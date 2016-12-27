@@ -4,21 +4,21 @@
  * This package is an SSL implementation written
  * by Eric Young (eay@cryptsoft.com).
  * The implementation was written so as to conform with Netscapes SSL.
- * 
+ *
  * This library is free for commercial and non-commercial use as long as
  * the following conditions are aheared to.  The following conditions
  * apply to all code found in this distribution, be it the RC4, RSA,
  * lhash, DES, etc., code; not just the SSL code.  The SSL documentation
  * included with this distribution is covered by the same copyright terms
  * except that the holder is Tim Hudson (tjh@cryptsoft.com).
- * 
+ *
  * Copyright remains Eric Young's, and as such any Copyright notices in
  * the code are not to be removed.
  * If this package is used in a product, Eric Young should be given attribution
  * as the author of the parts of the library used.
  * This can be in the form of a textual message at program startup or
  * in documentation (online or textual) provided with the package.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -33,10 +33,10 @@
  *     Eric Young (eay@cryptsoft.com)"
  *    The word 'cryptographic' can be left out if the rouines from the library
  *    being used are not cryptographic related :-).
- * 4. If you include any Windows specific code (or a derivative thereof) from 
+ * 4. If you include any Windows specific code (or a derivative thereof) from
  *    the apps directory (application code) you must include an acknowledgement:
  *    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY ERIC YOUNG ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -48,7 +48,7 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
+ *
  * The licence and distribution terms for any publically available version or
  * derivative of this code cannot be changed.  i.e. this code cannot simply be
  * copied and put under another distribution licence
@@ -62,7 +62,7 @@
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer. 
+ *    notice, this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
@@ -730,6 +730,138 @@ static int ext_sni_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
     return 0;
   }
 
+  return 1;
+}
+
+
+/* CACHED_INFO */
+
+static int ext_ci_add_clienthello(SSL_HANDSHAKE *hs, CBB *out) {
+  SSL *ssl = hs->ssl;
+  if (!ssl_is_cachedinfo_enabled(ssl)) {
+    return 1;
+  }
+  STACK_OF(CLIENT_CACHED_INFO) *cinfos = NULL;
+  if (ssl->ctx->tlsext_cachedinfo->get_list_cb == NULL ||
+      ssl->ctx->tlsext_cachedinfo->get_list_cb(
+        ssl, &cinfos, ssl->ctx->tlsext_cachedinfo->cb_arg) <= 0 ||
+      cinfos == NULL ||
+      sk_CLIENT_CACHED_INFO_num(cinfos) == 0) {
+    return 1;
+  }
+
+  CBB contents;
+  if (!CBB_add_u16(out, TLSEXT_TYPE_tlscachedinfo) ||
+      !CBB_add_u16_length_prefixed(out, &contents)) {
+    return 0;
+  }
+
+  for (size_t i = 0; i < sk_CLIENT_CACHED_INFO_num(cinfos); ++i) {
+    CLIENT_CACHED_INFO *cinfo = sk_CLIENT_CACHED_INFO_value(cinfos, i);
+    if (!CBB_add_u8(&contents, cinfo->type)) {
+      return 0;
+    }
+    for (int j = 0; j < TLSEXT_TLSCACHEDINFO_len; ++j) {
+      if (!CBB_add_u8(&contents, cinfo->cached_info[j])) {
+        return 0;
+      }
+    }
+  }
+
+  if (!CBB_flush(out)) {
+    return 0;
+  }
+
+  ssl->s3->cached_info_sent = 1;
+  sk_CLIENT_CACHED_INFO_pop_free(cinfos,
+    (void (*) (CLIENT_CACHED_INFO*))CRYPTO_free);
+  return 1;
+}
+
+static int ext_ci_parse_serverhello(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+                                    CBS *contents) {
+  if (contents == NULL) {
+    return 1;
+  }
+
+  if (!ssl_is_cachedinfo_enabled(hs->ssl)) {
+    return 1;
+  }
+
+  uint8_t type;
+  if (!CBS_get_u8(contents, &type)) {
+    return 0;
+  }
+
+  switch (type) {
+    case tlsext_cachedinfo_type_cert:
+      hs->ssl->s3->cached_info_supported_by_server = 1;
+      break;
+    case tlsext_cachedinfo_type_cert_req:
+      /* not supported */
+      break;
+    default:
+      *out_alert = SSL_AD_ILLEGAL_PARAMETER;
+      return 0;
+  }
+  return 1;
+}
+
+static int ext_ci_parse_clienthello(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+                                    CBS *contents) {
+  if (contents == NULL) {
+    return 1;
+  }
+  if (!ssl_is_cachedinfo_enabled(hs->ssl)) {
+    return 1;
+  }
+
+  hs->ssl->s3->cached_infos = sk_CLIENT_CACHED_INFO_new_null();
+  uint8_t type;
+  while (CBS_get_u8(contents, &type)) {
+    switch (type) {
+      case tlsext_cachedinfo_type_cert:
+      {
+        CLIENT_CACHED_INFO *cached_info =
+          OPENSSL_malloc(sizeof(CLIENT_CACHED_INFO));
+        cached_info->type = type;
+        if (!CBS_copy_bytes(
+              contents, cached_info->cached_info, TLSEXT_TLSCACHEDINFO_len)) {
+          return 0;
+        }
+        sk_CLIENT_CACHED_INFO_push(hs->ssl->s3->cached_infos, cached_info);
+        break;
+      }
+      case tlsext_cachedinfo_type_cert_req:
+        /* not implemented, skip */
+        break;
+      default:
+        *out_alert = SSL_AD_ILLEGAL_PARAMETER;
+        return 0;
+    }
+  }
+
+  if (CBS_len(contents) != 0) {
+    return 0;
+  }
+  return 1;
+}
+
+static int ext_ci_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
+  SSL *ssl = hs->ssl;
+  if (!ssl_is_cachedinfo_enabled(ssl) ||
+      !ssl_gen_cert_chain_hash(ssl) ||
+      !ssl_cert_matched_cachedinfo(ssl)) {
+    return 1;
+  }
+
+  CBB content;
+  if (!CBB_add_u16(out, TLSEXT_TYPE_tlscachedinfo) ||
+      !CBB_add_u16_length_prefixed(out, &content) ||
+      !CBB_add_u8(&content, tlsext_cachedinfo_type_cert) ||
+      !CBB_flush(out)) {
+    return 0;
+  }
   return 1;
 }
 
@@ -2727,6 +2859,14 @@ static const struct tls_extension kExtensions[] = {
     forbid_parse_serverhello,
     ignore_parse_clienthello,
     dont_add_serverhello,
+  },
+  {
+    TLSEXT_TYPE_tlscachedinfo,
+    NULL,
+    ext_ci_add_clienthello,
+    ext_ci_parse_serverhello,
+    ext_ci_parse_clienthello,
+    ext_ci_add_serverhello,
   },
   {
     TLSEXT_TYPE_short_header,

@@ -809,6 +809,26 @@ int ssl_check_leaf_certificate(SSL *ssl, EVP_PKEY *pkey,
                                const CRYPTO_BUFFER *leaf);
 
 
+/* CACHED_INFO */
+
+int ssl_is_cachedinfo_enabled(SSL *ssl);
+
+/* ssl_cert_matched_cachedinfo returns one if |cert_chain_hash| macthes one of
+ * the hashes in |cached_infos|, zero otherwise. */
+int ssl_cert_matched_cachedinfo(SSL *ssl);
+
+/* If |cert_chain_hash| matches one of the hashes in |cached_infos|, it adds
+ * |cert_chain_hash| to |cbb| in the format used by a TLS Certificate message.
+ * Otherwise, calls ssl_add_cert_chain. It returns one on success and zero on
+ * failure to add neither |cert_chain_hash| nor cert chain.*/
+int ssl_add_cert_chain_or_hash(SSL *ssl, CBB *cbb);
+
+/* ssl_gen_cert_chain_hash generates a SHA256 hash of a complete TLS Certificate
+ * message and stores it in |cert_chain_hash|.
+ * It returns one on success and zero on failure. */
+int ssl_gen_cert_chain_hash(SSL *ssl);
+
+
 /* TLS 1.3 key derivation. */
 
 /* tls13_init_key_schedule initializes the handshake hash and key derivation
@@ -1269,6 +1289,10 @@ typedef struct cert_st {
   /* Optional X509_STORE for certificate validation. If NULL the parent SSL_CTX
    * store is used instead. */
   X509_STORE *verify_store;
+
+  /* cert_chain_hash, if non-NULL, stores a SHA256 hash of the full server
+   * Certficate message */
+  uint8_t *cert_chain_hash;
 } CERT;
 
 /* SSL_METHOD is a compatibility structure to support the legacy version-locked
@@ -1577,6 +1601,14 @@ typedef struct ssl3_state_st {
    *     verified Channel ID from the client: a P256 point, (x,y), where
    *     each are big-endian values. */
   uint8_t tlsext_channel_id[64];
+
+  /* Only used for client-side bookkeeping */
+  unsigned cached_info_sent:1;
+  unsigned cached_info_supported_by_server:1;
+  /* Only used on the server-side, to store the cached infos
+   * sent in the ClientHello until the Certificate message is created
+   */
+  STACK_OF(CLIENT_CACHED_INFO) *cached_infos;
 } SSL3_STATE;
 
 /* lengths of messages */
@@ -1770,6 +1802,8 @@ int ssl3_new(SSL *ssl);
 void ssl3_free(SSL *ssl);
 int ssl3_accept(SSL_HANDSHAKE *hs);
 int ssl3_connect(SSL_HANDSHAKE *hs);
+
+int ssl3_parse_cert_chain_hash(SSL *ssl, CBS *cbs, uint8_t *received_new_cert);
 
 int ssl3_init_message(SSL *ssl, CBB *cbb, CBB *body, uint8_t type);
 int ssl3_finish_message(SSL *ssl, CBB *cbb, uint8_t **out_msg, size_t *out_len);

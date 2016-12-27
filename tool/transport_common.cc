@@ -602,3 +602,103 @@ bool DoSMTPStartTLS(int sock) {
 
   return true;
 }
+
+int cachedinfo_parse_cert_file(const char *filename,
+                               uint8_t *buf, size_t buflen) {
+  unsigned int read = 0;
+  BIO *certbio = BIO_new_file(filename, "r");
+  if (!certbio) {
+    fprintf(stderr, "Can't open cached info file %s\n", filename);
+    return 0;
+  }
+
+  if ((read = BIO_read(certbio, buf, buflen)) <= 0) {
+    BIO_printf(certbio, "Unable to read data from %s\n", filename);
+    read = 0;
+  }
+
+  BIO_free(certbio);
+  return read;
+}
+
+int cachedinfo_store_cert_to_file(const char *filename,
+                                  const uint8_t *buf, size_t buflen) {
+  size_t written;
+  int rc = 1;
+  BIO *bio = BIO_new_file(filename, "w");
+  if (!bio) {
+    fprintf(stderr, "Cannot open file %s\n", filename);
+    return 0;
+  }
+
+  written = BIO_write(bio, buf, buflen);
+  if (written != buflen) {
+    BIO_printf(bio, "Error: wrote %zu bytes (asked for %u) to file %s\n",
+        written, (uint16_t) buflen, filename);
+    rc = 0;
+  }
+  BIO_free(bio);
+  return rc;
+}
+
+int get_list_cb_fn(SSL *ssl, STACK_OF(CLIENT_CACHED_INFO) * *cinfo_list,
+                   void *cb_arg) {
+  struct s_client_cachedinfo_ctx *st = (struct s_client_cachedinfo_ctx*) cb_arg;
+  if (st == NULL) {
+    fprintf(stderr, "ctx empty");
+    return 0;
+  }
+
+  if (st->certlen > 0) {
+    SHA256(st->cert, st->certlen, st->certdigest);
+    st->valid = 1;
+
+    *cinfo_list = sk_CLIENT_CACHED_INFO_new_null();
+    CLIENT_CACHED_INFO *info =
+        (CLIENT_CACHED_INFO *)OPENSSL_malloc(sizeof(CLIENT_CACHED_INFO));
+    info->type = tlsext_cachedinfo_type_cert;
+    memcpy(info->cached_info, st->certdigest, SHA256_DIGEST_LENGTH);
+    sk_CLIENT_CACHED_INFO_push(*cinfo_list, info);
+    st->sent = 1;
+    return 1;
+  } else {
+    *cinfo_list = NULL;
+  }
+  return 0;
+}
+
+
+int find_certificate_cb_fn(SSL *ssl, const CLIENT_CACHED_INFO *matching_cinfo,
+                           uint8_t **full_cert, size_t *cert_len,
+                           void *cb_arg) {
+  struct s_client_cachedinfo_ctx *st = (struct s_client_cachedinfo_ctx*) cb_arg;
+
+  if (st == NULL || !st->valid || !st->sent) {
+    return 0;
+  }
+
+  if (!memcmp(matching_cinfo->cached_info, st->certdigest,
+              SHA256_DIGEST_LENGTH)) {
+    *full_cert = (uint8_t *) OPENSSL_malloc(st->certlen);
+    memcpy(*full_cert, st->cert, st->certlen);
+    *cert_len = st->certlen;
+    return 1;
+
+  }
+  return 0;
+}
+
+int new_certificate_cb_fn(SSL *ssl, const uint8_t *full_cert,
+                          size_t cert_len, void *cb_arg) {
+  struct s_client_cachedinfo_ctx *st = (struct s_client_cachedinfo_ctx*) cb_arg;
+
+  if (st == NULL) {
+    return 0;
+  }
+
+  if (st->out_filename) {
+    /* We don't care about the return code */
+    cachedinfo_store_cert_to_file(st->out_filename, full_cert, cert_len);
+  }
+  return 1;
+}

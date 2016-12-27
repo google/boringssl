@@ -229,6 +229,10 @@ void ssl_cert_clear_certs(CERT *cert) {
   sk_X509_pop_free(cert->x509_chain, X509_free);
   cert->x509_chain = NULL;
   cert->key_method = NULL;
+  if (cert->cert_chain_hash != NULL) {
+    OPENSSL_free(cert->cert_chain_hash);
+  }
+  cert->cert_chain_hash = NULL;
 }
 
 void ssl_cert_free(CERT *c) {
@@ -605,6 +609,59 @@ int ssl_add_cert_chain(SSL *ssl, CBB *cbb) {
   }
 
   return CBB_flush(cbb);
+}
+
+int ssl_gen_cert_chain_hash(SSL *ssl) {
+  CERT *cert = ssl->cert;
+  if (cert == NULL) {
+    return 0;
+  }
+  CBB cbb, body;
+  CBB_zero(&cbb);
+  if (!CBB_init(&cbb, 64) ||
+      !CBB_add_u8(&cbb, SSL3_MT_CERTIFICATE) ||
+      !CBB_add_u24_length_prefixed(&cbb, &body) ||
+      !ssl_add_cert_chain(ssl, &body)) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    CBB_cleanup(&cbb);
+    return 0;
+  }
+  uint8_t *msg = NULL;
+  size_t len;
+  if (!CBB_finish(&cbb, &msg, &len) ||
+      len > 0xffffffffu) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    CBB_cleanup(&cbb);
+    OPENSSL_free(msg);
+    return 0;
+  }
+  if (len > TLSEXT_TLSCACHEDINFO_len) {
+    uint8_t *cert_sha2 = (uint8_t *)OPENSSL_malloc(TLSEXT_TLSCACHEDINFO_len);
+    SHA256((const uint8_t *)msg, len, cert_sha2);
+    cert->cert_chain_hash = cert_sha2;
+  }
+
+  CBB_cleanup(&cbb);
+  OPENSSL_free(msg);
+
+  return (cert->cert_chain_hash != NULL);
+}
+
+int ssl_add_cert_chain_or_hash(SSL *ssl, CBB *cbb) {
+  if (!ssl_cert_matched_cachedinfo(ssl)) {
+    return ssl_add_cert_chain(ssl, cbb);
+  }
+
+  uint8_t *buf;
+  if (!CBB_add_space(cbb, &buf, TLSEXT_TLSCACHEDINFO_len)) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
+    return 0;
+  }
+  if (buf == NULL) {
+    return 0;
+  }
+  memcpy(buf, ssl->cert->cert_chain_hash, TLSEXT_TLSCACHEDINFO_len);
+  return 1;
 }
 
 /* ssl_cert_skip_to_spki parses a DER-encoded, X.509 certificate from |in| and
