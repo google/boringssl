@@ -4,21 +4,21 @@
  * This package is an SSL implementation written
  * by Eric Young (eay@cryptsoft.com).
  * The implementation was written so as to conform with Netscapes SSL.
- * 
+ *
  * This library is free for commercial and non-commercial use as long as
  * the following conditions are aheared to.  The following conditions
  * apply to all code found in this distribution, be it the RC4, RSA,
  * lhash, DES, etc., code; not just the SSL code.  The SSL documentation
  * included with this distribution is covered by the same copyright terms
  * except that the holder is Tim Hudson (tjh@cryptsoft.com).
- * 
+ *
  * Copyright remains Eric Young's, and as such any Copyright notices in
  * the code are not to be removed.
  * If this package is used in a product, Eric Young should be given attribution
  * as the author of the parts of the library used.
  * This can be in the form of a textual message at program startup or
  * in documentation (online or textual) provided with the package.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -33,10 +33,10 @@
  *     Eric Young (eay@cryptsoft.com)"
  *    The word 'cryptographic' can be left out if the rouines from the library
  *    being used are not cryptographic related :-).
- * 4. If you include any Windows specific code (or a derivative thereof) from 
+ * 4. If you include any Windows specific code (or a derivative thereof) from
  *    the apps directory (application code) you must include an acknowledgement:
  *    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY ERIC YOUNG ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -48,7 +48,7 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
+ *
  * The licence and distribution terms for any publically available version or
  * derivative of this code cannot be changed.  i.e. this code cannot simply be
  * copied and put under another distribution licence
@@ -62,7 +62,7 @@
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer. 
+ *    notice, this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
@@ -109,7 +109,7 @@
  */
 /* ====================================================================
  * Copyright 2002 Sun Microsystems, Inc. ALL RIGHTS RESERVED.
- * ECC cipher suite support in OpenSSL originally developed by 
+ * ECC cipher suite support in OpenSSL originally developed by
  * SUN MICROSYSTEMS, INC., and contributed to the OpenSSL project.
  */
 /* ====================================================================
@@ -304,6 +304,13 @@ SSL_CTX *SSL_CTX_new(const SSL_METHOD *method) {
     ret->options |= SSL_OP_NO_TICKET;
   }
 
+  ret->tlsext_cachedinfo = (struct tlsext_cachedinfo_ctx_st *) OPENSSL_malloc(sizeof(struct tlsext_cachedinfo_ctx_st));
+  ret->tlsext_cachedinfo->enabled = 0;
+  ret->tlsext_cachedinfo->get_list_cb = NULL;
+  ret->tlsext_cachedinfo->find_certificate_cb = NULL;
+  ret->tlsext_cachedinfo->new_certificate_cb = NULL;
+  ret->tlsext_cachedinfo->cb_arg = NULL;
+
   /* Disable the auto-chaining feature by default. Once this has stuck without
    * problems, the feature will be removed entirely. */
   ret->mode = SSL_MODE_NO_AUTO_CHAIN;
@@ -365,6 +372,8 @@ void SSL_CTX_free(SSL_CTX *ctx) {
   CRYPTO_BUFFER_free(ctx->ocsp_response);
   OPENSSL_free(ctx->signed_cert_timestamp_list);
   EVP_PKEY_free(ctx->tlsext_channel_id_private);
+  OPENSSL_free(ctx->tlsext_cachedinfo);
+  ctx->tlsext_cachedinfo = NULL;
 
   OPENSSL_free(ctx);
 }
@@ -3046,4 +3055,56 @@ int SSL_set_min_version(SSL *ssl, uint16_t version) {
 
 int SSL_set_max_version(SSL *ssl, uint16_t version) {
   return SSL_set_max_proto_version(ssl, version);
+}
+
+void SSL_CTX_set_cachedinfo_enabled(SSL_CTX *ctx, uint8_t enabled) {
+  ctx->tlsext_cachedinfo->enabled = enabled;
+}
+
+void SSL_CTX_set_cachedinfo_callbacks(SSL_CTX *ctx,
+    tlscachedinfo_get_list_cb_fn get_cert_cb,
+    tlscachedinfo_find_certificate_cb_fn find_cert_cb,
+    tlscachedinfo_new_certificate_cb_fn new_cert_cb,
+    void* cb_arg) {
+  SSL_CTX_set_cachedinfo_enabled(ctx, 1);
+  ctx->tlsext_cachedinfo->get_list_cb = get_cert_cb;
+  ctx->tlsext_cachedinfo->find_certificate_cb = find_cert_cb;
+  ctx->tlsext_cachedinfo->new_certificate_cb = new_cert_cb;
+  ctx->tlsext_cachedinfo->cb_arg = cb_arg;
+}
+
+void SSL_CTX_clear_cachedinfo_callbacks(SSL_CTX *ctx) {
+  SSL_CTX_set_cachedinfo_enabled(ctx, 0);
+  ctx->tlsext_cachedinfo->get_list_cb = NULL;
+  ctx->tlsext_cachedinfo->find_certificate_cb = NULL;
+  ctx->tlsext_cachedinfo->new_certificate_cb = NULL;
+  ctx->tlsext_cachedinfo->cb_arg = NULL;
+}
+
+int ssl_is_cachedinfo_enabled(SSL *ssl) {
+  return (ssl->ctx &&
+          ssl->ctx->tlsext_cachedinfo->enabled != 0);
+}
+
+int ssl_cert_matched_cachedinfo(SSL *ssl) {
+  CERT *cert = ssl->cert;
+  if (cert == NULL ||
+      !ssl_is_cachedinfo_enabled(ssl) ||
+      ssl->s3->cached_infos == NULL ||
+      sk_CLIENT_CACHED_INFO_num(ssl->s3->cached_infos) <= 0 ||
+      cert->cert_chain_hash == NULL) {
+    return 0;
+  }
+  uint8_t *hash = cert->cert_chain_hash;
+  size_t cachedinfo_count = sk_CLIENT_CACHED_INFO_num(ssl->s3->cached_infos);
+
+  for (size_t i = 0; i < cachedinfo_count; ++i) {
+    CLIENT_CACHED_INFO *cinfo =
+      sk_CLIENT_CACHED_INFO_value(ssl->s3->cached_infos, i);
+    if (cinfo->type == tlsext_cachedinfo_type_cert &&
+        memcmp(cinfo->cached_info, hash, TLSEXT_TLSCACHEDINFO_len) == 0) {
+      return 1;
+    }
+  }
+  return 0;
 }

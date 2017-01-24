@@ -4,21 +4,21 @@
  * This package is an SSL implementation written
  * by Eric Young (eay@cryptsoft.com).
  * The implementation was written so as to conform with Netscapes SSL.
- * 
+ *
  * This library is free for commercial and non-commercial use as long as
  * the following conditions are aheared to.  The following conditions
  * apply to all code found in this distribution, be it the RC4, RSA,
  * lhash, DES, etc., code; not just the SSL code.  The SSL documentation
  * included with this distribution is covered by the same copyright terms
  * except that the holder is Tim Hudson (tjh@cryptsoft.com).
- * 
+ *
  * Copyright remains Eric Young's, and as such any Copyright notices in
  * the code are not to be removed.
  * If this package is used in a product, Eric Young should be given attribution
  * as the author of the parts of the library used.
  * This can be in the form of a textual message at program startup or
  * in documentation (online or textual) provided with the package.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -33,10 +33,10 @@
  *     Eric Young (eay@cryptsoft.com)"
  *    The word 'cryptographic' can be left out if the rouines from the library
  *    being used are not cryptographic related :-).
- * 4. If you include any Windows specific code (or a derivative thereof) from 
+ * 4. If you include any Windows specific code (or a derivative thereof) from
  *    the apps directory (application code) you must include an acknowledgement:
  *    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY ERIC YOUNG ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -48,7 +48,7 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
+ *
  * The licence and distribution terms for any publically available version or
  * derivative of this code cannot be changed.  i.e. this code cannot simply be
  * copied and put under another distribution licence
@@ -62,7 +62,7 @@
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer. 
+ *    notice, this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
@@ -110,7 +110,7 @@
 /* ====================================================================
  * Copyright 2002 Sun Microsystems, Inc. ALL RIGHTS RESERVED.
  *
- * Portions of the attached software ("Contribution") are developed by 
+ * Portions of the attached software ("Contribution") are developed by
  * SUN MICROSYSTEMS, INC., and are contributed to the OpenSSL project.
  *
  * The Contribution is licensed pursuant to the OpenSSL open source
@@ -1032,6 +1032,46 @@ err:
   return -1;
 }
 
+int ssl3_parse_cert_chain_hash(SSL *ssl, CBS *cbs, uint8_t *received_new_cert) {
+  *received_new_cert = 1;
+  if (!ssl_is_cachedinfo_enabled(ssl) ||
+      ssl->init_num != TLSEXT_TLSCACHEDINFO_len ||
+      !ssl->s3->cached_info_sent ||
+      !ssl->s3->cached_info_supported_by_server ||
+      ssl->ctx->tlsext_cachedinfo->find_certificate_cb == NULL) {
+    return 1;
+  }
+
+  // the cert message contains hash of cert chain
+  CLIENT_CACHED_INFO cinfo;
+  cinfo.type = tlsext_cachedinfo_type_cert;
+  if (!CBS_copy_bytes(cbs, cinfo.cached_info, TLSEXT_TLSCACHEDINFO_len)) {
+    return 0;
+  }
+  size_t new_len = 0;
+  unsigned char *new_data = NULL;
+  if (ssl->ctx->tlsext_cachedinfo->find_certificate_cb(
+        ssl,
+        &cinfo,
+        &new_data,
+        &new_len,
+        ssl->ctx->tlsext_cachedinfo->cb_arg) <= 0) {
+    SSLerr(SSL_F_SSL3_GET_SERVER_CERTIFICATE,
+        SSL_R_TLSCACHEDINFO_RECV_CERT);
+    return 0;
+  }
+
+  if (new_len > 0 && new_data) {
+    *received_new_cert = 0;
+    CBS_init(cbs,
+             (uint8_t *) new_data + SSL3_HM_HEADER_LENGTH,
+             new_len - SSL3_HM_HEADER_LENGTH);
+  } else {
+    CBS_init(cbs, ssl->init_msg, ssl->init_num);
+  }
+  return 1;
+}
+
 static int ssl3_get_server_certificate(SSL_HANDSHAKE *hs) {
   SSL *const ssl = hs->ssl;
   int ret =
@@ -1042,6 +1082,10 @@ static int ssl3_get_server_certificate(SSL_HANDSHAKE *hs) {
 
   CBS cbs;
   CBS_init(&cbs, ssl->init_msg, ssl->init_num);
+  uint8_t received_new_cert = 1;
+  if (!ssl3_parse_cert_chain_hash(ssl, &cbs, &received_new_cert)) {
+    return 0;
+  }
 
   uint8_t alert;
   sk_CRYPTO_BUFFER_pop_free(ssl->s3->new_session->certs, CRYPTO_BUFFER_free);
@@ -1067,6 +1111,19 @@ static int ssl3_get_server_certificate(SSL_HANDSHAKE *hs) {
           sk_CRYPTO_BUFFER_value(ssl->s3->new_session->certs, 0))) {
     ssl3_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_ILLEGAL_PARAMETER);
     return -1;
+  }
+
+  if (ssl_is_cachedinfo_enabled(ssl) &&
+      received_new_cert &&
+      ssl->ctx->tlsext_cachedinfo->new_certificate_cb != NULL) {
+    if (ssl->ctx->tlsext_cachedinfo->new_certificate_cb(
+          ssl,
+          (const unsigned char*)ssl->init_buf->data,
+          ssl->init_num + SSL3_HM_HEADER_LENGTH,
+          ssl->ctx->tlsext_cachedinfo->cb_arg) <= 0) {
+      SSLerr(SSL_F_SSL3_GET_SERVER_CERTIFICATE,
+          SSL_R_TLSCACHEDINFO_RECV_CERT);
+    }
   }
 
   return 1;

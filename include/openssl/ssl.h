@@ -1133,6 +1133,79 @@ OPENSSL_EXPORT void SSL_CTX_set_private_key_method(
     SSL_CTX *ctx, const SSL_PRIVATE_KEY_METHOD *key_method);
 
 
+/* TLS ext CACHED_INFO (RFC 7924) */
+
+enum tlsext_cachedinfo_type_t {
+  tlsext_cachedinfo_type_cert,
+  tlsext_cachedinfo_type_cert_req,
+};
+
+/* Used by the client for caching server certificates */
+typedef struct client_cached_info_st {
+  enum tlsext_cachedinfo_type_t type;
+
+  /* |cached_info| stores the hash of a full TLS Certificate message */
+  uint8_t cached_info[TLSEXT_TLSCACHEDINFO_len];
+} CLIENT_CACHED_INFO;
+
+DECLARE_STACK_OF(CLIENT_CACHED_INFO)
+
+/* tlscachedinfo_find_certificate_cb_fn is a callback function that is called
+ * iwhen the ClientHello (for clients) is constructed when tls cached-info
+ * extension is enabled. This is not used by server.
+ *
+ * When called, it extracts a stack of CLIENT_CACHED_INFO from |cb_arg| and
+ * warites it to |cinfo_list|. It returns one on success and zero on failure.
+ */
+typedef int (*tlscachedinfo_get_list_cb_fn)(SSL *ssl,
+    STACK_OF(CLIENT_CACHED_INFO) **cinfo_list, void *cb_arg);
+
+/* tlscachedinfo_find_certificate_cb_fn is a callback function that is called
+ * when client is parsing ServerCertificate message, when tls cached-info
+ * extension is enabled. This is not used by server.
+ *
+ * When called, it matches |matching_cinfo| with the entries in |cached_infos|.
+ * It returns one on success and zero on failure. On success, it writes the
+ * constent of the TLS Certficate message corresponding to the |matching_cinfo|
+ * to |full_cert| and its size to |cert_len|.
+ */
+typedef int (*tlscachedinfo_find_certificate_cb_fn)(SSL *ssl,
+    const CLIENT_CACHED_INFO *matching_cinfo,
+    unsigned char **full_cert,
+    size_t *cert_len,
+    void *cb_arg);
+
+/* tlscachedinfo_new_certificate_cb_fn is a callback function that is called
+ * when client receives a new ServerCertificate message, if tls cached-info
+ * extension is enabled. This is not used by the server.
+ *
+ * When called, it updates the |cb_arg| to add the pair of the new server
+ * Certificate msg and its hash. It returns one on success and zero on failure.
+ */
+typedef int (*tlscachedinfo_new_certificate_cb_fn)(SSL *ssl,
+    const unsigned char *full_cert,
+    size_t cert_len, void *cb_arg);
+
+struct tlsext_cachedinfo_ctx_st {
+    uint8_t enabled;
+    tlscachedinfo_get_list_cb_fn get_list_cb;
+    tlscachedinfo_find_certificate_cb_fn find_certificate_cb;
+    tlscachedinfo_new_certificate_cb_fn new_certificate_cb;
+    void *cb_arg;
+};
+
+void SSL_CTX_set_cachedinfo_enabled(SSL_CTX *ctx,
+    uint8_t enabled);
+
+void SSL_CTX_set_cachedinfo_callbacks(SSL_CTX *ctx,
+    tlscachedinfo_get_list_cb_fn get_cert_cb,
+    tlscachedinfo_find_certificate_cb_fn find_cert_cb,
+    tlscachedinfo_new_certificate_cb_fn new_cert_cb,
+    void *cb_arg);
+
+void SSL_CTX_clear_cachedinfo_callbacks(SSL_CTX *ctx);
+
+
 /* Cipher suites.
  *
  * |SSL_CIPHER| objects represent cipher suites. */
@@ -4078,6 +4151,10 @@ struct ssl_ctx_st {
 
   /* TODO(agl): remove once node.js no longer references this. */
   int freelist_max_len;
+
+  /* tlsext_cachedinfo stores a set of callbacks when
+   * tls cached-info extension is enabled */
+  struct tlsext_cachedinfo_ctx_st *tlsext_cachedinfo;
 };
 
 typedef struct ssl_handshake_st SSL_HANDSHAKE;
@@ -4620,5 +4697,8 @@ BORINGSSL_MAKE_DELETER(SSL_SESSION, SSL_SESSION_free)
 #define SSL_R_TLSV1_BAD_CERTIFICATE_HASH_VALUE 1114
 #define SSL_R_TLSV1_UNKNOWN_PSK_IDENTITY 1115
 #define SSL_R_TLSV1_CERTIFICATE_REQUIRED 1116
+#define SSL_R_TLSCACHEDINFO_SEND_CERT 450
+#define SSL_R_TLSCACHEDINFO_RECV_CERT 451
+#define SSL_R_TLSCACHEDINFO_NEW_CERT 452
 
 #endif /* OPENSSL_HEADER_SSL_H */

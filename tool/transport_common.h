@@ -45,4 +45,29 @@ bool TransferData(SSL *ssl, int sock);
 // returns true on success and false otherwise.
 bool DoSMTPStartTLS(int sock);
 
+extern int cinfo_ex_index;
+struct s_client_cachedinfo_ctx {
+  char out_filename[256];
+  uint8_t cert[8192];
+  size_t certlen;
+  uint8_t certdigest[SHA256_DIGEST_LENGTH];
+  uint8_t valid;
+  uint8_t sent;
+};
+
+extern int tlscinfo_ex_index;
+typedef struct client_cached_info_st CLIENT_CACHED_INFO;
+
+int get_list_cb_fn(SSL *ssl, STACK_OF(CLIENT_CACHED_INFO) * *cinfo_list,
+                   void *cb_arg);
+int find_certificate_cb_fn(SSL *ssl, const CLIENT_CACHED_INFO *matching_cinfo,
+                           uint8_t **full_cert, size_t *cert_len,
+                           void *cb_arg);
+int new_certificate_cb_fn(SSL *ssl, const uint8_t *full_cert,
+                          size_t cert_len, void *cb_arg);
+int cachedinfo_parse_cert_file(const char *filename, uint8_t *buf,
+                               size_t buflen);
+int cachedinfo_store_cert_to_file(const char *filename, const uint8_t *buf,
+                                  size_t buflen);
+
 #endif  /* !OPENSSL_HEADER_TOOL_TRANSPORT_COMMON_H */

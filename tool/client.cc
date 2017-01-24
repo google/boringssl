@@ -106,6 +106,14 @@ static const struct argument kArguments[] = {
       "Establish a second connection resuming the original connection.",
     },
     {
+      "-tlscachedinfo_in", kOptionalArgument,
+      "Read cached info (certs) from file (needs -servername)",
+    },
+    {
+      "-tlscachedinfo_out", kOptionalArgument,
+      "Write cached cert to file (needs -servername)",
+    },
+    {
      "", kOptionalArgument, "",
     },
 };
@@ -393,6 +401,28 @@ bool Client(const std::vector<std::string> &args) {
   if (args_map.count("-resume") != 0 &&
       !DoConnection(ctx.get(), args_map, &WaitForSession)) {
     return false;
+  }
+
+  if (args_map.count("-tlscachedinfo_in") != 0) {
+    const char *in_file = args_map["-tlscachedinfo_in"].c_str();
+    struct s_client_cachedinfo_ctx* cachedinfo_ctx =
+      (struct s_client_cachedinfo_ctx*)
+      OPENSSL_malloc( sizeof( struct s_client_cachedinfo_ctx));
+    memset(cachedinfo_ctx, 0, sizeof( struct s_client_cachedinfo_ctx));
+
+    cachedinfo_ctx->certlen = cachedinfo_parse_cert_file(in_file,
+        cachedinfo_ctx->cert, sizeof( cachedinfo_ctx->cert));
+    const char *out_file;
+    if (args_map.count("-tlscachedinfo_out") != 0) {
+      out_file = args_map["-tlscachedinfo_out"].c_str();
+    } else {
+      out_file = in_file;
+    }
+    memcpy(cachedinfo_ctx->out_filename, out_file, strlen(out_file));
+    SSL_CTX_set_cachedinfo_callbacks(ctx.get(), get_list_cb_fn,
+                                     find_certificate_cb_fn,
+                                     new_certificate_cb_fn,
+                                     (void*) cachedinfo_ctx);
   }
 
   return DoConnection(ctx.get(), args_map, &TransferData);

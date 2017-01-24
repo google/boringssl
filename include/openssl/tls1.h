@@ -230,6 +230,11 @@ extern "C" {
 /* This is not an IANA defined extension number */
 #define TLSEXT_TYPE_short_header 27463
 
+/* ExtensionType value from RFC7924 */
+#define TLSEXT_TYPE_tlscachedinfo 25
+
+#define TLSEXT_TLSCACHEDINFO_len 32
+
 /* status request value from RFC 3546 */
 #define TLSEXT_STATUSTYPE_ocsp 1
 

@@ -210,6 +210,8 @@ void ssl3_free(SSL *ssl) {
   SSL_AEAD_CTX_free(ssl->s3->aead_read_ctx);
   SSL_AEAD_CTX_free(ssl->s3->aead_write_ctx);
   OPENSSL_free(ssl->s3->pending_message);
+  sk_CLIENT_CACHED_INFO_pop_free(ssl->s3->cached_infos,
+                                 (void (*) (CLIENT_CACHED_INFO*))CRYPTO_free);
 
   OPENSSL_cleanse(ssl->s3, sizeof *ssl->s3);
   OPENSSL_free(ssl->s3);
