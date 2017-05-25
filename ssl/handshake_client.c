@@ -455,6 +455,13 @@ int ssl3_connect(SSL_HANDSHAKE *hs) {
         if (hs->state != SSL3_ST_FINISH_CLIENT_HANDSHAKE) {
           ssl->method->expect_flight(ssl);
         }
+        if (hs->early_data_offered
+            && hs->state == SSL3_ST_CR_SRVR_HELLO_A) {
+            /* return for writing early data */
+            ret = 1;
+            hs->can_early_write = 1;
+            goto end;
+        }
         break;
 
       case SSL_ST_TLS13: {
