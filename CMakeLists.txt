@@ -656,6 +656,8 @@ add_executable(
   src/tool/transport_common.cc
 )
 
+target_link_libraries(ssl crypto)
+
 target_link_libraries(bssl ssl crypto)
 
 if(NOT WIN32 AND NOT ANDROID)
