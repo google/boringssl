@@ -121,6 +121,18 @@ architecture of the host machine, e.g. `linux-x86_64`.
     ${ANDROID_NDK}/prebuilt/HOST/bin/gdb
     target remote :5039  # in gdb
 
+###Build for vcpkg
+
+You can build and install boringssl using [vcpkg](https://github.com/Microsoft/vcpkg/) dependency manager:
+
+    git clone https://github.com/Microsoft/vcpkg.git
+    cd vcpkg
+    ./bootstrap-vcpkg.sh
+    ./vcpkg integrate install
+    ./vcpkg install boringssl
+
+The boringssl port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
+
 ### Building for iOS
 
 To build for iOS, pass `-DCMAKE_OSX_SYSROOT=iphoneos` and
