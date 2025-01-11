@@ -2968,3 +2968,20 @@ func (m *endOfEarlyDataMsg) marshal() []byte {
 func (*endOfEarlyDataMsg) unmarshal(data []byte) bool {
 	return len(data) == 4
 }
+
+type importedPSKIdentity struct {
+	externalIdentity []byte
+	context          []byte
+	targetProtocol   uint16
+	targetKDF        uint16
+}
+
+func (m *importedPSKIdentity) marshal() []byte {
+	// See RFC 9258, Section 5.1.
+	b := cryptobyte.NewBuilder(nil)
+	addUint16LengthPrefixedBytes(b, m.externalIdentity)
+	addUint16LengthPrefixedBytes(b, m.context)
+	b.AddUint16(m.targetProtocol)
+	b.AddUint16(m.targetKDF)
+	return b.BytesOrPanic()
+}

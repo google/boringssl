@@ -382,8 +382,8 @@ func (h *finishedHash) appendContextHashes(b []byte) []byte {
 }
 
 var (
-	externalPSKBinderLabel        = []byte("ext binder")
 	resumptionPSKBinderLabel      = []byte("res binder")
+	importedPSKBinderLabel        = []byte("imp binder")
 	earlyTrafficLabel             = []byte("c e traffic")
 	clientHandshakeTrafficLabel   = []byte("c hs traffic")
 	serverHandshakeTrafficLabel   = []byte("s hs traffic")
@@ -398,6 +398,8 @@ var (
 
 	echAcceptConfirmationLabel    = []byte("ech accept confirmation")
 	echAcceptConfirmationHRRLabel = []byte("hrr ech accept confirmation")
+
+	derivedPSKLabel = []byte("derived psk")
 )
 
 // deriveSecret implements TLS 1.3's Derive-Secret function, as defined in
@@ -521,4 +523,49 @@ func (psk *preSharedKey) computeBinder(clientHello, helloRetryRequest, truncated
 func deriveSessionPSK(suite *cipherSuite, vers version, masterSecret []byte, nonce []byte) []byte {
 	hash := suite.hash()
 	return hkdfExpandLabel(vers, hash, masterSecret, resumptionPSKLabel, nonce, hash.Size())
+}
+
+func importPSK(cred *Credential, targetProtocol version, targetHash crypto.Hash) *preSharedKey {
+	if cred.Type != CredentialTypePreSharedKey {
+		panic("not a PSK credential")
+	}
+
+	var targetKDF uint16
+	switch targetHash {
+	case crypto.SHA256:
+		targetKDF = kdfHKDFWithSHA256
+	case crypto.SHA384:
+		targetKDF = kdfHKDFWithSHA384
+	default:
+		panic("unrecogized target HKDF hash")
+	}
+
+	// See RFC 9258, Section 5.1.
+	identity := (&importedPSKIdentity{
+		externalIdentity: cred.PSKIdentity,
+		context:          cred.PSKContext,
+		targetProtocol:   targetProtocol.wire,
+		targetKDF:        targetKDF,
+	}).marshal()
+
+	h := cred.PSKHash.New()
+	h.Write(identity)
+	identityHash := h.Sum(nil)
+
+	epskx, err := hkdf.Extract(cred.PSKHash.New, cred.PreSharedKey, make([]byte, cred.PSKHash.Size()))
+	if err != nil {
+		panic(err)
+	}
+
+	// HKDF-Expand-Label in the ipskx calculation uses the label for the target protocol.
+	ipskx := hkdfExpandLabel(targetProtocol, cred.PSKHash, epskx, derivedPSKLabel, identityHash, targetHash.Size())
+
+	psk := &preSharedKey{
+		version:  targetProtocol,
+		hash:     targetHash,
+		identity: identity,
+		secret:   ipskx,
+	}
+	psk.initBinder(importedPSKBinderLabel)
+	return psk
 }

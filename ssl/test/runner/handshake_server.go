@@ -605,6 +605,28 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 
 	var psk *preSharedKey
 	foundKEMode := bytes.IndexByte(pskKEModes, pskDHEKEMode) >= 0
+
+	// If using PSKs, require that we are able to use it. (We may override the
+	// choice with session resumption later.)
+	if config.Credential.Type == CredentialTypePreSharedKey {
+		if !foundKEMode {
+			return errors.New("tls: no common PSK key exchange mode")
+		}
+		psk = importPSK(config.Credential, c.vers, hs.suite.hash())
+		pskIndex := slices.IndexFunc(pskIdentities, func(id pskIdentity) bool {
+			return bytes.Equal(id.ticket, psk.identity)
+		})
+		if pskIndex < 0 {
+			return errors.New("tls: client did not offer expected PSK")
+		}
+		binderToVerify := hs.clientHello.pskBinders[pskIndex]
+		if err := verifyPSKBinder(psk, hs.clientHello, binderToVerify, []byte{}, []byte{}); err != nil {
+			return err
+		}
+		hs.hello.hasPSKIdentity = true
+		hs.hello.pskIdentity = uint16(pskIndex)
+	}
+
 	if foundKEMode && !config.SessionTicketsDisabled {
 		for i, pskIdentity := range pskIdentities {
 			// TODO(svaldez): Check the obfuscatedTicketAge before accepting 0-RTT.
@@ -638,17 +660,9 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 			hs.sessionState = sessionState
 			hs.hello.hasPSKIdentity = true
 			hs.hello.pskIdentity = uint16(i)
-			if config.Bugs.SelectPSKIdentityOnResume != 0 {
-				hs.hello.pskIdentity = config.Bugs.SelectPSKIdentityOnResume
-			}
 			c.didResume = true
 			break
 		}
-	}
-
-	if config.Bugs.AlwaysSelectPSKIdentity {
-		hs.hello.hasPSKIdentity = true
-		hs.hello.pskIdentity = 0
 	}
 
 	// Resolve PSK and compute the early secret.
@@ -664,7 +678,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 
 	// Decide whether to use key_share.
 	hs.hello.hasKeyShare = config.Credential.Type != CredentialTypeSPAKE2PlusV1 && config.Bugs.UnsolicitedPAKE == 0
-	if hs.sessionState != nil && config.Bugs.NegotiatePSKResumption {
+	if psk != nil && config.Bugs.NegotiatePSKResumption {
 		hs.hello.hasKeyShare = false
 	}
 	if config.Bugs.MissingKeyShare {
@@ -946,6 +960,11 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		}
 	}
 
+	if config.Bugs.AlwaysSelectPSKIdentity != nil {
+		hs.hello.hasPSKIdentity = true
+		hs.hello.pskIdentity = *config.Bugs.AlwaysSelectPSKIdentity
+	}
+
 	if config.Bugs.SendEarlyDataExtension {
 		encryptedExtensions.extensions.hasEarlyData = true
 	}
@@ -1100,7 +1119,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	}
 
 	var requestClientCert bool
-	if (hs.sessionState == nil && hs.cert.Type != CredentialTypeSPAKE2PlusV1) || config.Bugs.AlwaysSendCertificateRequest {
+	if (psk == nil && hs.cert.Type != CredentialTypeSPAKE2PlusV1) || config.Bugs.AlwaysSendCertificateRequest {
 		requestClientCert = config.ClientAuth >= RequestClientCert
 	}
 	if requestClientCert {
@@ -1127,7 +1146,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		c.writeRecord(recordTypeHandshake, certReq.marshal())
 	}
 
-	if (hs.sessionState == nil && hs.cert.Type != CredentialTypeSPAKE2PlusV1) || config.Bugs.AlwaysSendCertificate {
+	if (psk == nil && hs.cert.Type != CredentialTypeSPAKE2PlusV1) || config.Bugs.AlwaysSendCertificate {
 		useCert := hs.cert
 		if config.Bugs.UseCertificateCredential != nil {
 			useCert = config.Bugs.UseCertificateCredential

@@ -1220,7 +1220,7 @@ func addTLS13HandshakeTests() {
 		config: Config{
 			MaxVersion: VersionTLS13,
 			Bugs: ProtocolBugs{
-				AlwaysSelectPSKIdentity: true,
+				AlwaysSelectPSKIdentity: ptrTo(uint16(0)),
 			},
 		},
 		shouldFail:    true,
@@ -1231,8 +1231,11 @@ func addTLS13HandshakeTests() {
 		name: "InvalidPSKIdentity-TLS13",
 		config: Config{
 			MaxVersion: VersionTLS13,
+		},
+		resumeConfig: &Config{
+			MaxVersion: VersionTLS13,
 			Bugs: ProtocolBugs{
-				SelectPSKIdentityOnResume: 1,
+				AlwaysSelectPSKIdentity: ptrTo(uint16(1)),
 			},
 		},
 		resumeSession: true,

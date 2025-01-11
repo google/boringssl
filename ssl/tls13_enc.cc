@@ -30,6 +30,7 @@
 #include <openssl/hmac.h>
 #include <openssl/mem.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/fipsmodule/tls/internal.h"
 #include "../crypto/internal.h"
 #include "internal.h"
@@ -501,13 +502,40 @@ bool tls13_export_keying_material(const SSL *ssl, Span<uint8_t> out,
                            hash, SSL_is_dtls(ssl));
 }
 
-static const char kTLS13LabelPSKBinder[] = "res binder";
+const EVP_MD *ssl_pre_shared_key_hash(const SSLPreSharedKey &psk) {
+  if (const auto *imported = std::get_if<SSLImportedPSK>(&psk);
+      imported != nullptr) {
+    return imported->md;
+  }
+  return ssl_session_get_digest(std::get<UniquePtr<SSL_SESSION>>(psk).get());
+}
+
+Span<const uint8_t> ssl_pre_shared_key_identity(const SSLPreSharedKey &psk) {
+  if (const auto *imported = std::get_if<SSLImportedPSK>(&psk);
+      imported != nullptr) {
+    return imported->imported_identity;
+  }
+  return std::get<UniquePtr<SSL_SESSION>>(psk)->ticket;
+}
 
 bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
-                      size_t *out_len, const SSL_SESSION *session,
+                      size_t *out_len, const SSLPreSharedKey &psk,
                       const SSLTranscript &transcript,
                       Span<const uint8_t> client_hello, size_t binders_len) {
-  const EVP_MD *digest = ssl_session_get_digest(session);
+  const EVP_MD *digest;
+  Span<const uint8_t> secret;
+  std::string_view label;
+  if (const auto *imported = std::get_if<SSLImportedPSK>(&psk);
+      imported != nullptr) {
+    digest = imported->md;
+    secret = imported->ipskx;
+    label = "imp binder";
+  } else {
+    const SSL_SESSION *session = std::get<UniquePtr<SSL_SESSION>>(psk).get();
+    digest = ssl_session_get_digest(session);
+    secret = session->secret;
+    label = "res binder";
+  }
 
   // Compute the binder key.
   //
@@ -521,13 +549,11 @@ bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
   auto binder_key = Span(binder_key_buf, EVP_MD_size(digest));
   if (!EVP_Digest(nullptr, 0, binder_context, &binder_context_len, digest,
                   nullptr) ||
-      !HKDF_extract(early_secret, &early_secret_len, digest,
-                    session->secret.data(), session->secret.size(), nullptr,
-                    0) ||
+      !HKDF_extract(early_secret, &early_secret_len, digest, secret.data(),
+                    secret.size(), nullptr, 0) ||
       !hkdf_expand_label(
-          binder_key, digest, Span(early_secret, early_secret_len),
-          kTLS13LabelPSKBinder, Span(binder_context, binder_context_len),
-          SSL_is_dtls(hs->ssl))) {
+          binder_key, digest, Span(early_secret, early_secret_len), label,
+          Span(binder_context, binder_context_len), SSL_is_dtls(hs->ssl))) {
     return false;
   }
 
@@ -573,7 +599,8 @@ bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
   // The binders are computed over |msg| with |binders| and its u16 length
   // prefix removed. The caller is assumed to have parsed |msg|, extracted
   // |binders|, and verified the PSK extension is last.
-  if (!tls13_psk_binder(hs, verify_data, &verify_data_len, session,
+  if (!tls13_psk_binder(hs, verify_data, &verify_data_len,
+                        UpRef(const_cast<SSL_SESSION *>(session)),
                         hs->transcript, msg.body, 2 + CBS_len(binders)) ||
       // We only consider the first PSK, so compare against the first binder.
       !CBS_get_u8_length_prefixed(binders, &binder)) {
@@ -593,6 +620,68 @@ bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
   }
 
   return true;
+}
+
+std::optional<SSLImportedPSK> tls13_derive_imported_psk(
+    const SSL_HANDSHAKE *hs, SSL_CREDENTIAL *cred, uint16_t protocol,
+    const EVP_MD *hkdf_md) {
+  assert(cred->type == SSLCredentialType::kPreSharedKey);
+
+  // See Section 10 of RFC 9258.
+  uint16_t target_kdf;
+  switch (EVP_MD_nid(hkdf_md)) {
+    case NID_sha256:
+      target_kdf = 0x0001;  // HKDF_SHA256
+      break;
+    case NID_sha384:
+      target_kdf = 0x0002;  // HKDF_SHA384
+      break;
+    default:
+      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+      return std::nullopt;
+  }
+
+  SSLImportedPSK ret;
+  ret.credential = UpRef(cred);
+  ret.protocol = protocol;
+  ret.md = hkdf_md;
+
+  // See Section 5.1 of RFC 9258.
+  ScopedCBB imported_id;
+  CBB external_identity, context;
+  if (!CBB_init(imported_id.get(), 2 + cred->epsk_id.size() + 2 +
+                                       cred->epsk_context.size() + 2 + 2) ||
+      !CBB_add_u16_length_prefixed(imported_id.get(), &external_identity) ||
+      !CBB_add_bytes(&external_identity, cred->epsk_id.data(),
+                     cred->epsk_id.size()) ||
+      !CBB_add_u16_length_prefixed(imported_id.get(), &context) ||
+      !CBB_add_bytes(&context, cred->epsk_context.data(),
+                     cred->epsk_context.size()) ||
+      !CBB_add_u16(imported_id.get(), protocol) ||
+      !CBB_add_u16(imported_id.get(), target_kdf) ||
+      !CBBFinishArray(imported_id.get(), &ret.imported_identity)) {
+    return std::nullopt;
+  }
+
+  ScopedEVP_MD_CTX imported_id_ctx;
+  InplaceVector<uint8_t, EVP_MAX_MD_SIZE> imported_id_hash;
+  imported_id_hash.ResizeForOverwrite(EVP_MD_size(cred->epsk_md));
+  unsigned imported_id_hash_len;
+  if (!EVP_Digest(ret.imported_identity.data(), ret.imported_identity.size(),
+                  imported_id_hash.data(), &imported_id_hash_len, cred->epsk_md,
+                  nullptr)) {
+    return std::nullopt;
+  }
+  assert(imported_id_hash.size() == imported_id_hash_len);
+
+  ret.ipskx.ResizeForOverwrite(EVP_MD_size(hkdf_md));
+  if (!hkdf_expand_label(Span(ret.ipskx), cred->epsk_md, cred->epskx,
+                         "derived psk", imported_id_hash,
+                         SSL_is_dtls(hs->ssl))) {
+    return std::nullopt;
+  }
+
+  return ret;
 }
 
 size_t ssl_ech_confirmation_signal_hello_offset(const SSL *ssl) {

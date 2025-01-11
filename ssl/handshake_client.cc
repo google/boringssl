@@ -328,8 +328,26 @@ void ssl_done_writing_client_hello(SSL_HANDSHAKE *hs) {
 }
 
 bool ssl_accepts_server_certificate_auth(const SSL_HANDSHAKE *hs) {
-  // In PAKE mode, the server must respond with a PAKE.
-  return hs->pake_prover == nullptr;
+  assert(!hs->ssl->server);
+  // In PAKE mode, the server must respond with a PAKE. We do not support
+  // accepting both PAKE and certificates together.
+  if (hs->pake_prover != nullptr) {
+    return false;
+  }
+
+  // If the caller has explicitly asked for certificate verification, it is
+  // willing to accept a certificate, even if it has non-certificate
+  // credentials, such as a PSK.
+  if (hs->config->verify_mode != SSL_VERIFY_NONE) {
+    return true;
+  }
+
+  // Otherwise, we fall back to default behavior: if there is at least one
+  // non-certificate credential configured, assume by default that the caller is
+  // only willing to use that non-certificate mode.
+  return std::none_of(hs->config->cert->credentials.begin(),
+                      hs->config->cert->credentials.end(),
+                      [](const auto &cred) { return !cred->UsesPrivateKey(); });
 }
 
 static enum ssl_hs_wait_t do_start_connect(SSL_HANDSHAKE *hs) {
@@ -423,7 +441,8 @@ static enum ssl_hs_wait_t do_start_connect(SSL_HANDSHAKE *hs) {
     hs->early_data_offered = true;
   }
 
-  if (!ssl_setup_key_shares(hs, /*override_group_id=*/0) ||
+  if (!ssl_setup_pre_shared_keys(hs) ||
+      !ssl_setup_key_shares(hs, /*override_group_id=*/0) ||
       !ssl_setup_extension_permutation(hs) ||
       !ssl_encrypt_client_hello(hs, Span(ech_enc, ech_enc_len)) ||
       !ssl_add_client_hello(hs)) {
@@ -658,6 +677,7 @@ static enum ssl_hs_wait_t do_read_server_hello(SSL_HANDSHAKE *hs) {
 
   // Clear some TLS 1.3 state that no longer needs to be retained.
   hs->key_shares.clear();
+  hs->pre_shared_keys.clear();
   ssl_done_writing_client_hello(hs);
 
   // TLS 1.2 handshakes cannot accept ECH.
@@ -1297,6 +1317,8 @@ static enum ssl_hs_wait_t do_send_client_certificate(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
+  // TODO(crbug.com/369963041): It is currently impossible for a client that
+  // accepts PSKs or server certs to then decline to send a client cert.
   if (creds.empty()) {
     // If there were no credentials, proceed without a client certificate. In
     // this case, the handshake buffer may be released early.

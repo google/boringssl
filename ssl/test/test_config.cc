@@ -492,6 +492,7 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         IntFlag("-expect-cipher", &TestConfig::expect_cipher),
         StringFlag("-expect-peer-cert-file",
                    &TestConfig::expect_peer_cert_file),
+        BoolFlag("-expect-no-peer-cert", &TestConfig::expect_no_peer_cert),
         IntFlag("-resumption-delay", &TestConfig::resumption_delay),
         BoolFlag("-retain-only-sha256-client-cert",
                  &TestConfig::retain_only_sha256_client_cert),
@@ -574,6 +575,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
                           CredentialConfigType::kDelegated),
         NewCredentialFlag("-new-spake2plusv1-credential",
                           CredentialConfigType::kSPAKE2PlusV1),
+        NewCredentialFlag("-new-psk-credential",
+                          CredentialConfigType::kPreSharedKey),
         CredentialFlagWithDefault(
             StringFlag("-cert-file", &TestConfig::cert_file),
             StringFlag("-cert-file", &CredentialConfig::cert_file)),
@@ -605,6 +608,15 @@ const Flag<TestConfig> *FindFlag(const char *name) {
             Base64Flag("-pake-password", &CredentialConfig::pake_password)),
         CredentialFlag(
             BoolFlag("-wrong-pake-role", &CredentialConfig::wrong_pake_role)),
+        CredentialFlag(Base64Flag("-psk-importer-key", &CredentialConfig::psk)),
+        CredentialFlag(Base64Flag("-psk-importer-identity",
+                                  &CredentialConfig::psk_identity)),
+        CredentialFlag(Base64Flag("-psk-importer-context",
+                                  &CredentialConfig::psk_context)),
+        CredentialFlag(SetValueFlag("-psk-importer-sha256",
+                                    &CredentialConfig::psk_hash, EVP_sha256())),
+        CredentialFlag(SetValueFlag("-psk-importer-sha384",
+                                    &CredentialConfig::psk_hash, EVP_sha384())),
         CredentialFlag(
             Base64Flag("-trust-anchor-id", &CredentialConfig::trust_anchor_id)),
         IntFlag("-private-key-delay-ms", &TestConfig::private_key_delay_ms),
@@ -1487,6 +1499,12 @@ static bssl::UniquePtr<SSL_CREDENTIAL> CredentialFromConfig(
       }
       break;
     }
+    case CredentialConfigType::kPreSharedKey:
+      cred.reset(SSL_CREDENTIAL_new_pre_shared_key(
+          cred_config.psk.data(), cred_config.psk.size(),
+          cred_config.psk_identity.data(), cred_config.psk_identity.size(),
+          cred_config.psk_hash, cred_config.psk_context.data(),
+          cred_config.psk_context.size()));
   }
   if (cred == nullptr) {
     return nullptr;

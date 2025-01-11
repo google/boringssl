@@ -433,6 +433,12 @@ static bool IsPAKE(const SSL *ssl) {
                          CredentialConfigType::kSPAKE2PlusV1;
 }
 
+static bool IsTLS13PSK(const SSL *ssl) {
+  int idx = GetTestState(ssl)->selected_credential;
+  return idx >= 0 && GetTestConfig(ssl)->credentials[idx].type ==
+                         CredentialConfigType::kPreSharedKey;
+}
+
 // CheckHandshakeProperties checks, immediately after |ssl| completes its
 // initial handshake (or False Starts), whether all the properties are
 // consistent with the test configuration and invariants.
@@ -663,14 +669,10 @@ static bool CheckHandshakeProperties(SSL *ssl, bool is_resume,
     return false;
   }
 
-  if (!config->psk.empty()) {
+  if (config->expect_no_peer_cert || !config->psk.empty() || IsTLS13PSK(ssl) ||
+      IsPAKE(ssl)) {
     if (SSL_get_peer_cert_chain(ssl) != nullptr) {
-      fprintf(stderr, "Received peer certificate on a PSK cipher.\n");
-      return false;
-    }
-  } else if (IsPAKE(ssl)) {
-    if (SSL_get_peer_cert_chain(ssl) != nullptr) {
-      fprintf(stderr, "Received peer certificate on a PAKE handshake.\n");
+      fprintf(stderr, "Received unexpected peer certificate.\n");
       return false;
     }
   } else if (!config->is_server || config->require_any_client_certificate) {

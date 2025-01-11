@@ -29,6 +29,7 @@ enum class CredentialConfigType {
   kX509,
   kDelegated,
   kSPAKE2PlusV1,
+  kPreSharedKey,
 };
 
 struct CredentialConfig {
@@ -46,6 +47,10 @@ struct CredentialConfig {
   std::vector<uint8_t> pake_password;
   std::vector<uint8_t> trust_anchor_id;
   bool wrong_pake_role = false;
+  std::vector<uint8_t> psk;
+  std::vector<uint8_t> psk_identity;
+  std::vector<uint8_t> psk_context;
+  const EVP_MD *psk_hash;
 };
 
 struct TestConfig {
@@ -188,6 +193,7 @@ struct TestConfig {
   uint16_t expect_cipher_aes = 0;
   uint16_t expect_cipher_no_aes = 0;
   uint16_t expect_cipher = 0;
+  bool expect_no_peer_cert = false;
   std::string expect_peer_cert_file;
   int resumption_delay = 0;
   bool retain_only_sha256_client_cert = false;

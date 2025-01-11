@@ -31,6 +31,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #include <openssl/aead.h>
 #include <openssl/curve25519.h>
@@ -1212,19 +1213,46 @@ bool tls13_finished_mac(SSL_HANDSHAKE *hs, uint8_t *out, size_t *out_len,
 bool tls13_derive_session_psk(SSL_SESSION *session, Span<const uint8_t> nonce,
                               bool is_dtls);
 
-// tls13_psk_binder calculates PSK binder value for |session| over
-// |transcript| and |client_hello|. On success, it writes the result to |out|,
-// sets |*out_len| to the length, and returns true. Otherwise, it returns false.
+struct SSLImportedPSK {
+  static constexpr bool kAllowUniquePtr = true;
+  UniquePtr<SSL_CREDENTIAL> credential;
+  Array<uint8_t> imported_identity;
+  InplaceVector<uint8_t, SSL_MAX_MD_SIZE> ipskx;
+  uint16_t protocol = 0;
+  const EVP_MD *md = nullptr;
+};
+
+// tls13_derive_imported_psk computes the imported PSK value for |cred|, which
+// must be an PSK credential, for use with a target KDF of HKDF with |hkdf_md|.
+// |protocol| should be the wire version (i.e. |TLS1_3_VERSION| or
+// |DTLS1_3_VERSION|) of the target protocol. It returns the imported PSK on
+// success and std::nullopt on error.
+std::optional<SSLImportedPSK> tls13_derive_imported_psk(const SSL_HANDSHAKE *hs,
+                                                        SSL_CREDENTIAL *cred,
+                                                        uint16_t protocol,
+                                                        const EVP_MD *hkdf_md);
+
+using SSLPreSharedKey = std::variant<SSLImportedPSK, UniquePtr<SSL_SESSION>>;
+
+// ssl_pre_shared_key_hash return's |psk|'s hash.
+const EVP_MD *ssl_pre_shared_key_hash(const SSLPreSharedKey &psk);
+
+// ssl_pre_shared_key_identity return's |psk|'s identity.
+Span<const uint8_t> ssl_pre_shared_key_identity(const SSLPreSharedKey &psk);
+
+// tls13_psk_binder calculates the PSK binder value for |psk| over |transcript|
+// and |client_hello|. On success, it writes the result to |out|, sets
+// |*out_len| to the length, and returns true. Otherwise, it returns false.
 // |binders_len| must be the length of the binders field, covering all binders
 // and the overall length prefix, in |client_hello|.
 bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
-                      size_t *out_len, const SSL_SESSION *session,
+                      size_t *out_len, const SSLPreSharedKey &psk,
                       const SSLTranscript &transcript,
                       Span<const uint8_t> client_hello, size_t binders_len);
 
 // tls13_verify_psk_binder verifies that the handshake transcript, truncated up
-// to the binders has a valid signature using the value of |session|'s
-// resumption secret. It returns true on success, and false on failure.
+// to the binders has a valid binder for |session|. It returns true on success,
+// and false on failure.
 bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
                              const SSL_SESSION *session, const SSLMessage &msg,
                              CBS *binders);
@@ -1365,6 +1393,7 @@ enum class SSLCredentialType {
   kDelegated,
   kSPAKE2PlusV1Client,
   kSPAKE2PlusV1Server,
+  kPreSharedKey,
 };
 
 BSSL_NAMESPACE_END
@@ -1467,6 +1496,13 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
   bssl::Array<uint8_t> password_verifier_w1;  // server-only
   bssl::Array<uint8_t> registration_record;   // client-only
   mutable std::atomic<uint32_t> pake_limit;
+
+  // External-PSK-specific information. epskx is the HKDF-Extract-ed value, from
+  // Section 5.1 of RFC 9258.
+  bssl::Array<uint8_t> epskx;
+  bssl::Array<uint8_t> epsk_id;
+  const EVP_MD *epsk_md = nullptr;
+  bssl::Array<uint8_t> epsk_context;
 
   // Checks whether there are still permitted PAKE attempts remaining, without
   // changing the counter.
@@ -1730,6 +1766,9 @@ struct SSL_HANDSHAKE {
   // key_shares are the current key exchange instances, in preference order. Any
   // members of this vector must be non-null.
   InplaceVector<UniquePtr<SSLKeyShare>, kNumNamedGroups> key_shares;
+
+  // pre_shared_keys are the pre-shared keys to be offered by the client.
+  Vector<SSLPreSharedKey> pre_shared_keys;
 
   // transcript is the current handshake transcript.
   SSLTranscript transcript;
@@ -2084,6 +2123,10 @@ UniquePtr<SSL_SESSION> tls13_create_session_with_ticket(SSL *ssl, CBS *body);
 // for |hs|, if applicable. It returns true on success and false on error.
 bool ssl_setup_extension_permutation(SSL_HANDSHAKE *hs);
 
+// ssl_setup_pre_shared_keys computes the offered client PSKs and saves them in
+// |hs|. It returns true on success and false on failure.
+bool ssl_setup_pre_shared_keys(SSL_HANDSHAKE *hs);
+
 // ssl_setup_key_shares computes client key shares and saves them in |hs|. It
 // returns true on success and false on failure. In order of precedence:
 //
@@ -2121,9 +2164,8 @@ bool ssl_ext_pake_parse_serverhello(SSL_HANDSHAKE *hs,
                                     Array<uint8_t> *out_secret,
                                     uint8_t *out_alert, CBS *contents);
 
-bool ssl_ext_pre_shared_key_parse_serverhello(SSL_HANDSHAKE *hs,
-                                              uint8_t *out_alert,
-                                              CBS *contents);
+const SSLPreSharedKey *ssl_ext_pre_shared_key_parse_serverhello(
+    SSL_HANDSHAKE *hs, uint8_t *out_alert, CBS *contents);
 bool ssl_ext_pre_shared_key_parse_clienthello(
     SSL_HANDSHAKE *hs, CBS *out_ticket, CBS *out_binders,
     uint32_t *out_obfuscated_ticket_age, uint8_t *out_alert,

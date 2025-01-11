@@ -1432,6 +1432,8 @@ func appendCredentialFlags(flags []string, cred *Credential, prefix string, newC
 			flags = append(flags, prefix+"-new-delegated-credential")
 		case CredentialTypeSPAKE2PlusV1:
 			flags = append(flags, prefix+"-new-spake2plusv1-credential")
+		case CredentialTypePreSharedKey:
+			flags = append(flags, prefix+"-new-psk-credential")
 		default:
 			panic(fmt.Errorf("unknown credential type %d", cred.Type))
 		}
@@ -1466,6 +1468,19 @@ func appendCredentialFlags(flags []string, cred *Credential, prefix string, newC
 	handleBase64Field("pake-password", cred.PAKEPassword)
 	if cred.WrongPAKERole {
 		flags = append(flags, prefix+"-wrong-pake-role")
+	}
+	handleBase64Field("psk-importer-key", cred.PreSharedKey)
+	handleBase64Field("psk-importer-identity", cred.PSKIdentity)
+	handleBase64Field("psk-importer-context", cred.PSKContext)
+	switch cred.PSKHash {
+	case 0:
+		break
+	case crypto.SHA256:
+		flags = append(flags, prefix+"-psk-importer-sha256")
+	case crypto.SHA384:
+		flags = append(flags, prefix+"-psk-importer-sha384")
+	default:
+		panic(fmt.Sprintf("unknown PSK hash %s", cred.PSKHash))
 	}
 	handleBase64Field("trust-anchor-id", cred.TrustAnchorID)
 	return flags
@@ -2244,6 +2259,7 @@ func main() {
 	addKeyUpdateTests()
 	addPAKETests()
 	addTrustAnchorTests()
+	addPSKTests()
 
 	toAppend, err := convertToSplitHandshakeTests(testCases)
 	if err != nil {

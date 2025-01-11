@@ -3703,11 +3703,71 @@ OPENSSL_EXPORT const SRTP_PROTECTION_PROFILE *SSL_get_selected_srtp_profile(
     SSL *ssl);
 
 
-// Pre-shared keys.
+// TLS 1.3 pre-shared keys.
 //
-// Connections may be configured with PSK (Pre-Shared Key) cipher suites. These
-// authenticate using out-of-band pre-shared keys rather than certificates. See
-// RFC 4279.
+// TLS 1.3 connections can be authenticated using external pre-shared keys
+// (PSKs), as described in RFC 9258. These are represented in BoringSSL with
+// |SSL_CREDENTIAL| objects.
+//
+// BoringSSL only implements the PSK importer interface from RFC 9258. The
+// underlying protocol- and cipher-specific TLS 1.3 PSK mechanism is not exposed
+// directly.
+
+// SSL_CREDENTIAL_new_pre_shared_key returns a newly-allocated |SSL_CREDENTIAL|
+// representing an external pre-shared key, as described in RFC 9258, or NULL on
+// error. |key| is the base key, |id| is the external identity, and |md| is the
+// hash function. The result may be added to the credential list with
+// |SSL_CTX_add1_credential| or |SSL_add1_credential|. |context| is the context
+// string to use when importing to TLS.
+//
+// Callers can configure the credential list with multiple PSKs, or a mix of
+// PSKs and other credentials, in some preference order. Due to protocol
+// differences, clients and servers evaluate PSKs in the credential list
+// differently:
+//
+// - As a server, PSK credentials behave similarly to other credentials. Callers
+//   can configure them dynamically in the certificate callbacks (see
+//   |SSL_CTX_set_select_certificate_cb| and |SSL_CTX_set_cert_cb|). After those
+//   callbacks run, BoringSSL will select a credential to use from the list.
+//
+// - As a client, PSK credentials are offered in the ClientHello and selected by
+//   the server. This means all PSK credentials must be configured before
+//   starting the handshake, and the order between PSK and non-PSK credentials
+//   will be ignored. PSK credentials cannot be configured dynamically in
+//   callbacks such as |SSL_CTX_set_cert_cb|.
+//
+// A single connection may be configured to accept only certificate-based
+// handshakes, only PSK-based handshakes, or both. The server credential
+// determines the kind of handshake, so this is implicitly controlled by the
+// credential list as a server:
+//
+// - If the credential list only contains PSKs, BoringSSL will only consider
+//   PSK-based handshakes.
+//
+// - If the credential list contains PSKs and certificates, BoringSSL will
+//   consider both, depending on the client.
+//
+// As a client, if any PSK credentials are configured, BoringSSL will only
+// accept PSK-based handshakes by default. Setting the verify mode to
+// |SSL_VERIFY_PEER| (see |SSL_CTX_set_verify| and |SSL_CTX_set_custom_verify|)
+// overrides this behavior and causes BoringSSL to accept either.
+//
+// In both clients and servers, if a caller configures one or more PSK
+// credentials, and calls no certificate-related functions, the connection will
+// only accept one of those PSKs.
+//
+// TODO(crbug.com/369963041): These credentials are currently only implemented
+// as a client. Implement these as a server as well.
+OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_pre_shared_key(
+    const uint8_t *key, size_t key_len, const uint8_t *id, size_t id_len,
+    const EVP_MD *md, const uint8_t *context, size_t context_len);
+
+
+// TLS 1.2 pre-shared keys.
+//
+// TLS 1.2 connections may be configured with PSK (Pre-Shared Key) cipher
+// suites. These authenticate using out-of-band pre-shared keys rather than
+// certificates. See RFC 4279.
 //
 // This implementation uses NUL-terminated C strings for identities and identity
 // hints, so values with a NUL character are not supported. (RFC 4279 does not
@@ -6759,6 +6819,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_INVALID_TRUST_ANCHOR_LIST 328
 #define SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST 329
 #define SSL_R_DUPLICATE_GROUP 330
+#define SSL_R_INVALID_PSK_FOR_CONNECTION 331
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

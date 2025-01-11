@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <variant>
 #include <utility>
 
 #include <openssl/aead.h>
@@ -1878,40 +1879,68 @@ static bool ext_ec_point_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
 //
 // https://tools.ietf.org/html/rfc8446#section-4.2.11
 
-static bool should_offer_psk(const SSL_HANDSHAKE *hs,
-                             ssl_client_hello_type_t type) {
+bool ssl_setup_pre_shared_keys(SSL_HANDSHAKE *hs) {
   const SSL *const ssl = hs->ssl;
-  if (hs->max_version < TLS1_3_VERSION || ssl->session == nullptr ||
-      ssl_session_get_type(ssl->session.get()) !=
-          SSLSessionType::kPreSharedKey ||
-      // TODO(https://crbug.com/boringssl/275): Should we synthesize a
-      // placeholder PSK, at least when we offer early data? Otherwise
-      // ClientHelloOuter will contain an early_data extension without a
-      // pre_shared_key extension and potentially break the recovery flow.
-      type == ssl_client_hello_outer) {
+  if (hs->max_version < TLS1_3_VERSION) {
+    return true;
+  }
+
+  if (SSL_SESSION *session = ssl->session.get();
+      session != nullptr &&
+      ssl_session_get_type(session) == SSLSessionType::kPreSharedKey &&
+      !hs->pre_shared_keys.Push(UpRef(session))) {
     return false;
   }
 
-  // Per RFC 8446 section 4.1.4, skip offering the session if the selected
-  // cipher in HelloRetryRequest does not match. This avoids performing the
-  // transcript hash transformation for multiple hashes.
-  if (ssl->s3->used_hello_retry_request &&
-      ssl->session->cipher->algorithm_prf != hs->new_cipher->algorithm_prf) {
-    return false;
+  const uint16_t epsk_protocol =
+      SSL_is_dtls(ssl) ? DTLS1_3_VERSION : TLS1_3_VERSION;
+#if defined(TLS1_4_VERSION)
+#error "More imported PSKs may be needed when TLS 1.4 exists"
+#endif
+  for (const auto &cred : hs->config->cert->credentials) {
+    if (cred->type != SSLCredentialType::kPreSharedKey) {
+      continue;
+    }
+    // We need SHA-256 and SHA-384 variants to cover supported cipher suites.
+    for (const EVP_MD *md : {EVP_sha256(), EVP_sha384()}) {
+      std::optional<SSLImportedPSK> psk =
+          tls13_derive_imported_psk(hs, cred.get(), epsk_protocol, md);
+      if (!psk || !hs->pre_shared_keys.Push(*std::move(psk))) {
+        return false;
+      }
+    }
   }
 
   return true;
 }
 
+static bool should_offer_psk(const SSL_HANDSHAKE *hs,
+                             ssl_client_hello_type_t type) {
+  // TODO(https://crbug.com/boringssl/275): Should we synthesize a placeholder
+  // PSK, at least when we offer early data? Otherwise ClientHelloOuter will
+  // contain an early_data extension without a pre_shared_key extension and
+  // potentially break the recovery flow.
+  return hs->max_version >= TLS1_3_VERSION && !hs->pre_shared_keys.empty() &&
+         type != ssl_client_hello_outer;
+}
+
 static size_t ext_pre_shared_key_clienthello_length(
     const SSL_HANDSHAKE *hs, ssl_client_hello_type_t type) {
-  const SSL *const ssl = hs->ssl;
   if (!should_offer_psk(hs, type)) {
     return 0;
   }
 
-  size_t binder_len = EVP_MD_size(ssl_session_get_digest(ssl->session.get()));
-  return 15 + ssl->session->ticket.size() + binder_len;
+  // extension value, extension length, identities length, binders length.
+  size_t ret = 2 + 2 + 2 + 2;
+  for (const auto &psk : hs->pre_shared_keys) {
+    // identity
+    ret += 2 + ssl_pre_shared_key_identity(psk).size();
+    // obfuscated_ticket_age
+    ret += 4;
+    // binder
+    ret += 1 + EVP_MD_size(ssl_pre_shared_key_hash(psk));
+  }
+  return ret;
 }
 
 // ext_pre_shared_key_add_clienthello writes a pre_shared_key extension to
@@ -1936,30 +1965,61 @@ static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
     return CBB_flush(out_client_hello);
   }
 
-  OPENSSL_timeval now = ssl_ctx_get_current_time(ssl->ctx.get());
-  uint32_t ticket_age = 1000 * (now.tv_sec - ssl->session->time);
-  uint32_t obfuscated_ticket_age = ticket_age + ssl->session->ticket_age_add;
-
-  const size_t one_binder_len =
-      EVP_MD_size(ssl_session_get_digest(ssl->session.get()));
   const size_t len_before = CBB_len(out_extensions);
-  CBB contents, identity, ticket, binders, binder;
+  CBB contents, identities, identity, binders, binder;
   if (!CBB_add_u16(out_extensions, TLSEXT_TYPE_pre_shared_key) ||
       !CBB_add_u16_length_prefixed(out_extensions, &contents) ||
-      !CBB_add_u16_length_prefixed(&contents, &identity) ||
-      !CBB_add_u16_length_prefixed(&identity, &ticket) ||
-      !CBB_add_bytes(&ticket, ssl->session->ticket.data(),
-                     ssl->session->ticket.size()) ||
-      !CBB_add_u32(&identity, obfuscated_ticket_age) ||
-      !CBB_add_u16_length_prefixed(&contents, &binders) ||
-      !CBB_add_u8_length_prefixed(&binders, &binder) ||
-      // Fill in a placeholder zero binder of the appropriate length. It will be
-      // computed and filled in later after length prefixes are computed.
-      !CBB_add_zeros(&binder, one_binder_len) ||  //
-      !CBB_flush(out_extensions)) {
+      !CBB_add_u16_length_prefixed(&contents, &identities)) {
     return false;
   }
-  // Sample the length of the PSK extension.
+
+  // Fill in the PSK identities.
+  for (const auto &psk : hs->pre_shared_keys) {
+    if (const auto *imported = std::get_if<SSLImportedPSK>(&psk);
+        imported != nullptr) {
+      if (!CBB_add_u16_length_prefixed(&identities, &identity) ||
+          !CBB_add_bytes(&identity, imported->imported_identity.data(),
+                         imported->imported_identity.size()) ||
+          !CBB_add_u32(&identities, 0 /* obfuscated_ticket_age */)) {
+        return false;
+      }
+    } else {
+      const SSL_SESSION *session = std::get<UniquePtr<SSL_SESSION>>(psk).get();
+      // At most one PSK will be a session.
+      assert(session == ssl->session.get());
+      OPENSSL_timeval now = ssl_ctx_get_current_time(ssl->ctx.get());
+      uint32_t ticket_age = 1000 * (now.tv_sec - session->time);
+      uint32_t obfuscated_ticket_age = ticket_age + session->ticket_age_add;
+      if (!CBB_add_u16_length_prefixed(&identities, &identity) ||
+          !CBB_add_bytes(&identity, session->ticket.data(),
+                         session->ticket.size()) ||
+          !CBB_add_u32(&identities, obfuscated_ticket_age)) {
+        return false;
+      }
+    }
+  }
+
+  // Fill in placeholder zero binders of the appropriate length. They will be
+  // computed and filled in later after length prefixes are computed.
+  if (!CBB_add_u16_length_prefixed(&contents, &binders)) {
+    return false;
+  }
+  for (const auto &psk : hs->pre_shared_keys) {
+    size_t binder_len = EVP_MD_size(ssl_pre_shared_key_hash(psk));
+    if (!CBB_add_u8_length_prefixed(&binders, &binder) ||
+        !CBB_add_zeros(&binder, binder_len)) {
+      return false;
+    }
+  }
+  if (!CBB_flush(&binders)) {
+    return false;
+  }
+  const size_t binders_len = CBB_len(&binders);
+
+  // Finish the PSK extension and save the length.
+  if (!CBB_flush(out_extensions)) {
+    return false;
+  }
   *out_psk_len = CBB_len(out_extensions) - len_before;
 
   // Fill in |out_extensions|'s length prefix.
@@ -1967,41 +2027,43 @@ static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
     return false;
   }
 
-  // Fill in the binder.
+  // Fill in binders.
+  const auto client_hello = CBBAsSpan(out_client_hello);
+  auto remaining_binders_out = client_hello.last(binders_len);
   const auto &transcript =
       type == ssl_client_hello_inner ? hs->inner_transcript : hs->transcript;
-  auto client_hello = CBBAsSpan(out_client_hello);
-  auto binder_out = client_hello.last(one_binder_len);
-  size_t binders_len = 3 + one_binder_len;  // u16 and u8 length prefix
-  size_t actual_binder_len;
-  if (!tls13_psk_binder(hs, binder_out, &actual_binder_len, ssl->session.get(),
-                        transcript, client_hello, binders_len)) {
-    return false;
+  for (const auto &psk : hs->pre_shared_keys) {
+    // Skip length prefix.
+    remaining_binders_out = remaining_binders_out.subspan(1);
+    size_t one_binder_len;
+    if (!tls13_psk_binder(hs, remaining_binders_out, &one_binder_len, psk,
+                          transcript, client_hello,
+                          2 /* length */ + binders_len)) {
+      return false;
+    }
+    remaining_binders_out = remaining_binders_out.subspan(one_binder_len);
   }
-  assert(actual_binder_len == one_binder_len);
-
+  assert(remaining_binders_out.empty());
   return true;
 }
 
-bool ssl_ext_pre_shared_key_parse_serverhello(SSL_HANDSHAKE *hs,
-                                              uint8_t *out_alert,
-                                              CBS *contents) {
-  uint16_t psk_id;
-  if (!CBS_get_u16(contents, &psk_id) ||  //
+const SSLPreSharedKey *ssl_ext_pre_shared_key_parse_serverhello(
+    SSL_HANDSHAKE *hs, uint8_t *out_alert, CBS *contents) {
+  uint16_t selected_identity;
+  if (!CBS_get_u16(contents, &selected_identity) ||  //
       CBS_len(contents) != 0) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
     *out_alert = SSL_AD_DECODE_ERROR;
-    return false;
+    return nullptr;
   }
 
-  // We only advertise one PSK identity, so the only legal index is zero.
-  if (psk_id != 0) {
+  if (selected_identity >= hs->pre_shared_keys.size()) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_PSK_IDENTITY_NOT_FOUND);
     *out_alert = SSL_AD_UNKNOWN_PSK_IDENTITY;
-    return false;
+    return nullptr;
   }
 
-  return true;
+  return &hs->pre_shared_keys[selected_identity];
 }
 
 bool ssl_ext_pre_shared_key_parse_clienthello(

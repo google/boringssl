@@ -367,6 +367,12 @@ const echAcceptConfirmationLength = 8
 // Temporary value; pre RFC.
 const spakeID uint16 = 0x7d96
 
+// KDF identifiers (RFC 9258)
+const (
+	kdfHKDFWithSHA256 uint16 = 0x0001
+	kdfHKDFWithSHA384 uint16 = 0x0002
+)
+
 // ConnectionState records basic TLS details about the connection.
 type ConnectionState struct {
 	Version                    uint16                // TLS version used by the connection (e.g. VersionTLS12)
@@ -1714,13 +1720,9 @@ type ProtocolBugs struct {
 	// resumption.
 	NegotiatePSKResumption bool
 
-	// AlwaysSelectPSKIdentity, if true, causes the server in TLS 1.3 to
-	// always acknowledge a session, regardless of one was offered.
-	AlwaysSelectPSKIdentity bool
-
-	// SelectPSKIdentityOnResume, if non-zero, causes the server to select
-	// the specified PSK identity index rather than the actual value.
-	SelectPSKIdentityOnResume uint16
+	// AlwaysSelectPSKIdentity, if not nil, causes the server in TLS 1.3 to
+	// select the specified PSK identity index.
+	AlwaysSelectPSKIdentity *uint16
 
 	// ExtraPSKIdentity, if true, causes the client to send an extra PSK
 	// identity.
@@ -2356,6 +2358,7 @@ const (
 	CredentialTypeX509 CredentialType = iota
 	CredentialTypeDelegated
 	CredentialTypeSPAKE2PlusV1
+	CredentialTypePreSharedKey
 )
 
 // A Credential is a certificate chain and private key that a TLS endpoint may
@@ -2408,6 +2411,11 @@ type Credential struct {
 	// OverridePAKECodepoint, if non-zero, causes the runner to send the
 	// specified value instead of the actual PAKE codepoint.
 	OverridePAKECodepoint uint16
+	// The following fields are used for PSK credentials.
+	PreSharedKey []byte
+	PSKIdentity  []byte
+	PSKHash      crypto.Hash
+	PSKContext   []byte
 	// TrustAnchorID, if not empty, is the trust anchor ID for the issuer
 	// of the certificate chain.
 	TrustAnchorID []byte
