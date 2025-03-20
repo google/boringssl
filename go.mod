@@ -5,8 +5,8 @@ go 1.24
 require (
 	cloud.google.com/go/storage v1.50.0
 	filippo.io/edwards25519 v1.1.0
-	golang.org/x/crypto v0.33.0
-	golang.org/x/net v0.35.0
+	golang.org/x/crypto v0.35.0
+	golang.org/x/net v0.36.0
 	google.golang.org/api v0.221.0
 )
 
