@@ -237,8 +237,10 @@ static bool GetString(std::string *out, CBS *cbs) {
 
 template <typename T>
 static bool GetVector(std::vector<T> *out, CBS *cbs) {
-  static_assert(std::is_pod<T>::value,
-                "GetVector may only be called on POD types");
+  static_assert(
+      std::is_standard_layout<T>::value && std::is_trivially_copyable<T>::value,
+      "GetVector may only be called on standard layout, trivially copyable "
+      "types");
 
   CBS child;
   if (!CBS_get_u8_length_prefixed(cbs, &child)) {

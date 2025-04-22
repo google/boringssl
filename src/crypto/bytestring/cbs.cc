@@ -410,7 +410,7 @@ int CBS_get_any_asn1(CBS *cbs, CBS *out, CBS_ASN1_TAG *out_tag) {
     return 0;
   }
 
-  if (!CBS_skip(out, header_len)) {
+  if (out && !CBS_skip(out, header_len)) {
     assert(0);
     return 0;
   }

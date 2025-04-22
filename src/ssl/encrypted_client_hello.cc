@@ -28,6 +28,7 @@
 #include <openssl/hpke.h>
 #include <openssl/rand.h>
 
+#include "../crypto/internal.h"
 #include "internal.h"
 
 
@@ -295,37 +296,37 @@ bool ssl_client_hello_decrypt(SSL_HANDSHAKE *hs, uint8_t *out_alert,
 
   // Decrypt the EncodedClientHelloInner.
   Array<uint8_t> encoded;
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  // In fuzzer mode, disable encryption to improve coverage. We reserve a short
-  // input to signal decryption failure, so the fuzzer can explore fallback to
-  // ClientHelloOuter.
-  const uint8_t kBadPayload[] = {0xff};
-  if (payload == kBadPayload) {
-    *out_alert = SSL_AD_DECRYPT_ERROR;
-    *out_is_decrypt_error = true;
-    OPENSSL_PUT_ERROR(SSL, SSL_R_DECRYPTION_FAILED);
-    return false;
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    // In fuzzer mode, disable encryption to improve coverage. We reserve a
+    // short input to signal decryption failure, so the fuzzer can explore
+    // fallback to ClientHelloOuter.
+    const uint8_t kBadPayload[] = {0xff};
+    if (payload == kBadPayload) {
+      *out_alert = SSL_AD_DECRYPT_ERROR;
+      *out_is_decrypt_error = true;
+      OPENSSL_PUT_ERROR(SSL, SSL_R_DECRYPTION_FAILED);
+      return false;
+    }
+    if (!encoded.CopyFrom(payload)) {
+      *out_alert = SSL_AD_INTERNAL_ERROR;
+      return false;
+    }
+  } else {
+    if (!encoded.InitForOverwrite(payload.size())) {
+      *out_alert = SSL_AD_INTERNAL_ERROR;
+      return false;
+    }
+    size_t len;
+    if (!EVP_HPKE_CTX_open(hs->ech_hpke_ctx.get(), encoded.data(), &len,
+                           encoded.size(), payload.data(), payload.size(),
+                           aad.data(), aad.size())) {
+      *out_alert = SSL_AD_DECRYPT_ERROR;
+      *out_is_decrypt_error = true;
+      OPENSSL_PUT_ERROR(SSL, SSL_R_DECRYPTION_FAILED);
+      return false;
+    }
+    encoded.Shrink(len);
   }
-  if (!encoded.CopyFrom(payload)) {
-    *out_alert = SSL_AD_INTERNAL_ERROR;
-    return false;
-  }
-#else
-  if (!encoded.InitForOverwrite(payload.size())) {
-    *out_alert = SSL_AD_INTERNAL_ERROR;
-    return false;
-  }
-  size_t len;
-  if (!EVP_HPKE_CTX_open(hs->ech_hpke_ctx.get(), encoded.data(), &len,
-                         encoded.size(), payload.data(), payload.size(),
-                         aad.data(), aad.size())) {
-    *out_alert = SSL_AD_DECRYPT_ERROR;
-    *out_is_decrypt_error = true;
-    OPENSSL_PUT_ERROR(SSL, SSL_R_DECRYPTION_FAILED);
-    return false;
-  }
-  encoded.Shrink(len);
-#endif
 
   if (!ssl_decode_client_hello_inner(hs->ssl, out_alert, out, encoded,
                                      client_hello_outer)) {
@@ -701,14 +702,13 @@ bool ssl_select_ech_config(SSL_HANDSHAKE *hs, Span<uint8_t> out_enc,
 }
 
 static size_t aead_overhead(const EVP_HPKE_AEAD *aead) {
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  // TODO(https://crbug.com/boringssl/275): Having to adjust the overhead
-  // everywhere is tedious. Change fuzzer mode to append a fake tag but still
-  // otherwise be cleartext, refresh corpora, and then inline this function.
-  return 0;
-#else
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    // TODO(https://crbug.com/boringssl/275): Having to adjust the overhead
+    // everywhere is tedious. Change fuzzer mode to append a fake tag but still
+    // otherwise be cleartext, refresh corpora, and then inline this function.
+    return 0;
+  }
   return EVP_AEAD_max_overhead(EVP_HPKE_AEAD_aead(aead));
-#endif
 }
 
 // random_size returns a random value between |min| and |max|, inclusive.
@@ -885,19 +885,19 @@ bool ssl_encrypt_client_hello(SSL_HANDSHAKE *hs, Span<const uint8_t> enc) {
 
   // Replace the payload in |hs->ech_client_outer| with the encrypted value.
   auto payload_span = Span(hs->ech_client_outer).last(payload_len);
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  // In fuzzer mode, the server expects a cleartext payload.
-  assert(payload_span.size() == encoded.size());
-  OPENSSL_memcpy(payload_span.data(), encoded.data(), encoded.size());
-#else
-  if (!EVP_HPKE_CTX_seal(hs->ech_hpke_ctx.get(), payload_span.data(),
-                         &payload_len, payload_span.size(), encoded.data(),
-                         encoded.size(), CBB_data(aad.get()),
-                         CBB_len(aad.get())) ||
-      payload_len != payload_span.size()) {
-    return false;
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    // In fuzzer mode, the server expects a cleartext payload.
+    assert(payload_span.size() == encoded.size());
+    OPENSSL_memcpy(payload_span.data(), encoded.data(), encoded.size());
+  } else {
+    if (!EVP_HPKE_CTX_seal(hs->ech_hpke_ctx.get(), payload_span.data(),
+                           &payload_len, payload_span.size(), encoded.data(),
+                           encoded.size(), CBB_data(aad.get()),
+                           CBB_len(aad.get())) ||
+        payload_len != payload_span.size()) {
+      return false;
+    }
   }
-#endif  // BORINGSSL_UNSAFE_FUZZER_MODE
 
   return true;
 }

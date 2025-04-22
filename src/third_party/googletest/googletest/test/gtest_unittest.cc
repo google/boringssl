@@ -422,11 +422,14 @@ TEST(FormatTimeInMillisAsSecondsTest, FormatsNegativeNumber) {
   EXPECT_EQ("-1234567.89", FormatTimeInMillisAsSeconds(-1234567890));
 }
 
+// TODO: b/287046337 - In emscripten, local time zone modification is not
+// supported.
+#if !defined(__EMSCRIPTEN__)
 // Tests FormatEpochTimeInMillisAsIso8601().  The correctness of conversion
 // for particular dates below was verified in Python using
 // datetime.datetime.fromutctimestamp(<timestamp>/1000).
 
-// FormatEpochTimeInMillisAsIso8601 depends on the current timezone, so we
+// FormatEpochTimeInMillisAsIso8601 depends on the local timezone, so we
 // have to set up a particular timezone to obtain predictable results.
 class FormatEpochTimeInMillisAsIso8601Test : public Test {
  public:
@@ -445,9 +448,8 @@ class FormatEpochTimeInMillisAsIso8601Test : public Test {
     }
     GTEST_DISABLE_MSC_DEPRECATED_POP_()
 
-    // Set up the time zone for FormatEpochTimeInMillisAsIso8601 to use.  We
-    // cannot use the local time zone because the function's output depends
-    // on the time zone.
+    // Set the local time zone for FormatEpochTimeInMillisAsIso8601 to be
+    // a fixed time zone for reproducibility purposes.
     SetTimeZone("UTC+00");
   }
 
@@ -513,6 +515,8 @@ TEST_F(FormatEpochTimeInMillisAsIso8601Test, Prints24HourTime) {
 TEST_F(FormatEpochTimeInMillisAsIso8601Test, PrintsEpochStart) {
   EXPECT_EQ("1970-01-01T00:00:00.000", FormatEpochTimeInMillisAsIso8601(0));
 }
+
+#endif  // __EMSCRIPTEN__
 
 #ifdef __BORLANDC__
 // Silences warnings: "Condition is always true", "Unreachable code"
@@ -2159,7 +2163,7 @@ class UnitTestRecordPropertyTestEnvironment : public Environment {
 };
 
 // This will test property recording outside of any test or test case.
-static Environment* record_property_env GTEST_ATTRIBUTE_UNUSED_ =
+[[maybe_unused]] static Environment* record_property_env =
     AddGlobalTestEnvironment(new UnitTestRecordPropertyTestEnvironment);
 
 // This group of tests is for predicate assertions (ASSERT_PRED*, etc)
@@ -2866,6 +2870,8 @@ TEST_F(FloatTest, LargeDiff) {
 // This ensures that no overflow occurs when comparing numbers whose
 // absolute value is very large.
 TEST_F(FloatTest, Infinity) {
+  EXPECT_FLOAT_EQ(values_.infinity, values_.infinity);
+  EXPECT_FLOAT_EQ(-values_.infinity, -values_.infinity);
   EXPECT_FLOAT_EQ(values_.infinity, values_.close_to_infinity);
   EXPECT_FLOAT_EQ(-values_.infinity, -values_.close_to_infinity);
   EXPECT_NONFATAL_FAILURE(EXPECT_FLOAT_EQ(values_.infinity, -values_.infinity),
@@ -2890,6 +2896,11 @@ TEST_F(FloatTest, NaN) {
   EXPECT_NONFATAL_FAILURE(EXPECT_FLOAT_EQ(v.nan1, v.nan1), "v.nan1");
   EXPECT_NONFATAL_FAILURE(EXPECT_FLOAT_EQ(v.nan1, v.nan2), "v.nan2");
   EXPECT_NONFATAL_FAILURE(EXPECT_FLOAT_EQ(1.0, v.nan1), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(1.0f, v.nan1, 1.0f), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(1.0f, v.nan1, v.infinity), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(v.infinity, v.nan1, 1.0f), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(v.infinity, v.nan1, v.infinity),
+                          "v.nan1");
 
   EXPECT_FATAL_FAILURE(ASSERT_FLOAT_EQ(v.nan1, v.infinity), "v.infinity");
 }
@@ -2913,11 +2924,28 @@ TEST_F(FloatTest, Commutative) {
 
 // Tests EXPECT_NEAR.
 TEST_F(FloatTest, EXPECT_NEAR) {
+  static const FloatTest::TestValues& v = this->values_;
+
   EXPECT_NEAR(-1.0f, -1.1f, 0.2f);
   EXPECT_NEAR(2.0f, 3.0f, 1.0f);
+  EXPECT_NEAR(v.infinity, v.infinity, 0.0f);
+  EXPECT_NEAR(-v.infinity, -v.infinity, 0.0f);
+  EXPECT_NEAR(0.0f, 1.0f, v.infinity);
+  EXPECT_NEAR(v.infinity, -v.infinity, v.infinity);
+  EXPECT_NEAR(-v.infinity, v.infinity, v.infinity);
   EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(1.0f, 1.5f, 0.25f),  // NOLINT
                           "The difference between 1.0f and 1.5f is 0.5, "
                           "which exceeds 0.25f");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(v.infinity, -v.infinity, 0.0f),  // NOLINT
+                          "The difference between v.infinity and -v.infinity "
+                          "is inf, which exceeds 0.0f");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(-v.infinity, v.infinity, 0.0f),  // NOLINT
+                          "The difference between -v.infinity and v.infinity "
+                          "is inf, which exceeds 0.0f");
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_NEAR(v.infinity, v.close_to_infinity, v.further_from_infinity),
+      "The difference between v.infinity and v.close_to_infinity is inf, which "
+      "exceeds v.further_from_infinity");
 }
 
 // Tests ASSERT_NEAR.
@@ -3024,6 +3052,8 @@ TEST_F(DoubleTest, LargeDiff) {
 // This ensures that no overflow occurs when comparing numbers whose
 // absolute value is very large.
 TEST_F(DoubleTest, Infinity) {
+  EXPECT_DOUBLE_EQ(values_.infinity, values_.infinity);
+  EXPECT_DOUBLE_EQ(-values_.infinity, -values_.infinity);
   EXPECT_DOUBLE_EQ(values_.infinity, values_.close_to_infinity);
   EXPECT_DOUBLE_EQ(-values_.infinity, -values_.close_to_infinity);
   EXPECT_NONFATAL_FAILURE(EXPECT_DOUBLE_EQ(values_.infinity, -values_.infinity),
@@ -3043,6 +3073,12 @@ TEST_F(DoubleTest, NaN) {
   EXPECT_NONFATAL_FAILURE(EXPECT_DOUBLE_EQ(v.nan1, v.nan1), "v.nan1");
   EXPECT_NONFATAL_FAILURE(EXPECT_DOUBLE_EQ(v.nan1, v.nan2), "v.nan2");
   EXPECT_NONFATAL_FAILURE(EXPECT_DOUBLE_EQ(1.0, v.nan1), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(1.0, v.nan1, 1.0), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(1.0, v.nan1, v.infinity), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(v.infinity, v.nan1, 1.0), "v.nan1");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(v.infinity, v.nan1, v.infinity),
+                          "v.nan1");
+
   EXPECT_FATAL_FAILURE(ASSERT_DOUBLE_EQ(v.nan1, v.infinity), "v.infinity");
 }
 
@@ -3065,11 +3101,28 @@ TEST_F(DoubleTest, Commutative) {
 
 // Tests EXPECT_NEAR.
 TEST_F(DoubleTest, EXPECT_NEAR) {
+  static const DoubleTest::TestValues& v = this->values_;
+
   EXPECT_NEAR(-1.0, -1.1, 0.2);
   EXPECT_NEAR(2.0, 3.0, 1.0);
+  EXPECT_NEAR(v.infinity, v.infinity, 0.0);
+  EXPECT_NEAR(-v.infinity, -v.infinity, 0.0);
+  EXPECT_NEAR(0.0, 1.0, v.infinity);
+  EXPECT_NEAR(v.infinity, -v.infinity, v.infinity);
+  EXPECT_NEAR(-v.infinity, v.infinity, v.infinity);
   EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(1.0, 1.5, 0.25),  // NOLINT
                           "The difference between 1.0 and 1.5 is 0.5, "
                           "which exceeds 0.25");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(v.infinity, -v.infinity, 0.0),
+                          "The difference between v.infinity and -v.infinity "
+                          "is inf, which exceeds 0.0");
+  EXPECT_NONFATAL_FAILURE(EXPECT_NEAR(-v.infinity, v.infinity, 0.0),
+                          "The difference between -v.infinity and v.infinity "
+                          "is inf, which exceeds 0.0");
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_NEAR(v.infinity, v.close_to_infinity, v.further_from_infinity),
+      "The difference between v.infinity and v.close_to_infinity is inf, which "
+      "exceeds v.further_from_infinity");
   // At this magnitude adjacent doubles are 512.0 apart, so this triggers a
   // slightly different failure reporting path.
   EXPECT_NONFATAL_FAILURE(
@@ -4168,8 +4221,8 @@ TEST(AssertionSyntaxTest, ExceptionAssertionsBehavesLikeSingleStatement) {
 #endif
 TEST(AssertionSyntaxTest, NoFatalFailureAssertionsBehavesLikeSingleStatement) {
   if (AlwaysFalse())
-    EXPECT_NO_FATAL_FAILURE(FAIL()) << "This should never be executed. "
-                                    << "It's a compilation test only.";
+    EXPECT_NO_FATAL_FAILURE(FAIL())
+        << "This should never be executed. " << "It's a compilation test only.";
   else
     ;  // NOLINT
 
@@ -6667,6 +6720,9 @@ TEST(ColoredOutputTest, UsesColorsWhenTermSupportsColors) {
   SetEnv("TERM", "xterm-kitty");      // TERM supports colors.
   EXPECT_TRUE(ShouldUseColor(true));  // Stdout is a TTY.
 
+  SetEnv("TERM", "alacritty");        // TERM supports colors.
+  EXPECT_TRUE(ShouldUseColor(true));  // Stdout is a TTY.
+
   SetEnv("TERM", "xterm-256color");   // TERM supports colors.
   EXPECT_TRUE(ShouldUseColor(true));  // Stdout is a TTY.
 
@@ -6691,15 +6747,15 @@ TEST(ColoredOutputTest, UsesColorsWhenTermSupportsColors) {
   SetEnv("TERM", "linux");            // TERM supports colors.
   EXPECT_TRUE(ShouldUseColor(true));  // Stdout is a TTY.
 
-  SetEnv("TERM", "cygwin");  // TERM supports colors.
+  SetEnv("TERM", "cygwin");           // TERM supports colors.
   EXPECT_TRUE(ShouldUseColor(true));  // Stdout is a TTY.
 #endif  // GTEST_OS_WINDOWS
 }
 
 // Verifies that StaticAssertTypeEq works in a namespace scope.
 
-static bool dummy1 GTEST_ATTRIBUTE_UNUSED_ = StaticAssertTypeEq<bool, bool>();
-static bool dummy2 GTEST_ATTRIBUTE_UNUSED_ =
+[[maybe_unused]] static bool dummy1 = StaticAssertTypeEq<bool, bool>();
+[[maybe_unused]] static bool dummy2 =
     StaticAssertTypeEq<const int, const int>();
 
 // Verifies that StaticAssertTypeEq works in a class.
@@ -7473,22 +7529,6 @@ TEST(NativeArrayTest, WorksForTwoDimensionalArray) {
   NativeArray<char[3]> na(a, 2, RelationToSourceReference());
   ASSERT_EQ(2U, na.size());
   EXPECT_EQ(a, na.begin());
-}
-
-// IndexSequence
-TEST(IndexSequence, MakeIndexSequence) {
-  using testing::internal::IndexSequence;
-  using testing::internal::MakeIndexSequence;
-  EXPECT_TRUE(
-      (std::is_same<IndexSequence<>, MakeIndexSequence<0>::type>::value));
-  EXPECT_TRUE(
-      (std::is_same<IndexSequence<0>, MakeIndexSequence<1>::type>::value));
-  EXPECT_TRUE(
-      (std::is_same<IndexSequence<0, 1>, MakeIndexSequence<2>::type>::value));
-  EXPECT_TRUE((
-      std::is_same<IndexSequence<0, 1, 2>, MakeIndexSequence<3>::type>::value));
-  EXPECT_TRUE(
-      (std::is_base_of<IndexSequence<0, 1, 2>, MakeIndexSequence<3>>::value));
 }
 
 // ElemFromList

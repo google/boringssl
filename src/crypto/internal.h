@@ -21,6 +21,7 @@
 #include <openssl/thread.h>
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(BORINGSSL_CONSTANT_TIME_VALIDATION)
@@ -47,9 +48,7 @@
 #endif
 
 #if defined(OPENSSL_WINDOWS_THREADS)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #endif
 
 #if defined(__cplusplus)
@@ -103,12 +102,6 @@ typedef __uint128_t uint128_t;
 #endif
 
 #define OPENSSL_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
-
-#if defined(__clang__) && __clang_major__ >= 5
-#if __has_attribute(fallthrough)
-#define OPENSSL_CAN_USE_ATTR_FALLTHROUGH
-#endif
-#endif
 
 // GCC-like compilers indicate SSE2 with |__SSE2__|. MSVC leaves the caller to
 // know that x86_64 has SSE2, and uses _M_IX86_FP to indicate SSE2 on x86.
@@ -610,8 +603,7 @@ OPENSSL_EXPORT int CRYPTO_refcount_dec_and_test_zero(CRYPTO_refcount_t *count);
 typedef struct crypto_mutex_st {
   char padding;  // Empty structs have different sizes in C and C++.
 } CRYPTO_MUTEX;
-#define CRYPTO_MUTEX_INIT \
-  { 0 }
+#define CRYPTO_MUTEX_INIT {0}
 #elif defined(OPENSSL_WINDOWS_THREADS)
 typedef SRWLOCK CRYPTO_MUTEX;
 #define CRYPTO_MUTEX_INIT SRWLOCK_INIT
@@ -676,7 +668,7 @@ using MutexReadLock =
 
 BSSL_NAMESPACE_END
 
-}       // extern "C++"
+}  // extern "C++"
 #endif  // defined(__cplusplus)
 
 
@@ -740,10 +732,9 @@ typedef struct {
   uint8_t num_reserved;
 } CRYPTO_EX_DATA_CLASS;
 
-#define CRYPTO_EX_DATA_CLASS_INIT \
-  { CRYPTO_MUTEX_INIT, NULL, NULL, {}, 0 }
+#define CRYPTO_EX_DATA_CLASS_INIT {CRYPTO_MUTEX_INIT, NULL, NULL, {}, 0}
 #define CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA \
-  { CRYPTO_MUTEX_INIT, NULL, NULL, {}, 1 }
+  {CRYPTO_MUTEX_INIT, NULL, NULL, {}, 1}
 
 // CRYPTO_get_ex_new_index_ex allocates a new index for |ex_data_class|. Each
 // class of object should provide a wrapper function that uses the correct
@@ -785,9 +776,6 @@ static inline uint64_t CRYPTO_bswap8(uint64_t x) {
   return __builtin_bswap64(x);
 }
 #elif defined(_MSC_VER)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
-#include <stdlib.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #pragma intrinsic(_byteswap_uint64, _byteswap_ulong, _byteswap_ushort)
 static inline uint16_t CRYPTO_bswap2(uint16_t x) { return _byteswap_ushort(x); }
 
@@ -842,7 +830,7 @@ static inline void *OPENSSL_memchr(void *s, int c, size_t n) {
   return memchr(s, c, n);
 }
 
-}      // extern "C++"
+}  // extern "C++"
 #else  // __cplusplus
 
 static inline void *OPENSSL_memchr(const void *s, int c, size_t n) {
@@ -1048,6 +1036,12 @@ inline void boringssl_ensure_ffdh_self_test(void) {}
 
 #endif  // FIPS
 
+// BORINGSSL_check_test memcmp's two values of equal length. It returns 1 on
+// success and, on failure, it prints an error message that includes the
+// hexdumps the two values and returns 0.
+int BORINGSSL_check_test(const void *expected, const void *actual,
+                         size_t expected_len, const char *name);
+
 // boringssl_self_test_sha256 performs a SHA-256 KAT.
 int boringssl_self_test_sha256(void);
 
@@ -1056,6 +1050,15 @@ int boringssl_self_test_sha512(void);
 
 // boringssl_self_test_hmac_sha256 performs an HMAC-SHA-256 KAT.
 int boringssl_self_test_hmac_sha256(void);
+
+// boringssl_self_test_mlkem performs the ML-KEM KATs.
+OPENSSL_EXPORT int boringssl_self_test_mlkem(void);
+
+// boringssl_self_test_mldsa performs the ML-DSA KATs.
+OPENSSL_EXPORT int boringssl_self_test_mldsa(void);
+
+// boringssl_self_test_slhdsa performs the SLH-DSA KATs.
+OPENSSL_EXPORT int boringssl_self_test_slhdsa(void);
 
 #if defined(BORINGSSL_FIPS_COUNTERS)
 void boringssl_fips_inc_counter(enum fips_counter_t counter);
@@ -1104,14 +1107,6 @@ extern uint32_t OPENSSL_ia32cap_P[4];
 OPENSSL_ATTR_CONST uint32_t OPENSSL_get_ia32cap(int idx);
 
 // See Intel manual, volume 2A, table 3-11.
-
-inline int CRYPTO_is_FXSR_capable(void) {
-#if defined(__FXSR__)
-  return 1;
-#else
-  return (OPENSSL_get_ia32cap(0) & (1u << 24)) != 0;
-#endif
-}
 
 inline int CRYPTO_is_intel_cpu(void) {
   // The reserved bit 30 is used to indicate an Intel CPU.
@@ -1399,6 +1394,7 @@ inline int CRYPTO_is_ARMv8_SHA512_capable(void) {
 
 #endif  // OPENSSL_ARM || OPENSSL_AARCH64
 
+
 #if defined(BORINGSSL_DISPATCH_TEST)
 // Runtime CPU dispatch testing support
 
@@ -1410,11 +1406,11 @@ inline int CRYPTO_is_ARMv8_SHA512_capable(void) {
 //   3: aes_hw_set_encrypt_key
 //   4: vpaes_encrypt
 //   5: vpaes_set_encrypt_key
-//   6: aes_gcm_enc_update_vaes_avx10_256 [reserved]
-//   7: aes_gcm_enc_update_vaes_avx10_512
-//   8: aes_gcm_enc_update_vaes_avx2
-extern uint8_t BORINGSSL_function_hit[9];
+//   6: aes_gcm_enc_update_vaes_avx2
+//   7: aes_gcm_enc_update_vaes_avx512
+extern uint8_t BORINGSSL_function_hit[8];
 #endif  // BORINGSSL_DISPATCH_TEST
+
 
 // OPENSSL_vasprintf_internal is just like |vasprintf(3)|. If |system_malloc| is
 // 0, memory will be allocated with |OPENSSL_malloc| and must be freed with
@@ -1423,6 +1419,19 @@ extern uint8_t BORINGSSL_function_hit[9];
 OPENSSL_EXPORT int OPENSSL_vasprintf_internal(char **str, const char *format,
                                               va_list args, int system_malloc)
     OPENSSL_PRINTF_FORMAT_FUNC(2, 0);
+
+
+// Fuzzer mode.
+
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+// CRYPTO_fuzzer_mode_enabled returns whether fuzzer mode is enabled. See
+// |CRYPTO_set_fuzzer_mode|. In non-fuzzer builds, this function statically
+// returns zero so the codepaths will be deleted by the optimizer.
+int CRYPTO_fuzzer_mode_enabled(void);
+#else
+inline int CRYPTO_fuzzer_mode_enabled(void) { return 0; }
+#endif
+
 
 #if defined(__cplusplus)
 }  // extern C

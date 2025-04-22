@@ -52,7 +52,7 @@ $L$SEH_begin_gcm_init_vpclmulqdq_avx2_1:
 _CET_ENDBR
 	sub	rsp,24
 $L$SEH_prologue_gcm_init_vpclmulqdq_avx2_2:
-	movdqa	XMMWORD[rsp],xmm6
+	vmovdqa	XMMWORD[rsp],xmm6
 $L$SEH_prologue_gcm_init_vpclmulqdq_avx2_3:
 
 $L$SEH_endprologue_gcm_init_vpclmulqdq_avx2_4:
@@ -75,14 +75,10 @@ $L$SEH_endprologue_gcm_init_vpclmulqdq_avx2_4:
 
 
 	vpclmulqdq	xmm0,xmm3,xmm3,0x00
-	vpclmulqdq	xmm1,xmm3,xmm3,0x01
-	vpclmulqdq	xmm2,xmm3,xmm3,0x10
-	vpxor	xmm1,xmm1,xmm2
-	vpclmulqdq	xmm2,xmm6,xmm0,0x01
+	vpclmulqdq	xmm5,xmm3,xmm3,0x11
+	vpclmulqdq	xmm1,xmm6,xmm0,0x01
 	vpshufd	xmm0,xmm0,0x4e
 	vpxor	xmm1,xmm1,xmm0
-	vpxor	xmm1,xmm1,xmm2
-	vpclmulqdq	xmm5,xmm3,xmm3,0x11
 	vpclmulqdq	xmm0,xmm6,xmm1,0x01
 	vpshufd	xmm1,xmm1,0x4e
 	vpxor	xmm5,xmm5,xmm1
@@ -160,7 +156,7 @@ $L$SEH_endprologue_gcm_init_vpclmulqdq_avx2_4:
 	vmovdqu	YMMWORD[128+rcx],ymm0
 
 	vzeroupper
-	movdqa	xmm6,XMMWORD[rsp]
+	vmovdqa	xmm6,XMMWORD[rsp]
 	add	rsp,24
 	ret
 $L$SEH_end_gcm_init_vpclmulqdq_avx2_5:
@@ -175,7 +171,7 @@ $L$SEH_begin_gcm_gmult_vpclmulqdq_avx2_1:
 _CET_ENDBR
 	sub	rsp,24
 $L$SEH_prologue_gcm_gmult_vpclmulqdq_avx2_2:
-	movdqa	XMMWORD[rsp],xmm6
+	vmovdqa	XMMWORD[rsp],xmm6
 $L$SEH_prologue_gcm_gmult_vpclmulqdq_avx2_3:
 
 $L$SEH_endprologue_gcm_gmult_vpclmulqdq_avx2_4:
@@ -203,7 +199,9 @@ $L$SEH_endprologue_gcm_gmult_vpclmulqdq_avx2_4:
 
 	vpshufb	xmm0,xmm0,xmm1
 	vmovdqu	XMMWORD[rcx],xmm0
-	movdqa	xmm6,XMMWORD[rsp]
+
+
+	vmovdqa	xmm6,XMMWORD[rsp]
 	add	rsp,24
 	ret
 $L$SEH_end_gcm_gmult_vpclmulqdq_avx2_5:
@@ -218,25 +216,35 @@ $L$SEH_begin_gcm_ghash_vpclmulqdq_avx2_1:
 _CET_ENDBR
 	sub	rsp,72
 $L$SEH_prologue_gcm_ghash_vpclmulqdq_avx2_2:
-	movdqa	XMMWORD[rsp],xmm6
+	vmovdqa	XMMWORD[rsp],xmm6
 $L$SEH_prologue_gcm_ghash_vpclmulqdq_avx2_3:
-	movdqa	XMMWORD[16+rsp],xmm7
+	vmovdqa	XMMWORD[16+rsp],xmm7
 $L$SEH_prologue_gcm_ghash_vpclmulqdq_avx2_4:
-	movdqa	XMMWORD[32+rsp],xmm8
+	vmovdqa	XMMWORD[32+rsp],xmm8
 $L$SEH_prologue_gcm_ghash_vpclmulqdq_avx2_5:
-	movdqa	XMMWORD[48+rsp],xmm9
+	vmovdqa	XMMWORD[48+rsp],xmm9
 $L$SEH_prologue_gcm_ghash_vpclmulqdq_avx2_6:
 
 $L$SEH_endprologue_gcm_ghash_vpclmulqdq_avx2_7:
 
-	vbroadcasti128	ymm6,XMMWORD[$L$bswap_mask]
+
+
+
+	vmovdqu	xmm6,XMMWORD[$L$bswap_mask]
+	vmovdqu	xmm7,XMMWORD[$L$gfpoly]
+
+
 	vmovdqu	xmm5,XMMWORD[rcx]
 	vpshufb	xmm5,xmm5,xmm6
-	vbroadcasti128	ymm7,XMMWORD[$L$gfpoly]
 
 
 	cmp	r9,32
 	jb	NEAR $L$ghash_lastblock
+
+
+
+	vinserti128	ymm6,ymm6,xmm6,1
+	vinserti128	ymm7,ymm7,xmm7,1
 
 	cmp	r9,127
 	jbe	NEAR $L$ghash_loop_1x
@@ -346,9 +354,6 @@ $L$ghash_loop_1x:
 $L$ghash_loop_1x_done:
 
 
-	vzeroupper
-
-
 $L$ghash_lastblock:
 	test	r9,r9
 	jz	NEAR $L$ghash_done
@@ -375,10 +380,12 @@ $L$ghash_done:
 
 	vpshufb	xmm5,xmm5,xmm6
 	vmovdqu	XMMWORD[rcx],xmm5
-	movdqa	xmm6,XMMWORD[rsp]
-	movdqa	xmm7,XMMWORD[16+rsp]
-	movdqa	xmm8,XMMWORD[32+rsp]
-	movdqa	xmm9,XMMWORD[48+rsp]
+
+	vzeroupper
+	vmovdqa	xmm6,XMMWORD[rsp]
+	vmovdqa	xmm7,XMMWORD[16+rsp]
+	vmovdqa	xmm8,XMMWORD[32+rsp]
+	vmovdqa	xmm9,XMMWORD[48+rsp]
 	add	rsp,72
 	ret
 $L$SEH_end_gcm_ghash_vpclmulqdq_avx2_8:
@@ -403,31 +410,31 @@ $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_4:
 	mov	r12,QWORD[80+rsp]
 	sub	rsp,160
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_5:
-	movdqa	XMMWORD[rsp],xmm6
+	vmovdqa	XMMWORD[rsp],xmm6
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_6:
-	movdqa	XMMWORD[16+rsp],xmm7
+	vmovdqa	XMMWORD[16+rsp],xmm7
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_7:
-	movdqa	XMMWORD[32+rsp],xmm8
+	vmovdqa	XMMWORD[32+rsp],xmm8
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_8:
-	movdqa	XMMWORD[48+rsp],xmm9
+	vmovdqa	XMMWORD[48+rsp],xmm9
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_9:
-	movdqa	XMMWORD[64+rsp],xmm10
+	vmovdqa	XMMWORD[64+rsp],xmm10
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_10:
-	movdqa	XMMWORD[80+rsp],xmm11
+	vmovdqa	XMMWORD[80+rsp],xmm11
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_11:
-	movdqa	XMMWORD[96+rsp],xmm12
+	vmovdqa	XMMWORD[96+rsp],xmm12
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_12:
-	movdqa	XMMWORD[112+rsp],xmm13
+	vmovdqa	XMMWORD[112+rsp],xmm13
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_13:
-	movdqa	XMMWORD[128+rsp],xmm14
+	vmovdqa	XMMWORD[128+rsp],xmm14
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_14:
-	movdqa	XMMWORD[144+rsp],xmm15
+	vmovdqa	XMMWORD[144+rsp],xmm15
 $L$SEH_prologue_aes_gcm_enc_update_vaes_avx2_15:
 
 $L$SEH_endprologue_aes_gcm_enc_update_vaes_avx2_16:
 %ifdef BORINGSSL_DISPATCH_TEST
 EXTERN	BORINGSSL_function_hit
-	mov	BYTE[((BORINGSSL_function_hit+8))],1
+	mov	BYTE[((BORINGSSL_function_hit+6))],1
 %endif
 	vbroadcasti128	ymm0,XMMWORD[$L$bswap_mask]
 
@@ -945,16 +952,16 @@ $L$done__func1:
 	vmovdqu	XMMWORD[r12],xmm1
 
 	vzeroupper
-	movdqa	xmm6,XMMWORD[rsp]
-	movdqa	xmm7,XMMWORD[16+rsp]
-	movdqa	xmm8,XMMWORD[32+rsp]
-	movdqa	xmm9,XMMWORD[48+rsp]
-	movdqa	xmm10,XMMWORD[64+rsp]
-	movdqa	xmm11,XMMWORD[80+rsp]
-	movdqa	xmm12,XMMWORD[96+rsp]
-	movdqa	xmm13,XMMWORD[112+rsp]
-	movdqa	xmm14,XMMWORD[128+rsp]
-	movdqa	xmm15,XMMWORD[144+rsp]
+	vmovdqa	xmm6,XMMWORD[rsp]
+	vmovdqa	xmm7,XMMWORD[16+rsp]
+	vmovdqa	xmm8,XMMWORD[32+rsp]
+	vmovdqa	xmm9,XMMWORD[48+rsp]
+	vmovdqa	xmm10,XMMWORD[64+rsp]
+	vmovdqa	xmm11,XMMWORD[80+rsp]
+	vmovdqa	xmm12,XMMWORD[96+rsp]
+	vmovdqa	xmm13,XMMWORD[112+rsp]
+	vmovdqa	xmm14,XMMWORD[128+rsp]
+	vmovdqa	xmm15,XMMWORD[144+rsp]
 	add	rsp,160
 	pop	r12
 	pop	rdi
@@ -982,25 +989,25 @@ $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_4:
 	mov	r12,QWORD[80+rsp]
 	sub	rsp,160
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_5:
-	movdqa	XMMWORD[rsp],xmm6
+	vmovdqa	XMMWORD[rsp],xmm6
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_6:
-	movdqa	XMMWORD[16+rsp],xmm7
+	vmovdqa	XMMWORD[16+rsp],xmm7
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_7:
-	movdqa	XMMWORD[32+rsp],xmm8
+	vmovdqa	XMMWORD[32+rsp],xmm8
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_8:
-	movdqa	XMMWORD[48+rsp],xmm9
+	vmovdqa	XMMWORD[48+rsp],xmm9
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_9:
-	movdqa	XMMWORD[64+rsp],xmm10
+	vmovdqa	XMMWORD[64+rsp],xmm10
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_10:
-	movdqa	XMMWORD[80+rsp],xmm11
+	vmovdqa	XMMWORD[80+rsp],xmm11
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_11:
-	movdqa	XMMWORD[96+rsp],xmm12
+	vmovdqa	XMMWORD[96+rsp],xmm12
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_12:
-	movdqa	XMMWORD[112+rsp],xmm13
+	vmovdqa	XMMWORD[112+rsp],xmm13
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_13:
-	movdqa	XMMWORD[128+rsp],xmm14
+	vmovdqa	XMMWORD[128+rsp],xmm14
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_14:
-	movdqa	XMMWORD[144+rsp],xmm15
+	vmovdqa	XMMWORD[144+rsp],xmm15
 $L$SEH_prologue_aes_gcm_dec_update_vaes_avx2_15:
 
 $L$SEH_endprologue_aes_gcm_dec_update_vaes_avx2_16:
@@ -1406,16 +1413,16 @@ $L$done__func2:
 	vmovdqu	XMMWORD[r12],xmm1
 
 	vzeroupper
-	movdqa	xmm6,XMMWORD[rsp]
-	movdqa	xmm7,XMMWORD[16+rsp]
-	movdqa	xmm8,XMMWORD[32+rsp]
-	movdqa	xmm9,XMMWORD[48+rsp]
-	movdqa	xmm10,XMMWORD[64+rsp]
-	movdqa	xmm11,XMMWORD[80+rsp]
-	movdqa	xmm12,XMMWORD[96+rsp]
-	movdqa	xmm13,XMMWORD[112+rsp]
-	movdqa	xmm14,XMMWORD[128+rsp]
-	movdqa	xmm15,XMMWORD[144+rsp]
+	vmovdqa	xmm6,XMMWORD[rsp]
+	vmovdqa	xmm7,XMMWORD[16+rsp]
+	vmovdqa	xmm8,XMMWORD[32+rsp]
+	vmovdqa	xmm9,XMMWORD[48+rsp]
+	vmovdqa	xmm10,XMMWORD[64+rsp]
+	vmovdqa	xmm11,XMMWORD[80+rsp]
+	vmovdqa	xmm12,XMMWORD[96+rsp]
+	vmovdqa	xmm13,XMMWORD[112+rsp]
+	vmovdqa	xmm14,XMMWORD[128+rsp]
+	vmovdqa	xmm15,XMMWORD[144+rsp]
 	add	rsp,160
 	pop	r12
 	pop	rdi

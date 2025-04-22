@@ -15,11 +15,13 @@
 //go:build ignore
 
 // trimvectors takes an ACVP vector set file and discards all but a single test
-// from each test group. This hope is that this achieves good coverage without
-// having to check in megabytes worth of JSON files.
+// from each test group, and also discards any test that serializes to more than
+// 4096 bytes. This hope is that this achieves good coverage without having to
+// check in megabytes worth of JSON files.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 )
@@ -39,12 +41,22 @@ func main() {
 			testGroup := testGroupInterface.(map[string]any)
 			tests := testGroup["tests"].([]any)
 
-			keepIndex := 10
-			if keepIndex >= len(tests) {
-				keepIndex = len(tests) - 1
+			var keptTests []any
+			for _, test := range tests {
+				var b bytes.Buffer
+				encoder := json.NewEncoder(&b)
+				if err := encoder.Encode(test); err != nil {
+					panic(err)
+				}
+				if b.Len() <= 4096 {
+					keptTests = append(keptTests, test)
+				}
+				// We only keep the first test that meets the size criteria.
+				if len(keptTests) >= 1 {
+					break
+				}
 			}
-
-			testGroup["tests"] = []any{tests[keepIndex]}
+			testGroup["tests"] = keptTests
 		}
 	}
 

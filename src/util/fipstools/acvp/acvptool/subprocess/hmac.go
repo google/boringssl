@@ -119,14 +119,14 @@ func (h *hmacPrimitive) Process(vectorSet []byte, m Transactable) (any, error) {
 			}
 
 			m.TransactAsync(h.algo, 1, [][]byte{msg, key}, func(result [][]byte) error {
-				if l := len(result[0]); l < outBytes {
-					return fmt.Errorf("HMAC result too short: %d bytes but wanted %d", l, outBytes)
+				if l := len(result[0]); l != outBytes {
+					return fmt.Errorf("incorrect HMAC length: %d bytes but wanted %d", l, outBytes)
 				}
 
 				// https://pages.nist.gov/ACVP/draft-fussell-acvp-mac.html#name-test-vectors
 				response.Tests = append(response.Tests, hmacTestResponse{
 					ID:     test.ID,
-					MACHex: hex.EncodeToString(result[0][:outBytes]),
+					MACHex: hex.EncodeToString(result[0]),
 				})
 				return nil
 			})

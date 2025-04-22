@@ -257,6 +257,18 @@ TEST(CBSTest, GetASN1) {
   EXPECT_EQ(CBS_ASN1_SEQUENCE, tag);
   EXPECT_EQ(Bytes("\x01\x02"), Bytes(CBS_data(&contents), CBS_len(&contents)));
 
+  CBS_init(&data, kData1, sizeof(kData1));
+  // We should be able to ignore the contents and get the tag.
+  ASSERT_TRUE(CBS_get_any_asn1(&data, NULL, &tag));
+  EXPECT_EQ(CBS_ASN1_SEQUENCE, tag);
+  // We should be able to ignore the tag and get the contents.
+  CBS_init(&data, kData1, sizeof(kData1));
+  ASSERT_TRUE(CBS_get_any_asn1(&data, &contents, NULL));
+  EXPECT_EQ(Bytes("\x01\x02"), Bytes(CBS_data(&contents), CBS_len(&contents)));
+  // We should be able to ignore both the tag and contents.
+  CBS_init(&data, kData1, sizeof(kData1));
+  ASSERT_TRUE(CBS_get_any_asn1(&data, NULL, NULL));
+
   size_t header_len;
   CBS_init(&data, kData1, sizeof(kData1));
   ASSERT_TRUE(CBS_get_any_asn1_element(&data, &contents, &tag, &header_len));

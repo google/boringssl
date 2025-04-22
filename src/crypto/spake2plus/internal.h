@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_SPAKE2PLUS_INTERNAL_H
-#define OPENSSL_HEADER_SPAKE2PLUS_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_SPAKE2PLUS_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_SPAKE2PLUS_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -201,4 +201,4 @@ class OPENSSL_EXPORT Verifier {
 
 BSSL_NAMESPACE_END
 
-#endif  // OPENSSL_HEADER_SPAKE2PLUS_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_SPAKE2PLUS_INTERNAL_H

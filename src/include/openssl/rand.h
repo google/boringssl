@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_RAND_H
 #define OPENSSL_HEADER_RAND_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {
@@ -59,7 +59,7 @@ OPENSSL_EXPORT void RAND_enable_fork_unsafe_buffering(int fd);
 OPENSSL_EXPORT void RAND_disable_fork_unsafe_buffering(void);
 #endif
 
-#if defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
 // RAND_reset_for_fuzzing resets the fuzzer-only deterministic RNG. This
 // function is only defined in the fuzzer-only build configuration.
 OPENSSL_EXPORT void RAND_reset_for_fuzzing(void);

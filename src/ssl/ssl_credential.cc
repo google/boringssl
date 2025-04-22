@@ -80,7 +80,22 @@ bool ssl_credential_matches_requested_issuers(SSL_HANDSHAKE *hs,
       }
     }
   }
-  // TODO(bbe): Other forms of issuer matching go here.
+  // If the credential has a trust anchor ID and it matches one sent by the
+  // peer, it is good.
+  if (!cred->trust_anchor_id.empty() && hs->peer_requested_trust_anchors) {
+    CBS cbs = CBS(*hs->peer_requested_trust_anchors), candidate;
+    while (CBS_len(&cbs) > 0) {
+      if (!CBS_get_u8_length_prefixed(&cbs, &candidate) ||
+          CBS_len(&candidate) == 0) {
+        OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+        return false;
+      }
+      if (candidate == Span(cred->trust_anchor_id)) {
+        hs->matched_peer_trust_anchor = true;
+        return true;
+      }
+    }
+  }
 
   OPENSSL_PUT_ERROR(SSL, SSL_R_NO_MATCHING_ISSUER);
   return false;
@@ -596,14 +611,75 @@ void *SSL_CREDENTIAL_get_ex_data(const SSL_CREDENTIAL *cred, int idx) {
   return CRYPTO_get_ex_data(&cred->ex_data, idx);
 }
 
-void SSL_CREDENTIAL_set_must_match_issuer(SSL_CREDENTIAL *cred) {
-  cred->must_match_issuer = true;
+void SSL_CREDENTIAL_set_must_match_issuer(SSL_CREDENTIAL *cred, int match) {
+  cred->must_match_issuer = !!match;
 }
 
-void SSL_CREDENTIAL_clear_must_match_issuer(SSL_CREDENTIAL *cred) {
-  cred->must_match_issuer = false;
+int SSL_CREDENTIAL_set1_trust_anchor_id(SSL_CREDENTIAL *cred, const uint8_t *id,
+                                        size_t id_len) {
+  // For now, this is only valid for X.509.
+  if (!cred->UsesX509()) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+    return 0;
+  }
+
+  if (!cred->trust_anchor_id.CopyFrom(Span(id, id_len))) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
+    return 0;
+  }
+
+  return 1;
 }
 
-int SSL_CREDENTIAL_must_match_issuer(const SSL_CREDENTIAL *cred) {
-  return cred->must_match_issuer ? 1 : 0;
+int SSL_CREDENTIAL_set1_certificate_properties(
+    SSL_CREDENTIAL *cred, CRYPTO_BUFFER *cert_property_list) {
+  std::optional<CBS> trust_anchor;
+  CBS cbs, cpl;
+  CRYPTO_BUFFER_init_CBS(cert_property_list, &cbs);
+
+  if (!CBS_get_u16_length_prefixed(&cbs, &cpl)) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST);
+    return 0;
+  }
+  while (CBS_len(&cpl) != 0) {
+    uint16_t cp_type;
+    CBS cp_data;
+    if (!CBS_get_u16(&cpl, &cp_type) ||
+        !CBS_get_u16_length_prefixed(&cpl, &cp_data)) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST);
+      return 0;
+    }
+    switch (cp_type) {
+      case 0:  // trust anchor identifier.
+        if (trust_anchor.has_value()) {
+          OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST);
+          return 0;
+        }
+        trust_anchor = cp_data;
+        break;
+      default:
+        break;
+    }
+  }
+  if (CBS_len(&cbs) != 0) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST);
+    return 0;
+  }
+  // Certificate property list has parsed correctly.
+
+  // We do not currently retain |cert_property_list|, but if we define another
+  // property with larger fields (e.g. stapled SCTs), it may make sense for
+  // those fields to retain |cert_property_list| and alias into it.
+  if (trust_anchor.has_value()) {
+    if (!CBS_len(&trust_anchor.value())) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_TRUST_ANCHOR_LIST);
+      return 0;
+    }
+    if (!SSL_CREDENTIAL_set1_trust_anchor_id(cred,
+                                             CBS_data(&trust_anchor.value()),
+                                             CBS_len(&trust_anchor.value()))) {
+      return 0;
+    }
+  }
+  return 1;
 }

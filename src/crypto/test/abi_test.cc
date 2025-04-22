@@ -40,10 +40,8 @@
 #include <unistd.h>
 #elif defined(OPENSSL_WINDOWS)
 #define SUPPORTS_UNWIND_TEST
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
 #include <dbghelp.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #endif
 #endif  // X86_64 && SUPPORTS_ABI_TEST
 

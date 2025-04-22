@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_POOL_INTERNAL_H
-#define OPENSSL_HEADER_POOL_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_POOL_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_POOL_INTERNAL_H
 
 #include <openssl/lhash.h>
 #include <openssl/thread.h>
@@ -48,4 +48,4 @@ struct crypto_buffer_pool_st {
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_POOL_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_POOL_INTERNAL_H

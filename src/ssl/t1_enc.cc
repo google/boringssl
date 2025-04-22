@@ -199,7 +199,7 @@ int SSL_generate_key_block(const SSL *ssl, uint8_t *out, size_t out_len) {
   return generate_key_block(ssl, Span(out, out_len), SSL_get_session(ssl));
 }
 
-int SSL_export_keying_material(SSL *ssl, uint8_t *out, size_t out_len,
+int SSL_export_keying_material(const SSL *ssl, uint8_t *out, size_t out_len,
                                const char *label, size_t label_len,
                                const uint8_t *context, size_t context_len,
                                int use_context) {

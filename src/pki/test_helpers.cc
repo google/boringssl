@@ -26,6 +26,7 @@
 #include <openssl/bytestring.h>
 #include <openssl/mem.h>
 #include <openssl/pool.h>
+#include <openssl/span.h>
 
 #include "../crypto/test/test_data.h"
 #include "cert_error_params.h"
@@ -123,7 +124,7 @@ void PrintTo(Input data, ::std::ostream *os) {
 }  // namespace der
 
 der::Input SequenceValueFromString(std::string_view s) {
-  der::Parser parser((der::Input(s)));
+  der::Parser parser(StringAsBytes(s));
   der::Input data;
   if (!parser.ReadTag(CBS_ASN1_SEQUENCE, &data)) {
     ADD_FAILURE();
@@ -299,7 +300,7 @@ bool ReadVerifyCertChainTestFromFile(const std::string &file_path_ascii,
       if (value == "DEFAULT") {
         value = "211005120000Z";
       }
-      if (!der::ParseUTCTime(der::Input(value), &test->time)) {
+      if (!der::ParseUTCTime(StringAsBytes(value), &test->time)) {
         ADD_FAILURE() << "Failed parsing UTC time";
         return false;
       }
@@ -319,6 +320,12 @@ bool ReadVerifyCertChainTestFromFile(const std::string &file_path_ascii,
         test->key_purpose = KeyPurpose::SERVER_AUTH_STRICT_LEAF;
       } else if (value == "CLIENT_AUTH_STRICT_LEAF") {
         test->key_purpose = KeyPurpose::CLIENT_AUTH_STRICT_LEAF;
+      } else if (value == "MLS_CLIENT_AUTH") {
+        test->key_purpose = KeyPurpose::RCS_MLS_CLIENT_AUTH;
+      } else if (value == "C2PA_TIMESTAMPING") {
+        test->key_purpose = KeyPurpose::C2PA_TIMESTAMPING;
+      } else if (value == "C2PA_MANIFEST") {
+        test->key_purpose = KeyPurpose::C2PA_MANIFEST;
       } else {
         ADD_FAILURE() << "Unrecognized key_purpose: " << value;
         return false;

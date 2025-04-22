@@ -129,12 +129,11 @@ int BN_rshift(BIGNUM *r, const BIGNUM *a, int n) {
 
 int bn_rshift_secret_shift(BIGNUM *r, const BIGNUM *a, unsigned n,
                            BN_CTX *ctx) {
-  int ret = 0;
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
   unsigned max_bits;
   if (tmp == NULL || !BN_copy(r, a) || !bn_wexpand(tmp, r->width)) {
-    goto err;
+    return 0;
   }
 
   // Shift conditionally by powers of two.
@@ -147,11 +146,7 @@ int bn_rshift_secret_shift(BIGNUM *r, const BIGNUM *a, unsigned n,
                     r->d /* ignore shift */, r->width);
   }
 
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
+  return 1;
 }
 
 void bn_rshift1_words(BN_ULONG *r, const BN_ULONG *a, size_t num) {

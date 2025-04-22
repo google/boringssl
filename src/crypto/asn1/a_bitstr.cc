@@ -17,6 +17,7 @@
 #include <limits.h>
 #include <string.h>
 
+#include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
 
@@ -92,6 +93,21 @@ int i2c_ASN1_BIT_STRING(const ASN1_BIT_STRING *a, unsigned char **pp) {
   p += len;
   *pp = p;
   return ret;
+}
+
+int asn1_marshal_bit_string(CBB *out, const ASN1_BIT_STRING *in,
+                            CBS_ASN1_TAG tag) {
+  int len = i2c_ASN1_BIT_STRING(in, nullptr);
+  if (len <= 0) {
+    return 0;
+  }
+  tag = tag == 0 ? CBS_ASN1_BITSTRING : tag;
+  CBB child;
+  uint8_t *ptr;
+  return CBB_add_asn1(out, &child, tag) &&                         //
+         CBB_add_space(&child, &ptr, static_cast<size_t>(len)) &&  //
+         i2c_ASN1_BIT_STRING(in, &ptr) == len &&                   //
+         CBB_flush(out);
 }
 
 ASN1_BIT_STRING *c2i_ASN1_BIT_STRING(ASN1_BIT_STRING **a,

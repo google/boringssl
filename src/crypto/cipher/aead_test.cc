@@ -152,6 +152,12 @@ static const struct KnownAEAD kAEADs[] = {
 
     {"AES_128_CCM_Matter", EVP_aead_aes_128_ccm_matter,
      "aes_128_ccm_matter_tests.txt", 0},
+
+    {"AES_128_EAX", EVP_aead_aes_128_eax, "aes_128_eax_test.txt",
+     kVariableNonce},
+
+    {"AES_256_EAX", EVP_aead_aes_256_eax, "aes_256_eax_test.txt",
+     kVariableNonce},
 };
 
 class PerAEADTest : public testing::TestWithParam<KnownAEAD> {
@@ -1022,6 +1028,36 @@ TEST(AEADTest, WycheproofXChaCha20Poly1305) {
       [](FileTest *t) {
         t->IgnoreInstruction("keySize");
         RunWycheproofTestCase(t, EVP_aead_xchacha20_poly1305());
+      });
+}
+
+TEST(AEADTest, WycheproofAESEAX) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/aes_eax_test.txt", [](FileTest *t) {
+        std::string key_size_str;
+        ASSERT_TRUE(t->GetInstruction(&key_size_str, "keySize"));
+        const EVP_AEAD *aead;
+        switch (atoi(key_size_str.c_str())) {
+          case 128:
+            aead = EVP_aead_aes_128_eax();
+            break;
+          case 256:
+            aead = EVP_aead_aes_256_eax();
+            break;
+          default:
+            t->SkipCurrent();
+            GTEST_SKIP() << "Unsupported key size: " << key_size_str;
+        }
+
+        std::string nonce_size_str;
+        ASSERT_TRUE(t->GetInstruction(&nonce_size_str, "ivSize"));
+        // Skip tests with invalid nonce size.
+        if (nonce_size_str != "96" && nonce_size_str != "128") {
+          t->SkipCurrent();
+          GTEST_SKIP() << "Unsupported nonce size: " << nonce_size_str;
+        }
+
+        RunWycheproofTestCase(t, aead);
       });
 }
 

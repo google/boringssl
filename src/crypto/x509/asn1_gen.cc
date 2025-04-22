@@ -58,27 +58,23 @@ static int generate_v3(CBB *cbb, const char *str, const X509V3_CTX *cnf,
 static int bitstr_cb(const char *elem, size_t len, void *bitstr);
 
 ASN1_TYPE *ASN1_generate_v3(const char *str, const X509V3_CTX *cnf) {
-  CBB cbb;
-  if (!CBB_init(&cbb, 0) ||  //
-      !generate_v3(&cbb, str, cnf, /*tag=*/0, ASN1_GEN_FORMAT_ASCII,
+  bssl::ScopedCBB cbb;
+  if (!CBB_init(cbb.get(), 0) ||  //
+      !generate_v3(cbb.get(), str, cnf, /*tag=*/0, ASN1_GEN_FORMAT_ASCII,
                    /*depth=*/0)) {
-    CBB_cleanup(&cbb);
-    return NULL;
+    return nullptr;
   }
 
   // While not strictly necessary to avoid a DoS (we rely on any super-linear
   // checks being performed internally), cap the overall output to
   // |ASN1_GEN_MAX_OUTPUT| so the externally-visible behavior is consistent.
-  if (CBB_len(&cbb) > ASN1_GEN_MAX_OUTPUT) {
+  if (CBB_len(cbb.get()) > ASN1_GEN_MAX_OUTPUT) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_TOO_LONG);
-    CBB_cleanup(&cbb);
-    return NULL;
+    return nullptr;
   }
 
-  const uint8_t *der = CBB_data(&cbb);
-  ASN1_TYPE *ret = d2i_ASN1_TYPE(NULL, &der, CBB_len(&cbb));
-  CBB_cleanup(&cbb);
-  return ret;
+  const uint8_t *der = CBB_data(cbb.get());
+  return d2i_ASN1_TYPE(nullptr, &der, CBB_len(cbb.get()));
 }
 
 static int cbs_str_equal(const CBS *cbs, const char *str) {

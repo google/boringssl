@@ -245,21 +245,13 @@ static int BN_from_montgomery_word(BIGNUM *ret, BIGNUM *r,
 
 int BN_from_montgomery(BIGNUM *r, const BIGNUM *a, const BN_MONT_CTX *mont,
                        BN_CTX *ctx) {
-  int ret = 0;
-  BIGNUM *t;
-
-  BN_CTX_start(ctx);
-  t = BN_CTX_get(ctx);
+  bssl::BN_CTXScope scope(ctx);
+  BIGNUM *t = BN_CTX_get(ctx);
   if (t == NULL || !BN_copy(t, a)) {
-    goto err;
+    return 0;
   }
 
-  ret = BN_from_montgomery_word(r, t, mont);
-
-err:
-  BN_CTX_end(ctx);
-
-  return ret;
+  return BN_from_montgomery_word(r, t, mont);
 }
 
 int bn_one_to_montgomery(BIGNUM *r, const BN_MONT_CTX *mont, BN_CTX *ctx) {
@@ -286,34 +278,28 @@ static int bn_mod_mul_montgomery_fallback(BIGNUM *r, const BIGNUM *a,
                                           const BIGNUM *b,
                                           const BN_MONT_CTX *mont,
                                           BN_CTX *ctx) {
-  int ret = 0;
-
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
   if (tmp == NULL) {
-    goto err;
+    return 0;
   }
 
   if (a == b) {
     if (!bn_sqr_consttime(tmp, a, ctx)) {
-      goto err;
+      return 0;
     }
   } else {
     if (!bn_mul_consttime(tmp, a, b, ctx)) {
-      goto err;
+      return 0;
     }
   }
 
   // reduce from aRR to aR
   if (!BN_from_montgomery_word(r, tmp, mont)) {
-    goto err;
+    return 0;
   }
 
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
+  return 1;
 }
 
 int BN_mod_mul_montgomery(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
@@ -324,7 +310,7 @@ int BN_mod_mul_montgomery(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
   }
 
 #if defined(OPENSSL_BN_ASM_MONT)
-  // |bn_mul_mont| requires at least 128 bits of limbs, at least for x86.
+  // |bn_mul_mont| requires at least 128 bits of limbs.
   int num = mont->N.width;
   if (num >= (128 / BN_BITS2) && a->width == num && b->width == num) {
     if (!bn_wexpand(r, num)) {
@@ -333,12 +319,7 @@ int BN_mod_mul_montgomery(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
     // This bound is implied by |bn_mont_ctx_set_N_and_n0|. |bn_mul_mont|
     // allocates |num| words on the stack, so |num| cannot be too large.
     assert((size_t)num <= BN_MONTGOMERY_MAX_WORDS);
-    if (!bn_mul_mont(r->d, a->d, b->d, mont->N.d, mont->n0, num)) {
-      // The check above ensures this won't happen.
-      assert(0);
-      OPENSSL_PUT_ERROR(BN, ERR_R_INTERNAL_ERROR);
-      return 0;
-    }
+    bn_mul_mont(r->d, a->d, b->d, mont->N.d, mont->n0, num);
     r->neg = 0;
     r->width = num;
     return 1;
@@ -379,11 +360,9 @@ void bn_mod_mul_montgomery_small(BN_ULONG *r, const BN_ULONG *a,
   }
 
 #if defined(OPENSSL_BN_ASM_MONT)
-  // |bn_mul_mont| requires at least 128 bits of limbs, at least for x86.
+  // |bn_mul_mont| requires at least 128 bits of limbs.
   if (num >= (128 / BN_BITS2)) {
-    if (!bn_mul_mont(r, a, b, mont->N.d, mont->n0, num)) {
-      abort();  // The check above ensures this won't happen.
-    }
+    bn_mul_mont(r, a, b, mont->N.d, mont->n0, num);
     return;
   }
 #endif
@@ -404,27 +383,27 @@ void bn_mod_mul_montgomery_small(BN_ULONG *r, const BN_ULONG *a,
 }
 
 #if defined(OPENSSL_BN_ASM_MONT) && defined(OPENSSL_X86_64)
-int bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+void bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
                 const BN_ULONG *np, const BN_ULONG *n0, size_t num) {
   if (ap == bp && bn_sqr8x_mont_capable(num)) {
-    return bn_sqr8x_mont(rp, ap, bn_mulx_adx_capable(), np, n0, num);
+    bn_sqr8x_mont(rp, ap, bn_mulx_adx_capable(), np, n0, num);
+  } else if (bn_mulx4x_mont_capable(num)) {
+    bn_mulx4x_mont(rp, ap, bp, np, n0, num);
+  } else if (bn_mul4x_mont_capable(num)) {
+    bn_mul4x_mont(rp, ap, bp, np, n0, num);
+  } else {
+    bn_mul_mont_nohw(rp, ap, bp, np, n0, num);
   }
-  if (bn_mulx4x_mont_capable(num)) {
-    return bn_mulx4x_mont(rp, ap, bp, np, n0, num);
-  }
-  if (bn_mul4x_mont_capable(num)) {
-    return bn_mul4x_mont(rp, ap, bp, np, n0, num);
-  }
-  return bn_mul_mont_nohw(rp, ap, bp, np, n0, num);
 }
 #endif
 
 #if defined(OPENSSL_BN_ASM_MONT) && defined(OPENSSL_ARM)
-int bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                const BN_ULONG *np, const BN_ULONG *n0, size_t num) {
+void bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                 const BN_ULONG *np, const BN_ULONG *n0, size_t num) {
   if (bn_mul8x_mont_neon_capable(num)) {
-    return bn_mul8x_mont_neon(rp, ap, bp, np, n0, num);
+    bn_mul8x_mont_neon(rp, ap, bp, np, n0, num);
+  } else {
+    bn_mul_mont_nohw(rp, ap, bp, np, n0, num);
   }
-  return bn_mul_mont_nohw(rp, ap, bp, np, n0, num);
 }
 #endif

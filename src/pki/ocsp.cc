@@ -19,6 +19,8 @@
 #include <openssl/mem.h>
 #include <openssl/pool.h>
 #include <openssl/sha.h>
+#include <openssl/span.h>
+
 #include "cert_errors.h"
 #include "extended_key_usage.h"
 #include "parsed_certificate.h"
@@ -887,9 +889,8 @@ OCSPRevocationStatus CheckOCSP(
     return OCSPRevocationStatus::UNKNOWN;
   }
 
-  der::Input response_der(raw_response);
   OCSPResponse response;
-  if (!ParseOCSPResponse(response_der, &response)) {
+  if (!ParseOCSPResponse(StringAsBytes(raw_response), &response)) {
     *response_details = OCSPVerifyResult::PARSE_RESPONSE_ERROR;
     return OCSPRevocationStatus::UNKNOWN;
   }
@@ -1056,6 +1057,11 @@ bool CreateOCSPRequest(const ParsedCertificate *cert,
   //       issuerNameHash      OCTET STRING, -- Hash of issuer's DN
   //       issuerKeyHash       OCTET STRING, -- Hash of issuer's public key
   //       serialNumber        CertificateSerialNumber }
+  //
+  // It is unclear whether the parameters for hashAlgorithm should be omitted or
+  // NULL. Section 2.1 of RFC 4055 would suggest omitting it is the right
+  // default behavior. However, both OpenSSL and Go include it, so we match them
+  // for now.
 
   // TODO(eroman): Don't use SHA1.
   const EVP_MD *md = EVP_sha1();

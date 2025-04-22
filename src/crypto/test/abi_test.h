@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_ABI_TEST_H
-#define OPENSSL_HEADER_ABI_TEST_H
+#ifndef OPENSSL_HEADER_CRYPTO_TEST_ABI_TEST_H
+#define OPENSSL_HEADER_CRYPTO_TEST_ABI_TEST_H
 
 #include <gtest/gtest.h>
 
@@ -479,4 +479,4 @@ int abi_test_set_direction_flag(void);
 #endif  // SUPPORTS_ABI_TEST
 
 
-#endif  // OPENSSL_HEADER_ABI_TEST_H
+#endif  // OPENSSL_HEADER_CRYPTO_TEST_ABI_TEST_H

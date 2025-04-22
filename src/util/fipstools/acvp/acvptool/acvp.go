@@ -29,7 +29,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	neturl "net/url"
@@ -52,7 +51,7 @@ var (
 	runFlag         = flag.String("run", "", "Name of primitive to run tests for")
 	fetchFlag       = flag.String("fetch", "", "Name of primitive to fetch vectors for")
 	expectedOutFlag = flag.String("expected-out", "", "Name of a file to write the expected results to")
-	wrapperPath     = flag.String("wrapper", "../../../../build/util/fipstools/acvp/modulewrapper/modulewrapper", "Path to the wrapper binary")
+	wrapperPath     = flag.String("wrapper", "../../../../build/modulewrapper", "Path to the wrapper binary")
 )
 
 type Config struct {
@@ -179,6 +178,13 @@ func loadCachedSessionTokens(server *acvp.Server, cachePath string) error {
 func trimLeadingSlash(s string) string {
 	if strings.HasPrefix(s, "/") {
 		return s[1:]
+	}
+	return s
+}
+
+func addTrailingSlash(s string) string {
+	if !strings.HasSuffix(s, "/") {
+		s += "/"
 	}
 	return s
 }
@@ -496,9 +502,9 @@ func uploadResults(results []nistUploadResult, sessionID string, config *Config,
 // Vector Test Result files are JSON formatted with various objects and keys.
 // Define structs to read and process the files.
 type vectorResult struct {
-	Version    string      `json:"acvVersion,omitempty"`
-	Algorithm  string      `json:"algorithm,omitempty"`
-	ID         int         `json:"vsId,omitempty"`
+	Version   string `json:"acvVersion,omitempty"`
+	Algorithm string `json:"algorithm,omitempty"`
+	ID        int    `json:"vsId,omitempty"`
 	// Objects under testGroups can have various keys so use an empty interface.
 	Tests []map[string]interface{} `json:"testGroups,omitempty"`
 }
@@ -539,6 +545,35 @@ type nistUploadResult struct {
 	JSONResult []byte
 }
 
+// Processes test result and returns them in format to be uploaded.
+func processResultContent(previousResults []nistUploadResult, result []byte, sessionID string, filename string) []nistUploadResult {
+	var data []vectorResult
+	if err := json.Unmarshal(result, &data); err != nil {
+		// Assume file is not JSON. Log and continue to next file.
+		log.Printf("Failed to parse %q: %s", filename, err)
+		return previousResults
+	}
+
+	vectorSetID, err := getVectorSetID(data)
+	if err != nil {
+		log.Fatalf("failed to get VectorSetID: %s", err)
+	}
+	// uploadResult() uses acvp.Server whose write() function takes the
+	// JSON *object* payload and turns it into a JSON *array* adding
+	// {"acvVersion":"1.0"} as a top-level object. Since the result file is
+	// already in this format, the JSON provided to uploadResult() must be
+	// modified to have those aspects removed. In other words, only store only
+	// the vector test result JSON object (do not store a JSON array or
+	// acvVersion object).
+	vectorTestResult, err := getVectorResult(data)
+	if err != nil {
+		log.Fatalf("failed to get VectorResult: %s", err)
+	}
+	requestPath := fmt.Sprintf("/acvp/v1/testSessions/%s/vectorSets/%d", sessionID, vectorSetID)
+	newResult := nistUploadResult{URLPath: requestPath, JSONResult: vectorTestResult}
+	return append(previousResults, newResult)
+}
+
 // Uploads a results directory based on the directory name being the session id.
 // Non-JSON files are ignored and JSON files are assumed to be test results.
 // The vectorSetId is retrieved from the test result file.
@@ -551,7 +586,7 @@ func uploadResultsDirectory(directory string, config *Config, sessionTokensCache
 
 	var results []nistUploadResult
 	// Read directory, identify, and process all files.
-	files, err := ioutil.ReadDir(directory)
+	files, err := os.ReadDir(directory)
 	if err != nil {
 		log.Fatalf("Unable to read directory: %s", err)
 	}
@@ -559,36 +594,12 @@ func uploadResultsDirectory(directory string, config *Config, sessionTokensCache
 	for _, file := range files {
 		// Add contents of the result file to results.
 		filePath := filepath.Join(directory, file.Name())
-		in, err := ioutil.ReadFile(filePath)
+		content, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Fatalf("Cannot open input: %s", err)
 		}
 
-		var data []vectorResult
-		if err := json.Unmarshal(in, &data); err != nil {
-			// Assume file is not JSON. Log and continue to next file.
-			log.Printf("Failed to parse %q: %s", filePath, err)
-			continue
-		}
-
-		vectorSetID, err := getVectorSetID(data)
-		if err != nil {
-			log.Fatalf("Failed to get VectorSetId: %s", err)
-		}
-		// uploadResult() uses acvp.Server whose write() function takes the
-		// JSON *object* payload and turns it into a JSON *array* adding
-		// {"acvVersion":"1.0"} as a top-level object. Since the result file is
-		// already in this format, the JSON provided to uploadResult() must be
-		// modified to have those aspects removed. In other words, only store only
-		// the vector test result JSON object (do not store a JSON array or
-		// acvVersion object).
-		vectorTestResult, err := getVectorResult(data)
-		if err != nil {
-			log.Fatalf("Failed to get VectorResult: %s", err)
-		}
-		requestPath := fmt.Sprintf("/acvp/v1/testSessions/%s/vectorSets/%d", sessionID, vectorSetID)
-		newResult := nistUploadResult{URLPath: requestPath, JSONResult: vectorTestResult}
-		results = append(results, newResult)
+		results = processResultContent(results, content, sessionID, filePath)
 	}
 
 	uploadResults(results, sessionID, config, sessionTokensCacheDir)
@@ -656,18 +667,18 @@ func main() {
 		}
 	}
 	if resultFlagCount > 1 {
-		log.Fatalf("only one submit result action (-upload, -directory) is allowed at a time")
+		log.Fatalf("only one submit result action (-upload, -directory, -gcs) is allowed at a time")
 	} else if resultFlagCount == 1 {
 		if len(*jsonInputFile) > 0 {
-			log.Fatalf("submit result action (-upload, -directory) cannot be used with -json")
+			log.Fatalf("submit result action (-upload, -directory, -gcs) cannot be used with -json")
 		} else if len(*runFlag) > 0 {
-			log.Fatalf("submit result action (-upload, -directory) cannot be used with -run")
+			log.Fatalf("submit result action (-upload, -directory, -gcs) cannot be used with -run")
 		} else if len(*fetchFlag) > 0 {
-			log.Fatalf("submit result action (-upload, -directory) cannot be used with -fetch")
+			log.Fatalf("submit result action (-upload, -directory, -gcs) cannot be used with -fetch")
 		} else if len(*expectedOutFlag) > 0 {
-			log.Fatalf("submit result action (-upload, -directory) cannot be used with -expected-out")
+			log.Fatalf("submit result action (-upload, -directory, -gcs) cannot be used with -expected-out")
 		} else if *dumpRegcap {
-			log.Fatalf("submit result action (-upload, -directory) cannot be used with -regcap")
+			log.Fatalf("submit result action (-upload, -directory, -gcs) cannot be used with -regcap")
 		}
 	}
 
@@ -811,6 +822,9 @@ func main() {
 
 	if len(*uploadDirectory) > 0 {
 		uploadResultsDirectory(*uploadDirectory, &config, sessionTokensCacheDir)
+		return
+	}
+	if handleGCSFlag(&config, sessionTokensCacheDir) {
 		return
 	}
 

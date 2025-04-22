@@ -57,84 +57,76 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
     return 0;
   }
 
-  int ret = 0;
   const size_t block_size = EVP_MD_block_size(md);
   const size_t md_size = EVP_MD_size(md);
-  EVP_MD_CTX ctx;
-  EVP_MD_CTX_init(&ctx);
+  bssl::ScopedEVP_MD_CTX ctx;
 
-  {
-    // Long DSTs are hashed down to size. See section 5.3.3.
-    static_assert(EVP_MAX_MD_SIZE < 256, "hashed DST still too large");
-    uint8_t dst_buf[EVP_MAX_MD_SIZE];
-    if (dst_len >= 256) {
-      static const char kPrefix[] = "H2C-OVERSIZE-DST-";
-      if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
-          !EVP_DigestUpdate(&ctx, kPrefix, sizeof(kPrefix) - 1) ||
-          !EVP_DigestUpdate(&ctx, dst, dst_len) ||
-          !EVP_DigestFinal_ex(&ctx, dst_buf, NULL)) {
-        goto err;
-      }
-      dst = dst_buf;
-      dst_len = md_size;
+  // Long DSTs are hashed down to size. See section 5.3.3.
+  static_assert(EVP_MAX_MD_SIZE < 256, "hashed DST still too large");
+  uint8_t dst_buf[EVP_MAX_MD_SIZE];
+  if (dst_len >= 256) {
+    static const char kPrefix[] = "H2C-OVERSIZE-DST-";
+    if (!EVP_DigestInit_ex(ctx.get(), md, nullptr) ||
+        !EVP_DigestUpdate(ctx.get(), kPrefix, sizeof(kPrefix) - 1) ||
+        !EVP_DigestUpdate(ctx.get(), dst, dst_len) ||
+        !EVP_DigestFinal_ex(ctx.get(), dst_buf, nullptr)) {
+      return 0;
     }
-    uint8_t dst_len_u8 = (uint8_t)dst_len;
+    dst = dst_buf;
+    dst_len = md_size;
+  }
+  uint8_t dst_len_u8 = (uint8_t)dst_len;
 
-    // Compute b_0.
-    static const uint8_t kZeros[EVP_MAX_MD_BLOCK_SIZE] = {0};
-    // If |out_len| exceeds 16 bits then |i| will wrap below causing an error to
-    // be returned. This depends on the static assert above.
-    uint8_t l_i_b_str_zero[3] = {static_cast<uint8_t>(out_len >> 8),
-                                 static_cast<uint8_t>(out_len), 0};
-    uint8_t b_0[EVP_MAX_MD_SIZE];
-    if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
-        !EVP_DigestUpdate(&ctx, kZeros, block_size) ||
-        !EVP_DigestUpdate(&ctx, msg, msg_len) ||
-        !EVP_DigestUpdate(&ctx, l_i_b_str_zero, sizeof(l_i_b_str_zero)) ||
-        !EVP_DigestUpdate(&ctx, dst, dst_len) ||
-        !EVP_DigestUpdate(&ctx, &dst_len_u8, 1) ||
-        !EVP_DigestFinal_ex(&ctx, b_0, NULL)) {
-      goto err;
-    }
-
-    uint8_t b_i[EVP_MAX_MD_SIZE];
-    uint8_t i = 1;
-    while (out_len > 0) {
-      if (i == 0) {
-        // Input was too large.
-        OPENSSL_PUT_ERROR(EC, ERR_R_INTERNAL_ERROR);
-        goto err;
-      }
-      if (i > 1) {
-        for (size_t j = 0; j < md_size; j++) {
-          b_i[j] ^= b_0[j];
-        }
-      } else {
-        OPENSSL_memcpy(b_i, b_0, md_size);
-      }
-
-      if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
-          !EVP_DigestUpdate(&ctx, b_i, md_size) ||
-          !EVP_DigestUpdate(&ctx, &i, 1) ||
-          !EVP_DigestUpdate(&ctx, dst, dst_len) ||
-          !EVP_DigestUpdate(&ctx, &dst_len_u8, 1) ||
-          !EVP_DigestFinal_ex(&ctx, b_i, NULL)) {
-        goto err;
-      }
-
-      size_t todo = out_len >= md_size ? md_size : out_len;
-      OPENSSL_memcpy(out, b_i, todo);
-      out += todo;
-      out_len -= todo;
-      i++;
-    }
-
-    ret = 1;
+  // Compute b_0.
+  static const uint8_t kZeros[EVP_MAX_MD_BLOCK_SIZE] = {0};
+  // If |out_len| exceeds 16 bits then |i| will wrap below causing an error to
+  // be returned. This depends on the static assert above.
+  uint8_t l_i_b_str_zero[3] = {static_cast<uint8_t>(out_len >> 8),
+                               static_cast<uint8_t>(out_len), 0};
+  uint8_t b_0[EVP_MAX_MD_SIZE];
+  if (!EVP_DigestInit_ex(ctx.get(), md, nullptr) ||
+      !EVP_DigestUpdate(ctx.get(), kZeros, block_size) ||
+      !EVP_DigestUpdate(ctx.get(), msg, msg_len) ||
+      !EVP_DigestUpdate(ctx.get(), l_i_b_str_zero, sizeof(l_i_b_str_zero)) ||
+      !EVP_DigestUpdate(ctx.get(), dst, dst_len) ||
+      !EVP_DigestUpdate(ctx.get(), &dst_len_u8, 1) ||
+      !EVP_DigestFinal_ex(ctx.get(), b_0, nullptr)) {
+    return 0;
   }
 
-err:
-  EVP_MD_CTX_cleanup(&ctx);
-  return ret;
+  uint8_t b_i[EVP_MAX_MD_SIZE];
+  uint8_t i = 1;
+  while (out_len > 0) {
+    if (i == 0) {
+      // Input was too large.
+      OPENSSL_PUT_ERROR(EC, ERR_R_INTERNAL_ERROR);
+      return 0;
+    }
+    if (i > 1) {
+      for (size_t j = 0; j < md_size; j++) {
+        b_i[j] ^= b_0[j];
+      }
+    } else {
+      OPENSSL_memcpy(b_i, b_0, md_size);
+    }
+
+    if (!EVP_DigestInit_ex(ctx.get(), md, nullptr) ||
+        !EVP_DigestUpdate(ctx.get(), b_i, md_size) ||
+        !EVP_DigestUpdate(ctx.get(), &i, 1) ||
+        !EVP_DigestUpdate(ctx.get(), dst, dst_len) ||
+        !EVP_DigestUpdate(ctx.get(), &dst_len_u8, 1) ||
+        !EVP_DigestFinal_ex(ctx.get(), b_i, nullptr)) {
+      return 0;
+    }
+
+    size_t todo = out_len >= md_size ? md_size : out_len;
+    OPENSSL_memcpy(out, b_i, todo);
+    out += todo;
+    out_len -= todo;
+    i++;
+  }
+
+  return 1;
 }
 
 // num_bytes_to_derive determines the number of bytes to derive when hashing to

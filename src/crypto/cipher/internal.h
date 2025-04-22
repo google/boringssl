@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_CIPHER_EXTRA_INTERNAL_H
-#define OPENSSL_HEADER_CIPHER_EXTRA_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_CIPHER_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_CIPHER_INTERNAL_H
 
 #include <assert.h>
 #include <stdlib.h>
@@ -237,4 +237,4 @@ inline void chacha20_poly1305_seal(uint8_t *out_ciphertext,
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_CIPHER_EXTRA_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_CIPHER_INTERNAL_H

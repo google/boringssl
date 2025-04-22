@@ -239,7 +239,7 @@ int PEM_ASN1_write(i2d_of_void *i2d, const char *name, FILE *fp, void *x,
 int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp, void *x,
                        const EVP_CIPHER *enc, const unsigned char *pass,
                        int pass_len, pem_password_cb *callback, void *u) {
-  EVP_CIPHER_CTX ctx;
+  bssl::ScopedEVP_CIPHER_CTX ctx;
   int dsize = 0, i, j, ret = 0;
   unsigned char *p, *data = NULL;
   const char *objstr = NULL;
@@ -305,16 +305,14 @@ int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp, void *x,
     PEM_dek_info(buf, objstr, iv_len, (char *)iv);
     // k=strlen(buf);
 
-    EVP_CIPHER_CTX_init(&ctx);
     ret = 1;
-    if (!EVP_EncryptInit_ex(&ctx, enc, NULL, key, iv) ||
-        !EVP_EncryptUpdate(&ctx, data, &j, data, i) ||
-        !EVP_EncryptFinal_ex(&ctx, &(data[j]), &i)) {
+    if (!EVP_EncryptInit_ex(ctx.get(), enc, NULL, key, iv) ||
+        !EVP_EncryptUpdate(ctx.get(), data, &j, data, i) ||
+        !EVP_EncryptFinal_ex(ctx.get(), &(data[j]), &i)) {
       ret = 0;
     } else {
       i += j;
     }
-    EVP_CIPHER_CTX_cleanup(&ctx);
     if (ret == 0) {
       goto err;
     }
@@ -329,7 +327,6 @@ int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp, void *x,
 err:
   OPENSSL_cleanse(key, sizeof(key));
   OPENSSL_cleanse(iv, sizeof(iv));
-  OPENSSL_cleanse((char *)&ctx, sizeof(ctx));
   OPENSSL_cleanse(buf, PEM_BUFSIZE);
   OPENSSL_free(data);
   return ret;
@@ -339,7 +336,7 @@ int PEM_do_header(const EVP_CIPHER_INFO *cipher, unsigned char *data,
                   long *plen, pem_password_cb *callback, void *u) {
   int i = 0, j, o, pass_len;
   long len;
-  EVP_CIPHER_CTX ctx;
+  bssl::ScopedEVP_CIPHER_CTX ctx;
   unsigned char key[EVP_MAX_KEY_LENGTH];
   char buf[PEM_BUFSIZE];
 
@@ -365,15 +362,13 @@ int PEM_do_header(const EVP_CIPHER_INFO *cipher, unsigned char *data,
   }
 
   j = (int)len;
-  EVP_CIPHER_CTX_init(&ctx);
-  o = EVP_DecryptInit_ex(&ctx, cipher->cipher, NULL, key, cipher->iv);
+  o = EVP_DecryptInit_ex(ctx.get(), cipher->cipher, NULL, key, cipher->iv);
   if (o) {
-    o = EVP_DecryptUpdate(&ctx, data, &i, data, j);
+    o = EVP_DecryptUpdate(ctx.get(), data, &i, data, j);
   }
   if (o) {
-    o = EVP_DecryptFinal_ex(&ctx, &(data[i]), &j);
+    o = EVP_DecryptFinal_ex(ctx.get(), &(data[i]), &j);
   }
-  EVP_CIPHER_CTX_cleanup(&ctx);
   OPENSSL_cleanse((char *)buf, sizeof(buf));
   OPENSSL_cleanse((char *)key, sizeof(key));
   if (!o) {

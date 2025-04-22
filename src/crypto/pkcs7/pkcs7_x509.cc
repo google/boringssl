@@ -17,8 +17,12 @@
 #include <assert.h>
 #include <limits.h>
 
+#include <openssl/asn1.h>
 #include <openssl/bytestring.h>
+#include <openssl/cms.h>
+#include <openssl/digest.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/mem.h>
 #include <openssl/obj.h>
 #include <openssl/pem.h>
@@ -26,6 +30,8 @@
 #include <openssl/stack.h>
 #include <openssl/x509.h>
 
+#include "../asn1/internal.h"
+#include "../x509/internal.h"
 #include "../internal.h"
 #include "internal.h"
 
@@ -168,8 +174,8 @@ int PKCS7_get_PEM_CRLs(STACK_OF(X509_CRL) *out_crls, BIO *pem_bio) {
   return ret;
 }
 
-static int pkcs7_bundle_certificates_cb(CBB *out, const void *arg) {
-  const STACK_OF(X509) *certs = reinterpret_cast<const STACK_OF(X509) *>(arg);
+static int pkcs7_bundle_certificates_cb(CBB *out, void *arg) {
+  auto *certs = static_cast<const STACK_OF(X509) *>(arg);
   size_t i;
   CBB certificates;
 
@@ -195,14 +201,14 @@ static int pkcs7_bundle_certificates_cb(CBB *out, const void *arg) {
 }
 
 int PKCS7_bundle_certificates(CBB *out, const STACK_OF(X509) *certs) {
-  return pkcs7_add_signed_data(out, /*digest_algos_cb=*/NULL,
-                               pkcs7_bundle_certificates_cb,
-                               /*signer_infos_cb=*/NULL, certs);
+  return pkcs7_add_signed_data(
+      out, /*signed_data_version=*/1,
+      /*digest_algos_cb=*/nullptr, pkcs7_bundle_certificates_cb,
+      /*signer_infos_cb=*/nullptr, const_cast<STACK_OF(X509) *>(certs));
 }
 
-static int pkcs7_bundle_crls_cb(CBB *out, const void *arg) {
-  const STACK_OF(X509_CRL) *crls =
-      reinterpret_cast<const STACK_OF(X509_CRL) *>(arg);
+static int pkcs7_bundle_crls_cb(CBB *out, void *arg) {
+  auto *crls = static_cast<const STACK_OF(X509_CRL) *>(arg);
   size_t i;
   CBB crl_data;
 
@@ -228,9 +234,10 @@ static int pkcs7_bundle_crls_cb(CBB *out, const void *arg) {
 }
 
 int PKCS7_bundle_CRLs(CBB *out, const STACK_OF(X509_CRL) *crls) {
-  return pkcs7_add_signed_data(out, /*digest_algos_cb=*/NULL,
-                               pkcs7_bundle_crls_cb,
-                               /*signer_infos_cb=*/NULL, crls);
+  return pkcs7_add_signed_data(
+      out, /*signed_data_version=*/1,
+      /*digest_algos_cb=*/nullptr, pkcs7_bundle_crls_cb,
+      /*signer_infos_cb=*/nullptr, const_cast<STACK_OF(X509_CRL) *>(crls));
 }
 
 static PKCS7 *pkcs7_new(CBS *cbs) {
@@ -363,164 +370,155 @@ int PKCS7_type_is_enveloped(const PKCS7 *p7) { return 0; }
 int PKCS7_type_is_signed(const PKCS7 *p7) { return 1; }
 int PKCS7_type_is_signedAndEnveloped(const PKCS7 *p7) { return 0; }
 
-// write_sha256_ai writes an AlgorithmIdentifier for SHA-256 to
-// |digest_algos_set|.
-static int write_sha256_ai(CBB *digest_algos_set, const void *arg) {
-  CBB seq;
-  return CBB_add_asn1(digest_algos_set, &seq, CBS_ASN1_SEQUENCE) &&
-         OBJ_nid2cbb(&seq, NID_sha256) &&  //
-         // https://datatracker.ietf.org/doc/html/rfc5754#section-2
-         // "Implementations MUST generate SHA2 AlgorithmIdentifiers with absent
-         //  parameters."
-         CBB_flush(digest_algos_set);
-}
-
-// sign_sha256 writes at most |max_out_sig| bytes of the signature of |data| by
-// |pkey| to |out_sig| and sets |*out_sig_len| to the number of bytes written.
-// It returns one on success or zero on error.
-static int sign_sha256(uint8_t *out_sig, size_t *out_sig_len,
-                       size_t max_out_sig, EVP_PKEY *pkey, BIO *data) {
-  static const size_t kBufSize = 4096;
-  uint8_t *buffer = reinterpret_cast<uint8_t *>(OPENSSL_malloc(kBufSize));
-  if (!buffer) {
-    return 0;
-  }
-
-  EVP_MD_CTX ctx;
-  EVP_MD_CTX_init(&ctx);
-
-  int ret = 0;
-  if (!EVP_DigestSignInit(&ctx, NULL, EVP_sha256(), NULL, pkey)) {
-    goto out;
-  }
-
+static bool digest_sign_update(EVP_MD_CTX *ctx, BIO *data) {
   for (;;) {
-    const int n = BIO_read(data, buffer, kBufSize);
+    uint8_t buf[4096];
+    const int n = BIO_read(data, buf, sizeof(buf));
     if (n == 0) {
-      break;
-    } else if (n < 0 || !EVP_DigestSignUpdate(&ctx, buffer, n)) {
-      goto out;
+      return true;
+    } else if (n < 0 || !EVP_DigestSignUpdate(ctx, buf, n)) {
+      return false;
     }
   }
-
-  *out_sig_len = max_out_sig;
-  if (!EVP_DigestSignFinal(&ctx, out_sig, out_sig_len)) {
-    goto out;
-  }
-
-  ret = 1;
-
-out:
-  EVP_MD_CTX_cleanup(&ctx);
-  OPENSSL_free(buffer);
-  return ret;
 }
 
 namespace {
 struct signer_info_data {
-  const X509 *sign_cert;
-  uint8_t *signature;
-  size_t signature_len;
+  X509 *sign_cert = nullptr;
+  bssl::ScopedEVP_MD_CTX sign_ctx;
+  bool use_key_id = false;
 };
 }  // namespace
 
+static int write_signer_digest_algos(CBB *digest_algos_set, void *arg) {
+  auto *si_data = static_cast<struct signer_info_data *>(arg);
+  // https://www.rfc-editor.org/rfc/rfc5754.html#section-2
+  // "Implementations MUST generate SHA2 AlgorithmIdentifiers with absent
+  //  parameters."
+  return EVP_marshal_digest_algorithm_no_params(
+      digest_algos_set, EVP_MD_CTX_get0_md(si_data->sign_ctx.get()));
+}
+
 // write_signer_info writes the SignerInfo structure from
-// https://datatracker.ietf.org/doc/html/rfc2315#section-9.2 to |out|. It
-// returns one on success or zero on error.
-static int write_signer_info(CBB *out, const void *arg) {
-  const struct signer_info_data *const si_data =
-      reinterpret_cast<const struct signer_info_data *>(arg);
+// https://www.rfc-editor.org/rfc/rfc2315.html#section-9.2 and
+// https://www.rfc-editor.org/rfc/rfc5652.html#section-5.3 to |out|. It returns
+// one on success or zero on error.
+static int write_signer_info(CBB *out, void *arg) {
+  auto *si_data = static_cast<struct signer_info_data *>(arg);
 
-  int ret = 0;
-  uint8_t *subject_bytes = NULL;
-  uint8_t *serial_bytes = NULL;
-
-  const int subject_len =
-      i2d_X509_NAME(X509_get_subject_name(si_data->sign_cert), &subject_bytes);
-  const int serial_len = i2d_ASN1_INTEGER(
-      (ASN1_INTEGER *)X509_get0_serialNumber(si_data->sign_cert),
-      &serial_bytes);
-
-  CBB seq, issuer_and_serial, signing_algo, null, signature;
-  if (subject_len < 0 || serial_len < 0 ||
-      !CBB_add_asn1(out, &seq, CBS_ASN1_SEQUENCE) ||
-      // version
-      !CBB_add_asn1_uint64(&seq, 1) ||
-      !CBB_add_asn1(&seq, &issuer_and_serial, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_bytes(&issuer_and_serial, subject_bytes, subject_len) ||
-      !CBB_add_bytes(&issuer_and_serial, serial_bytes, serial_len) ||
-      !write_sha256_ai(&seq, NULL) ||
-      !CBB_add_asn1(&seq, &signing_algo, CBS_ASN1_SEQUENCE) ||
-      !OBJ_nid2cbb(&signing_algo, NID_rsaEncryption) ||
-      !CBB_add_asn1(&signing_algo, &null, CBS_ASN1_NULL) ||
-      !CBB_add_asn1(&seq, &signature, CBS_ASN1_OCTETSTRING) ||
-      !CBB_add_bytes(&signature, si_data->signature, si_data->signature_len) ||
-      !CBB_flush(out)) {
-    goto out;
+  uint64_t version = si_data->use_key_id ? 3u : 1u;
+  CBB seq, child, signing_algo, null, signature;
+  if (!CBB_add_asn1(out, &seq, CBS_ASN1_SEQUENCE) ||
+      !CBB_add_asn1_uint64(&seq, version)) {
+    return 0;
   }
 
-  ret = 1;
+  // Output the SignerIdentifier.
+  if (si_data->use_key_id) {
+    const ASN1_OCTET_STRING *skid =
+        X509_get0_subject_key_id(si_data->sign_cert);
+    if (skid == nullptr) {
+      OPENSSL_PUT_ERROR(CMS, CMS_R_CERTIFICATE_HAS_NO_KEYID);
+      return 0;
+    }
+    // subjectKeyIdentifier is implicitly-tagged.
+    if (!CBB_add_asn1_element(&seq, CBS_ASN1_CONTEXT_SPECIFIC | 0,
+                              ASN1_STRING_get0_data(skid),
+                              ASN1_STRING_length(skid))) {
+      return 0;
+    }
+  } else {
+    if (!CBB_add_asn1(&seq, &child, CBS_ASN1_SEQUENCE) ||
+        !x509_marshal_name(&child, X509_get_subject_name(si_data->sign_cert)) ||
+        !asn1_marshal_integer(&child,
+                              X509_get0_serialNumber(si_data->sign_cert),
+                              /*tag=*/0)) {
+      return 0;
+    }
+  }
 
-out:
-  OPENSSL_free(subject_bytes);
-  OPENSSL_free(serial_bytes);
-  return ret;
+  // Output the digest and signature algorithm. This cannot use X.509 signature
+  // algorithms because CMS incorrectly decomposes signature algorithms into a
+  // combination of digesting and "encrypting" the digest, then uses the plain
+  // rsaEncryption OID instead of the hash-specific RSA OIDs. For now, we only
+  // support RSA.
+  EVP_PKEY *pkey = EVP_PKEY_CTX_get0_pkey(si_data->sign_ctx->pctx);
+  if (EVP_PKEY_id(pkey) != EVP_PKEY_RSA) {
+    OPENSSL_PUT_ERROR(PKCS7, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+    return 0;
+  }
+  if (!EVP_marshal_digest_algorithm_no_params(
+          &seq, EVP_MD_CTX_get0_md(si_data->sign_ctx.get())) ||
+      !CBB_add_asn1(&seq, &signing_algo, CBS_ASN1_SEQUENCE) ||
+      !OBJ_nid2cbb(&signing_algo, NID_rsaEncryption) ||
+      !CBB_add_asn1(&signing_algo, &null, CBS_ASN1_NULL)) {
+    return 0;
+  }
+
+  // Output the signature.
+  uint8_t *ptr;
+  size_t sig_len;
+  if (!EVP_DigestSignFinal(si_data->sign_ctx.get(), nullptr, &sig_len) ||
+      !CBB_add_asn1(&seq, &signature, CBS_ASN1_OCTETSTRING) ||
+      !CBB_reserve(&signature, &ptr, sig_len) ||
+      !EVP_DigestSignFinal(si_data->sign_ctx.get(), ptr, &sig_len) ||
+      !CBB_did_write(&signature, sig_len) ||  //
+      !CBB_flush(out)) {
+    return 0;
+  }
+
+  return 1;
+}
+
+int pkcs7_add_external_signature(CBB *out, X509 *sign_cert, EVP_PKEY *key,
+                                 const EVP_MD *md, BIO *data, bool use_key_id) {
+  signer_info_data si_data;
+  si_data.use_key_id = use_key_id;
+  si_data.sign_cert = sign_cert;
+
+  // Set up the signature.
+  if (!EVP_DigestSignInit(si_data.sign_ctx.get(), nullptr, md, nullptr, key) ||
+      !digest_sign_update(si_data.sign_ctx.get(), data)) {
+    return 0;
+  }
+
+  // See RFC 5652, Section 5.1. When no certificates are present, the version
+  // comes from the highest SignerInfo version, which will be 3 (CMS) for a key
+  // ID, and 1 (CMS or PKCS#7) for issuer and serial.
+  uint64_t signed_data_version = use_key_id ? 3u : 1u;
+  return pkcs7_add_signed_data(
+      out, signed_data_version, write_signer_digest_algos,
+      /*cert_crl_cb=*/nullptr, write_signer_info, &si_data);
 }
 
 PKCS7 *PKCS7_sign(X509 *sign_cert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
                   BIO *data, int flags) {
-  CBB cbb;
-  if (!CBB_init(&cbb, 2048)) {
-    return NULL;
+  bssl::ScopedCBB cbb;
+  if (!CBB_init(cbb.get(), 2048)) {
+    return nullptr;
   }
 
-  uint8_t *der = NULL;
-  size_t len;
-  PKCS7 *ret = NULL;
-
-  if (sign_cert == NULL && pkey == NULL && flags == PKCS7_DETACHED) {
+  if (sign_cert == nullptr && pkey == nullptr && flags == PKCS7_DETACHED) {
     // Caller just wants to bundle certificates.
-    if (!PKCS7_bundle_certificates(&cbb, certs)) {
-      goto out;
+    if (!PKCS7_bundle_certificates(cbb.get(), certs)) {
+      return nullptr;
     }
-  } else if (sign_cert != NULL && pkey != NULL && certs == NULL &&
-             data != NULL &&
+  } else if (sign_cert != nullptr && pkey != nullptr && certs == nullptr &&
+             data != nullptr &&
              flags == (PKCS7_NOATTR | PKCS7_BINARY | PKCS7_NOCERTS |
-                       PKCS7_DETACHED) &&
-             EVP_PKEY_id(pkey) == NID_rsaEncryption) {
-    // sign-file.c from the Linux kernel.
-    const size_t signature_max_len = EVP_PKEY_size(pkey);
-    struct signer_info_data si_data = {
-        /*sign_cert=*/sign_cert,
-        /*signature=*/
-        reinterpret_cast<uint8_t *>(OPENSSL_malloc(signature_max_len)),
-        /*signature_len=*/0,
-    };
-
-    if (!si_data.signature ||
-        !sign_sha256(si_data.signature, &si_data.signature_len,
-                     signature_max_len, pkey, data) ||
-        !pkcs7_add_signed_data(&cbb, write_sha256_ai, /*cert_crl_cb=*/NULL,
-                               write_signer_info, &si_data)) {
-      OPENSSL_free(si_data.signature);
-      goto out;
+                       PKCS7_DETACHED)) {
+    // In OpenSSL, this API signs with some default hash. That default has been
+    // SHA-256 since 2015.
+    if (!pkcs7_add_external_signature(cbb.get(), sign_cert, pkey, EVP_sha256(),
+                                      data, /*use_key_id=*/false)) {
+      return nullptr;
     }
-    OPENSSL_free(si_data.signature);
   } else {
     OPENSSL_PUT_ERROR(PKCS7, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
-    goto out;
-  }
-
-  if (!CBB_finish(&cbb, &der, &len)) {
-    goto out;
+    return nullptr;
   }
 
   CBS cbs;
-  CBS_init(&cbs, der, len);
-  ret = pkcs7_new(&cbs);
-
-out:
-  CBB_cleanup(&cbb);
-  OPENSSL_free(der);
-  return ret;
+  CBS_init(&cbs, CBB_data(cbb.get()), CBB_len(cbb.get()));
+  return pkcs7_new(&cbs);
 }

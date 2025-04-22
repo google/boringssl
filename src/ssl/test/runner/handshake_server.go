@@ -452,6 +452,15 @@ func (hs *serverHandshakeState) readClientHello() error {
 		return errors.New("tls: expected non-empty session ID from client")
 	}
 
+	if expected := c.config.Bugs.ExpectPeerRequestedTrustAnchors; expected != nil {
+		if hs.clientHello.trustAnchors == nil {
+			return errors.New("tls: client did not send trust anchors")
+		}
+		if !slices.EqualFunc(expected, hs.clientHello.trustAnchors, slices.Equal) {
+			return fmt.Errorf("tls: client offered trust anchors %v, but expected %v", hs.clientHello.trustAnchors, expected)
+		}
+	}
+
 	applyBugsToClientHello(hs.clientHello, config)
 
 	return nil
@@ -1160,6 +1169,19 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		certMsg := &certificateMsg{
 			hasRequestContext: true,
 		}
+		certMsg.sendTrustAnchorWrongCertificate = config.Bugs.SendTrustAnchorWrongCertificate
+		certMsg.sendNonEmptyTrustAnchorMatch = config.Bugs.SendNonEmptyTrustAnchorMatch
+		if config.Bugs.AlwaysMatchTrustAnchorID {
+			certMsg.matchedTrustAnchor = true
+		} else {
+			if hs.clientHello.trustAnchors != nil && useCert.TrustAnchorID != nil {
+				for _, id := range hs.clientHello.trustAnchors {
+					if bytes.Equal(useCert.TrustAnchorID, id) {
+						certMsg.matchedTrustAnchor = true
+					}
+				}
+			}
+		}
 		if !config.Bugs.EmptyCertificateList {
 			for i, certData := range useCert.Certificate {
 				cert := certificateEntry{
@@ -1751,6 +1773,9 @@ func (hs *serverHandshakeState) processClientExtensions(serverExtensions *server
 		return errors.New("tls: no GREASE extension found")
 	}
 
+	if hs.clientHello.trustAnchors != nil || config.Bugs.AlwaysSendAvailableTrustAnchors {
+		serverExtensions.trustAnchors = c.config.AvailableTrustAnchors
+	}
 	serverExtensions.serverNameAck = c.config.Bugs.SendServerNameAck
 
 	if (c.vers >= VersionTLS13 && hs.clientHello.echOuter != nil) || c.config.Bugs.AlwaysSendECHRetryConfigs {

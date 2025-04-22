@@ -29,11 +29,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *buf, size_t len) {
     // correctly.
     size_t consumed = len - CBS_len(&cbs);
     bssl::ScopedCBB cbb;
-    CBB body_cbb;
     if (!CBB_init(cbb.get(), consumed) ||
-        !CBB_add_asn1(cbb.get(), &body_cbb, tag) ||
-        !CBB_add_bytes(&body_cbb, CBS_data(&body), CBS_len(&body)) ||
-        !CBB_flush(cbb.get()) ||
+        !CBB_add_asn1_element(cbb.get(), tag, CBS_data(&body),
+                              CBS_len(&body)) ||
         CBB_len(cbb.get()) != consumed ||
         memcmp(CBB_data(cbb.get()), buf, consumed) != 0) {
       abort();

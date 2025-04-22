@@ -22,10 +22,7 @@
 #if !defined(OPENSSL_WINDOWS)
 #include <unistd.h>
 #else
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
-
 OPENSSL_MSVC_PRAGMA(comment(lib, "Ws2_32.lib"))
 #endif
 

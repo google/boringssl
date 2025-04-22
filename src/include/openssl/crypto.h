@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_CRYPTO_H
 #define OPENSSL_HEADER_CRYPTO_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <openssl/sha.h>
 
 // Upstream OpenSSL defines |OPENSSL_malloc|, etc., in crypto.h rather than
@@ -46,9 +46,16 @@ OPENSSL_EXPORT int CRYPTO_is_confidential_build(void);
 // in which case it returns zero.
 OPENSSL_EXPORT int CRYPTO_has_asm(void);
 
-// BORINGSSL_self_test triggers the FIPS KAT-based self tests. It returns one on
-// success and zero on error.
+// BORINGSSL_self_test triggers most of the FIPS KAT-based self tests. It
+// returns one on success and zero on error. It currently skips the SLH-DSA
+// tests, which take a really long time to run.
 OPENSSL_EXPORT int BORINGSSL_self_test(void);
+
+// BORINGSSL_self_test_all triggers all of the FIPS KAT-based self tests. This
+// is the 'self-test' entry point required by FIPS 140. It returns one on
+// success and zero on error. This test will take a very long time to run. You
+// probably do not want to run this in a resource or time constrained test.
+OPENSSL_EXPORT int BORINGSSL_self_test_all(void);
 
 // BORINGSSL_integrity_test triggers the module's integrity test where the code
 // and data of the module is matched against a hash injected at build time. It
@@ -70,6 +77,19 @@ OPENSSL_EXPORT void CRYPTO_pre_sandbox_init(void);
 // workaround was needed. See https://crbug.com/boringssl/46.
 OPENSSL_EXPORT int CRYPTO_needs_hwcap2_workaround(void);
 #endif  // OPENSSL_ARM && OPENSSL_LINUX && !OPENSSL_STATIC_ARMCAP
+
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+// CRYPTO_set_fuzzer_mode, in non-production fuzzer builds, configures a "fuzzer
+// mode" in the library, which disables various signature checks and disables
+// encryption in parts of TLS.
+//
+// By default, fuzzer builds make the PRNG deterministic (and thus unsafe for
+// production), but continue to run cryptographic operations as usual. This
+// allows a fuzzer build of BoringSSL to be used dependency of fuzzer builds of
+// other libraries, without changing in semantics. This function enables further
+// incompatible changes intended for fuzzing BoringSSL itself.
+OPENSSL_EXPORT void CRYPTO_set_fuzzer_mode(int enabled);
+#endif
 
 
 // FIPS monitoring

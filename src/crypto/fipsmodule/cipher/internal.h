@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_CIPHER_INTERNAL_H
-#define OPENSSL_HEADER_CIPHER_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_CIPHER_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_CIPHER_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -110,4 +110,4 @@ struct evp_cipher_st {
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_CIPHER_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_CIPHER_INTERNAL_H

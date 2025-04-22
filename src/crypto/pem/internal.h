@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_PEM_INTERNAL_H
-#define OPENSSL_HEADER_PEM_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_PEM_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_PEM_INTERNAL_H
 
 #include <openssl/pem.h>
 
@@ -41,4 +41,4 @@ int PEM_do_header(const EVP_CIPHER_INFO *cipher, uint8_t *data, long *len,
 }  // extern "C"
 #endif
 
-#endif  // OPENSSL_HEADER_PEM_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_PEM_INTERNAL_H

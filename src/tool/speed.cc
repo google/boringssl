@@ -52,9 +52,7 @@
 #include <openssl/trust_token.h>
 
 #if defined(OPENSSL_WINDOWS)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #elif defined(OPENSSL_APPLE)
 #include <sys/time.h>
 #else

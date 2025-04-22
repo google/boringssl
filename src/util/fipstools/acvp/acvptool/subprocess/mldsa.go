@@ -92,12 +92,12 @@ type mldsaSigVerTestGroup struct {
 	ID           uint64            `json:"tgId"`
 	TestType     string            `json:"testType"`
 	ParameterSet string            `json:"parameterSet"`
-	PublicKey    string            `json:"pk"`
 	Tests        []mldsaSigVerTest `json:"tests"`
 }
 
 type mldsaSigVerTest struct {
 	ID        uint64 `json:"tcId"`
+	PublicKey string `json:"pk"`
 	Message   string `json:"message"`
 	Signature string `json:"signature"`
 }
@@ -254,13 +254,13 @@ func (m *mldsa) processSigVer(vectorSet []byte, t Transactable) (any, error) {
 		}
 		cmdName := group.ParameterSet + "/sigVer"
 
-		pk, err := hex.DecodeString(group.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode public key in group %d: %s",
-				group.ID, err)
-		}
-
 		for _, test := range group.Tests {
+			pk, err := hex.DecodeString(test.PublicKey)
+			if err != nil || len(pk) == 0 {
+				return nil, fmt.Errorf("failed to decode public key in test case %d/%d: %s",
+					group.ID, test.ID, err)
+			}
+
 			msg, err := hex.DecodeString(test.Message)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode message in test case %d/%d: %s",

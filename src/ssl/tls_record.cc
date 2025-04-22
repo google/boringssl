@@ -47,14 +47,11 @@ static const uint8_t kMaxWarningAlerts = 4;
 // ssl_needs_record_splitting returns one if |ssl|'s current outgoing cipher
 // state needs record-splitting and zero otherwise.
 bool ssl_needs_record_splitting(const SSL *ssl) {
-#if !defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  return !ssl->s3->aead_write_ctx->is_null_cipher() &&
+  return !CRYPTO_fuzzer_mode_enabled() &&
+         !ssl->s3->aead_write_ctx->is_null_cipher() &&
          ssl_protocol_version(ssl) < TLS1_1_VERSION &&
          (ssl->mode & SSL_MODE_CBC_RECORD_SPLITTING) != 0 &&
          SSL_CIPHER_is_block_cipher(ssl->s3->aead_write_ctx->cipher());
-#else
-  return false;
-#endif
 }
 
 size_t ssl_record_prefix_len(const SSL *ssl) {

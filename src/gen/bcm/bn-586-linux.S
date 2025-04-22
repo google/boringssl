@@ -162,18 +162,6 @@ bn_sqr_words:
 	popl	%ebp
 	ret
 .size	bn_sqr_words,.-.L_bn_sqr_words_begin
-.globl	bn_div_words
-.hidden	bn_div_words
-.type	bn_div_words,@function
-.align	16
-bn_div_words:
-.L_bn_div_words_begin:
-	movl	4(%esp),%edx
-	movl	8(%esp),%eax
-	movl	12(%esp),%ecx
-	divl	%ecx
-	ret
-.size	bn_div_words,.-.L_bn_div_words_begin
 .globl	bn_add_words
 .hidden	bn_add_words
 .type	bn_add_words,@function

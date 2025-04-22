@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_CRYPTO_HPKE_INTERNAL_H
-#define OPENSSL_HEADER_CRYPTO_HPKE_INTERNAL_H
+#ifndef OPENSSL_HEADER_HPKE_H
+#define OPENSSL_HEADER_HPKE_H
 
 #include <openssl/aead.h>
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <openssl/curve25519.h>
 #include <openssl/digest.h>
 
@@ -406,4 +406,4 @@ BSSL_NAMESPACE_END
 }  // extern C++
 #endif
 
-#endif  // OPENSSL_HEADER_CRYPTO_HPKE_INTERNAL_H
+#endif  // OPENSSL_HEADER_HPKE_H

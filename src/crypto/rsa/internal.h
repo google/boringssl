@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_RSA_EXTRA_INTERNAL_H
-#define OPENSSL_HEADER_RSA_EXTRA_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_RSA_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_RSA_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -33,4 +33,4 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *out, size_t *out_len,
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_RSA_EXTRA_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_RSA_INTERNAL_H

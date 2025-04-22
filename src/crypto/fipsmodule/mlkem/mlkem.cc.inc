@@ -26,11 +26,18 @@
 
 #include "../../internal.h"
 #include "../bcm_interface.h"
+#include "../delocate.h"
 #include "../keccak/internal.h"
 
 
 namespace mlkem {
 namespace {
+
+namespace fips {
+void ensure_keygen_self_test();
+void ensure_encap_self_test();
+void ensure_decap_self_test();
+}  // namespace fips
 
 // See
 // https://csrc.nist.gov/pubs/fips/203/final
@@ -690,7 +697,7 @@ static bcm_status mlkem_marshal_public_key(CBB *out,
 }
 
 template <int RANK>
-void mlkem_generate_key_external_seed(
+void mlkem_generate_key_external_seed_no_self_test(
     uint8_t *out_encoded_public_key, private_key<RANK> *priv,
     const uint8_t seed[BCM_MLKEM_SEED_BYTES]) {
   uint8_t augmented_seed[33];
@@ -725,6 +732,15 @@ void mlkem_generate_key_external_seed(
   hash_h(priv->pub.public_key_hash, out_encoded_public_key,
          encoded_public_key_size(RANK));
   OPENSSL_memcpy(priv->fo_failure_secret, seed + 32, 32);
+}
+
+template <int RANK>
+void mlkem_generate_key_external_seed(
+    uint8_t *out_encoded_public_key, private_key<RANK> *priv,
+    const uint8_t seed[BCM_MLKEM_SEED_BYTES]) {
+  fips::ensure_keygen_self_test();
+  mlkem_generate_key_external_seed_no_self_test(out_encoded_public_key, priv,
+                                                seed);
 }
 
 // Encrypts a message with given randomness to
@@ -768,9 +784,9 @@ void encrypt_cpa(uint8_t *out, const struct mlkem::public_key<RANK> *pub,
 
 // See section 6.3
 template <int RANK>
-void mlkem_decap(uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
-                 const uint8_t *ciphertext,
-                 const struct private_key<RANK> *priv) {
+void mlkem_decap_no_self_test(
+    uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
+    const uint8_t *ciphertext, const struct private_key<RANK> *priv) {
   uint8_t decrypted[64];
   decrypt_cpa(decrypted, priv, ciphertext);
   OPENSSL_memcpy(decrypted + 32, priv->pub.public_key_hash,
@@ -792,6 +808,14 @@ void mlkem_decap(uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
     out_shared_secret[i] =
         constant_time_select_8(mask, key_and_randomness[i], failure_key[i]);
   }
+}
+
+template <int RANK>
+void mlkem_decap(uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
+                 const uint8_t *ciphertext,
+                 const struct private_key<RANK> *priv) {
+  fips::ensure_decap_self_test();
+  mlkem_decap_no_self_test(out_shared_secret, ciphertext, priv);
 }
 
 // mlkem_parse_public_key_no_hash parses |in| into |pub| but doesn't calculate
@@ -863,8 +887,8 @@ struct public_key<RANK768> *public_key_768_from_external(
   return (struct public_key<RANK768> *)external;
 }
 
-static struct public_key<RANK1024> *
-public_key_1024_from_external(const struct BCM_mlkem1024_public_key *external) {
+static struct public_key<RANK1024> *public_key_1024_from_external(
+    const struct BCM_mlkem1024_public_key *external) {
   static_assert(sizeof(struct BCM_mlkem1024_public_key) >=
                     sizeof(struct public_key<RANK1024>),
                 "MLKEM1024 public key is too small");
@@ -874,8 +898,8 @@ public_key_1024_from_external(const struct BCM_mlkem1024_public_key *external) {
   return (struct public_key<RANK1024> *)external;
 }
 
-struct private_key<RANK768> *
-private_key_768_from_external(const struct BCM_mlkem768_private_key *external) {
+struct private_key<RANK768> *private_key_768_from_external(
+    const struct BCM_mlkem768_private_key *external) {
   static_assert(sizeof(struct BCM_mlkem768_private_key) >=
                     sizeof(struct private_key<RANK768>),
                 "MLKEM private key too small");
@@ -885,8 +909,7 @@ private_key_768_from_external(const struct BCM_mlkem768_private_key *external) {
   return (struct private_key<RANK768> *)external;
 }
 
-struct private_key<RANK1024> *
-private_key_1024_from_external(
+struct private_key<RANK1024> *private_key_1024_from_external(
     const struct BCM_mlkem1024_private_key *external) {
   static_assert(sizeof(struct BCM_mlkem1024_private_key) >=
                     sizeof(struct private_key<RANK1024>),
@@ -897,8 +920,195 @@ private_key_1024_from_external(
   return (struct private_key<RANK1024> *)external;
 }
 
+// See section 6.2.
+template <int RANK>
+void mlkem_encap_external_entropy_no_self_test(
+    uint8_t *out_ciphertext,
+    uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
+    const struct mlkem::public_key<RANK> *pub,
+    const uint8_t entropy[BCM_MLKEM_ENCAP_ENTROPY]) {
+  uint8_t input[64];
+  OPENSSL_memcpy(input, entropy, BCM_MLKEM_ENCAP_ENTROPY);
+  OPENSSL_memcpy(input + BCM_MLKEM_ENCAP_ENTROPY, pub->public_key_hash,
+                 sizeof(input) - BCM_MLKEM_ENCAP_ENTROPY);
+  uint8_t key_and_randomness[64];
+  mlkem::hash_g(key_and_randomness, input, sizeof(input));
+  encrypt_cpa(out_ciphertext, pub, entropy, key_and_randomness + 32);
+  // The ciphertext is public.
+  CONSTTIME_DECLASSIFY(out_ciphertext, mlkem::ciphertext_size(RANK));
+  static_assert(BCM_MLKEM_SHARED_SECRET_BYTES == 32, "");
+  memcpy(out_shared_secret, key_and_randomness, 32);
+}
+
+template <int RANK>
+void mlkem_encap_external_entropy(
+    uint8_t *out_ciphertext,
+    uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
+    const struct mlkem::public_key<RANK> *pub,
+    const uint8_t entropy[BCM_MLKEM_ENCAP_ENTROPY]) {
+  fips::ensure_encap_self_test();
+  mlkem_encap_external_entropy_no_self_test(out_ciphertext, out_shared_secret,
+                                            pub, entropy);
+}
+
+namespace fips {
+
+#include "fips_known_values.inc"
+
+static int keygen_self_test() {
+  uint8_t pub_key[BCM_MLKEM768_PUBLIC_KEY_BYTES];
+  private_key<RANK768> priv;
+  static_assert(sizeof(kTestEntropy) >= BCM_MLKEM_SEED_BYTES);
+  mlkem_generate_key_external_seed_no_self_test(pub_key, &priv, kTestEntropy);
+  CBB cbb;
+  constexpr size_t kMarshaledPrivateKeySize = 2400;
+  uint8_t priv_bytes[kMarshaledPrivateKeySize];
+  CBB_init_fixed(&cbb, priv_bytes, sizeof(priv_bytes));
+  static_assert(sizeof(kExpectedPrivateKeyBytes) == kMarshaledPrivateKeySize);
+  static_assert(sizeof(kExpectedPublicKeyBytes) == sizeof(pub_key));
+  if (!mlkem_marshal_private_key(&cbb, &priv) ||
+      !BORINGSSL_check_test(kExpectedPrivateKeyBytes, priv_bytes,
+                            sizeof(priv_bytes), "ML-KEM keygen private key") ||
+      !BORINGSSL_check_test(kExpectedPublicKeyBytes, pub_key, sizeof(pub_key),
+                            "ML-KEM keygen public key")) {
+    return 0;
+  }
+  return 1;
+}
+
+static int encap_self_test() {
+  CBS cbs;
+  CBS_init(&cbs, kExpectedPublicKeyBytes, sizeof(kExpectedPublicKeyBytes));
+  public_key<RANK768> pub;
+  if (!mlkem_parse_public_key(&pub, &cbs)) {
+    return 0;
+  }
+  uint8_t ciphertext[BCM_MLKEM768_CIPHERTEXT_BYTES];
+  uint8_t shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES];
+  static_assert(sizeof(kTestEntropy) >= BCM_MLKEM_ENCAP_ENTROPY);
+  mlkem_encap_external_entropy_no_self_test(ciphertext, shared_secret, &pub,
+                                            kTestEntropy);
+  if (!BORINGSSL_check_test(ciphertext, kExpectedCiphertext, sizeof(ciphertext),
+                            "ML-KEM encap ciphertext") ||
+      !BORINGSSL_check_test(kExpectedSharedSecret, shared_secret,
+                            sizeof(kExpectedSharedSecret),
+                            "ML-KEM encap shared secret")) {
+    return 0;
+  }
+  return 1;
+}
+
+static int decap_self_test() {
+  CBS cbs;
+  CBS_init(&cbs, kExpectedPrivateKeyBytes, sizeof(kExpectedPrivateKeyBytes));
+  private_key<RANK768> priv;
+  if (!mlkem_parse_private_key(&priv, &cbs)) {
+    return 0;
+  }
+  uint8_t shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES];
+  mlkem_decap_no_self_test(shared_secret, kExpectedCiphertext, &priv);
+  static_assert(sizeof(kExpectedSharedSecret) == sizeof(shared_secret));
+  if (!BORINGSSL_check_test(kExpectedSharedSecret, shared_secret,
+                            sizeof(shared_secret),
+                            "ML-KEM decap shared secret")) {
+    return 0;
+  }
+
+  uint8_t implicit_rejection_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES];
+  static_assert(sizeof(kExpectedPrivateKeyBytes) >=
+                sizeof(kExpectedCiphertext));
+  mlkem_decap_no_self_test(implicit_rejection_shared_secret,
+                           kExpectedPrivateKeyBytes, &priv);
+  static_assert(sizeof(kExpectedImplicitRejectionSharedSecret) ==
+                sizeof(implicit_rejection_shared_secret));
+  if (!BORINGSSL_check_test(kExpectedImplicitRejectionSharedSecret,
+                            implicit_rejection_shared_secret,
+                            sizeof(implicit_rejection_shared_secret),
+                            "ML-KEM decap implicit rejection shared secret")) {
+    return 0;
+  }
+  return 1;
+}
+
+#if defined(BORINGSSL_FIPS)
+
+DEFINE_STATIC_ONCE(g_mlkem_keygen_self_test_once)
+
+void ensure_keygen_self_test(void) {
+  CRYPTO_once(g_mlkem_keygen_self_test_once_bss_get(), []() {
+    if (!keygen_self_test()) {
+      BORINGSSL_FIPS_abort();
+    }
+  });
+}
+
+DEFINE_STATIC_ONCE(g_mlkem_encap_self_test_once)
+
+void ensure_encap_self_test(void) {
+  CRYPTO_once(g_mlkem_encap_self_test_once_bss_get(), []() {
+    if (!encap_self_test()) {
+      BORINGSSL_FIPS_abort();
+    }
+  });
+}
+
+DEFINE_STATIC_ONCE(g_mlkem_decap_self_test_once)
+
+void ensure_decap_self_test(void) {
+  CRYPTO_once(g_mlkem_decap_self_test_once_bss_get(), []() {
+    if (!decap_self_test()) {
+      BORINGSSL_FIPS_abort();
+    }
+  });
+}
+
+#else
+
+void ensure_keygen_self_test(void) {}
+void ensure_encap_self_test(void) {}
+void ensure_decap_self_test(void) {}
+
+#endif
+}  // namespace fips
+
 }  // namespace
 }  // namespace mlkem
+
+bcm_status BCM_mlkem768_check_fips(
+    const struct BCM_mlkem768_private_key *private_key) {
+  mlkem::private_key<RANK768> *priv =
+      mlkem::private_key_768_from_external(private_key);
+
+  const uint8_t entropy[BCM_MLKEM_ENCAP_ENTROPY] = {1, 2, 3, 4};
+  uint8_t ciphertext[BCM_MLKEM768_CIPHERTEXT_BYTES];
+  uint8_t shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES];
+  mlkem_encap_external_entropy_no_self_test(ciphertext, shared_secret,
+                                            &priv->pub, entropy);
+
+  if (boringssl_fips_break_test("MLKEM_PWCT")) {
+    shared_secret[0] ^= 1;
+  }
+
+  uint8_t shared_secret2[BCM_MLKEM_SHARED_SECRET_BYTES];
+  mlkem::mlkem_decap_no_self_test(shared_secret2, ciphertext, priv);
+  if (CRYPTO_memcmp(shared_secret, shared_secret2, sizeof(shared_secret)) !=
+      0) {
+    return bcm_status::failure;
+  }
+  return bcm_status::approved;
+}
+
+bcm_status BCM_mlkem768_generate_key_fips(
+    uint8_t out_encoded_public_key[BCM_MLKEM768_PUBLIC_KEY_BYTES],
+    uint8_t optional_out_seed[BCM_MLKEM_SEED_BYTES],
+    struct BCM_mlkem768_private_key *out_private_key) {
+  if (out_encoded_public_key == nullptr || out_private_key == nullptr) {
+    return bcm_status::failure;
+  }
+  BCM_mlkem768_generate_key(out_encoded_public_key, optional_out_seed,
+                            out_private_key);
+  return BCM_mlkem768_check_fips(out_private_key);
+}
 
 bcm_infallible BCM_mlkem768_generate_key(
     uint8_t out_encoded_public_key[BCM_MLKEM768_PUBLIC_KEY_BYTES],
@@ -912,7 +1122,7 @@ bcm_infallible BCM_mlkem768_generate_key(
   }
   BCM_mlkem768_generate_key_external_seed(out_encoded_public_key,
                                           out_private_key, seed);
-  return bcm_infallible::approved;
+  return bcm_infallible::not_approved;
 }
 
 bcm_status BCM_mlkem768_private_key_from_seed(
@@ -921,10 +1131,47 @@ bcm_status BCM_mlkem768_private_key_from_seed(
   if (seed_len != BCM_MLKEM_SEED_BYTES) {
     return bcm_status::failure;
   }
+
   uint8_t public_key_bytes[BCM_MLKEM768_PUBLIC_KEY_BYTES];
   BCM_mlkem768_generate_key_external_seed(public_key_bytes, out_private_key,
                                           seed);
+  return bcm_status::not_approved;
+}
+
+bcm_status BCM_mlkem1024_check_fips(
+    const struct BCM_mlkem1024_private_key *private_key) {
+  mlkem::private_key<RANK1024> *priv =
+      mlkem::private_key_1024_from_external(private_key);
+
+  const uint8_t entropy[BCM_MLKEM_ENCAP_ENTROPY] = {1, 2, 3, 4};
+  uint8_t ciphertext[BCM_MLKEM1024_CIPHERTEXT_BYTES];
+  uint8_t shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES];
+  mlkem_encap_external_entropy_no_self_test(ciphertext, shared_secret,
+                                            &priv->pub, entropy);
+
+  if (boringssl_fips_break_test("MLKEM_PWCT")) {
+    shared_secret[0] ^= 1;
+  }
+
+  uint8_t shared_secret2[BCM_MLKEM_SHARED_SECRET_BYTES];
+  mlkem::mlkem_decap_no_self_test(shared_secret2, ciphertext, priv);
+  if (CRYPTO_memcmp(shared_secret, shared_secret2, sizeof(shared_secret)) !=
+      0) {
+    return bcm_status::failure;
+  }
   return bcm_status::approved;
+}
+
+bcm_status BCM_mlkem1024_generate_key_fips(
+    uint8_t out_encoded_public_key[BCM_MLKEM1024_PUBLIC_KEY_BYTES],
+    uint8_t optional_out_seed[BCM_MLKEM_SEED_BYTES],
+    struct BCM_mlkem1024_private_key *out_private_key) {
+  if (out_encoded_public_key == nullptr || out_private_key == nullptr) {
+    return bcm_status::failure;
+  }
+  BCM_mlkem1024_generate_key(out_encoded_public_key, optional_out_seed,
+                             out_private_key);
+  return BCM_mlkem1024_check_fips(out_private_key);
 }
 
 bcm_infallible BCM_mlkem1024_generate_key(
@@ -939,7 +1186,7 @@ bcm_infallible BCM_mlkem1024_generate_key(
   }
   BCM_mlkem1024_generate_key_external_seed(out_encoded_public_key,
                                            out_private_key, seed);
-  return bcm_infallible::approved;
+  return bcm_infallible::not_approved;
 }
 
 bcm_status BCM_mlkem1024_private_key_from_seed(
@@ -951,7 +1198,7 @@ bcm_status BCM_mlkem1024_private_key_from_seed(
   uint8_t public_key_bytes[BCM_MLKEM1024_PUBLIC_KEY_BYTES];
   BCM_mlkem1024_generate_key_external_seed(public_key_bytes, out_private_key,
                                            seed);
-  return bcm_status::approved;
+  return bcm_status::not_approved;
 }
 
 bcm_infallible BCM_mlkem768_generate_key_external_seed(
@@ -1020,26 +1267,6 @@ bcm_infallible BCM_mlkem1024_encap(
   BCM_mlkem1024_encap_external_entropy(out_ciphertext, out_shared_secret,
                                        public_key, entropy);
   return bcm_infallible::approved;
-}
-
-// See section 6.2.
-template <int RANK>
-void mlkem_encap_external_entropy(
-    uint8_t *out_ciphertext,
-    uint8_t out_shared_secret[BCM_MLKEM_SHARED_SECRET_BYTES],
-    const struct mlkem::public_key<RANK> *pub,
-    const uint8_t entropy[BCM_MLKEM_ENCAP_ENTROPY]) {
-  uint8_t input[64];
-  OPENSSL_memcpy(input, entropy, BCM_MLKEM_ENCAP_ENTROPY);
-  OPENSSL_memcpy(input + BCM_MLKEM_ENCAP_ENTROPY, pub->public_key_hash,
-                 sizeof(input) - BCM_MLKEM_ENCAP_ENTROPY);
-  uint8_t key_and_randomness[64];
-  mlkem::hash_g(key_and_randomness, input, sizeof(input));
-  encrypt_cpa(out_ciphertext, pub, entropy, key_and_randomness + 32);
-  // The ciphertext is public.
-  CONSTTIME_DECLASSIFY(out_ciphertext, mlkem::ciphertext_size(RANK));
-  static_assert(BCM_MLKEM_SHARED_SECRET_BYTES == 32, "");
-  memcpy(out_shared_secret, key_and_randomness, 32);
 }
 
 bcm_infallible BCM_mlkem768_encap_external_entropy(
@@ -1162,4 +1389,9 @@ bcm_status BCM_mlkem1024_parse_private_key(
     return bcm_status::failure;
   }
   return bcm_status::approved;
+}
+
+int boringssl_self_test_mlkem() {
+  return mlkem::fips::keygen_self_test() && mlkem::fips::encap_self_test() &&
+         mlkem::fips::decap_self_test();
 }

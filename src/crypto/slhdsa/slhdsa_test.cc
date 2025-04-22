@@ -220,4 +220,15 @@ TEST(SLHDSATest, NISTPrehashSignatureVerification) {
                 NISTPrehashSignatureVerificationFileTest);
 }
 
+TEST(SLHDSATest, Self) { boringssl_self_test_slhdsa(); }
+
+TEST(SLHDSATest, NullptrArgumentsToCreate) {
+  // For FIPS reasons, this should fail rather than crash.
+  ASSERT_EQ(BCM_slhdsa_sha2_128s_generate_key_fips(nullptr, nullptr),
+            bcm_status::failure);
+  ASSERT_EQ(BCM_slhdsa_sha2_128s_generate_key_from_seed_fips(nullptr, nullptr,
+                                                             nullptr),
+            bcm_status::failure);
+}
+
 }  // namespace

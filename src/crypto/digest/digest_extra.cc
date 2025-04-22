@@ -156,21 +156,22 @@ const EVP_MD *EVP_parse_digest_algorithm(CBS *cbs) {
   return ret;
 }
 
-int EVP_marshal_digest_algorithm(CBB *cbb, const EVP_MD *md) {
+static int marshal_digest_algorithm(CBB *cbb, const EVP_MD *md,
+                                    bool with_null) {
   CBB algorithm, oid, null;
   if (!CBB_add_asn1(cbb, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT)) {
     return 0;
   }
 
-  int found = 0;
+  bool found = false;
   int nid = EVP_MD_type(md);
-  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMDOIDs); i++) {
-    if (nid == kMDOIDs[i].nid) {
-      if (!CBB_add_bytes(&oid, kMDOIDs[i].oid, kMDOIDs[i].oid_len)) {
+  for (const auto &mdoid : kMDOIDs) {
+    if (nid == mdoid.nid) {
+      if (!CBB_add_bytes(&oid, mdoid.oid, mdoid.oid_len)) {
         return 0;
       }
-      found = 1;
+      found = true;
       break;
     }
   }
@@ -180,13 +181,20 @@ int EVP_marshal_digest_algorithm(CBB *cbb, const EVP_MD *md) {
     return 0;
   }
 
-  // TODO(crbug.com/boringssl/710): Is this correct? See RFC 4055, section 2.1.
-  if (!CBB_add_asn1(&algorithm, &null, CBS_ASN1_NULL) ||  //
+  if ((with_null && !CBB_add_asn1(&algorithm, &null, CBS_ASN1_NULL)) ||  //
       !CBB_flush(cbb)) {
     return 0;
   }
 
   return 1;
+}
+
+int EVP_marshal_digest_algorithm(CBB *cbb, const EVP_MD *md) {
+  return marshal_digest_algorithm(cbb, md, /*with_null=*/true);
+}
+
+int EVP_marshal_digest_algorithm_no_params(CBB *cbb, const EVP_MD *md) {
+  return marshal_digest_algorithm(cbb, md, /*with_null=*/false);
 }
 
 const EVP_MD *EVP_get_digestbyname(const char *name) {

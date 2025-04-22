@@ -17,8 +17,8 @@
 // (1) Intel Corporation, Israel Development Center, Haifa, Israel
 // (2) University of Haifa, Israel
 
-#ifndef OPENSSL_HEADER_BN_RSAZ_EXP_H
-#define OPENSSL_HEADER_BN_RSAZ_EXP_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_BN_RSAZ_EXP_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_BN_RSAZ_EXP_H
 
 #include <openssl/bn.h>
 
@@ -108,4 +108,4 @@ void rsaz_1024_red2norm_avx2(BN_ULONG norm[16], const BN_ULONG red[40]);
 }  // extern "C"
 #endif
 
-#endif  // OPENSSL_HEADER_BN_RSAZ_EXP_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_BN_RSAZ_EXP_H

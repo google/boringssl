@@ -18,17 +18,10 @@
 #include <openssl/base.h>
 #include <openssl/span.h>
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
-
-// MSVC issues warning C4702 for unreachable code in its xtree header when
-// compiling with -D_HAS_EXCEPTIONS=0. See
-// https://connect.microsoft.com/VisualStudio/feedback/details/809962
-OPENSSL_MSVC_PRAGMA(warning(push))
-OPENSSL_MSVC_PRAGMA(warning(disable: 4702))
-#include <map>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 
 struct FileCloser {
   void operator()(FILE *file) {

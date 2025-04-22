@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_PKCS7_H
 #define OPENSSL_HEADER_PKCS7_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <openssl/stack.h>
 

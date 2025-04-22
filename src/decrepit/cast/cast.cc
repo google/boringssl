@@ -17,9 +17,7 @@
 #include <openssl/obj.h>
 
 #if defined(OPENSSL_WINDOWS)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <intrin.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #endif
 
 #include "../../crypto/fipsmodule/cipher/internal.h"

@@ -16,7 +16,7 @@
 #define OPENSSL_HEADER_ASN1T_H
 
 #include <openssl/asn1.h>
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_DES_INTERNAL_H
-#define OPENSSL_HEADER_DES_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_DES_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_DES_INTERNAL_H
 
 #include <openssl/base.h>
 #include <openssl/des.h>
@@ -146,4 +146,4 @@ OPENSSL_EXPORT void DES_encrypt3(uint32_t data[2], const DES_key_schedule *ks1,
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_DES_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_DES_INTERNAL_H

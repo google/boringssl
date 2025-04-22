@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_POSIX_TIME_H
 #define OPENSSL_HEADER_POSIX_TIME_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <time.h>
 

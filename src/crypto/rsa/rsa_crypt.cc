@@ -349,25 +349,21 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
   }
 
   const unsigned rsa_size = RSA_size(rsa);
-  BIGNUM *f, *result;
-  uint8_t *buf = NULL;
-  BN_CTX *ctx = NULL;
-  int i, ret = 0;
-
   if (max_out < rsa_size) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_OUTPUT_BUFFER_TOO_SMALL);
     return 0;
   }
 
-  ctx = BN_CTX_new();
-  if (ctx == NULL) {
-    goto err;
+  bssl::UniquePtr<BN_CTX> ctx(BN_CTX_new());
+  if (ctx == nullptr) {
+    return 0;
   }
 
-  BN_CTX_start(ctx);
-  f = BN_CTX_get(ctx);
-  result = BN_CTX_get(ctx);
-  buf = reinterpret_cast<uint8_t *>(OPENSSL_malloc(rsa_size));
+  bssl::BN_CTXScope scope(ctx.get());
+  BIGNUM *f = BN_CTX_get(ctx.get());
+  BIGNUM *result = BN_CTX_get(ctx.get());
+  uint8_t *buf = reinterpret_cast<uint8_t *>(OPENSSL_malloc(rsa_size));
+  int i, ret = 0;
   if (!f || !result || !buf) {
     goto err;
   }
@@ -378,8 +374,8 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
       break;
     case RSA_PKCS1_OAEP_PADDING:
       // Use the default parameters: SHA-1 for both hashes and no label.
-      i = RSA_padding_add_PKCS1_OAEP_mgf1(buf, rsa_size, in, in_len, NULL, 0,
-                                          NULL, NULL);
+      i = RSA_padding_add_PKCS1_OAEP_mgf1(buf, rsa_size, in, in_len, nullptr, 0,
+                                          nullptr, nullptr);
       break;
     case RSA_NO_PADDING:
       i = RSA_padding_add_none(buf, rsa_size, in, in_len);
@@ -393,7 +389,7 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
     goto err;
   }
 
-  if (BN_bin2bn(buf, rsa_size, f) == NULL) {
+  if (BN_bin2bn(buf, rsa_size, f) == nullptr) {
     goto err;
   }
 
@@ -403,8 +399,9 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
     goto err;
   }
 
-  if (!BN_MONT_CTX_set_locked(&rsa->mont_n, &rsa->lock, rsa->n, ctx) ||
-      !BN_mod_exp_mont(result, f, rsa->e, &rsa->mont_n->N, ctx, rsa->mont_n)) {
+  if (!BN_MONT_CTX_set_locked(&rsa->mont_n, &rsa->lock, rsa->n, ctx.get()) ||
+      !BN_mod_exp_mont(result, f, rsa->e, &rsa->mont_n->N, ctx.get(),
+                       rsa->mont_n)) {
     goto err;
   }
 
@@ -419,12 +416,7 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
   ret = 1;
 
 err:
-  if (ctx != NULL) {
-    BN_CTX_end(ctx);
-    BN_CTX_free(ctx);
-  }
   OPENSSL_free(buf);
-
   return ret;
 }
 

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_ASN1_INTERNAL_H
-#define OPENSSL_HEADER_ASN1_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_ASN1_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_ASN1_INTERNAL_H
 
 #include <time.h>
 
@@ -180,6 +180,17 @@ int asn1_is_printable(uint32_t value);
 int asn1_bit_string_length(const ASN1_BIT_STRING *str,
                            uint8_t *out_padding_bits);
 
+// asn1_marshal_bit_string marshals |in| as a DER-encoded, ASN.1 BIT STRING and
+// writes the result to |out|. It returns one on success and zero on error. If
+// |tag| is non-zero, the tag is replaced with |tag|.
+int asn1_marshal_bit_string(CBB *out, const ASN1_BIT_STRING *in,
+                            CBS_ASN1_TAG tag);
+
+// asn1_marshal_integer marshals |in| as a DER-encoded, ASN.1 INTEGER and writes
+// the result to |out|. It returns one on success and zero on error. If |tag| is
+// non-zero, the tag is replaced with |tag|.
+int asn1_marshal_integer(CBB *out, const ASN1_INTEGER *in, CBS_ASN1_TAG tag);
+
 typedef struct {
   int nid;
   long minsize;
@@ -214,9 +225,14 @@ typedef struct ASN1_EXTERN_FUNCS_st {
   ASN1_ex_i2d *asn1_ex_i2d;
 } ASN1_EXTERN_FUNCS;
 
+// ASN1_ANY_AS_STRING is an |ASN1_ITEM| with ASN.1 type ANY and C type
+// |ASN1_STRING*|. Types which are not represented with |ASN1_STRING|, such as
+// |ASN1_OBJECT|, are represented with type |V_ASN1_OTHER|.
+DECLARE_ASN1_ITEM(ASN1_ANY_AS_STRING)
+
 
 #if defined(__cplusplus)
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_ASN1_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_ASN1_INTERNAL_H

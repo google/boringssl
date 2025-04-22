@@ -140,7 +140,7 @@ static void rand_thread_state_free(void *state_in) {
 }
 
 #if defined(OPENSSL_X86_64) && !defined(OPENSSL_NO_ASM) && \
-    !defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
+    !defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
 // rdrand should only be called if either |have_rdrand| or |have_fast_rdrand|
 // returned true.
 static int rdrand(uint8_t *buf, const size_t len) {

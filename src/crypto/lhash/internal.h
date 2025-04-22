@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_LHASH_INTERNAL_H
-#define OPENSSL_HEADER_LHASH_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_LHASH_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_LHASH_INTERNAL_H
 
 #include <openssl/lhash.h>
 
@@ -218,4 +218,4 @@ OPENSSL_EXPORT void OPENSSL_lh_doall_arg(_LHASH *lh,
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_LHASH_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_LHASH_INTERNAL_H

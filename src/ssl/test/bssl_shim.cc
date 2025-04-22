@@ -57,7 +57,6 @@ OPENSSL_MSVC_PRAGMA(comment(lib, "Ws2_32.lib"))
 #include <vector>
 
 #include "../../crypto/internal.h"
-#include "../internal.h"
 #include "async_bio.h"
 #include "handshake_util.h"
 #include "mock_quic_transport.h"
@@ -1277,13 +1276,26 @@ static bool DoExchange(bssl::UniquePtr<SSL_SESSION> *out_session,
     }
 
     if (expect_new_session) {
-      bool got_early_data = test_state->new_session->ticket_max_early_data != 0;
+      bool got_early_data =
+          !!SSL_SESSION_early_data_capable(test_state->new_session.get());
       if (config->expect_ticket_supports_early_data != got_early_data) {
         fprintf(stderr,
                 "new session did%s support early data, but we expected the "
                 "opposite\n",
                 got_early_data ? "" : " not");
         return false;
+      }
+
+      if (config->expect_resumable_across_names.has_value()) {
+        bool actual = !!SSL_SESSION_is_resumable_across_names(
+            test_state->new_session.get());
+        if (config->expect_resumable_across_names.value() != actual) {
+          fprintf(stderr,
+                  "new session did%s support cross-name resumption, but we "
+                  "expected the opposite\n",
+                  actual ? "" : " not");
+          return false;
+        }
       }
     }
   }
@@ -1311,7 +1323,7 @@ static bool DoExchange(bssl::UniquePtr<SSL_SESSION> *out_session,
   }
 
   if (SSL_total_renegotiations(ssl) > 0) {
-    if (!SSL_get_session(ssl)->not_resumable) {
+    if (SSL_SESSION_is_resumable(SSL_get_session(ssl))) {
       fprintf(stderr,
               "Renegotiations should never produce resumable sessions.\n");
       return false;
@@ -1401,8 +1413,13 @@ int main(int argc, char **argv) {
 #endif
   }
 
-  bssl::UniquePtr<SSL_CTX> ssl_ctx;
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+  if (initial_config.fuzzer_mode) {
+    CRYPTO_set_fuzzer_mode(1);
+  }
+#endif
 
+  bssl::UniquePtr<SSL_CTX> ssl_ctx;
   bssl::UniquePtr<SSL_SESSION> session;
   for (int i = 0; i < initial_config.resume_count + 1; i++) {
     bool is_resume = i > 0;

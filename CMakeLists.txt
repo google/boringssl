@@ -86,10 +86,10 @@ set(
   src/crypto/curve25519/asm/x25519-asm-arm.S
   src/crypto/hrss/asm/poly_rq_mul.S
   src/crypto/poly1305/poly1305_arm_asm.S
-  src/gen/bcm/aes-gcm-avx10-x86_64-apple.S
-  src/gen/bcm/aes-gcm-avx10-x86_64-linux.S
   src/gen/bcm/aes-gcm-avx2-x86_64-apple.S
   src/gen/bcm/aes-gcm-avx2-x86_64-linux.S
+  src/gen/bcm/aes-gcm-avx512-x86_64-apple.S
+  src/gen/bcm/aes-gcm-avx512-x86_64-linux.S
   src/gen/bcm/aesni-gcm-x86_64-apple.S
   src/gen/bcm/aesni-gcm-x86_64-linux.S
   src/gen/bcm/aesni-x86-apple.S
@@ -219,8 +219,8 @@ set(
 set(
   CRYPTO_SOURCES_NASM
 
-  src/gen/bcm/aes-gcm-avx10-x86_64-win.asm
   src/gen/bcm/aes-gcm-avx2-x86_64-win.asm
+  src/gen/bcm/aes-gcm-avx512-x86_64-win.asm
   src/gen/bcm/aesni-gcm-x86_64-win.asm
   src/gen/bcm/aesni-x86-win.asm
   src/gen/bcm/aesni-x86_64-win.asm
@@ -266,6 +266,7 @@ add_library(
   crypto
 
   ${CRYPTO_SOURCES_ASM_USED}
+  src/crypto/aes/aes.cc
   src/crypto/asn1/a_bitstr.cc
   src/crypto/asn1/a_bool.cc
   src/crypto/asn1/a_d2i_fp.cc
@@ -308,6 +309,9 @@ add_library(
   src/crypto/blake2/blake2.cc
   src/crypto/bn/bn_asn1.cc
   src/crypto/bn/convert.cc
+  src/crypto/bn/div.cc
+  src/crypto/bn/exponentiation.cc
+  src/crypto/bn/sqrt.cc
   src/crypto/buf/buf.cc
   src/crypto/bytestring/asn1_compat.cc
   src/crypto/bytestring/ber.cc
@@ -317,6 +321,7 @@ add_library(
   src/crypto/chacha/chacha.cc
   src/crypto/cipher/derive_key.cc
   src/crypto/cipher/e_aesctrhmac.cc
+  src/crypto/cipher/e_aeseax.cc
   src/crypto/cipher/e_aesgcmsiv.cc
   src/crypto/cipher/e_chacha20poly1305.cc
   src/crypto/cipher/e_des.cc
@@ -326,6 +331,7 @@ add_library(
   src/crypto/cipher/e_tls.cc
   src/crypto/cipher/get_cipher.cc
   src/crypto/cipher/tls_cbc.cc
+  src/crypto/cms/cms.cc
   src/crypto/conf/conf.cc
   src/crypto/cpu_aarch64_apple.cc
   src/crypto/cpu_aarch64_fuchsia.cc
@@ -375,6 +381,7 @@ add_library(
   src/crypto/ex_data.cc
   src/crypto/fipsmodule/bcm.cc
   src/crypto/fipsmodule/fips_shared_support.cc
+  src/crypto/fuzzer_mode.cc
   src/crypto/hpke/hpke.cc
   src/crypto/hrss/hrss.cc
   src/crypto/kyber/kyber.cc

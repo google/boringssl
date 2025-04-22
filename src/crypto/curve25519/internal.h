@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_CURVE25519_INTERNAL_H
-#define OPENSSL_HEADER_CURVE25519_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_CURVE25519_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_CURVE25519_INTERNAL_H
 
 #include <openssl/curve25519.h>
 
@@ -161,4 +161,4 @@ extern const uint8_t k25519Precomp[32][8][3][32];
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_CURVE25519_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_CURVE25519_INTERNAL_H

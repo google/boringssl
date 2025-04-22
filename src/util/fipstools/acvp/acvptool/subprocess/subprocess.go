@@ -371,8 +371,6 @@ func (m *Subprocess) Config() ([]byte, error) {
 					m.supportsFlush = true
 				}
 			}
-		} else if _, ok := m.primitives[algo.Algorithm]; !ok {
-			return nil, fmt.Errorf("wrapper config advertises support for unknown algorithm %q", algo.Algorithm)
 		}
 	}
 

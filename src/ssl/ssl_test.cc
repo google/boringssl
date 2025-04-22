@@ -49,9 +49,7 @@
 
 #if defined(OPENSSL_WINDOWS)
 // Windows defines struct timeval in winsock2.h.
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #else
 #include <sys/time.h>
 #endif
@@ -135,6 +133,17 @@ class UnownedSSLExData {
  private:
   int index_;
 };
+
+static timeval g_current_time;
+
+static void CurrentTimeCallback(const SSL *ssl, timeval *out_clock) {
+  *out_clock = g_current_time;
+}
+
+static void FrozenTimeCallback(const SSL *ssl, timeval *out_clock) {
+  out_clock->tv_sec = 1000;
+  out_clock->tv_usec = 0;
+}
 
 static const CipherTest kCipherTests[] = {
     // Selecting individual ciphers should work.
@@ -1133,11 +1142,7 @@ static bssl::UniquePtr<SSL_SESSION> CreateSessionWithTicket(uint16_t version,
     return nullptr;
   }
   // Fix up the timeout.
-#if defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
-  SSL_SESSION_set_time(session.get(), 1234);
-#else
   SSL_SESSION_set_time(session.get(), time(nullptr));
-#endif
   return session;
 }
 
@@ -2784,6 +2789,14 @@ INSTANTIATE_TEST_SUITE_P(WithVersion, SSLVersionTest,
                          });
 
 TEST_P(SSLVersionTest, SequenceNumber) {
+  // TODO(crbug.com/42290608): Once |SSL_get_read_sequence| and
+  // |SSL_get_write_sequence| are no longer implemented in DTLS 1.3, make this
+  // test TLS-only and remove the DTLS cases. For now, since we still care about
+  // their behavior in DTLS 1.2, continue testing this behavior.
+  if (is_dtls() && is_tls13()) {
+    return;
+  }
+
   ASSERT_TRUE(Connect());
 
   // Drain any post-handshake messages to ensure there are no unread records
@@ -2796,26 +2809,15 @@ TEST_P(SSLVersionTest, SequenceNumber) {
   uint64_t server_write_seq = SSL_get_write_sequence(server_.get());
 
   if (is_dtls()) {
-    if (version() == DTLS1_3_VERSION) {
-      // Both client and server must be at epoch 3 (application data).
-      EXPECT_EQ(EpochFromSequence(client_write_seq), 3);
-      EXPECT_EQ(EpochFromSequence(server_write_seq), 3);
+    // Both client and server must be at epoch 1.
+    EXPECT_EQ(EpochFromSequence(client_read_seq), 1);
+    EXPECT_EQ(EpochFromSequence(client_write_seq), 1);
+    EXPECT_EQ(EpochFromSequence(server_read_seq), 1);
+    EXPECT_EQ(EpochFromSequence(server_write_seq), 1);
 
-      // TODO(crbug.com/42290608): Ideally we would check the read sequence
-      // numbers and compare them against each other, but
-      // |SSL_get_read_sequence| is ill-defined right after DTLS 1.3's key
-      // change. See that function for details.
-    } else {
-      // Both client and server must be at epoch 1.
-      EXPECT_EQ(EpochFromSequence(client_read_seq), 1);
-      EXPECT_EQ(EpochFromSequence(client_write_seq), 1);
-      EXPECT_EQ(EpochFromSequence(server_read_seq), 1);
-      EXPECT_EQ(EpochFromSequence(server_write_seq), 1);
-
-      // The next record to be written should exceed the largest received.
-      EXPECT_GT(client_write_seq, server_read_seq);
-      EXPECT_GT(server_write_seq, client_read_seq);
-    }
+    // The next record to be written should exceed the largest received.
+    EXPECT_GT(client_write_seq, server_read_seq);
+    EXPECT_GT(server_write_seq, client_read_seq);
   } else {
     // The next record to be written should equal the next to be received.
     EXPECT_EQ(client_write_seq, server_read_seq);
@@ -2827,18 +2829,264 @@ TEST_P(SSLVersionTest, SequenceNumber) {
   EXPECT_EQ(SSL_write(client_.get(), &byte, 1), 1);
   EXPECT_EQ(SSL_read(server_.get(), &byte, 1), 1);
 
-  if (version() == DTLS1_3_VERSION) {
-    // TODO(crbug.com/42290608): Write an appropriate test for incrementing both
-    // sequence number and epoch in the following test. The server read seq was
-    // in epoch 2, but after the write it's in epoch 3, so adding 1 doesn't work
-    // any more.
-    return;
-  }
-
   // The client write and server read sequence numbers should have
   // incremented.
   EXPECT_EQ(client_write_seq + 1, SSL_get_write_sequence(client_.get()));
   EXPECT_EQ(server_read_seq + 1, SSL_get_read_sequence(server_.get()));
+}
+
+TEST_P(SSLVersionTest, RecordStateDTLS) {
+  if (!is_dtls()) {
+    return;
+  }
+
+  SSL_CTX_set_current_time_cb(client_ctx_.get(), CurrentTimeCallback);
+  SSL_CTX_set_current_time_cb(server_ctx_.get(), CurrentTimeCallback);
+
+  ASSERT_TRUE(CreateClientAndServer(&client_, &server_, client_ctx_.get(),
+                                    server_ctx_.get()));
+
+  // The handshake is incomplete.
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(client_.get()));
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(server_.get()));
+
+  // The initial epoch is zero.
+  EXPECT_EQ(SSL_get_dtls_read_epoch(client_.get()), 0);
+  EXPECT_EQ(SSL_get_dtls_write_epoch(server_.get()), 0);
+  EXPECT_EQ(SSL_get_dtls_read_epoch(server_.get()), 0);
+  EXPECT_EQ(SSL_get_dtls_write_epoch(client_.get()), 0);
+
+  // We have not sent or received any records.
+  EXPECT_EQ(SSL_get_dtls_read_sequence(client_.get(), 0), 0u);
+  EXPECT_EQ(SSL_get_dtls_write_sequence(server_.get(), 0), 0u);
+  EXPECT_EQ(SSL_get_dtls_read_sequence(server_.get(), 0), 0u);
+  EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 0), 0u);
+
+  // We have not sent or received any handshake messages.
+  EXPECT_EQ(SSL_get_dtls_handshake_read_seq(client_.get()), 0u);
+  EXPECT_EQ(SSL_get_dtls_handshake_write_seq(server_.get()), 0u);
+  EXPECT_EQ(SSL_get_dtls_handshake_read_seq(server_.get()), 0u);
+  EXPECT_EQ(SSL_get_dtls_handshake_write_seq(client_.get()), 0u);
+
+  // Though it exists, epoch zero is unencrypted and does not have traffic
+  // secrets.
+  const uint8_t *data;
+  size_t len;
+  EXPECT_FALSE(SSL_get_dtls_read_traffic_secret(client_.get(), &data, &len, 0));
+  EXPECT_FALSE(
+      SSL_get_dtls_write_traffic_secret(client_.get(), &data, &len, 0));
+  EXPECT_FALSE(SSL_get_dtls_read_traffic_secret(server_.get(), &data, &len, 0));
+  EXPECT_FALSE(
+      SSL_get_dtls_write_traffic_secret(server_.get(), &data, &len, 0));
+
+  // Other epochs do not exist yet.
+  EXPECT_EQ(SSL_get_dtls_read_sequence(client_.get(), 1), UINT64_MAX);
+  EXPECT_EQ(SSL_get_dtls_write_sequence(server_.get(), 1), UINT64_MAX);
+  EXPECT_EQ(SSL_get_dtls_read_sequence(server_.get(), 1), UINT64_MAX);
+  EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 1), UINT64_MAX);
+  EXPECT_FALSE(SSL_get_dtls_read_traffic_secret(client_.get(), &data, &len, 1));
+  EXPECT_FALSE(
+      SSL_get_dtls_write_traffic_secret(server_.get(), &data, &len, 1));
+  EXPECT_FALSE(SSL_get_dtls_read_traffic_secret(server_.get(), &data, &len, 1));
+  EXPECT_FALSE(
+      SSL_get_dtls_write_traffic_secret(client_.get(), &data, &len, 1));
+
+  ASSERT_TRUE(CompleteHandshakes(client_.get(), server_.get()));
+
+  // DTLS 1.0 and 1.2 are relative simple.
+  if (!is_tls13()) {
+    // This handshake is now idle.
+    EXPECT_TRUE(SSL_is_dtls_handshake_idle(client_.get()));
+    EXPECT_TRUE(SSL_is_dtls_handshake_idle(server_.get()));
+
+    // Both sides of both channels are at epoch 1.
+    EXPECT_EQ(SSL_get_dtls_read_epoch(client_.get()), 1);
+    EXPECT_EQ(SSL_get_dtls_write_epoch(server_.get()), 1);
+    EXPECT_EQ(SSL_get_dtls_read_epoch(server_.get()), 1);
+    EXPECT_EQ(SSL_get_dtls_write_epoch(client_.get()), 1);
+
+    // Both sides have sent one record at epoch 1 each (Finished).
+    EXPECT_EQ(SSL_get_dtls_read_sequence(client_.get(), 1), 1u);
+    EXPECT_EQ(SSL_get_dtls_write_sequence(server_.get(), 1), 1u);
+    EXPECT_EQ(SSL_get_dtls_read_sequence(server_.get(), 1), 1u);
+    EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 1), 1u);
+
+    // DTLS 1.2 does not use traffic secrets.
+    EXPECT_FALSE(
+        SSL_get_dtls_read_traffic_secret(client_.get(), &data, &len, 1));
+    EXPECT_FALSE(
+        SSL_get_dtls_write_traffic_secret(server_.get(), &data, &len, 1));
+    EXPECT_FALSE(
+        SSL_get_dtls_read_traffic_secret(server_.get(), &data, &len, 1));
+    EXPECT_FALSE(
+        SSL_get_dtls_write_traffic_secret(client_.get(), &data, &len, 1));
+
+    // Send a record from client to server.
+    uint8_t byte = 0;
+    EXPECT_EQ(SSL_write(client_.get(), &byte, 1), 1);
+    EXPECT_EQ(SSL_read(server_.get(), &byte, 1), 1);
+
+    // Sequence numbers should have updated.
+    EXPECT_EQ(SSL_get_dtls_read_sequence(client_.get(), 1), 1u);
+    EXPECT_EQ(SSL_get_dtls_write_sequence(server_.get(), 1), 1u);
+    EXPECT_EQ(SSL_get_dtls_read_sequence(server_.get(), 1), 2u);
+    EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 1), 2u);
+    return;
+  }
+
+  // The client sent Finished, which the server ACKed, but the client hasn't
+  // consumed the ACK.
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(client_.get()));
+  // The server sent NewSessionTicket, which the client hasn't consumed yet.
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(server_.get()));
+
+  // Both sides of both channels are at epoch 3.
+  EXPECT_EQ(SSL_get_dtls_read_epoch(client_.get()), 3);
+  EXPECT_EQ(SSL_get_dtls_write_epoch(server_.get()), 3);
+  EXPECT_EQ(SSL_get_dtls_read_epoch(server_.get()), 3);
+  EXPECT_EQ(SSL_get_dtls_write_epoch(client_.get()), 3);
+
+  auto check_matching_secret = [&](SSL *reader, SSL *writer, uint16_t epoch) {
+    ASSERT_TRUE(SSL_get_dtls_read_traffic_secret(reader, &data, &len, epoch));
+    auto read_secret = Span(data, len);
+    ASSERT_TRUE(SSL_get_dtls_write_traffic_secret(writer, &data, &len, epoch));
+    auto write_secret = Span(data, len);
+    EXPECT_EQ(Bytes(read_secret), Bytes(write_secret));
+  };
+
+  // Traffic secrets at epoch 3 should match.
+  check_matching_secret(client_.get(), server_.get(), 3);
+  check_matching_secret(server_.get(), client_.get(), 3);
+
+  // Both sides retain read epoch 2 (but not write epoch 2). The server must
+  // retain epoch 2 because it does not know the client has seen the ACK and
+  // therefore must respond to retransmissions of the client's final flight.
+  // The client could discard epoch 2, but our implementation happens not to.
+  EXPECT_LT(SSL_get_dtls_read_sequence(client_.get(), 2), UINT64_MAX);
+  EXPECT_LT(SSL_get_dtls_read_sequence(server_.get(), 2), UINT64_MAX);
+  EXPECT_TRUE(SSL_get_dtls_read_traffic_secret(client_.get(), &data, &len, 2));
+  EXPECT_TRUE(SSL_get_dtls_read_traffic_secret(server_.get(), &data, &len, 2));
+
+  // The client has not sent anything over epoch 3.
+  EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 3), 0u);
+  EXPECT_EQ(SSL_get_dtls_read_sequence(server_.get(), 3), 0u);
+
+  // The server has (ACK and NewSessionTicket), but the client has not seen it.
+  EXPECT_GT(SSL_get_dtls_write_sequence(server_.get(), 3), 0u);
+  EXPECT_EQ(SSL_get_dtls_read_sequence(client_.get(), 3), 0u);
+
+  // Read from the client. No application data, but this will consume the
+  // records. We send ACKs on a timer, so advance the clock to flush it.
+  uint8_t byte;
+  EXPECT_EQ(SSL_read(client_.get(), &byte, 1), -1);
+  EXPECT_EQ(SSL_get_error(client_.get(), -1), SSL_ERROR_WANT_READ);
+  g_current_time.tv_sec++;
+  EXPECT_EQ(DTLSv1_handle_timeout(client_.get()), 1);
+
+  // The client has now picked up the ACK and is idle.
+  EXPECT_TRUE(SSL_is_dtls_handshake_idle(client_.get()));
+
+  // The client has caught up to what the server wrote.
+  EXPECT_EQ(SSL_get_dtls_write_sequence(server_.get(), 3),
+            SSL_get_dtls_read_sequence(client_.get(), 3));
+
+  // The client saw NewSessionTicket and sent an ACK.
+  EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 3), 1u);
+
+  // Pick up the ACK from the server.
+  EXPECT_EQ(SSL_read(server_.get(), &byte, 1), -1);
+  EXPECT_EQ(SSL_get_error(server_.get(), -1), SSL_ERROR_WANT_READ);
+
+  // Now the server is also idle.
+  EXPECT_TRUE(SSL_is_dtls_handshake_idle(server_.get()));
+
+  // The server has seen the ACK and has caught up to the client.
+  EXPECT_EQ(SSL_get_dtls_write_sequence(client_.get(), 3),
+            SSL_get_dtls_read_sequence(server_.get(), 3));
+
+  // Exchange some data. Sequence numbers should increment.
+  uint64_t old_seq = SSL_get_dtls_write_sequence(server_.get(), 3);
+  byte = 42;
+  ASSERT_EQ(SSL_write(server_.get(), &byte, 1), 1);
+  ASSERT_EQ(SSL_read(client_.get(), &byte, 1), 1);
+  EXPECT_EQ(SSL_get_dtls_write_sequence(server_.get(), 3), old_seq + 1);
+  EXPECT_EQ(SSL_get_dtls_read_sequence(client_.get(), 3), old_seq + 1);
+
+  // Now that everyone's caught up, handshake sequence numbers should be
+  // non-zero and match.
+  uint32_t client_hs_seq = SSL_get_dtls_handshake_write_seq(client_.get());
+  EXPECT_NE(client_hs_seq, 0u);
+  EXPECT_EQ(client_hs_seq, SSL_get_dtls_handshake_read_seq(server_.get()));
+  uint32_t server_hs_seq = SSL_get_dtls_handshake_write_seq(server_.get());
+  EXPECT_NE(server_hs_seq, 0u);
+  EXPECT_EQ(server_hs_seq, SSL_get_dtls_handshake_read_seq(client_.get()));
+
+  // Enqueue a KeyUpdate that requests the peer do the same. The client is now
+  // busy.
+  ASSERT_TRUE(SSL_key_update(client_.get(), SSL_KEY_UPDATE_REQUESTED));
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(client_.get()));
+  // Flush the KeyUpdate to the transport. (We currently flush incidental
+  // traffic on read because callers are expected to be constantly reading.)
+  // The client has an unacked message, so it is still busy.
+  EXPECT_EQ(SSL_read(client_.get(), &byte, 1), -1);
+  EXPECT_EQ(SSL_get_error(client_.get(), -1), SSL_ERROR_WANT_READ);
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(client_.get()));
+
+  // KeyUpdates are driven by ACKs, so the client is still at epoch 3.
+  EXPECT_EQ(SSL_get_dtls_write_epoch(client_.get()), 3);
+
+  // Consume the KeyUpdate on the server and wait for the ACK timer. The server
+  // has now ACKed the KeyUpdate, advanced to read epoch 4, and sent a KeyUpdate
+  // of its own.
+  EXPECT_EQ(SSL_read(server_.get(), &byte, 1), -1);
+  EXPECT_EQ(SSL_get_error(server_.get(), -1), SSL_ERROR_WANT_READ);
+  g_current_time.tv_sec++;
+  EXPECT_EQ(DTLSv1_handle_timeout(server_.get()), 1);
+  EXPECT_EQ(SSL_get_dtls_read_epoch(server_.get()), 4);
+  EXPECT_EQ(SSL_get_dtls_read_sequence(server_.get(), 4), 0u);
+
+  // The server has an outstanding unacked KeyUpdate, so it is busy.
+  EXPECT_FALSE(SSL_is_dtls_handshake_idle(server_.get()));
+  EXPECT_EQ(SSL_get_dtls_write_epoch(server_.get()), 3);
+
+  // Consume the ACK and new KeyUpdate on the client. Wait the ACK timer for the
+  // client to flush its ACK.
+  EXPECT_EQ(SSL_read(client_.get(), &byte, 1), -1);
+  EXPECT_EQ(SSL_get_error(client_.get(), -1), SSL_ERROR_WANT_READ);
+  g_current_time.tv_sec++;
+  EXPECT_EQ(DTLSv1_handle_timeout(client_.get()), 1);
+
+  // The client has now seen the ACK to its KeyUpdate, advancing its write
+  // state, and seen the server's KeyUpdate, advancing its read state. It is
+  // now idle.
+  EXPECT_TRUE(SSL_is_dtls_handshake_idle(client_.get()));
+  EXPECT_EQ(SSL_get_dtls_read_epoch(client_.get()), 4);
+  EXPECT_EQ(SSL_get_dtls_write_epoch(client_.get()), 4);
+
+  // Both sides now have epoch 4 of the client write channel.
+  check_matching_secret(/*reader=*/server_.get(), /*writer=*/client_.get(), 4);
+
+  // Finally, consume the ACK on the server. The server applies the KeyUpdate
+  // and is also idle.
+  EXPECT_EQ(SSL_read(server_.get(), &byte, 1), -1);
+  EXPECT_EQ(SSL_get_error(server_.get(), -1), SSL_ERROR_WANT_READ);
+  EXPECT_TRUE(SSL_is_dtls_handshake_idle(server_.get()));
+  EXPECT_EQ(SSL_get_dtls_read_epoch(server_.get()), 4);
+  EXPECT_EQ(SSL_get_dtls_write_epoch(server_.get()), 4);
+
+  // Both sides now have epoch 4 of the server write channel.
+  check_matching_secret(/*reader=*/client_.get(), /*writer=*/server_.get(), 4);
+
+  // Both sides still retain read epoch 3 because neither side has received data
+  // at epoch 4 and cannot be sure the ACK has gotten through.
+  EXPECT_TRUE(SSL_get_dtls_read_traffic_secret(client_.get(), &data, &len, 3));
+  EXPECT_TRUE(SSL_get_dtls_read_traffic_secret(server_.get(), &data, &len, 3));
+
+  // Handshake sequence numbers should have incremented.
+  EXPECT_EQ(SSL_get_dtls_handshake_write_seq(client_.get()), client_hs_seq + 1);
+  EXPECT_EQ(SSL_get_dtls_handshake_read_seq(server_.get()), client_hs_seq + 1);
+  EXPECT_EQ(SSL_get_dtls_handshake_write_seq(server_.get()), server_hs_seq + 1);
+  EXPECT_EQ(SSL_get_dtls_handshake_read_seq(client_.get()), server_hs_seq + 1);
 }
 
 TEST_P(SSLVersionTest, OneSidedShutdown) {
@@ -3545,17 +3793,6 @@ TEST_P(SSLVersionTest, SessionIDContext) {
                                   false /* expect session not reused */));
 }
 
-static timeval g_current_time;
-
-static void CurrentTimeCallback(const SSL *ssl, timeval *out_clock) {
-  *out_clock = g_current_time;
-}
-
-static void FrozenTimeCallback(const SSL *ssl, timeval *out_clock) {
-  out_clock->tv_sec = 1000;
-  out_clock->tv_usec = 0;
-}
-
 static int RenewTicketCallback(SSL *ssl, uint8_t *key_name, uint8_t *iv,
                                EVP_CIPHER_CTX *ctx, HMAC_CTX *hmac_ctx,
                                int encrypt) {
@@ -3590,10 +3827,6 @@ static bool GetServerTicketTime(long *out, const SSL_SESSION *session) {
   size_t len = ticket_len - 16 - 16 - SHA256_DIGEST_LENGTH;
   auto plaintext = std::make_unique<uint8_t[]>(len);
 
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  // Fuzzer-mode tickets are unencrypted.
-  OPENSSL_memcpy(plaintext.get(), ciphertext, len);
-#else
   static const uint8_t kZeros[16] = {0};
   const uint8_t *iv = ticket + 16;
   bssl::ScopedEVP_CIPHER_CTX ctx;
@@ -3607,7 +3840,6 @@ static bool GetServerTicketTime(long *out, const SSL_SESSION *session) {
   }
 
   len = static_cast<size_t>(len1 + len2);
-#endif
 
   bssl::UniquePtr<SSL_CTX> ssl_ctx(SSL_CTX_new(TLS_method()));
   if (!ssl_ctx) {
@@ -4876,8 +5108,8 @@ TEST(SSLTest, CredentialChains) {
 
   ASSERT_TRUE(SSL_CREDENTIAL_set1_private_key(cred.get(), key.get()));
   ASSERT_TRUE(SSL_CREDENTIAL_set1_private_key(cred2.get(), testkey.get()));
-  SSL_CREDENTIAL_set_must_match_issuer(cred.get());
-  SSL_CREDENTIAL_set_must_match_issuer(cred2.get());
+  SSL_CREDENTIAL_set_must_match_issuer(cred.get(), 1);
+  SSL_CREDENTIAL_set_must_match_issuer(cred2.get(), 1);
   ASSERT_TRUE(SSL_CTX_add1_credential(ctx.get(), cred.get()));
   ASSERT_TRUE(SSL_CTX_add1_credential(ctx.get(), cred2.get()));
 
@@ -4949,6 +5181,102 @@ TEST(SSLTest, CredentialChains) {
   ASSERT_TRUE(ConnectClientAndServer(&client5, &server5, ctx.get(), ctx.get()));
   EXPECT_TRUE(BuffersEqual(SSL_get0_peer_certificates(client5.get()),
                            {leaf.get(), ca.get()}));
+}
+
+TEST(SSLTest, CredentialCertProperties) {
+  // A CertificatePropertyList containing a trust_anchors property, and an
+  // unknown property 0xbb with 0 bytes of data.
+  bssl::UniquePtr<SSL_CREDENTIAL> cred(SSL_CREDENTIAL_new_x509());
+  ASSERT_TRUE(cred);
+  static const uint8_t kTestProperties1[] = {0x00, 0x0b, 0x00, 0x00, 0x00,
+                                             0x03, 0xba, 0xdb, 0x0b, 0x00,
+                                             0xbb, 0x00, 0x00};
+  bssl::UniquePtr<CRYPTO_BUFFER> pl(
+      CRYPTO_BUFFER_new(kTestProperties1, sizeof(kTestProperties1), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_TRUE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+
+  // A CertificatePropertyList containing a trust_anchors property, and an
+  // unknown property 0xbb with 1 byte of data.
+  static const uint8_t kTestProperties2[] = {0x00, 0x0c, 0x00, 0x00, 0x00,
+                                             0x03, 0xba, 0xdb, 0x0b, 0x00,
+                                             0xbb, 0x00, 0x01, 0xba};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties2, sizeof(kTestProperties2), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_TRUE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+
+  // A CertificatePropertyList containing a trust_anchors property, and an
+  // unknown but malformed property 0xbb with missing data.
+  static const uint8_t kTestProperties3[] = {0x00, 0x09, 0x00, 0x00, 0x00, 0x03,
+                                      0xba, 0xdb, 0x0b, 0x00, 0xbb};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties3, sizeof(kTestProperties3), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_FALSE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                          SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST));
+
+  // A CertificatePropertyList containing a trust_anchors property, and an
+  // unknown but malformed property 0xbb with incorrect length data.
+  static const uint8_t kTestProperties4[] = {0x00, 0x0c, 0x00, 0x00, 0x00,
+                                             0x03, 0xba, 0xdb, 0x0b, 0x00,
+                                             0xbb, 0x00, 0x03, 0xba};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties4, sizeof(kTestProperties4), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_FALSE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                          SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST));
+
+  // A CertificatePropertyList containing a trust_anchors property with 0 bytes
+  // of data.
+  static const uint8_t kTestProperties5[] = {0x00, 0x04, 0x00,
+                                             0x00, 0x00, 0x00};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties5, sizeof(kTestProperties5), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_FALSE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                          SSL_R_INVALID_TRUST_ANCHOR_LIST));
+
+  // A CertificatePropertyList containing a trust_anchors property with extra
+  // data.
+  static const uint8_t kTestProperties6[] = {0x00, 0x08, 0x00, 0x00, 0x00,
+                                             0x03, 0xba, 0xdb, 0x0b, 0xbb};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties6, sizeof(kTestProperties6), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_FALSE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                          SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST));
+
+  // A CertificatePropertyList containing a trust_anchors property with missing
+  // data.
+  static const uint8_t kTestProperties7[] = {0x00, 0x06, 0x00, 0x00,
+                                             0x00, 0x03, 0xba, 0xdb};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties7, sizeof(kTestProperties7), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_FALSE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                          SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST));
+
+  // A CertificatePropertyList containing only a trust_anchors property.
+  static const uint8_t kTestProperties8[] = {0x00, 0x07, 0x00, 0x00, 0x00,
+                                             0x03, 0xba, 0xdb, 0x0b};
+  pl.reset(
+      CRYPTO_BUFFER_new(kTestProperties8, sizeof(kTestProperties8), nullptr));
+  ASSERT_TRUE(pl);
+  EXPECT_TRUE(
+      SSL_CREDENTIAL_set1_certificate_properties(cred.get(), pl.get()));
 }
 
 TEST(SSLTest, SetChainAndKeyCtx) {
@@ -8138,16 +8466,6 @@ static void WriteHelloRequest(SSL *server) {
 
   // Encrypt a HelloRequest.
   uint8_t in[] = {SSL3_MT_HELLO_REQUEST, 0, 0, 0};
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  // Fuzzer-mode records are unencrypted.
-  uint8_t record[5 + sizeof(in)];
-  record[0] = SSL3_RT_HANDSHAKE;
-  record[1] = 3;
-  record[2] = 3;  // TLS 1.2
-  record[3] = 0;
-  record[4] = sizeof(record) - 5;
-  memcpy(record + 5, in, sizeof(in));
-#else
   // Extract key material from |server|.
   static const size_t kKeyLen = 32;
   static const size_t kNonceLen = 12;
@@ -8189,7 +8507,6 @@ static void WriteHelloRequest(SSL *server) {
                                 sizeof(record) - 5, nonce.data(), nonce.size(),
                                 in, sizeof(in), ad, sizeof(ad)));
   ASSERT_EQ(sizeof(record) - 5, len);
-#endif  // BORINGSSL_UNSAFE_FUZZER_MODE
 
   ASSERT_EQ(int(sizeof(record)),
             BIO_write(SSL_get_wbio(server), record, sizeof(record)));
@@ -8578,6 +8895,32 @@ TEST_F(AlpsNewCodepointTest, Enabled) {
                                     server_ctx_.get()));
 
   SSL_set_alps_use_new_codepoint(client_.get(), 1);
+  SSL_set_alps_use_new_codepoint(server_.get(), 1);
+
+  SetUpApplicationSetting();
+  ASSERT_TRUE(CompleteHandshakes(client_.get(), server_.get()));
+  ASSERT_TRUE(SSL_has_application_settings(client_.get()));
+}
+
+TEST_F(AlpsNewCodepointTest, ClientExplictServerDefault) {
+  SetUpExpectedNewCodePoint(server_ctx_.get());
+
+  ASSERT_TRUE(CreateClientAndServer(&client_, &server_, client_ctx_.get(),
+                                    server_ctx_.get()));
+
+  SSL_set_alps_use_new_codepoint(client_.get(), 1);
+
+  SetUpApplicationSetting();
+  ASSERT_TRUE(CompleteHandshakes(client_.get(), server_.get()));
+  ASSERT_TRUE(SSL_has_application_settings(client_.get()));
+}
+
+TEST_F(AlpsNewCodepointTest, ClientDefaultServerExplicit) {
+  SetUpExpectedNewCodePoint(server_ctx_.get());
+
+  ASSERT_TRUE(CreateClientAndServer(&client_, &server_, client_ctx_.get(),
+                                    server_ctx_.get()));
+
   SSL_set_alps_use_new_codepoint(server_.get(), 1);
 
   SetUpApplicationSetting();
@@ -9595,20 +9938,26 @@ TEST_P(SSLVersionTest, KeyLog) {
                                         Key("SERVER_HANDSHAKE_TRAFFIC_SECRET"),
                                         Key("SERVER_TRAFFIC_SECRET_0")));
 
-    if (!is_dtls()) {
-      // Ideally we'd check the other values, but those are harder to check
-      // without actually decrypting the records.
-      //
-      // TODO(crbug.com/42290608): Check the secrets in DTLS, once we have an
-      // API for them.
-      Span<const uint8_t> read_secret, write_secret;
+    Span<const uint8_t> read_secret, write_secret;
+    if (is_dtls()) {
+      // The first application data epoch is 3.
+      const uint8_t *data;
+      size_t len;
+      ASSERT_TRUE(SSL_get_dtls_read_traffic_secret(client_.get(), &data, &len,
+                                                   /*epoch=*/3));
+      read_secret = Span(data, len);
+      ASSERT_TRUE(SSL_get_dtls_write_traffic_secret(client_.get(), &data, &len,
+                                                   /*epoch=*/3));
+      write_secret = Span(data, len);
+    } else {
       ASSERT_TRUE(
           SSL_get_traffic_secrets(client_.get(), &read_secret, &write_secret));
-      EXPECT_EQ(Bytes(read_secret),
-                Bytes(client_log["SERVER_TRAFFIC_SECRET_0"]));
-      EXPECT_EQ(Bytes(write_secret),
-                Bytes(client_log["CLIENT_TRAFFIC_SECRET_0"]));
     }
+    // Ideally we'd check the other values, but those are harder to check
+    // without actually decrypting the records.
+    EXPECT_EQ(Bytes(read_secret), Bytes(client_log["SERVER_TRAFFIC_SECRET_0"]));
+    EXPECT_EQ(Bytes(write_secret),
+              Bytes(client_log["CLIENT_TRAFFIC_SECRET_0"]));
   } else {
     EXPECT_THAT(client_log, ElementsAre(Key("CLIENT_RANDOM")));
 

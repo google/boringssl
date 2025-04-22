@@ -1270,7 +1270,8 @@ static bool check_credential(SSL_HANDSHAKE *hs, const SSL_CREDENTIAL *cred,
   // check the ECDSA curve. Prior to TLS 1.3, there is no way to determine which
   // ECDSA curves are supported by the peer, so we must assume all curves are
   // supported.
-  return tls1_choose_signature_algorithm(hs, cred, out_sigalg);
+  return tls1_choose_signature_algorithm(hs, cred, out_sigalg) &&
+         ssl_credential_matches_requested_issuers(hs, cred);
 }
 
 static enum ssl_hs_wait_t do_send_client_certificate(SSL_HANDSHAKE *hs) {

@@ -27,6 +27,7 @@
 #include <initializer_list>
 #include <limits>
 #include <new>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -49,9 +50,7 @@
 
 #if defined(OPENSSL_WINDOWS)
 // Windows defines struct timeval in winsock2.h.
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #else
 #include <sys/time.h>
 #endif
@@ -1094,7 +1093,7 @@ class DTLSReplayBitmap {
   // to |max_seq_num_ - i|.
   std::bitset<256> map_;
   // max_seq_num_ is the largest sequence number seen so far as a 64-bit
-  // integer.
+  // integer, or zero if none have been seen.
   uint64_t max_seq_num_ = 0;
 };
 
@@ -1178,6 +1177,7 @@ struct DTLSReadEpoch {
   UniquePtr<SSLAEADContext> aead;
   UniquePtr<RecordNumberEncrypter> rn_encrypter;
   DTLSReplayBitmap bitmap;
+  InplaceVector<uint8_t, SSL_MAX_MD_SIZE> traffic_secret;
 };
 
 struct DTLSWriteEpoch {
@@ -1188,6 +1188,7 @@ struct DTLSWriteEpoch {
   DTLSRecordNumber next_record;
   UniquePtr<SSLAEADContext> aead;
   UniquePtr<RecordNumberEncrypter> rn_encrypter;
+  InplaceVector<uint8_t, SSL_MAX_MD_SIZE> traffic_secret;
 };
 
 // ssl_record_prefix_len returns the length of the prefix before the ciphertext
@@ -1275,6 +1276,11 @@ size_t dtls_seal_prefix_len(const SSL *ssl, uint16_t epoch);
 // dtls_seal_max_input_len returns the maximum number of input bytes that can
 // fit in a record of up to |max_out| bytes, or zero if none may fit.
 size_t dtls_seal_max_input_len(const SSL *ssl, uint16_t epoch, size_t max_out);
+
+// dtls_get_read_epoch and dtls_get_write_epoch return the epoch corresponding
+// to |epoch| or nullptr if there is none.
+DTLSReadEpoch *dtls_get_read_epoch(const SSL *ssl, uint16_t epoch);
+DTLSWriteEpoch *dtls_get_write_epoch(const SSL *ssl, uint16_t epoch);
 
 // dtls_seal_record implements |tls_seal_record| for DTLS. |epoch| selects which
 // epoch's cipher state to use. Unlike |tls_seal_record|, |in| and |out| may
@@ -1659,7 +1665,7 @@ bool tls13_derive_resumption_secret(SSL_HANDSHAKE *hs);
 
 // tls13_export_keying_material provides an exporter interface to use the
 // |exporter_secret|.
-bool tls13_export_keying_material(SSL *ssl, Span<uint8_t> out,
+bool tls13_export_keying_material(const SSL *ssl, Span<uint8_t> out,
                                   Span<const uint8_t> secret,
                                   std::string_view label,
                                   Span<const uint8_t> context);
@@ -1942,11 +1948,17 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
   // |ClaimPAKEAttempt| call.
   void RestorePAKEAttempt() const;
 
+  // trust_anchor_id, if non-empty, is the trust anchor ID for the root of the
+  // chain in |chain|.
+  bssl::Array<uint8_t> trust_anchor_id;
+
   CRYPTO_EX_DATA ex_data;
 
   // must_match_issuer is a flag indicating that this credential should be
   // considered only when it matches a peer request for a particular issuer via
   // a negotiation mechanism (such as the certificate_authorities extension).
+  // This also implies that chain is a certificate path ending in a certificate
+  // issued by the certificate with that trust anchor identifier.
   bool must_match_issuer = false;
 
  private:
@@ -2266,6 +2278,16 @@ struct SSL_HANDSHAKE {
   // extension in our peer's CertificateRequest or ClientHello message
   UniquePtr<STACK_OF(CRYPTO_BUFFER)> ca_names;
 
+  // peer_requested_trust_anchors, if not nullopt, contains the trust anchor IDs
+  // (possibly none) the peer requested in ClientHello or CertificateRequest. If
+  // nullopt, the peer did not send the extension.
+  std::optional<Array<uint8_t>> peer_requested_trust_anchors;
+
+  // peer_available_trust_anchors, if not empty, is the list of trust anchor IDs
+  // the peer reported as available in EncryptedExtensions. This is only sent by
+  // servers to clients.
+  Array<uint8_t> peer_available_trust_anchors;
+
   // cached_x509_ca_names contains a cache of parsed versions of the elements of
   // |ca_names|. This pointer is left non-owning so only
   // |ssl_crypto_x509_method| needs to link against crypto/x509.
@@ -2413,6 +2435,14 @@ struct SSL_HANDSHAKE {
   // received_hello_verify_request is true if we received a HelloVerifyRequest
   // message from the server.
   bool received_hello_verify_request : 1;
+
+  // matched_peer_trust_anchor indicates that we have matched a trust anchor
+  // the peer requested in the trust anchors extension.
+  bool matched_peer_trust_anchor : 1;
+
+  // peer_matched_trust_anchor is true if the peer indicated a match with one of
+  // our requested trust anchors.
+  bool peer_matched_trust_anchor : 1;
 
   // client_version is the value sent or received in the ClientHello version.
   uint16_t client_version = 0;
@@ -2626,6 +2656,10 @@ bool ssl_get_local_application_settings(const SSL_HANDSHAKE *hs,
 bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                         const SSL_CLIENT_HELLO *client_hello);
 
+// ssl_is_valid_trust_anchor_list returns whether |in| is a valid trust anchor
+// identifiers list.
+bool ssl_is_valid_trust_anchor_list(Span<const uint8_t> in);
+
 struct SSLExtension {
   SSLExtension(uint16_t type_arg, bool allowed_arg = true)
       : type(type_arg), allowed(allowed_arg), present(false) {
@@ -2671,6 +2705,43 @@ const SSL_SESSION *ssl_handshake_session(const SSL_HANDSHAKE *hs);
 // ssl_done_writing_client_hello is called after the last ClientHello is written
 // by |hs|. It releases some memory that is no longer needed.
 void ssl_done_writing_client_hello(SSL_HANDSHAKE *hs);
+
+
+// Flags.
+
+// SSLFlags is a bitmask of flags that can be encoded with the TLS flags
+// extension, draft-ietf-tls-tlsflags-14. For now, our in-memory representation
+// matches the wire representation, and we only support flags up to 32. If
+// higher values are needed, we can increase the size of the bitmask, or only
+// store the flags we implement in the bitmask.
+using SSLFlags = uint32_t;
+inline constexpr SSLFlags kSSLFlagResumptionAcrossNames = 1 << 8;
+
+// ssl_add_flags_extension encodes a tls_flags extension (including the header)
+// containing the flags in |flags|. It returns true on success and false on
+// error. If |flags| is zero (no flags set), it returns true without adding
+// anything to |cbb|.
+bool ssl_add_flags_extension(CBB *cbb, SSLFlags flags);
+
+// ssl_parse_flags_extension_request parses tls_flags extension value (excluding
+// the header) from |cbs|, for a request message (ClientHello,
+// CertificateRequest, or NewSessionTicket). Unrecognized flags will be ignored.
+//
+// On success, it sets |*out| to the parsed flags and returns true. On error, it
+// sets |*out_alert| to a TLS alert and returns false.
+bool ssl_parse_flags_extension_request(const CBS *cbs, SSLFlags *out,
+                                       uint8_t *out_alert);
+
+// ssl_parse_flags_extension_response parses tls_flags extension value
+// (excluding the header) from |cbs|, for a response message (HelloRetryRequest,
+// ServerHello, EncryptedExtensions, or Certificate). Only the flags in
+// |allowed_flags| may be present.
+//
+// On success, it sets |*out| to the parsed flags and returns true. On error, it
+// sets |*out_alert| to a TLS alert and returns false.
+bool ssl_parse_flags_extension_response(const CBS *cbs, SSLFlags *out,
+                                        uint8_t *out_alert,
+                                        SSLFlags allowed_flags);
 
 
 // SSLKEYLOGFILE functions.
@@ -3615,6 +3686,9 @@ struct SSL_CONFIG {
   // moment we are not crossing those streams.
   UniquePtr<STACK_OF(CRYPTO_BUFFER)> CA_names;
 
+  // Trust anchor IDs to be requested in the trust_anchors extension.
+  std::optional<Array<uint8_t>> requested_trust_anchors;
+
   Array<uint16_t> supported_group_list;  // our list
 
   // channel_id_private is the client's Channel ID private key, or null if
@@ -4148,6 +4222,9 @@ struct ssl_ctx_st : public bssl::RefCounted<ssl_ctx_st> {
   // What we put in client hello in the CA extension.
   bssl::UniquePtr<STACK_OF(CRYPTO_BUFFER)> CA_names;
 
+  // What we request in the trust_anchors extension.
+  std::optional<bssl::Array<uint8_t>> requested_trust_anchors;
+
   // Default values to use in SSL structures follow (these are copied by
   // SSL_new)
 
@@ -4352,6 +4429,10 @@ struct ssl_ctx_st : public bssl::RefCounted<ssl_ctx_st> {
   // |aes_hw_override| is true.
   bool aes_hw_override_value : 1;
 
+  // resumption_across_names_enabled indicates whether a TLS 1.3 server should
+  // signal its sessions may be resumed across names in the server certificate.
+  bool resumption_across_names_enabled : 1;
+
  private:
   friend RefCounted;
   ~ssl_ctx_st();
@@ -4439,6 +4520,10 @@ struct ssl_st {
 
   // If enable_early_data is true, early data can be sent and accepted.
   bool enable_early_data : 1;
+
+  // resumption_across_names_enabled indicates whether a TLS 1.3 server should
+  // signal its sessions may be resumed across names in the server certificate.
+  bool resumption_across_names_enabled : 1;
 };
 
 struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
@@ -4578,6 +4663,10 @@ struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
   // has_application_settings indicates whether ALPS was negotiated in this
   // session.
   bool has_application_settings : 1;
+
+  // is_resumable_across_names indicates whether the session may be resumed for
+  // any of the identities presented in the certificate.
+  bool is_resumable_across_names : 1;
 
   // quic_early_data_context is used to determine whether early data must be
   // rejected when performing a QUIC handshake.

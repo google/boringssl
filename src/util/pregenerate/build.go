@@ -234,7 +234,9 @@ func writeCMakeVariable(b *bytes.Buffer, name string, val []string) {
 }
 
 func writeMakeVariable(b *bytes.Buffer, name string, val []string) {
-	fmt.Fprintf(b, "\n%s := \\\n", name)
+	// Prefix the variable names to avoid collisions. make builds often use
+	// by inclusion, so variables may not be scoped.
+	fmt.Fprintf(b, "\nboringssl_%s := \\\n", name)
 	for i, v := range val {
 		if i == len(val)-1 {
 			fmt.Fprintf(b, "  %s\n", v)
@@ -312,6 +314,7 @@ func MakeBuildFiles(targets map[string]build.Target) []Task {
 		buildVariablesTask(targets, "gen/sources.bzl", "#", writeBazelVariable),
 		buildVariablesTask(targets, "gen/sources.cmake", "#", writeCMakeVariable),
 		buildVariablesTask(targets, "gen/sources.gni", "#", writeGNVariable),
+		buildVariablesTask(targets, "gen/sources.mk", "#", writeMakeVariable),
 		jsonTask(targets, "gen/sources.json"),
 	}
 }

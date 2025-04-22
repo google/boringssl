@@ -212,16 +212,10 @@ int EVP_DigestFinal(EVP_MD_CTX *ctx, uint8_t *md, unsigned int *size) {
 
 int EVP_Digest(const void *data, size_t count, uint8_t *out_md,
                unsigned int *out_size, const EVP_MD *type, ENGINE *impl) {
-  EVP_MD_CTX ctx;
-  int ret;
-
-  EVP_MD_CTX_init(&ctx);
-  ret = EVP_DigestInit_ex(&ctx, type, impl) &&
-        EVP_DigestUpdate(&ctx, data, count) &&
-        EVP_DigestFinal_ex(&ctx, out_md, out_size);
-  EVP_MD_CTX_cleanup(&ctx);
-
-  return ret;
+  bssl::ScopedEVP_MD_CTX ctx;
+  return EVP_DigestInit_ex(ctx.get(), type, impl) &&
+         EVP_DigestUpdate(ctx.get(), data, count) &&
+         EVP_DigestFinal_ex(ctx.get(), out_md, out_size);
 }
 
 const EVP_MD *EVP_MD_CTX_get0_md(const EVP_MD_CTX *ctx) {

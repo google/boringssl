@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_FIPSMODULE_DELOCATE_H
-#define OPENSSL_HEADER_FIPSMODULE_DELOCATE_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_DELOCATE_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_DELOCATE_H
 
 #include <openssl/base.h>
 
@@ -22,11 +22,18 @@
 
 #if !defined(BORINGSSL_SHARED_LIBRARY) && defined(BORINGSSL_FIPS) && \
     !defined(OPENSSL_ASAN) && !defined(OPENSSL_MSAN)
-#define DEFINE_BSS_GET(type, name, init_value)         \
-  static type name __attribute__((used)) = init_value; \
-  extern "C" {                                         \
-  type *name##_bss_get(void) __attribute__((const));   \
-  }
+#define DEFINE_BSS_GET(type, name, init_value)                                 \
+  /* delocate needs C linkage and for |name| to be unique across BCM. */       \
+  extern "C" {                                                                 \
+  extern type bcm_##name;                                                      \
+  type bcm_##name = init_value;                                                \
+  type *bcm_##name##_bss_get(void) __attribute__((const));                     \
+  } /* extern "C" */                                                           \
+                                                                               \
+  /* The getter functions are exported, but static variables are usually named \
+   * with short names. Define a static wrapper function so the caller can use  \
+   * a short name, while the symbol itself is prefixed. */                     \
+  static type *name##_bss_get(void) { return bcm_##name##_bss_get(); }
 // For FIPS builds we require that CRYPTO_ONCE_INIT be zero.
 #define DEFINE_STATIC_ONCE(name) \
   DEFINE_BSS_GET(CRYPTO_once_t, name, CRYPTO_ONCE_INIT)
@@ -89,4 +96,4 @@
 
 #define DEFINE_LOCAL_DATA(type, name) DEFINE_DATA(type, name, static const)
 
-#endif  // OPENSSL_HEADER_FIPSMODULE_DELOCATE_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_DELOCATE_H

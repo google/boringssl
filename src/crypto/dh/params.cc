@@ -22,7 +22,8 @@
 #include "../fipsmodule/dh/internal.h"
 
 
-static BIGNUM *get_params(BIGNUM *ret, const BN_ULONG *words, size_t num_words) {
+static BIGNUM *get_params(BIGNUM *ret, const BN_ULONG *words,
+                          size_t num_words) {
   BIGNUM *alloc = NULL;
   if (ret == NULL) {
     alloc = BN_new();
@@ -304,92 +305,57 @@ int DH_generate_parameters_ex(DH *dh, int prime_bits, int generator,
     return 0;
   }
 
-  BIGNUM *t1, *t2;
-  int g, ok = 0;
-  BN_CTX *ctx = NULL;
-
-  ctx = BN_CTX_new();
-  if (ctx == NULL) {
-    goto err;
-  }
-  BN_CTX_start(ctx);
-  t1 = BN_CTX_get(ctx);
-  t2 = BN_CTX_get(ctx);
-  if (t1 == NULL || t2 == NULL) {
-    goto err;
-  }
-
   // Make sure |dh| has the necessary elements
   if (dh->p == NULL) {
     dh->p = BN_new();
     if (dh->p == NULL) {
-      goto err;
+      OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
+      return 0;
     }
   }
   if (dh->g == NULL) {
     dh->g = BN_new();
     if (dh->g == NULL) {
-      goto err;
+      OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
+      return 0;
     }
   }
 
+  BN_ULONG t1, t2, g;
   if (generator <= 1) {
     OPENSSL_PUT_ERROR(DH, DH_R_BAD_GENERATOR);
-    goto err;
+    return 0;
   }
   if (generator == DH_GENERATOR_2) {
-    if (!BN_set_word(t1, 24)) {
-      goto err;
-    }
-    if (!BN_set_word(t2, 11)) {
-      goto err;
-    }
+    t1 = 24;
+    t2 = 11;
     g = 2;
   } else if (generator == DH_GENERATOR_5) {
-    if (!BN_set_word(t1, 10)) {
-      goto err;
-    }
-    if (!BN_set_word(t2, 3)) {
-      goto err;
-    }
-    // BN_set_word(t3,7); just have to miss
-    // out on these ones :-(
+    t1 = 10;
+    t2 = 3;
     g = 5;
   } else {
-    // in the general case, don't worry if 'generator' is a
-    // generator or not: since we are using safe primes,
-    // it will generate either an order-q or an order-2q group,
-    // which both is OK
-    if (!BN_set_word(t1, 2)) {
-      goto err;
-    }
-    if (!BN_set_word(t2, 1)) {
-      goto err;
-    }
+    // In the general case, don't worry if 'generator' is a generator or not:
+    // since we are using safe primes, it will generate either an order-q or an
+    // order-2q group, which both is OK.
+    t1 = 2;
+    t2 = 1;
     g = generator;
   }
 
-  if (!BN_generate_prime_ex(dh->p, prime_bits, 1, t1, t2, cb)) {
-    goto err;
-  }
-  if (!BN_GENCB_call(cb, 3, 0)) {
-    goto err;
-  }
-  if (!BN_set_word(dh->g, g)) {
-    goto err;
-  }
-  ok = 1;
-
-err:
-  if (!ok) {
+  bssl::UniquePtr<BIGNUM> t1_bn(BN_new()), t2_bn(BN_new());
+  if (t1_bn == nullptr || t2_bn == nullptr ||
+      !BN_set_word(t1_bn.get(), t1) ||  //
+      !BN_set_word(t2_bn.get(), t2) ||  //
+      !BN_generate_prime_ex(dh->p, prime_bits, 1, t1_bn.get(), t2_bn.get(),
+                            cb) ||
+      !BN_GENCB_call(cb, 3, 0) ||  //
+      !BN_set_word(dh->g, g)) {
     OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
+    return 0;
   }
 
-  if (ctx != NULL) {
-    BN_CTX_end(ctx);
-    BN_CTX_free(ctx);
-  }
-  return ok;
+  return 1;
 }
 
 static int int_dh_bn_cpy(BIGNUM **dst, const BIGNUM *src) {

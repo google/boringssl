@@ -19,15 +19,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-OPENSSL_MSVC_PRAGMA(warning(push))
-OPENSSL_MSVC_PRAGMA(warning(disable: 4702))
-
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
-
-OPENSSL_MSVC_PRAGMA(warning(pop))
 
 #include <gtest/gtest.h>
 

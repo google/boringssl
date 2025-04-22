@@ -481,6 +481,19 @@ void CBB_discard_child(CBB *cbb) {
   cbb->child = NULL;
 }
 
+int CBB_add_asn1_element(CBB *cbb, CBS_ASN1_TAG tag, const uint8_t *data,
+                         size_t data_len) {
+  CBB child;
+  if (!CBB_add_asn1(cbb, &child, tag) ||
+      !CBB_add_bytes(&child, data, data_len) ||  //
+      !CBB_flush(cbb)) {
+    cbb_on_error(cbb);
+    return 0;
+  }
+
+  return 1;
+}
+
 int CBB_add_asn1_uint64(CBB *cbb, uint64_t value) {
   return CBB_add_asn1_uint64_with_tag(cbb, value, CBS_ASN1_INTEGER);
 }
@@ -557,14 +570,7 @@ err:
 }
 
 int CBB_add_asn1_octet_string(CBB *cbb, const uint8_t *data, size_t data_len) {
-  CBB child;
-  if (!CBB_add_asn1(cbb, &child, CBS_ASN1_OCTETSTRING) ||
-      !CBB_add_bytes(&child, data, data_len) || !CBB_flush(cbb)) {
-    cbb_on_error(cbb);
-    return 0;
-  }
-
-  return 1;
+  return CBB_add_asn1_element(cbb, CBS_ASN1_OCTETSTRING, data, data_len);
 }
 
 int CBB_add_asn1_bool(CBB *cbb, int value) {

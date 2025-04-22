@@ -17,6 +17,8 @@
 #endif
 
 #include "../bcm_support.h"
+#include "../internal.h"
+#include "internal.h"
 
 #if defined(OPENSSL_FORK_DETECTION_MADVISE)
 #include <assert.h>
@@ -33,8 +35,6 @@ static_assert(MADV_WIPEONFORK == 18, "MADV_WIPEONFORK is not 18");
 #include <stdlib.h>
 #include <unistd.h>
 #endif  // OPENSSL_FORK_DETECTION_PTHREAD_ATFORK
-
-#include "../internal.h"
 
 #if defined(OPENSSL_FORK_DETECTION_MADVISE)
 static int g_force_madv_wipeonfork;

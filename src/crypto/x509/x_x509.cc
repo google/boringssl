@@ -17,6 +17,7 @@
 #include <stdio.h>
 
 #include <openssl/asn1t.h>
+#include <openssl/bytestring.h>
 #include <openssl/evp.h>
 #include <openssl/mem.h>
 #include <openssl/obj.h>
@@ -109,7 +110,7 @@ static X509 *x509_parse(CBS *cbs, CRYPTO_BUFFER *buf) {
       !CBS_get_asn1_element(&cert, &tbs, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1_element(&cert, &sigalg, CBS_ASN1_SEQUENCE)) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
-    return NULL;
+    return nullptr;
   }
 
   // For just the signature field, we accept non-minimal BER lengths, though not
@@ -121,76 +122,70 @@ static X509 *x509_parse(CBS *cbs, CRYPTO_BUFFER *buf) {
   size_t header_len;
   int indefinite;
   if (!CBS_get_any_ber_asn1_element(&cert, &sig, &tag, &header_len,
-                                    /*out_ber_found=*/NULL,
+                                    /*out_ber_found=*/nullptr,
                                     &indefinite) ||
       tag != CBS_ASN1_BITSTRING || indefinite ||  //
       !CBS_skip(&sig, header_len) ||              //
       CBS_len(&cert) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
-    return NULL;
+    return nullptr;
   }
 
-  X509 *ret = x509_new_null();
-  if (ret == NULL) {
-    return NULL;
+  bssl::UniquePtr<X509> ret(x509_new_null());
+  if (ret == nullptr) {
+    return nullptr;
   }
 
-  {
-    // TODO(crbug.com/boringssl/443): When the rest of the library is decoupled
-    // from the tasn_*.c implementation, replace this with |CBS|-based
-    // functions.
-    const uint8_t *inp = CBS_data(&tbs);
-    if (ASN1_item_ex_d2i((ASN1_VALUE **)&ret->cert_info, &inp, CBS_len(&tbs),
-                         ASN1_ITEM_rptr(X509_CINF), /*tag=*/-1,
-                         /*aclass=*/0, /*opt=*/0, buf) <= 0 ||
-        inp != CBS_data(&tbs) + CBS_len(&tbs)) {
-      goto err;
-    }
-
-    inp = CBS_data(&sigalg);
-    ret->sig_alg = d2i_X509_ALGOR(NULL, &inp, CBS_len(&sigalg));
-    if (ret->sig_alg == NULL || inp != CBS_data(&sigalg) + CBS_len(&sigalg)) {
-      goto err;
-    }
-
-    inp = CBS_data(&sig);
-    ret->signature = c2i_ASN1_BIT_STRING(NULL, &inp, CBS_len(&sig));
-    if (ret->signature == NULL || inp != CBS_data(&sig) + CBS_len(&sig)) {
-      goto err;
-    }
-
-    // The version must be one of v1(0), v2(1), or v3(2).
-    long version = X509_VERSION_1;
-    if (ret->cert_info->version != NULL) {
-      version = ASN1_INTEGER_get(ret->cert_info->version);
-      // TODO(https://crbug.com/boringssl/364): |X509_VERSION_1| should
-      // also be rejected here. This means an explicitly-encoded X.509v1
-      // version. v1 is DEFAULT, so DER requires it be omitted.
-      if (version < X509_VERSION_1 || version > X509_VERSION_3) {
-        OPENSSL_PUT_ERROR(X509, X509_R_INVALID_VERSION);
-        goto err;
-      }
-    }
-
-    // Per RFC 5280, section 4.1.2.8, these fields require v2 or v3.
-    if (version == X509_VERSION_1 && (ret->cert_info->issuerUID != NULL ||
-                                      ret->cert_info->subjectUID != NULL)) {
-      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_FIELD_FOR_VERSION);
-      goto err;
-    }
-
-    // Per RFC 5280, section 4.1.2.9, extensions require v3.
-    if (version != X509_VERSION_3 && ret->cert_info->extensions != NULL) {
-      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_FIELD_FOR_VERSION);
-      goto err;
-    }
-
-    return ret;
+  // TODO(crbug.com/boringssl/443): When the rest of the library is decoupled
+  // from the tasn_*.c implementation, replace this with |CBS|-based
+  // functions.
+  const uint8_t *inp = CBS_data(&tbs);
+  if (ASN1_item_ex_d2i((ASN1_VALUE **)&ret->cert_info, &inp, CBS_len(&tbs),
+                       ASN1_ITEM_rptr(X509_CINF), /*tag=*/-1,
+                       /*aclass=*/0, /*opt=*/0, buf) <= 0 ||
+      inp != CBS_data(&tbs) + CBS_len(&tbs)) {
+    return nullptr;
   }
 
-err:
-  X509_free(ret);
-  return NULL;
+  inp = CBS_data(&sigalg);
+  ret->sig_alg = d2i_X509_ALGOR(nullptr, &inp, CBS_len(&sigalg));
+  if (ret->sig_alg == nullptr || inp != CBS_data(&sigalg) + CBS_len(&sigalg)) {
+    return nullptr;
+  }
+
+  inp = CBS_data(&sig);
+  ret->signature = c2i_ASN1_BIT_STRING(nullptr, &inp, CBS_len(&sig));
+  if (ret->signature == nullptr || inp != CBS_data(&sig) + CBS_len(&sig)) {
+    return nullptr;
+  }
+
+  // The version must be one of v1(0), v2(1), or v3(2).
+  long version = X509_VERSION_1;
+  if (ret->cert_info->version != nullptr) {
+    version = ASN1_INTEGER_get(ret->cert_info->version);
+    // TODO(https://crbug.com/boringssl/364): |X509_VERSION_1| should
+    // also be rejected here. This means an explicitly-encoded X.509v1
+    // version. v1 is DEFAULT, so DER requires it be omitted.
+    if (version < X509_VERSION_1 || version > X509_VERSION_3) {
+      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_VERSION);
+      return nullptr;
+    }
+  }
+
+  // Per RFC 5280, section 4.1.2.8, these fields require v2 or v3.
+  if (version == X509_VERSION_1 && (ret->cert_info->issuerUID != nullptr ||
+                                    ret->cert_info->subjectUID != nullptr)) {
+    OPENSSL_PUT_ERROR(X509, X509_R_INVALID_FIELD_FOR_VERSION);
+    return nullptr;
+  }
+
+  // Per RFC 5280, section 4.1.2.9, extensions require v3.
+  if (version != X509_VERSION_3 && ret->cert_info->extensions != nullptr) {
+    OPENSSL_PUT_ERROR(X509, X509_R_INVALID_FIELD_FOR_VERSION);
+    return nullptr;
+  }
+
+  return ret.release();
 }
 
 X509 *d2i_X509(X509 **out, const uint8_t **inp, long len) {
@@ -223,42 +218,26 @@ int i2d_X509(X509 *x509, uint8_t **outp) {
     return -1;
   }
 
-  CBB cbb, cert;
-  int len;
-  if (!CBB_init(&cbb, 64) ||  //
-      !CBB_add_asn1(&cbb, &cert, CBS_ASN1_SEQUENCE)) {
-    goto err;
+  bssl::ScopedCBB cbb;
+  CBB cert;
+  if (!CBB_init(cbb.get(), 64) ||  //
+      !CBB_add_asn1(cbb.get(), &cert, CBS_ASN1_SEQUENCE)) {
+    return -1;
   }
 
   // TODO(crbug.com/boringssl/443): When the rest of the library is decoupled
   // from the tasn_*.c implementation, replace this with |CBS|-based functions.
   uint8_t *out;
-  len = i2d_X509_CINF(x509->cert_info, NULL);
+  int len = i2d_X509_CINF(x509->cert_info, NULL);
   if (len < 0 ||  //
-      !CBB_add_space(&cert, &out, (size_t)len) ||
-      i2d_X509_CINF(x509->cert_info, &out) != len) {
-    goto err;
+      !CBB_add_space(&cert, &out, static_cast<size_t>(len)) ||
+      i2d_X509_CINF(x509->cert_info, &out) != len ||
+      !x509_marshal_algorithm(&cert, x509->sig_alg) ||
+      !asn1_marshal_bit_string(&cert, x509->signature, /*tag=*/0)) {
+    return -1;
   }
 
-  len = i2d_X509_ALGOR(x509->sig_alg, NULL);
-  if (len < 0 ||  //
-      !CBB_add_space(&cert, &out, (size_t)len) ||
-      i2d_X509_ALGOR(x509->sig_alg, &out) != len) {
-    goto err;
-  }
-
-  len = i2d_ASN1_BIT_STRING(x509->signature, NULL);
-  if (len < 0 ||  //
-      !CBB_add_space(&cert, &out, (size_t)len) ||
-      i2d_ASN1_BIT_STRING(x509->signature, &out) != len) {
-    goto err;
-  }
-
-  return CBB_finish_i2d(&cbb, outp);
-
-err:
-  CBB_cleanup(&cbb);
-  return -1;
+  return CBB_finish_i2d(cbb.get(), outp);
 }
 
 static int x509_new_cb(ASN1_VALUE **pval, const ASN1_ITEM *it) {

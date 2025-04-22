@@ -31,13 +31,11 @@ int ASN1_item_sign(const ASN1_ITEM *it, X509_ALGOR *algor1, X509_ALGOR *algor2,
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_WRONG_TYPE);
     return 0;
   }
-  EVP_MD_CTX ctx;
-  EVP_MD_CTX_init(&ctx);
-  if (!EVP_DigestSignInit(&ctx, NULL, type, NULL, pkey)) {
-    EVP_MD_CTX_cleanup(&ctx);
+  bssl::ScopedEVP_MD_CTX ctx;
+  if (!EVP_DigestSignInit(ctx.get(), nullptr, type, nullptr, pkey)) {
     return 0;
   }
-  return ASN1_item_sign_ctx(it, algor1, algor2, signature, asn, &ctx);
+  return ASN1_item_sign_ctx(it, algor1, algor2, signature, asn, ctx.get());
 }
 
 int ASN1_item_sign_ctx(const ASN1_ITEM *it, X509_ALGOR *algor1,

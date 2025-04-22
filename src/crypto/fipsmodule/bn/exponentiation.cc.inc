@@ -70,261 +70,6 @@ static void bn_power5(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *table,
 
 #endif  // defined(OPENSSL_BN_ASM_MONT5)
 
-int BN_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p, BN_CTX *ctx) {
-  int i, bits, ret = 0;
-  BIGNUM *v, *rr;
-
-  BN_CTX_start(ctx);
-  if (r == a || r == p) {
-    rr = BN_CTX_get(ctx);
-  } else {
-    rr = r;
-  }
-
-  v = BN_CTX_get(ctx);
-  if (rr == NULL || v == NULL) {
-    goto err;
-  }
-
-  if (BN_copy(v, a) == NULL) {
-    goto err;
-  }
-  bits = BN_num_bits(p);
-
-  if (BN_is_odd(p)) {
-    if (BN_copy(rr, a) == NULL) {
-      goto err;
-    }
-  } else {
-    if (!BN_one(rr)) {
-      goto err;
-    }
-  }
-
-  for (i = 1; i < bits; i++) {
-    if (!BN_sqr(v, v, ctx)) {
-      goto err;
-    }
-    if (BN_is_bit_set(p, i)) {
-      if (!BN_mul(rr, rr, v, ctx)) {
-        goto err;
-      }
-    }
-  }
-
-  if (r != rr && !BN_copy(r, rr)) {
-    goto err;
-  }
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
-}
-
-namespace {
-typedef struct bn_recp_ctx_st {
-  BIGNUM N;   // the divisor
-  BIGNUM Nr;  // the reciprocal
-  int num_bits;
-  int shift;
-  int flags;
-} BN_RECP_CTX;
-}  // namespace
-
-static void BN_RECP_CTX_init(BN_RECP_CTX *recp) {
-  BN_init(&recp->N);
-  BN_init(&recp->Nr);
-  recp->num_bits = 0;
-  recp->shift = 0;
-  recp->flags = 0;
-}
-
-static void BN_RECP_CTX_free(BN_RECP_CTX *recp) {
-  if (recp == nullptr) {
-    return;
-  }
-  BN_free(&recp->N);
-  BN_free(&recp->Nr);
-}
-
-static int BN_RECP_CTX_set(BN_RECP_CTX *recp, const BIGNUM *d, BN_CTX *ctx) {
-  if (!BN_copy(&(recp->N), d)) {
-    return 0;
-  }
-  BN_zero(&recp->Nr);
-  recp->num_bits = BN_num_bits(d);
-  recp->shift = 0;
-
-  return 1;
-}
-
-// len is the expected size of the result We actually calculate with an extra
-// word of precision, so we can do faster division if the remainder is not
-// required.
-// r := 2^len / m
-static int BN_reciprocal(BIGNUM *r, const BIGNUM *m, int len, BN_CTX *ctx) {
-  int ret = -1;
-  BIGNUM *t;
-
-  BN_CTX_start(ctx);
-  t = BN_CTX_get(ctx);
-  if (t == NULL) {
-    goto err;
-  }
-
-  if (!BN_set_bit(t, len)) {
-    goto err;
-  }
-
-  if (!BN_div(r, NULL, t, m, ctx)) {
-    goto err;
-  }
-
-  ret = len;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
-}
-
-static int BN_div_recp(BIGNUM *dv, BIGNUM *rem, const BIGNUM *m,
-                       BN_RECP_CTX *recp, BN_CTX *ctx) {
-  int i, j, ret = 0;
-  BIGNUM *a, *b, *d, *r;
-
-  BN_CTX_start(ctx);
-  a = BN_CTX_get(ctx);
-  b = BN_CTX_get(ctx);
-  if (dv != NULL) {
-    d = dv;
-  } else {
-    d = BN_CTX_get(ctx);
-  }
-
-  if (rem != NULL) {
-    r = rem;
-  } else {
-    r = BN_CTX_get(ctx);
-  }
-
-  if (a == NULL || b == NULL || d == NULL || r == NULL) {
-    goto err;
-  }
-
-  if (BN_ucmp(m, &recp->N) < 0) {
-    BN_zero(d);
-    if (!BN_copy(r, m)) {
-      goto err;
-    }
-    BN_CTX_end(ctx);
-    return 1;
-  }
-
-  // We want the remainder
-  // Given input of ABCDEF / ab
-  // we need multiply ABCDEF by 3 digests of the reciprocal of ab
-
-  // i := max(BN_num_bits(m), 2*BN_num_bits(N))
-  i = BN_num_bits(m);
-  j = recp->num_bits << 1;
-  if (j > i) {
-    i = j;
-  }
-
-  // Nr := round(2^i / N)
-  if (i != recp->shift) {
-    recp->shift =
-        BN_reciprocal(&(recp->Nr), &(recp->N), i,
-                      ctx);  // BN_reciprocal returns i, or -1 for an error
-  }
-
-  if (recp->shift == -1) {
-    goto err;
-  }
-
-  // d := |round(round(m / 2^BN_num_bits(N)) * recp->Nr / 2^(i -
-  // BN_num_bits(N)))|
-  //    = |round(round(m / 2^BN_num_bits(N)) * round(2^i / N) / 2^(i -
-  // BN_num_bits(N)))|
-  //   <= |(m / 2^BN_num_bits(N)) * (2^i / N) * (2^BN_num_bits(N) / 2^i)|
-  //    = |m/N|
-  if (!BN_rshift(a, m, recp->num_bits)) {
-    goto err;
-  }
-  if (!BN_mul(b, a, &(recp->Nr), ctx)) {
-    goto err;
-  }
-  if (!BN_rshift(d, b, i - recp->num_bits)) {
-    goto err;
-  }
-  d->neg = 0;
-
-  if (!BN_mul(b, &(recp->N), d, ctx)) {
-    goto err;
-  }
-  if (!BN_usub(r, m, b)) {
-    goto err;
-  }
-  r->neg = 0;
-
-  j = 0;
-  while (BN_ucmp(r, &(recp->N)) >= 0) {
-    if (j++ > 2) {
-      OPENSSL_PUT_ERROR(BN, BN_R_BAD_RECIPROCAL);
-      goto err;
-    }
-    if (!BN_usub(r, r, &(recp->N))) {
-      goto err;
-    }
-    if (!BN_add_word(d, 1)) {
-      goto err;
-    }
-  }
-
-  r->neg = BN_is_zero(r) ? 0 : m->neg;
-  d->neg = m->neg ^ recp->N.neg;
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
-}
-
-static int BN_mod_mul_reciprocal(BIGNUM *r, const BIGNUM *x, const BIGNUM *y,
-                                 BN_RECP_CTX *recp, BN_CTX *ctx) {
-  int ret = 0;
-  BIGNUM *a;
-  const BIGNUM *ca;
-
-  BN_CTX_start(ctx);
-  a = BN_CTX_get(ctx);
-  if (a == NULL) {
-    goto err;
-  }
-
-  if (y != NULL) {
-    if (x == y) {
-      if (!BN_sqr(a, x, ctx)) {
-        goto err;
-      }
-    } else {
-      if (!BN_mul(a, x, y, ctx)) {
-        goto err;
-      }
-    }
-    ca = a;
-  } else {
-    ca = x;  // Just do the mod
-  }
-
-  ret = BN_div_recp(NULL, r, ca, recp, ctx);
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
-}
-
 // BN_window_bits_for_exponent_size returns sliding window size for mod_exp with
 // a |b| bit exponent.
 //
@@ -378,163 +123,6 @@ static int BN_window_bits_for_exponent_size(size_t b) {
 // |BN_BITS2| * |BN_SMALL_MAX_WORDS|.
 #define TABLE_SIZE_SMALL (1 << (TABLE_BITS_SMALL - 1))
 
-static int mod_exp_recp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
-                        const BIGNUM *m, BN_CTX *ctx) {
-  int i, j, ret = 0, wstart, window;
-  int start = 1;
-  BIGNUM *aa;
-  // Table of variables obtained from 'ctx'
-  BIGNUM *val[TABLE_SIZE];
-  BN_RECP_CTX recp;
-
-  // This function is only called on even moduli.
-  assert(!BN_is_odd(m));
-
-  int bits = BN_num_bits(p);
-  if (bits == 0) {
-    return BN_one(r);
-  }
-
-  BN_RECP_CTX_init(&recp);
-  BN_CTX_start(ctx);
-  aa = BN_CTX_get(ctx);
-  val[0] = BN_CTX_get(ctx);
-  if (!aa || !val[0]) {
-    goto err;
-  }
-
-  if (m->neg) {
-    // ignore sign of 'm'
-    if (!BN_copy(aa, m)) {
-      goto err;
-    }
-    aa->neg = 0;
-    if (BN_RECP_CTX_set(&recp, aa, ctx) <= 0) {
-      goto err;
-    }
-  } else {
-    if (BN_RECP_CTX_set(&recp, m, ctx) <= 0) {
-      goto err;
-    }
-  }
-
-  if (!BN_nnmod(val[0], a, m, ctx)) {
-    goto err;  // 1
-  }
-  if (BN_is_zero(val[0])) {
-    BN_zero(r);
-    ret = 1;
-    goto err;
-  }
-
-  window = BN_window_bits_for_exponent_size(bits);
-  if (window > 1) {
-    if (!BN_mod_mul_reciprocal(aa, val[0], val[0], &recp, ctx)) {
-      goto err;  // 2
-    }
-    j = 1 << (window - 1);
-    for (i = 1; i < j; i++) {
-      if (((val[i] = BN_CTX_get(ctx)) == NULL) ||
-          !BN_mod_mul_reciprocal(val[i], val[i - 1], aa, &recp, ctx)) {
-        goto err;
-      }
-    }
-  }
-
-  start = 1;          // This is used to avoid multiplication etc
-                      // when there is only the value '1' in the
-                      // buffer.
-  wstart = bits - 1;  // The top bit of the window
-
-  if (!BN_one(r)) {
-    goto err;
-  }
-
-  for (;;) {
-    int wvalue;  // The 'value' of the window
-    int wend;    // The bottom bit of the window
-
-    if (!BN_is_bit_set(p, wstart)) {
-      if (!start) {
-        if (!BN_mod_mul_reciprocal(r, r, r, &recp, ctx)) {
-          goto err;
-        }
-      }
-      if (wstart == 0) {
-        break;
-      }
-      wstart--;
-      continue;
-    }
-
-    // We now have wstart on a 'set' bit, we now need to work out
-    // how bit a window to do.  To do this we need to scan
-    // forward until the last set bit before the end of the
-    // window
-    wvalue = 1;
-    wend = 0;
-    for (i = 1; i < window; i++) {
-      if (wstart - i < 0) {
-        break;
-      }
-      if (BN_is_bit_set(p, wstart - i)) {
-        wvalue <<= (i - wend);
-        wvalue |= 1;
-        wend = i;
-      }
-    }
-
-    // wend is the size of the current window
-    j = wend + 1;
-    // add the 'bytes above'
-    if (!start) {
-      for (i = 0; i < j; i++) {
-        if (!BN_mod_mul_reciprocal(r, r, r, &recp, ctx)) {
-          goto err;
-        }
-      }
-    }
-
-    // wvalue will be an odd number < 2^window
-    if (!BN_mod_mul_reciprocal(r, r, val[wvalue >> 1], &recp, ctx)) {
-      goto err;
-    }
-
-    // move the 'window' down further
-    wstart -= wend + 1;
-    start = 0;
-    if (wstart < 0) {
-      break;
-    }
-  }
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  BN_RECP_CTX_free(&recp);
-  return ret;
-}
-
-int BN_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p, const BIGNUM *m,
-               BN_CTX *ctx) {
-  if (m->neg) {
-    OPENSSL_PUT_ERROR(BN, BN_R_NEGATIVE_NUMBER);
-    return 0;
-  }
-  if (a->neg || BN_ucmp(a, m) >= 0) {
-    if (!BN_nnmod(r, a, m, ctx)) {
-      return 0;
-    }
-    a = r;
-  }
-
-  if (BN_is_odd(m)) {
-    return BN_mod_exp_mont(r, a, p, m, ctx, NULL);
-  }
-
-  return mod_exp_recp(r, a, p, m, ctx);
-}
-
 int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
                     const BIGNUM *m, BN_CTX *ctx, const BN_MONT_CTX *mont) {
   if (!BN_is_odd(m)) {
@@ -561,57 +149,55 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     return BN_one(rr);
   }
 
-  int ret = 0;
   BIGNUM *val[TABLE_SIZE];
-  BN_MONT_CTX *new_mont = NULL;
 
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *r = BN_CTX_get(ctx);
   val[0] = BN_CTX_get(ctx);
-  int window, r_is_one, wstart;
   if (r == NULL || val[0] == NULL) {
-    goto err;
+    return 0;
   }
 
   // Allocate a montgomery context if it was not supplied by the caller.
-  if (mont == NULL) {
-    new_mont = BN_MONT_CTX_new_consttime(m, ctx);
-    if (new_mont == NULL) {
-      goto err;
+  bssl::UniquePtr<BN_MONT_CTX> new_mont;
+  if (mont == nullptr) {
+    new_mont.reset(BN_MONT_CTX_new_consttime(m, ctx));
+    if (new_mont == nullptr) {
+      return 0;
     }
-    mont = new_mont;
+    mont = new_mont.get();
   }
 
   // We exponentiate by looking at sliding windows of the exponent and
   // precomputing powers of |a|. Windows may be shifted so they always end on a
   // set bit, so only precompute odd powers. We compute val[i] = a^(2*i + 1)
   // for i = 0 to 2^(window-1), all in Montgomery form.
-  window = BN_window_bits_for_exponent_size(bits);
+  int window = BN_window_bits_for_exponent_size(bits);
   if (!BN_to_montgomery(val[0], a, mont, ctx)) {
-    goto err;
+    return 0;
   }
   if (window > 1) {
     BIGNUM *d = BN_CTX_get(ctx);
     if (d == NULL || !BN_mod_mul_montgomery(d, val[0], val[0], mont, ctx)) {
-      goto err;
+      return 0;
     }
     for (int i = 1; i < 1 << (window - 1); i++) {
       val[i] = BN_CTX_get(ctx);
       if (val[i] == NULL ||
           !BN_mod_mul_montgomery(val[i], val[i - 1], d, mont, ctx)) {
-        goto err;
+        return 0;
       }
     }
   }
 
   // |p| is non-zero, so at least one window is non-zero. To save some
   // multiplications, defer initializing |r| until then.
-  r_is_one = 1;
-  wstart = bits - 1;  // The top bit of the window.
+  int r_is_one = 1;
+  int wstart = bits - 1;  // The top bit of the window.
   for (;;) {
     if (!BN_is_bit_set(p, wstart)) {
       if (!r_is_one && !BN_mod_mul_montgomery(r, r, r, mont, ctx)) {
-        goto err;
+        return 0;
       }
       if (wstart == 0) {
         break;
@@ -635,7 +221,7 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     if (!r_is_one) {
       for (int i = 0; i < wsize + 1; i++) {
         if (!BN_mod_mul_montgomery(r, r, r, mont, ctx)) {
-          goto err;
+          return 0;
         }
       }
     }
@@ -644,10 +230,10 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     assert(wvalue < (1 << window));
     if (r_is_one) {
       if (!BN_copy(r, val[wvalue >> 1])) {
-        goto err;
+        return 0;
       }
     } else if (!BN_mod_mul_montgomery(r, r, val[wvalue >> 1], mont, ctx)) {
-      goto err;
+      return 0;
     }
 
     r_is_one = 0;
@@ -660,15 +246,7 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
   // |p| is non-zero, so |r_is_one| must be cleared at some point.
   assert(!r_is_one);
 
-  if (!BN_from_montgomery(rr, r, mont, ctx)) {
-    goto err;
-  }
-  ret = 1;
-
-err:
-  BN_MONT_CTX_free(new_mont);
-  BN_CTX_end(ctx);
-  return ret;
+  return BN_from_montgomery(rr, r, mont, ctx);
 }
 
 void bn_mod_exp_mont_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
@@ -835,7 +413,6 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
                               const BIGNUM *m, BN_CTX *ctx,
                               const BN_MONT_CTX *mont) {
   int i, ret = 0, wvalue;
-  BN_MONT_CTX *new_mont = NULL;
 
   void *powerbuf_free = NULL;
   size_t powerbuf_len = 0;
@@ -871,12 +448,13 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
   // Allocate a montgomery context if it was not supplied by the caller.
   int top, num_powers, window;
-  if (mont == NULL) {
-    new_mont = BN_MONT_CTX_new_consttime(m, ctx);
-    if (new_mont == NULL) {
+  bssl::UniquePtr<BN_MONT_CTX> new_mont;
+  if (mont == nullptr) {
+    new_mont.reset(BN_MONT_CTX_new_consttime(m, ctx));
+    if (new_mont == nullptr) {
       goto err;
     }
-    mont = new_mont;
+    mont = new_mont.get();
   }
 
   // Use the width in |mont->N|, rather than the copy in |m|. The assembly
@@ -1153,75 +731,9 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
   ret = 1;
 
 err:
-  BN_MONT_CTX_free(new_mont);
   if (powerbuf != NULL && powerbuf_free == NULL) {
     OPENSSL_cleanse(powerbuf, powerbuf_len);
   }
   OPENSSL_free(powerbuf_free);
-  return ret;
-}
-
-int BN_mod_exp_mont_word(BIGNUM *rr, BN_ULONG a, const BIGNUM *p,
-                         const BIGNUM *m, BN_CTX *ctx,
-                         const BN_MONT_CTX *mont) {
-  BIGNUM a_bignum;
-  BN_init(&a_bignum);
-
-  int ret = 0;
-
-  // BN_mod_exp_mont requires reduced inputs.
-  if (bn_minimal_width(m) == 1) {
-    a %= m->d[0];
-  }
-
-  if (!BN_set_word(&a_bignum, a)) {
-    OPENSSL_PUT_ERROR(BN, ERR_R_INTERNAL_ERROR);
-    goto err;
-  }
-
-  ret = BN_mod_exp_mont(rr, &a_bignum, p, m, ctx, mont);
-
-err:
-  BN_free(&a_bignum);
-
-  return ret;
-}
-
-#define TABLE_SIZE 32
-
-int BN_mod_exp2_mont(BIGNUM *rr, const BIGNUM *a1, const BIGNUM *p1,
-                     const BIGNUM *a2, const BIGNUM *p2, const BIGNUM *m,
-                     BN_CTX *ctx, const BN_MONT_CTX *mont) {
-  BIGNUM tmp;
-  BN_init(&tmp);
-
-  int ret = 0;
-  BN_MONT_CTX *new_mont = NULL;
-
-  // Allocate a montgomery context if it was not supplied by the caller.
-  if (mont == NULL) {
-    new_mont = BN_MONT_CTX_new_for_modulus(m, ctx);
-    if (new_mont == NULL) {
-      goto err;
-    }
-    mont = new_mont;
-  }
-
-  // BN_mod_mul_montgomery removes one Montgomery factor, so passing one
-  // Montgomery-encoded and one non-Montgomery-encoded value gives a
-  // non-Montgomery-encoded result.
-  if (!BN_mod_exp_mont(rr, a1, p1, m, ctx, mont) ||
-      !BN_mod_exp_mont(&tmp, a2, p2, m, ctx, mont) ||
-      !BN_to_montgomery(rr, rr, mont, ctx) ||
-      !BN_mod_mul_montgomery(rr, rr, &tmp, mont, ctx)) {
-    goto err;
-  }
-
-  ret = 1;
-
-err:
-  BN_MONT_CTX_free(new_mont);
-  BN_free(&tmp);
-
   return ret;
 }

@@ -910,9 +910,9 @@ int SSL_serialize_handshake_hints(const SSL *ssl, CBB *out) {
   }
 
   if (!hints->server_random_tls13.empty()) {
-    if (!CBB_add_asn1(&seq, &child, kServerRandomTLS13Tag) ||
-        !CBB_add_bytes(&child, hints->server_random_tls13.data(),
-                       hints->server_random_tls13.size())) {
+    if (!CBB_add_asn1_element(&seq, kServerRandomTLS13Tag,
+                              hints->server_random_tls13.data(),
+                              hints->server_random_tls13.size())) {
       return 0;
     }
   }
@@ -944,9 +944,9 @@ int SSL_serialize_handshake_hints(const SSL *ssl, CBB *out) {
   }
 
   if (!hints->decrypted_psk.empty()) {
-    if (!CBB_add_asn1(&seq, &child, kDecryptedPSKTag) ||
-        !CBB_add_bytes(&child, hints->decrypted_psk.data(),
-                       hints->decrypted_psk.size())) {
+    if (!CBB_add_asn1_element(&seq, kDecryptedPSKTag,
+                              hints->decrypted_psk.data(),
+                              hints->decrypted_psk.size())) {
       return 0;
     }
   }
@@ -971,9 +971,9 @@ int SSL_serialize_handshake_hints(const SSL *ssl, CBB *out) {
   }
 
   if (!hints->server_random_tls12.empty()) {
-    if (!CBB_add_asn1(&seq, &child, kServerRandomTLS12Tag) ||
-        !CBB_add_bytes(&child, hints->server_random_tls12.data(),
-                       hints->server_random_tls12.size())) {
+    if (!CBB_add_asn1_element(&seq, kServerRandomTLS12Tag,
+                              hints->server_random_tls12.data(),
+                              hints->server_random_tls12.size())) {
       return 0;
     }
   }
@@ -992,9 +992,9 @@ int SSL_serialize_handshake_hints(const SSL *ssl, CBB *out) {
 
 
   if (!hints->decrypted_ticket.empty()) {
-    if (!CBB_add_asn1(&seq, &child, kDecryptedTicketTag) ||
-        !CBB_add_bytes(&child, hints->decrypted_ticket.data(),
-                       hints->decrypted_ticket.size())) {
+    if (!CBB_add_asn1_element(&seq, kDecryptedTicketTag,
+                              hints->decrypted_ticket.data(),
+                              hints->decrypted_ticket.size())) {
       return 0;
     }
   }

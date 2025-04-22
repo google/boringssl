@@ -20,6 +20,7 @@
 
 #include <openssl/mem.h>
 
+#include "../bcm_interface.h"
 #include "../../internal.h"
 #include "../service_indicator/internal.h"
 
@@ -53,7 +54,7 @@ int AES_wrap_key(const AES_KEY *key, const uint8_t *iv, uint8_t *out,
   for (unsigned j = 0; j < kBound; j++) {
     for (size_t i = 1; i <= n; i++) {
       OPENSSL_memcpy(A + 8, out + 8 * i, 8);
-      AES_encrypt(A, A, key);
+      BCM_aes_encrypt(A, A, key);
 
       uint32_t t = (uint32_t)(n * j + i);
       A[7] ^= t & 0xff;
@@ -96,7 +97,7 @@ static int aes_unwrap_key_inner(const AES_KEY *key, uint8_t *out,
       A[5] ^= (t >> 16) & 0xff;
       A[4] ^= (t >> 24) & 0xff;
       OPENSSL_memcpy(A + 8, out + 8 * (i - 1), 8);
-      AES_decrypt(A, A, key);
+      BCM_aes_decrypt(A, A, key);
       OPENSSL_memcpy(out + 8 * (i - 1), A + 8, 8);
     }
   }
@@ -145,7 +146,7 @@ int AES_wrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
   if (in_len <= 8) {
     memset(block + 8, 0, 8);
     memcpy(block + 8, in, in_len);
-    AES_encrypt(block, out, key);
+    BCM_aes_encrypt(block, out, key);
     *out_len = AES_BLOCK_SIZE;
     return 1;
   }
@@ -179,7 +180,7 @@ int AES_unwrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
   uint8_t iv[8];
   if (in_len == AES_BLOCK_SIZE) {
     uint8_t block[AES_BLOCK_SIZE];
-    AES_decrypt(in, block, key);
+    BCM_aes_decrypt(in, block, key);
     memcpy(iv, block, sizeof(iv));
     memcpy(out, block + 8, 8);
   } else if (!aes_unwrap_key_inner(key, out, iv, in, in_len)) {

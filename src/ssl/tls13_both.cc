@@ -197,7 +197,8 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
       return false;
     }
 
-    if (sk_CRYPTO_BUFFER_num(certs.get()) == 0) {
+    const bool is_leaf = sk_CRYPTO_BUFFER_num(certs.get()) == 0;
+    if (is_leaf) {
       pkey = ssl_cert_parse_pubkey(&certificate);
       if (!pkey) {
         ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
@@ -234,8 +235,13 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
     SSLExtension sct(
         TLSEXT_TYPE_certificate_timestamp,
         !ssl->server && hs->config->signed_cert_timestamps_enabled);
+    SSLExtension trust_anchors(
+        TLSEXT_TYPE_trust_anchors,
+        !ssl->server && is_leaf &&
+            hs->config->requested_trust_anchors.has_value());
     uint8_t alert = SSL_AD_DECODE_ERROR;
-    if (!ssl_parse_extensions(&extensions, &alert, {&status_request, &sct},
+    if (!ssl_parse_extensions(&extensions, &alert,
+                              {&status_request, &sct, &trust_anchors},
                               /*ignore_unknown=*/false)) {
       ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
       return false;
@@ -279,6 +285,15 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
           return false;
         }
       }
+    }
+
+    if (trust_anchors.present) {
+      if (CBS_len(&trust_anchors.data) != 0) {
+        OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_PARSING_EXTENSION);
+        ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
+        return false;
+      }
+      hs->peer_matched_trust_anchor = true;
     }
   }
 
@@ -378,9 +393,9 @@ bool tls13_process_finished(SSL_HANDSHAKE *hs, const SSLMessage &msg,
 
   bool finished_ok =
       CBS_mem_equal(&msg.body, verify_data.data(), verify_data.size());
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  finished_ok = true;
-#endif
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    finished_ok = true;
+  }
   if (!finished_ok) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_DECRYPT_ERROR);
     OPENSSL_PUT_ERROR(SSL, SSL_R_DIGEST_CHECK_FAILED);
@@ -468,6 +483,16 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
                        CRYPTO_BUFFER_len(cred->dc.get())) ||
         !CBB_flush(&extensions)) {
       OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+      return false;
+    }
+  }
+
+  if (hs->matched_peer_trust_anchor) {
+    // Let the peer know we matched a requested trust anchor.
+    CBB empty_contents;
+    if (!CBB_add_u16(&extensions, TLSEXT_TYPE_trust_anchors) ||        //
+        !CBB_add_u16_length_prefixed(&extensions, &empty_contents) ||  //
+        !CBB_flush(&extensions)) {
       return false;
     }
   }
@@ -642,8 +667,7 @@ bool tls13_add_key_update(SSL *ssl, int request_type) {
   }
 
   // In DTLS, the actual key update is deferred until KeyUpdate is ACKed.
-  if (!SSL_is_dtls(ssl) &&
-      !tls13_rotate_traffic_key(ssl, evp_aead_seal)) {
+  if (!SSL_is_dtls(ssl) && !tls13_rotate_traffic_key(ssl, evp_aead_seal)) {
     return false;
   }
 

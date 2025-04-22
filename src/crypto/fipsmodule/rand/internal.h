@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_CRYPTO_RAND_INTERNAL_H
-#define OPENSSL_HEADER_CRYPTO_RAND_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_RAND_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_RAND_INTERNAL_H
 
 #include <openssl/aes.h>
 #include <openssl/ctrdrbg.h>
@@ -81,4 +81,4 @@ inline int have_fast_rdrand(void) { return 0; }
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_CRYPTO_RAND_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_RAND_INTERNAL_H

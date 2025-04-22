@@ -25,12 +25,6 @@
 #include "internal.h"
 
 
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-#define FUZZER_MODE true
-#else
-#define FUZZER_MODE false
-#endif
-
 BSSL_NAMESPACE_BEGIN
 
 SSLAEADContext::SSLAEADContext(const SSL_CIPHER *cipher_arg)
@@ -134,7 +128,7 @@ UniquePtr<SSLAEADContext> SSLAEADContext::CreatePlaceholderForQUIC(
 }
 
 size_t SSLAEADContext::ExplicitNonceLen() const {
-  if (!FUZZER_MODE && variable_nonce_included_in_record_) {
+  if (!CRYPTO_fuzzer_mode_enabled() && variable_nonce_included_in_record_) {
     return variable_nonce_len_;
   }
   return 0;
@@ -142,7 +136,7 @@ size_t SSLAEADContext::ExplicitNonceLen() const {
 
 bool SSLAEADContext::SuffixLen(size_t *out_suffix_len, const size_t in_len,
                                const size_t extra_in_len) const {
-  if (is_null_cipher() || FUZZER_MODE) {
+  if (is_null_cipher() || CRYPTO_fuzzer_mode_enabled()) {
     *out_suffix_len = extra_in_len;
     return true;
   }
@@ -168,7 +162,7 @@ bool SSLAEADContext::CiphertextLen(size_t *out_len, const size_t in_len,
 
 size_t SSLAEADContext::MaxOverhead() const {
   return ExplicitNonceLen() +
-         (is_null_cipher() || FUZZER_MODE
+         (is_null_cipher() || CRYPTO_fuzzer_mode_enabled()
               ? 0
               : EVP_AEAD_max_overhead(EVP_AEAD_CTX_aead(ctx_.get())));
 }
@@ -179,7 +173,7 @@ size_t SSLAEADContext::MaxSealInputLen(size_t max_out) const {
     return 0;
   }
   max_out -= explicit_nonce_len;
-  if (is_null_cipher() || FUZZER_MODE) {
+  if (is_null_cipher() || CRYPTO_fuzzer_mode_enabled()) {
     return max_out;
   }
   // TODO(crbug.com/42290602): This should be part of |EVP_AEAD_CTX|.
@@ -232,7 +226,7 @@ Span<const uint8_t> SSLAEADContext::GetAdditionalData(
 bool SSLAEADContext::Open(Span<uint8_t> *out, uint8_t type,
                           uint16_t record_version, uint64_t seqnum,
                           Span<const uint8_t> header, Span<uint8_t> in) {
-  if (is_null_cipher() || FUZZER_MODE) {
+  if (is_null_cipher() || CRYPTO_fuzzer_mode_enabled()) {
     // Handle the initial NULL cipher.
     *out = in;
     return true;
@@ -321,7 +315,7 @@ bool SSLAEADContext::SealScatter(uint8_t *out_prefix, uint8_t *out,
     return false;
   }
 
-  if (is_null_cipher() || FUZZER_MODE) {
+  if (is_null_cipher() || CRYPTO_fuzzer_mode_enabled()) {
     // Handle the initial NULL cipher.
     OPENSSL_memmove(out, in, in_len);
     OPENSSL_memmove(out_suffix, extra_in, extra_in_len);

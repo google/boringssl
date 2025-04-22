@@ -109,7 +109,11 @@ void OPENSSL_cpuid_setup(void) {
 
   // Matching OpenSSL, only report other features if NEON is present.
   unsigned long hwcap = getauxval(AT_HWCAP);
-  if (hwcap & HWCAP_NEON) {
+  if (hwcap & CRYPTO_HWCAP_NEON) {
+#if defined(HWCAP_ARM_NEON)
+      static_assert(HWCAP_ARM_NEON == CRYPTO_HWCAP_NEON,
+                    "CRYPTO_HWCAP values must match Linux");
+#endif
     OPENSSL_armcap_P |= ARMV7_NEON;
 
     // Some ARMv8 Android devices don't expose AT_HWCAP2. Fall back to
@@ -123,16 +127,35 @@ void OPENSSL_cpuid_setup(void) {
       g_needs_hwcap2_workaround = hwcap2 != 0;
     }
 
-    if (hwcap2 & HWCAP2_AES) {
+    // HWCAP2_* values, without the "CRYPTO_" prefix, are exposed through
+    // <sys/auxv.h> in some versions of glibc(>= 2.41). Assert that we don't
+    // diverge from those values.
+    if (hwcap2 & CRYPTO_HWCAP2_AES) {
+#if defined(HWCAP2_AES)
+      static_assert(HWCAP2_AES == CRYPTO_HWCAP2_AES,
+                    "CRYPTO_HWCAP2 values must match Linux");
+#endif
       OPENSSL_armcap_P |= ARMV8_AES;
     }
-    if (hwcap2 & HWCAP2_PMULL) {
+    if (hwcap2 & CRYPTO_HWCAP2_PMULL) {
+#if defined(HWCAP2_PMULL)
+      static_assert(HWCAP2_PMULL == CRYPTO_HWCAP2_PMULL,
+                    "CRYPTO_HWCAP2 values must match Linux");
+#endif
       OPENSSL_armcap_P |= ARMV8_PMULL;
     }
-    if (hwcap2 & HWCAP2_SHA1) {
+    if (hwcap2 & CRYPTO_HWCAP2_SHA1) {
+#if defined(HWCAP2_SHA1)
+      static_assert(HWCAP2_SHA1 == CRYPTO_HWCAP2_SHA1,
+                    "CRYPTO_HWCAP2 values must match Linux");
+#endif
       OPENSSL_armcap_P |= ARMV8_SHA1;
     }
-    if (hwcap2 & HWCAP2_SHA2) {
+    if (hwcap2 & CRYPTO_HWCAP2_SHA2) {
+#if defined(HWCAP2_SHA2)
+      static_assert(HWCAP2_SHA2 == CRYPTO_HWCAP2_SHA2,
+                    "CRYPTO_HWCAP2 values must match Linux");
+#endif
       OPENSSL_armcap_P |= ARMV8_SHA256;
     }
   }

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_CURVE25519_H
 #define OPENSSL_HEADER_CURVE25519_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {

@@ -62,11 +62,11 @@ static int dsa_pub_encode(CBB *out, const EVP_PKEY *key) {
       dsa->p != nullptr && dsa->q != nullptr && dsa->g != nullptr;
 
   // See RFC 5480, section 2.
-  CBB spki, algorithm, oid, key_bitstring;
+  CBB spki, algorithm, key_bitstring;
   if (!CBB_add_asn1(out, &spki, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&spki, &algorithm, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, dsa_asn1_meth.oid, dsa_asn1_meth.oid_len) ||
+      !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, dsa_asn1_meth.oid,
+                            dsa_asn1_meth.oid_len) ||
       (has_params && !DSA_marshal_parameters(&algorithm, dsa)) ||
       !CBB_add_asn1(&spki, &key_bitstring, CBS_ASN1_BITSTRING) ||
       !CBB_add_u8(&key_bitstring, 0 /* padding */) ||
@@ -126,12 +126,12 @@ static int dsa_priv_encode(CBB *out, const EVP_PKEY *key) {
   }
 
   // See PKCS#11, v2.40, section 2.5.
-  CBB pkcs8, algorithm, oid, private_key;
+  CBB pkcs8, algorithm, private_key;
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
       !CBB_add_asn1(&pkcs8, &algorithm, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, dsa_asn1_meth.oid, dsa_asn1_meth.oid_len) ||
+      !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, dsa_asn1_meth.oid,
+                            dsa_asn1_meth.oid_len) ||
       !DSA_marshal_parameters(&algorithm, dsa) ||
       !CBB_add_asn1(&pkcs8, &private_key, CBS_ASN1_OCTETSTRING) ||
       !BN_marshal_asn1(&private_key, dsa->priv_key) || !CBB_flush(out)) {

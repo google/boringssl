@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_DIGEST_H
 #define OPENSSL_HEADER_DIGEST_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {
@@ -166,11 +166,6 @@ OPENSSL_EXPORT size_t EVP_MD_size(const EVP_MD *md);
 // EVP_MD_block_size returns the native block-size of |md|, in bytes.
 OPENSSL_EXPORT size_t EVP_MD_block_size(const EVP_MD *md);
 
-// EVP_MD_FLAG_PKEY_DIGEST indicates that the digest function is used with a
-// specific public key in order to verify signatures. (For example,
-// EVP_dss1.)
-#define EVP_MD_FLAG_PKEY_DIGEST 1
-
 // EVP_MD_FLAG_DIGALGID_ABSENT indicates that the parameter type in an X.509
 // DigestAlgorithmIdentifier representing this digest function should be
 // undefined rather than NULL.
@@ -220,8 +215,25 @@ OPENSSL_EXPORT const EVP_MD *EVP_parse_digest_algorithm(CBS *cbs);
 
 // EVP_marshal_digest_algorithm marshals |md| as an AlgorithmIdentifier
 // structure and appends the result to |cbb|. It returns one on success and zero
-// on error.
+// on error. It sets the parameters field to NULL. Use
+// |EVP_marshal_digest_algorithm_no_params| to omit the parameters instead.
+//
+// In general, the parameters should be omitted for digest algorithms, but the
+// following specifications require a NULL parameter instead.
+//
+// - Hash algorithms and MGF-1 hash algorithms used in RSASSA-PSS and RSAES-OAEP
+//   (see RFC 4055, Section 2.1)
+// - The hash algorithm in the DigestInfo structure of RSASSA-PKCS1-v1_5 (see
+//   RFC 8017, Appendix A.2.4)
+//
+// Some existing software also uses NULL parameters in other contexts. In
+// practice, digest algorithms are encoded wildly inconsistently.
 OPENSSL_EXPORT int EVP_marshal_digest_algorithm(CBB *cbb, const EVP_MD *md);
+
+// EVP_marshal_digest_algorithm_no_params behaves like
+// |EVP_marshal_digest_algorithm| but omits the parameters field.
+OPENSSL_EXPORT int EVP_marshal_digest_algorithm_no_params(CBB *cbb,
+                                                          const EVP_MD *md);
 
 
 // Deprecated functions.

@@ -527,21 +527,23 @@ static int asn1_ex_i2c(ASN1_VALUE **pval, unsigned char *cout, int *out_omit,
   unsigned char c;
   int len;
 
+  assert(it->itype == ASN1_ITYPE_PRIMITIVE || it->itype == ASN1_ITYPE_MSTRING);
   // Historically, |it->funcs| for primitive types contained an
   // |ASN1_PRIMITIVE_FUNCS| table of callbacks.
   assert(it->funcs == NULL);
 
   *out_omit = 0;
 
-  // Should type be omitted?
-  if ((it->itype != ASN1_ITYPE_PRIMITIVE) || (it->utype != V_ASN1_BOOLEAN)) {
+  // Handle omitted optional values for all but BOOLEAN, which uses a
+  // non-pointer representation.
+  if (it->itype != ASN1_ITYPE_PRIMITIVE || it->utype != V_ASN1_BOOLEAN) {
     if (!*pval) {
       *out_omit = 1;
       return 0;
     }
   }
 
-  if (it->itype == ASN1_ITYPE_MSTRING) {
+  if (it->itype == ASN1_ITYPE_MSTRING || it->utype == V_ASN1_ANY_AS_STRING) {
     // If MSTRING type set the underlying type
     strtmp = (ASN1_STRING *)*pval;
     utype = strtmp->type;
@@ -550,15 +552,8 @@ static int asn1_ex_i2c(ASN1_VALUE **pval, unsigned char *cout, int *out_omit,
       OPENSSL_PUT_ERROR(ASN1, ASN1_R_WRONG_TYPE);
       return -1;
     }
-    // Negative INTEGER and ENUMERATED values use |ASN1_STRING| type values
-    // that do not match their corresponding utype values. INTEGERs cannot
-    // participate in MSTRING types, but ENUMERATEDs can.
-    //
-    // TODO(davidben): Is this a bug? Although arguably one of the MSTRING
-    // types should contain more values, rather than less. See
-    // https://crbug.com/boringssl/412. But it is not possible to fit all
-    // possible ANY values into an |ASN1_STRING|, so matching the spec here
-    // is somewhat hopeless.
+    // Negative INTEGER and ENUMERATED values use |ASN1_STRING| type values that
+    // do not match their corresponding utype values.
     if (utype == V_ASN1_NEG_INTEGER) {
       utype = V_ASN1_INTEGER;
     } else if (utype == V_ASN1_NEG_ENUMERATED) {
@@ -649,18 +644,15 @@ static int asn1_ex_i2c(ASN1_VALUE **pval, unsigned char *cout, int *out_omit,
     case V_ASN1_SET:
     // This is not a valid |ASN1_ITEM| type, but it appears in |ASN1_TYPE|.
     case V_ASN1_OTHER:
-    // TODO(crbug.com/boringssl/412): This default case should be removed, now
-    // that we've resolved https://crbug.com/boringssl/561. However, it is still
-    // needed to support some edge cases in |ASN1_PRINTABLE|. |ASN1_PRINTABLE|
-    // broadly doesn't tolerate unrecognized universal tags, but except for
-    // eight values that map to |B_ASN1_UNKNOWN| instead of zero. See the
-    // X509Test.NameAttributeValues test.
-    default:
       // All based on ASN1_STRING and handled the same
       strtmp = (ASN1_STRING *)*pval;
       cont = strtmp->data;
       len = strtmp->length;
       break;
+
+    default:
+      OPENSSL_PUT_ERROR(ASN1, ASN1_R_BAD_TEMPLATE);
+      return -1;
   }
   if (cout && len) {
     OPENSSL_memcpy(cout, cont, len);

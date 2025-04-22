@@ -175,47 +175,44 @@ EC_GROUP *EC_GROUP_new_curve_GFp(const BIGNUM *p, const BIGNUM *a,
                                  const BIGNUM *b, BN_CTX *ctx) {
   if (BN_num_bytes(p) > EC_MAX_BYTES) {
     OPENSSL_PUT_ERROR(EC, EC_R_INVALID_FIELD);
-    return NULL;
+    return nullptr;
   }
 
-  BN_CTX *new_ctx = NULL;
-  if (ctx == NULL) {
-    ctx = new_ctx = BN_CTX_new();
-    if (ctx == NULL) {
-      return NULL;
+  bssl::UniquePtr<BN_CTX> new_ctx;
+  if (ctx == nullptr) {
+    new_ctx.reset(BN_CTX_new());
+    if (new_ctx == nullptr) {
+      return nullptr;
     }
+    ctx = new_ctx.get();
   }
 
   // Historically, |a| and |b| were not required to be fully reduced.
   // TODO(davidben): Can this be removed?
-  EC_GROUP *ret = NULL;
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *a_reduced = BN_CTX_get(ctx);
   BIGNUM *b_reduced = BN_CTX_get(ctx);
-  if (a_reduced == NULL || b_reduced == NULL ||
-      !BN_nnmod(a_reduced, a, p, ctx) || !BN_nnmod(b_reduced, b, p, ctx)) {
-    goto err;
+  if (a_reduced == nullptr || b_reduced == nullptr ||
+      !BN_nnmod(a_reduced, a, p, ctx) ||  //
+      !BN_nnmod(b_reduced, b, p, ctx)) {
+    return nullptr;
   }
 
-  ret = reinterpret_cast<EC_GROUP *>(OPENSSL_zalloc(sizeof(EC_GROUP)));
-  if (ret == NULL) {
-    return NULL;
+  bssl::UniquePtr<EC_GROUP> ret(
+      reinterpret_cast<EC_GROUP *>(OPENSSL_zalloc(sizeof(EC_GROUP))));
+  if (ret == nullptr) {
+    return nullptr;
   }
   ret->references = 1;
   ret->meth = EC_GFp_mont_method();
   bn_mont_ctx_init(&ret->field);
   bn_mont_ctx_init(&ret->order);
-  ret->generator.group = ret;
-  if (!ec_GFp_simple_group_set_curve(ret, p, a_reduced, b_reduced, ctx)) {
-    EC_GROUP_free(ret);
-    ret = NULL;
-    goto err;
+  ret->generator.group = ret.get();
+  if (!ec_GFp_simple_group_set_curve(ret.get(), p, a_reduced, b_reduced, ctx)) {
+    return nullptr;
   }
 
-err:
-  BN_CTX_end(ctx);
-  BN_CTX_free(new_ctx);
-  return ret;
+  return ret.release();
 }
 
 int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
@@ -246,20 +243,19 @@ int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
   // Note any curve which did not satisfy this must have been invalid or use a
   // tiny prime (less than 17). See the proof in |field_element_to_scalar| in
   // the ECDSA implementation.
-  int ret = 0;
-  BIGNUM *tmp = BN_new();
-  if (tmp == NULL || !BN_lshift1(tmp, order)) {
-    goto err;
+  bssl::UniquePtr<BIGNUM> tmp(BN_new());
+  if (tmp == nullptr || !BN_lshift1(tmp.get(), order)) {
+    return 0;
   }
-  if (BN_cmp(tmp, &group->field.N) <= 0) {
+  if (BN_cmp(tmp.get(), &group->field.N) <= 0) {
     OPENSSL_PUT_ERROR(EC, EC_R_INVALID_GROUP_ORDER);
-    goto err;
+    return 0;
   }
 
   EC_AFFINE affine;
   if (!ec_jacobian_to_affine(group, &affine, &generator->raw) ||
       !BN_MONT_CTX_set(&group->order, order, NULL)) {
-    goto err;
+    return 0;
   }
 
   group->field_greater_than_order = BN_cmp(&group->field.N, order) > 0;
@@ -267,11 +263,7 @@ int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
   group->generator.raw.Y = affine.Y;
   // |raw.Z| was set to 1 by |EC_GROUP_new_curve_GFp|.
   group->has_order = 1;
-  ret = 1;
-
-err:
-  BN_free(tmp);
-  return ret;
+  return 1;
 }
 
 EC_GROUP *EC_GROUP_new_by_curve_name(int nid) {
@@ -663,12 +655,10 @@ static int arbitrary_bignum_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
   ERR_clear_error();
 
   // This is an unusual input, so we do not guarantee constant-time processing.
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
-  int ok = tmp != NULL && BN_nnmod(tmp, in, EC_GROUP_get0_order(group), ctx) &&
-           ec_bignum_to_scalar(group, out, tmp);
-  BN_CTX_end(ctx);
-  return ok;
+  return tmp != nullptr && BN_nnmod(tmp, in, EC_GROUP_get0_order(group), ctx) &&
+         ec_bignum_to_scalar(group, out, tmp);
 }
 
 int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
@@ -689,14 +679,13 @@ int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
     return 0;
   }
 
-  int ret = 0;
-  BN_CTX *new_ctx = NULL;
+  bssl::UniquePtr<BN_CTX> new_ctx;
   if (ctx == NULL) {
-    new_ctx = BN_CTX_new();
+    new_ctx.reset(BN_CTX_new());
     if (new_ctx == NULL) {
-      goto err;
+      return 0;
     }
-    ctx = new_ctx;
+    ctx = new_ctx.get();
   }
 
   // If both |g_scalar| and |p_scalar| are non-NULL,
@@ -714,7 +703,7 @@ int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
     EC_SCALAR scalar;
     if (!arbitrary_bignum_to_scalar(group, &scalar, g_scalar, ctx) ||
         !ec_point_mul_scalar_base(group, &r->raw, &scalar)) {
-      goto err;
+      return 0;
     }
   }
 
@@ -723,7 +712,7 @@ int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
     EC_JACOBIAN tmp;
     if (!arbitrary_bignum_to_scalar(group, &scalar, p_scalar, ctx) ||
         !ec_point_mul_scalar(group, &tmp, &p->raw, &scalar)) {
-      goto err;
+      return 0;
     }
     if (g_scalar == NULL) {
       OPENSSL_memcpy(&r->raw, &tmp, sizeof(EC_JACOBIAN));
@@ -732,11 +721,7 @@ int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
     }
   }
 
-  ret = 1;
-
-err:
-  BN_CTX_free(new_ctx);
-  return ret;
+  return 1;
 }
 
 int EC_POINT_mul(const EC_GROUP *group, EC_POINT *r, const BIGNUM *g_scalar,

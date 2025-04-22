@@ -61,6 +61,7 @@ var libraryNames = []string{
 	"CIPHER",
 	"HKDF",
 	"TRUST_TOKEN",
+	"CMS",
 	"USER",
 }
 

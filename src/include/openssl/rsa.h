@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_RSA_H
 #define OPENSSL_HEADER_RSA_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <openssl/engine.h>
 #include <openssl/ex_data.h>
@@ -71,7 +71,7 @@ OPENSSL_EXPORT int RSA_up_ref(RSA *rsa);
 
 // OPENSSL_RSA_MAX_MODULUS_BITS is the maximum supported RSA modulus, in bits.
 //
-// TODO(davidben): Reduce this to 8192.
+// TODO(crbug.com/402677800): Reduce this to 8192.
 #define OPENSSL_RSA_MAX_MODULUS_BITS 16384
 
 // RSA_bits returns the size of |rsa|, in bits.

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_BIO_H
 #define OPENSSL_HEADER_BIO_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <stdio.h>  // For FILE
 

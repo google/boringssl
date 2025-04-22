@@ -515,7 +515,6 @@ static void MLDSAWycheproofVerifyTest(FileTest *t) {
   }
 }
 
-
 TEST(MLDSATest, WycheproofVerifyTests65) {
   FileTestGTest(
       "third_party/wycheproof_testvectors/mldsa_65_standard_verify_test.txt",
@@ -530,6 +529,36 @@ TEST(MLDSATest, WycheproofVerifyTests87) {
       MLDSAWycheproofVerifyTest<
           BCM_mldsa87_public_key, BCM_MLDSA87_SIGNATURE_BYTES,
           BCM_mldsa87_parse_public_key, BCM_mldsa87_verify>);
+}
+
+TEST(MLDSATest, Self) { ASSERT_TRUE(boringssl_self_test_mldsa()); }
+
+TEST(MLDSATest, PWCT) {
+  uint8_t seed[BCM_MLDSA_SEED_BYTES];
+
+  auto pub65 = std::make_unique<uint8_t[]>(BCM_MLDSA65_PUBLIC_KEY_BYTES);
+  auto priv65 = std::make_unique<BCM_mldsa65_private_key>();
+  ASSERT_EQ(BCM_mldsa65_generate_key_fips(pub65.get(), seed, priv65.get()),
+            bcm_status::approved);
+
+  auto pub87 = std::make_unique<uint8_t[]>(BCM_MLDSA87_PUBLIC_KEY_BYTES);
+  auto priv87 = std::make_unique<BCM_mldsa87_private_key>();
+  ASSERT_EQ(BCM_mldsa87_generate_key_fips(pub87.get(), seed, priv87.get()),
+            bcm_status::approved);
+}
+
+TEST(MLDSATest, NullptrArgumentsToCreate) {
+  // For FIPS reasons, this should fail rather than crash.
+  ASSERT_EQ(BCM_mldsa65_generate_key_fips(nullptr, nullptr, nullptr),
+            bcm_status::failure);
+  ASSERT_EQ(BCM_mldsa87_generate_key_fips(nullptr, nullptr, nullptr),
+            bcm_status::failure);
+  ASSERT_EQ(
+      BCM_mldsa65_generate_key_external_entropy_fips(nullptr, nullptr, nullptr),
+      bcm_status::failure);
+  ASSERT_EQ(
+      BCM_mldsa87_generate_key_external_entropy_fips(nullptr, nullptr, nullptr),
+      bcm_status::failure);
 }
 
 }  // namespace

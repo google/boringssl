@@ -15,7 +15,7 @@
 #if !defined(BSSL_PKI_SIGNATURE_VERIFY_CACHE_H_) && defined(__cplusplus)
 #define BSSL_PKI_SIGNATURE_VERIFY_CACHE_H_
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <string>
 
 BSSL_NAMESPACE_BEGIN

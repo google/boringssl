@@ -161,15 +161,6 @@ L$005sqr_sse2_loop:
 	pop	ebx
 	pop	ebp
 	ret
-global	_bn_div_words
-align	16
-_bn_div_words:
-L$_bn_div_words_begin:
-	mov	edx,DWORD [4+esp]
-	mov	eax,DWORD [8+esp]
-	mov	ecx,DWORD [12+esp]
-	div	ecx
-	ret
 global	_bn_add_words
 align	16
 _bn_add_words:

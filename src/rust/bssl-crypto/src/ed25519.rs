@@ -34,7 +34,10 @@
 //! assert!(public_key.verify(signed_message, &sig).is_ok());
 //! ```
 
-use crate::{FfiMutSlice, FfiSlice, InvalidSignatureError};
+use crate::{
+    cbb_to_buffer, parse_with_cbs, scoped, with_output_array, Buffer, FfiMutSlice, FfiSlice,
+    InvalidSignatureError,
+};
 
 /// The length in bytes of an Ed25519 public key.
 pub const PUBLIC_KEY_LEN: usize = bssl_sys::ED25519_PUBLIC_KEY_LEN as usize;
@@ -149,6 +152,66 @@ impl PublicKey {
         &self.0
     }
 
+    /// Parse a public key in SubjectPublicKeyInfo format.
+    pub fn from_der_subject_public_key_info(spki: &[u8]) -> Option<Self> {
+        let mut pkey = scoped::EvpPkey::from_ptr(parse_with_cbs(
+            spki,
+            // Safety: `pkey` is a non-null result from `EVP_parse_public_key` here.
+            |pkey| unsafe { bssl_sys::EVP_PKEY_free(pkey) },
+            // Safety: cbs is valid per `parse_with_cbs`.
+            |cbs| unsafe { bssl_sys::EVP_parse_public_key(cbs) },
+        )?);
+
+        let mut out_len = 0;
+        // When the out buffer is null, `out_len` is set to the size of the raw public key.
+        // Safety: the arguments are valid.
+        let result = unsafe {
+            bssl_sys::EVP_PKEY_get_raw_public_key(
+                pkey.as_ffi_ptr(),
+                core::ptr::null_mut(),
+                &mut out_len,
+            )
+        };
+        if result != 1 {
+            return None;
+        }
+        if out_len != PUBLIC_KEY_LEN {
+            return None;
+        }
+
+        // When the out buffer is not null, the raw public key is written into it.
+        // Safety: the arguments are valid.
+        let raw_pkey: [u8; PUBLIC_KEY_LEN] = unsafe {
+            with_output_array(|out, _| {
+                assert_eq!(
+                    1,
+                    bssl_sys::EVP_PKEY_get_raw_public_key(pkey.as_ffi_ptr(), out, &mut out_len)
+                );
+            })
+        };
+        Some(PublicKey(raw_pkey))
+    }
+
+    /// Serialize this key in SubjectPublicKeyInfo format.
+    pub fn to_der_subject_public_key_info(&self) -> Buffer {
+        // Safety: this only copies from the `self.0` buffer.
+        let mut pkey = scoped::EvpPkey::from_ptr(unsafe {
+            bssl_sys::EVP_PKEY_new_raw_public_key(
+                bssl_sys::EVP_PKEY_ED25519,
+                /*unused=*/ core::ptr::null_mut(),
+                self.0.as_ffi_ptr(),
+                PUBLIC_KEY_LEN,
+            )
+        });
+        assert!(!pkey.as_ffi_ptr().is_null());
+
+        cbb_to_buffer(PUBLIC_KEY_LEN + 32, |cbb| unsafe {
+            // The arguments are valid so this will only fail if out of memory,
+            // which this crate doesn't handle.
+            assert_eq!(1, bssl_sys::EVP_marshal_public_key(cbb, pkey.as_ffi_ptr()));
+        })
+    }
+
     /// Verifies that `signature` is a valid signature, by this key, of `msg`.
     pub fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), InvalidSignatureError> {
         let ret = unsafe {
@@ -180,6 +243,29 @@ mod test {
         let seed = private_key.to_seed();
         let new_private_key = PrivateKey::from_seed(&seed);
         assert_eq!(private_key.0, new_private_key.0);
+    }
+
+    #[test]
+    fn der_subject_public_key_info() {
+        let priv_key = PrivateKey::generate();
+        let msg = [0u8; 0];
+        let sig = priv_key.sign(&msg);
+
+        let pub_key = priv_key.to_public();
+        assert!(pub_key.verify(&msg, &sig).is_ok());
+
+        let pub_key_der = pub_key.to_der_subject_public_key_info();
+        let pub_key_from_der =
+            PublicKey::from_der_subject_public_key_info(pub_key_der.as_ref()).unwrap();
+        assert_eq!(pub_key.as_bytes(), pub_key_from_der.as_bytes());
+        assert!(pub_key_from_der.verify(&msg, &sig).is_ok());
+
+        assert!(PublicKey::from_der_subject_public_key_info(
+            &pub_key_from_der.as_bytes()[0..PUBLIC_KEY_LEN / 2]
+        )
+        .is_none());
+
+        assert!(PublicKey::from_der_subject_public_key_info(b"").is_none());
     }
 
     #[test]

@@ -21,8 +21,8 @@
 // S.Gueron and V.Krasnov, "Fast Prime Field Elliptic Curve Cryptography with
 //                          256 Bit Primes"
 
-#ifndef OPENSSL_HEADER_EC_P256_X86_64_H
-#define OPENSSL_HEADER_EC_P256_X86_64_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_EC_P256_NISTZ_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_EC_P256_NISTZ_H
 
 #include <openssl/base.h>
 
@@ -204,4 +204,4 @@ void ecp_nistz256_point_add_affine(P256_POINT *r, const P256_POINT *a,
 }  // extern C++
 #endif
 
-#endif  // OPENSSL_HEADER_EC_P256_X86_64_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_EC_P256_NISTZ_H

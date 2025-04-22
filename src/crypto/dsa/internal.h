@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_DSA_INTERNAL_H
-#define OPENSSL_HEADER_DSA_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_DSA_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_DSA_INTERNAL_H
 
 #include <openssl/dsa.h>
 
@@ -51,4 +51,4 @@ int dsa_check_key(const DSA *dsa);
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_DSA_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_DSA_INTERNAL_H

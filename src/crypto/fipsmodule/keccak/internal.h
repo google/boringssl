@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_CRYPTO_KECCAK_INTERNAL_H
-#define OPENSSL_HEADER_CRYPTO_KECCAK_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_KECCAK_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_KECCAK_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -67,4 +67,4 @@ OPENSSL_EXPORT void BORINGSSL_keccak_squeeze(struct BORINGSSL_keccak_st *ctx,
 }
 #endif
 
-#endif  // OPENSSL_HEADER_CRYPTO_KECCAK_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_KECCAK_INTERNAL_H

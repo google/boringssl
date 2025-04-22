@@ -143,7 +143,7 @@ instance, For instance:
 Name public headers like `include/openssl/evp.h` with header guards like
 `OPENSSL_HEADER_EVP_H`. Name internal headers like
 `crypto/ec/internal.h` with header guards like
-`OPENSSL_HEADER_EC_INTERNAL_H`.
+`OPENSSL_HEADER_CRYPTO_EC_INTERNAL_H`.
 
 Name enums like `enum unix_hacker_t`. For instance:
 

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_ECDSA_H
 #define OPENSSL_HEADER_ECDSA_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <openssl/ec_key.h>
 

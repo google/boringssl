@@ -673,7 +673,6 @@ TEST(MRUQueueTest, Basic) {
   expect_queue({1, 2, 3});
 }
 
-#if !defined(BORINGSSL_UNSAFE_FUZZER_MODE)
 TEST(SSLAEADContextTest, Lengths) {
   struct LengthTest {
     // All plaintext lengths from |min_plaintext_len| to |max_plaintext_len|
@@ -883,7 +882,6 @@ TEST(SSLAEADContextTest, Lengths) {
     }
   }
 }
-#endif  // !BORINGSSL_UNSAFE_FUZZER_MODE
 
 }  // namespace
 BSSL_NAMESPACE_END

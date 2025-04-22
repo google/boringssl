@@ -282,7 +282,7 @@ class X25519Kyber768KeyShare : public SSLKeyShare {
   KYBER_private_key kyber_private_key_;
 };
 
-// draft-kwiatkowski-tls-ecdhe-mlkem-01
+// draft-ietf-tls-ecdhe-mlkem-00
 class X25519MLKEM768KeyShare : public SSLKeyShare {
  public:
   X25519MLKEM768KeyShare() {}

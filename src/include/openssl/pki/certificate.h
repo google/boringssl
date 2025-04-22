@@ -19,7 +19,7 @@
 #include <string>
 #include <string_view>
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <openssl/span.h>
 
 BSSL_NAMESPACE_BEGIN

@@ -16,7 +16,7 @@
 #ifndef OPENSSL_HEADER_X509_H
 #define OPENSSL_HEADER_X509_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <time.h>
 
@@ -1504,9 +1504,12 @@ OPENSSL_EXPORT int X509_NAME_ENTRY_set_object(X509_NAME_ENTRY *entry,
 // pointer for OpenSSL compatibility, but callers should not mutate the result.
 // Doing so will break internal invariants in the library.
 //
-// TODO(https://crbug.com/boringssl/412): Although the spec says any ASN.1 type
-// is allowed, we currently only allow an ad-hoc set of types. Additionally, it
-// is unclear if some types can even be represented by this function.
+// See |ASN1_STRING| for how values are represented in this library. Where a
+// specific |ASN1_STRING| representation exists, that representation is used.
+// Otherwise, the |V_ASN1_OTHER| representation is used. Note that NULL, OBJECT
+// IDENTIFIER, and BOOLEAN attribute values are represented as |V_ASN1_OTHER|,
+// because their usual representation in this library is not
+// |ASN1_STRING|-compatible.
 OPENSSL_EXPORT ASN1_STRING *X509_NAME_ENTRY_get_data(
     const X509_NAME_ENTRY *entry);
 

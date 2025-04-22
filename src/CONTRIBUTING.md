@@ -22,10 +22,13 @@ use [Gerrit](https://boringssl-review.googlesource.com) for this purpose.
 If you have not done so on this machine, you will need to set up a password for
 Gerrit. Sign in with a Google account, visit
 [this link](https://boringssl.googlesource.com/), and click the "Generate
-Password" link in the top right. You must also have a Gerrit account associated with
+Password" link in the top right.
+
+You must also have a Gerrit account associated with
 your Google account.  To do this visit the [Gerrit review server](https://boringssl-review.googlesource.com)
 and click "Sign in" (top right).
-You will also need to prepare your checkout to
+
+Finally, you will need to prepare your checkout to
 [add Change-Ids](https://gerrit-review.googlesource.com/Documentation/cmd-hook-commit-msg.html)
 on commit. Run:
 
@@ -38,7 +41,7 @@ To upload a change, push it to the special `refs/for/main` target:
     git push origin HEAD:refs/for/main
 
 The output will then give you a link to the change. Add `agl@google.com`,
-`davidben@google.com`, and `bbe@google.com` as reviewers.
+`davidben@google.com` as reviewers.
 
 Pushing a commit with the same Change-Id as an existing change will upload a new
 version of it. (Use the `git rebase` or `git commit --amend` commands.)
@@ -61,6 +64,23 @@ We started the AUTHORS file after the project began, and after receiving many
 valuable contributions. To avoid being presumptuous, we did not proactively list
 all past contributors. If you previously made a contribution, you are likewise
 welcome to send us a patch to be added, or request that we add you.
+
+After the copyright lines, files should include the license notice described in
+the Apache 2.0 appendix. Thus new files should begin with the following header:
+
+    // Copyright YEAR The BoringSSL Authors
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    //     https://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
 
 ### The small print
 Contributions made by corporations are covered by a different agreement than

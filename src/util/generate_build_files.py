@@ -30,6 +30,9 @@ def PathOf(x):
   return x if not PREFIX else os.path.join(PREFIX, x)
 
 
+TARGET_PREFIX = ''
+
+
 LICENSE_TEMPLATE = """Copyright 2015 The BoringSSL Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,6 +66,7 @@ class Android(object):
 """
 
   def PrintVariableSection(self, out, name, files):
+    name = f'{TARGET_PREFIX}{name}'
     out.write('%s := \\\n' % name)
     for f in sorted(files):
       out.write('  %s\\\n' % f)
@@ -98,6 +102,7 @@ class Android(object):
 
   def PrintDefaults(self, blueprint, name, files, asm_files=[], data=[]):
     """Print a cc_defaults section from a list of C files and optionally assembly outputs"""
+    name = f'{TARGET_PREFIX}{name}'
     if asm_files:
       blueprint.write('\n')
       blueprint.write('%s_asm = [\n' % name)
@@ -668,12 +673,15 @@ ALL_PLATFORMS = {
 
 if __name__ == '__main__':
   parser = optparse.OptionParser(
-      usage='Usage: %%prog [--prefix=<path>] [all|%s]' %
+      usage='Usage: %%prog [--prefix=<path>] [--target-prefix=<prefix>] [all|%s]' %
       '|'.join(sorted(ALL_PLATFORMS.keys())))
   parser.add_option('--prefix', dest='prefix',
       help='For Bazel, prepend argument to all source files')
+  parser.add_option('--target-prefix', dest='target_prefix', default='',
+      help='For Android, prepend argument to all target names')
   options, args = parser.parse_args(sys.argv[1:])
   PREFIX = options.prefix
+  TARGET_PREFIX = options.target_prefix
 
   if not args:
     parser.print_help()

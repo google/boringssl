@@ -23,6 +23,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "internal.h"
 
 
 ASN1_INTEGER *ASN1_INTEGER_dup(const ASN1_INTEGER *x) {
@@ -70,6 +71,20 @@ static int is_all_zeros(const uint8_t *in, size_t len) {
     }
   }
   return 1;
+}
+
+int asn1_marshal_integer(CBB *out, const ASN1_INTEGER *in, CBS_ASN1_TAG tag) {
+  int len = i2c_ASN1_INTEGER(in, nullptr);
+  if (len <= 0) {
+    return 0;
+  }
+  tag = tag == 0 ? CBS_ASN1_INTEGER : tag;
+  CBB child;
+  uint8_t *ptr;
+  return CBB_add_asn1(out, &child, tag) &&     //
+         CBB_add_space(&child, &ptr, static_cast<size_t>(len)) &&   //
+         i2c_ASN1_INTEGER(in, &ptr) == len &&  //
+         CBB_flush(out);
 }
 
 int i2c_ASN1_INTEGER(const ASN1_INTEGER *in, unsigned char **outp) {

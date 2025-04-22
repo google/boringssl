@@ -88,25 +88,20 @@ int ECDSA_sign(int type, const uint8_t *digest, size_t digest_len, uint8_t *sig,
 
   // TODO(davidben): We can actually do better and go straight from the DER
   // format to the fixed-width format without a malloc.
-  ECDSA_SIG *s = ecdsa_sig_from_fixed(eckey, fixed, fixed_len);
-  if (s == NULL) {
+  bssl::UniquePtr<ECDSA_SIG> s(ecdsa_sig_from_fixed(eckey, fixed, fixed_len));
+  if (s == nullptr) {
     return 0;
   }
 
-  int ret = 0;
   CBB cbb;
   CBB_init_fixed(&cbb, sig, ECDSA_size(eckey));
   size_t len;
-  if (!ECDSA_SIG_marshal(&cbb, s) || !CBB_finish(&cbb, NULL, &len)) {
+  if (!ECDSA_SIG_marshal(&cbb, s.get()) || !CBB_finish(&cbb, nullptr, &len)) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_ENCODE_ERROR);
-    goto err;
+    return 0;
   }
-  *out_sig_len = (unsigned)len;
-  ret = 1;
-
-err:
-  ECDSA_SIG_free(s);
-  return ret;
+  *out_sig_len = static_cast<unsigned>(len);
+  return 1;
 }
 
 int ECDSA_verify(int type, const uint8_t *digest, size_t digest_len,
@@ -116,15 +111,15 @@ int ECDSA_verify(int type, const uint8_t *digest, size_t digest_len,
   // TODO(davidben): We can actually do better and go straight from the DER
   // format to the fixed-width format without a malloc.
   int ret = 0;
-  uint8_t *der = NULL;
-  ECDSA_SIG *s = ECDSA_SIG_from_bytes(sig, sig_len);
-  if (s == NULL) {
+  uint8_t *der = nullptr;
+  bssl::UniquePtr<ECDSA_SIG> s(ECDSA_SIG_from_bytes(sig, sig_len));
+  if (s == nullptr) {
     goto err;
   }
 
   // Defend against potential laxness in the DER parser.
   size_t der_len;
-  if (!ECDSA_SIG_to_bytes(&der, &der_len, s) || der_len != sig_len ||
+  if (!ECDSA_SIG_to_bytes(&der, &der_len, s.get()) || der_len != sig_len ||
       OPENSSL_memcmp(sig, der, sig_len) != 0) {
     // This should never happen. crypto/bytestring is strictly DER.
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_INTERNAL_ERROR);
@@ -133,12 +128,11 @@ int ECDSA_verify(int type, const uint8_t *digest, size_t digest_len,
 
   uint8_t fixed[ECDSA_MAX_FIXED_LEN];
   size_t fixed_len;
-  ret = ecdsa_sig_to_fixed(eckey, fixed, &fixed_len, sizeof(fixed), s) &&
+  ret = ecdsa_sig_to_fixed(eckey, fixed, &fixed_len, sizeof(fixed), s.get()) &&
         ecdsa_verify_fixed(digest, digest_len, fixed, fixed_len, eckey);
 
 err:
   OPENSSL_free(der);
-  ECDSA_SIG_free(s);
   return ret;
 }
 

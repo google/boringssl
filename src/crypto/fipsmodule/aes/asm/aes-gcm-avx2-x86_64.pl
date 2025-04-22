@@ -15,14 +15,15 @@
 #
 #------------------------------------------------------------------------------
 #
-# VAES and VPCLMULQDQ optimized AES-GCM for x86_64 (AVX2 version)
+# This is an AES-GCM implementation for x86_64 CPUs that support the following
+# CPU features: VAES && VPCLMULQDQ && AVX2.
 #
-# This is similar to aes-gcm-avx10-x86_64.pl, but it uses AVX2 instead of AVX512
-# / AVX10.  This means it can only use 16 vector registers instead of 32, the
+# This is similar to aes-gcm-avx512-x86_64.pl, but it uses AVX2 instead of
+# AVX512.  This means it can only use 16 vector registers instead of 32, the
 # maximum vector length is 32 bytes, and some instructions such as vpternlogd
 # and masked loads/stores are unavailable.  However, it is able to run on CPUs
-# that have VAES without AVX512 / AVX10, namely AMD Zen 3 (including "Milan"
-# server processors) and some Intel client CPUs such as Alder Lake.
+# that have VAES without AVX512, namely AMD Zen 3 (including "Milan" server
+# processors) and some Intel client CPUs such as Alder Lake.
 #
 # This implementation also uses Karatsuba multiplication instead of schoolbook
 # multiplication for GHASH in its main loop.  This does not help much on Intel,
@@ -121,7 +122,7 @@ sub _save_xmmregs {
         for my $i ( 0 .. $num_xmmregs - 1 ) {
             my $reg_num = $xmmregs[$i];
             my $pos     = 16 * $i;
-            $code .= "movdqa %xmm$reg_num, $pos(%rsp)\n";
+            $code .= "vmovdqa %xmm$reg_num, $pos(%rsp)\n";
             $code .= ".seh_savexmm %xmm$reg_num, $pos\n";
         }
     }
@@ -139,7 +140,7 @@ sub _end_func {
         for my $i ( 0 .. $num_xmmregs - 1 ) {
             my $reg_num = $g_cur_func_saved_xmmregs[$i];
             my $pos     = 16 * $i;
-            $code .= "movdqa $pos(%rsp), %xmm$reg_num\n";
+            $code .= "vmovdqa $pos(%rsp), %xmm$reg_num\n";
         }
         $code .= "add \$$alloc_size, %rsp\n";
     }
@@ -226,6 +227,23 @@ sub _ghash_mul {
 ___
 }
 
+# This is a specialized version of _ghash_mul that computes \a * \a, i.e. it
+# squares \a.  It skips computing MI = (a_L * a_H) + (a_H * a_L) = 0.
+sub _ghash_square {
+    my ( $a, $dst, $gfpoly, $t0, $t1 ) = @_;
+    return <<___;
+    vpclmulqdq      \$0x00, $a, $a, $t0        # LO = a_L * a_L
+    vpclmulqdq      \$0x11, $a, $a, $dst       # HI = a_H * a_H
+    vpclmulqdq      \$0x01, $t0, $gfpoly, $t1  # LO_L*(x^63 + x^62 + x^57)
+    vpshufd         \$0x4e, $t0, $t0           # Swap halves of LO
+    vpxor           $t0, $t1, $t1              # Fold LO into MI
+    vpclmulqdq      \$0x01, $t1, $gfpoly, $t0  # MI_L*(x^63 + x^62 + x^57)
+    vpshufd         \$0x4e, $t1, $t1           # Swap halves of MI
+    vpxor           $t1, $dst, $dst            # Fold MI into HI (part 1)
+    vpxor           $t0, $dst, $dst            # Fold MI into HI (part 2)
+___
+}
+
 # void gcm_init_vpclmulqdq_avx2(u128 Htable[16], const uint64_t H[2]);
 #
 # Initialize |Htable| with powers of the GHASH subkey |H|.
@@ -265,8 +283,8 @@ $code .= _begin_func "gcm_init_vpclmulqdq_avx2", 1;
     vbroadcasti128  .Lgfpoly(%rip), $GFPOLY
 
     # Square H^1 to get H^2.
-    @{[ _ghash_mul  $H_CUR_XMM, $H_CUR_XMM, $H_INC_XMM, $GFPOLY_XMM,
-                    $TMP0_XMM, $TMP1_XMM, $TMP2_XMM ]}
+    @{[ _ghash_square  $H_CUR_XMM, $H_INC_XMM, $GFPOLY_XMM,
+                       $TMP0_XMM, $TMP1_XMM ]}
 
     # Create H_CUR = [H^2, H^1] and H_INC = [H^2, H^2].
     vinserti128     \$1, $H_CUR_XMM, $H_INC, $H_CUR
@@ -456,6 +474,8 @@ $code .= _begin_func "gcm_gmult_vpclmulqdq_avx2", 1;
 
     vpshufb         $BSWAP_MASK, $GHASH_ACC, $GHASH_ACC
     vmovdqu         $GHASH_ACC, ($GHASH_ACC_PTR)
+
+    # No need for vzeroupper, since only xmm registers were used.
 ___
 }
 $code .= _end_func;
@@ -490,14 +510,24 @@ $code .= _begin_func "gcm_ghash_vpclmulqdq_avx2", 1;
     @{[ _save_xmmregs (6 .. 9) ]}
     .seh_endprologue
 
-    vbroadcasti128  .Lbswap_mask(%rip), $BSWAP_MASK
+    # Load the bswap_mask and gfpoly constants.  Since AADLEN is usually small,
+    # usually only 128-bit vectors will be used.  So as an optimization, don't
+    # broadcast these constants to both 128-bit lanes quite yet.
+    vmovdqu         .Lbswap_mask(%rip), $BSWAP_MASK_XMM
+    vmovdqu         .Lgfpoly(%rip), $GFPOLY_XMM
+
+    # Load the GHASH accumulator.
     vmovdqu         ($GHASH_ACC_PTR), $GHASH_ACC_XMM
     vpshufb         $BSWAP_MASK_XMM, $GHASH_ACC_XMM, $GHASH_ACC_XMM
-    vbroadcasti128  .Lgfpoly(%rip), $GFPOLY
 
     # Optimize for AADLEN < 32 by checking for AADLEN < 32 before AADLEN < 128.
     cmp             \$32, $AADLEN
     jb              .Lghash_lastblock
+
+    # AADLEN >= 32, so we'll operate on full vectors.  Broadcast bswap_mask and
+    # gfpoly to both 128-bit lanes.
+    vinserti128     \$1, $BSWAP_MASK_XMM, $BSWAP_MASK, $BSWAP_MASK
+    vinserti128     \$1, $GFPOLY_XMM, $GFPOLY, $GFPOLY
 
     cmp             \$127, $AADLEN
     jbe             .Lghash_loop_1x
@@ -530,9 +560,6 @@ $code .= _begin_func "gcm_ghash_vpclmulqdq_avx2", 1;
     cmp             \$32, $AADLEN
     jae             .Lghash_loop_1x
 .Lghash_loop_1x_done:
-    # Issue the vzeroupper that is needed after using ymm registers.  Do it here
-    # instead of at the end, to minimize overhead for small AADLEN.
-    vzeroupper
 
     # Update GHASH with the remaining 16-byte block if any.
 .Lghash_lastblock:
@@ -549,6 +576,8 @@ $code .= _begin_func "gcm_ghash_vpclmulqdq_avx2", 1;
     # Store the updated GHASH accumulator back to memory.
     vpshufb         $BSWAP_MASK_XMM, $GHASH_ACC_XMM, $GHASH_ACC_XMM
     vmovdqu         $GHASH_ACC_XMM, ($GHASH_ACC_PTR)
+
+    vzeroupper
 ___
 }
 $code .= _end_func;
@@ -723,7 +752,7 @@ ___
         $code .= <<___;
 #ifdef BORINGSSL_DISPATCH_TEST
         .extern BORINGSSL_function_hit
-        movb \$1,BORINGSSL_function_hit+8(%rip)
+        movb \$1,BORINGSSL_function_hit+6(%rip)
 #endif
 ___
     }

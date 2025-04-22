@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_EX_DATA_H
 #define OPENSSL_HEADER_EX_DATA_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <openssl/stack.h>
 

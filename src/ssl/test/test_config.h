@@ -39,10 +39,12 @@ struct CredentialConfig {
   std::vector<uint8_t> delegated_credential;
   std::vector<uint8_t> ocsp_response;
   std::vector<uint8_t> signed_cert_timestamps;
+  bool must_match_issuer = false;
   std::vector<uint8_t> pake_context;
   std::vector<uint8_t> pake_client_id;
   std::vector<uint8_t> pake_server_id;
   std::vector<uint8_t> pake_password;
+  std::vector<uint8_t> trust_anchor_id;
   bool wrong_pake_role = false;
 };
 
@@ -55,6 +57,9 @@ struct TestConfig {
   bool is_quic = false;
   int resume_count = 0;
   std::string write_settings;
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+  bool fuzzer_mode = false;
+#endif
   bool fallback_scsv = false;
   std::vector<uint16_t> signing_prefs;
   std::vector<uint16_t> verify_prefs;
@@ -107,7 +112,7 @@ struct TestConfig {
   bool defer_alps = false;
   std::vector<std::pair<std::string, std::string>> application_settings;
   std::optional<std::string> expect_peer_application_settings;
-  bool alps_use_new_codepoint = false;
+  int alps_use_new_codepoint = 1;
   std::vector<uint8_t> quic_transport_params;
   std::vector<uint8_t> expect_quic_transport_params;
   // Set quic_use_legacy_codepoint to 0 or 1 to configure, -1 uses default.
@@ -156,7 +161,6 @@ struct TestConfig {
   bool shim_shuts_down = false;
   bool verify_fail = false;
   bool verify_peer = false;
-  bool verify_peer_if_no_obc = false;
   bool expect_verify_result = false;
   std::vector<uint8_t> signed_cert_timestamps;
   int expect_total_renegotiations = 0;
@@ -228,9 +232,14 @@ struct TestConfig {
   bool fips_202205 = false;
   bool wpa_202304 = false;
   bool cnsa_202407 = false;
+  std::optional<bool> expect_peer_match_trust_anchor;
+  std::optional<std::vector<uint8_t>> expect_peer_available_trust_anchors;
+  std::optional<std::vector<uint8_t>> requested_trust_anchors;
   std::optional<int> expect_selected_credential;
   std::vector<CredentialConfig> credentials;
   int private_key_delay_ms = 0;
+  bool resumption_across_names_enabled = false;
+  std::optional<bool> expect_resumable_across_names;
 
   std::vector<const char *> handshaker_args;
 

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_BLAKE2_H
 #define OPENSSL_HEADER_BLAKE2_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {

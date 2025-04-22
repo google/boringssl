@@ -19,9 +19,7 @@
 #if !defined(OPENSSL_WINDOWS)
 #include <sys/select.h>
 #else
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #endif
 
 #include <openssl/err.h>

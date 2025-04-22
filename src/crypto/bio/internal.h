@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_BIO_INTERNAL_H
-#define OPENSSL_HEADER_BIO_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_BIO_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_BIO_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -26,9 +26,7 @@ typedef unsigned short u_short;
 #include <sys/types.h>
 #include <sys/socket.h>
 #else
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 typedef int socklen_t;
 #endif
 #endif  // !OPENSSL_NO_SOCK
@@ -76,4 +74,4 @@ int bio_errno_should_retry(int return_value);
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_BIO_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_BIO_INTERNAL_H

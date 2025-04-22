@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_MD5_INTERNAL_H
-#define OPENSSL_HEADER_MD5_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_MD5_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_MD5_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -34,4 +34,4 @@ extern void md5_block_asm_data_order(uint32_t *state, const uint8_t *data,
 }  // extern "C"
 #endif
 
-#endif  // OPENSSL_HEADER_MD5_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_MD5_INTERNAL_H

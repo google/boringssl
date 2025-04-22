@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_HRSS_INTERNAL_H
-#define OPENSSL_HEADER_HRSS_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_HRSS_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_HRSS_INTERNAL_H
 
 #include <openssl/base.h>
 #include "../internal.h"
@@ -65,4 +65,4 @@ extern void poly_Rq_mul(
 }  // extern "C"
 #endif
 
-#endif  // !OPENSSL_HEADER_HRSS_INTERNAL_H
+#endif  // !OPENSSL_HEADER_CRYPTO_HRSS_INTERNAL_H

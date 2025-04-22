@@ -29,14 +29,16 @@ extern "C" {
 // The cpuinfo parser lives in a header file so it may be accessible from
 // cross-platform fuzzers without adding code to those platforms normally.
 
-#define HWCAP_NEON (1 << 12)
+#define CRYPTO_HWCAP_NEON (1 << 12)
 
 // See /usr/include/asm/hwcap.h on an ARM installation for the source of
 // these values.
-#define HWCAP2_AES (1 << 0)
-#define HWCAP2_PMULL (1 << 1)
-#define HWCAP2_SHA1 (1 << 2)
-#define HWCAP2_SHA2 (1 << 3)
+// We add the prefix "CRYPTO_" to the definitions so as not to collide with
+// some versions of glibc (>= 2.41) that expose them through <sys/auxv.h>.
+#define CRYPTO_HWCAP2_AES (1 << 0)
+#define CRYPTO_HWCAP2_PMULL (1 << 1)
+#define CRYPTO_HWCAP2_SHA1 (1 << 2)
+#define CRYPTO_HWCAP2_SHA2 (1 << 3)
 
 typedef struct {
   const char *data;
@@ -141,16 +143,16 @@ static unsigned long crypto_get_arm_hwcap2_from_cpuinfo(
 
   unsigned long ret = 0;
   if (has_list_item(&features, "aes")) {
-    ret |= HWCAP2_AES;
+    ret |= CRYPTO_HWCAP2_AES;
   }
   if (has_list_item(&features, "pmull")) {
-    ret |= HWCAP2_PMULL;
+    ret |= CRYPTO_HWCAP2_PMULL;
   }
   if (has_list_item(&features, "sha1")) {
-    ret |= HWCAP2_SHA1;
+    ret |= CRYPTO_HWCAP2_SHA1;
   }
   if (has_list_item(&features, "sha2")) {
-    ret |= HWCAP2_SHA2;
+    ret |= CRYPTO_HWCAP2_SHA2;
   }
   return ret;
 }

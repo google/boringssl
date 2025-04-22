@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_OBJ_H
 #define OPENSSL_HEADER_OBJ_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <openssl/bytestring.h>
 #include <openssl/nid.h>  // IWYU pragma: export

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_PKCS8_H
 #define OPENSSL_HEADER_PKCS8_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <openssl/x509.h>
 
 
@@ -174,11 +174,24 @@ OPENSSL_EXPORT int PKCS12_verify_mac(const PKCS12 *p12, const char *password,
 // |NID_pbe_WithSHA1And40BitRC2_CBC|, |PKCS12_DEFAULT_ITER|, and one,
 // respectively.
 //
-// |key_nid| or |cert_nid| may also be -1 to disable encryption of the key or
-// certificate, respectively. This option is not recommended and is only
-// implemented for compatibility with external packages. Note the output still
-// requires a password for the MAC. Unencrypted keys in PKCS#12 are also not
-// widely supported and may not open in other implementations.
+// |key_nid| and |cert_nid| are then interpreted as follows:
+//
+// * If the NID is a cipher that is supported with PBES2, e.g.
+//   |NID_aes_256_cbc|, this function will use it with PBES2 and a default KDF
+//   (currently PBKDF2 with HMAC-SHA1). There is no way to specify the KDF in
+//   this function.
+//
+// * If the NID is a PBES1 suite, e.g. |NID_pbe_WithSHA1And3_Key_TripleDES_CBC|,
+//   this function will use the specified suite.
+//
+// * If the NID is -1, this function will disable encryption for the key or
+//   certificate. This option is not recommended and is only implemented for
+//   compatibility with external packages. Note the output still requires a
+//   password for the MAC. Unencrypted keys in PKCS#12 are also not widely
+//   supported and may not open in other implementations.
+//
+// WARNING: This differs from other functions in this module, which use a pair
+// of NID and |EVP_CIPHER| parameters to pick between PBES1 and PBES2 schemes.
 //
 // If |cert| or |chain| have associated aliases (see |X509_alias_set1|), they
 // will be included in the output as friendlyName attributes (RFC 2985). It is

@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <openssl/crypto.h>
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/mem.h>
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *buf, size_t len) {
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+  CRYPTO_set_fuzzer_mode(1);
+#endif
+
   CBS cbs;
   CBS_init(&cbs, buf, len);
   EVP_PKEY *pkey = EVP_parse_private_key(&cbs);

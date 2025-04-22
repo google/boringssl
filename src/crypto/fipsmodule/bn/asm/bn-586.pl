@@ -28,7 +28,6 @@ $sse2=1;
 &bn_mul_add_words("bn_mul_add_words");
 &bn_mul_words("bn_mul_words");
 &bn_sqr_words("bn_sqr_words");
-&bn_div_words("bn_div_words");
 &bn_add_words("bn_add_words");
 &bn_sub_words("bn_sub_words");
 
@@ -203,19 +202,6 @@ sub bn_sqr_words
 		&ret();
 	}
 	&function_end($name);
-	}
-
-sub bn_div_words
-	{
-	local($name)=@_;
-
-	&function_begin_B($name,"");
-	&mov("edx",&wparam(0));	#
-	&mov("eax",&wparam(1));	#
-	&mov("ecx",&wparam(2));	#
-	&div("ecx");
-	&ret();
-	&function_end_B($name);
 	}
 
 sub bn_add_words

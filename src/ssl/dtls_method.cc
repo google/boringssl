@@ -80,6 +80,7 @@ static bool dtls1_set_read_state(SSL *ssl, ssl_encryption_level_t level,
 
   DTLSReadEpoch new_epoch;
   new_epoch.aead = std::move(aead_ctx);
+  new_epoch.traffic_secret.CopyFrom(traffic_secret);
   if (!next_epoch(ssl, &new_epoch.epoch, level, ssl->d1->read_epoch.epoch)) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_UNEXPECTED_MESSAGE);
     return false;
@@ -118,6 +119,7 @@ static bool dtls1_set_write_state(SSL *ssl, ssl_encryption_level_t level,
   DTLSWriteEpoch new_epoch;
   new_epoch.aead = std::move(aead_ctx);
   new_epoch.next_record = DTLSRecordNumber(epoch, 0);
+  new_epoch.traffic_secret.CopyFrom(traffic_secret);
   if (ssl_protocol_version(ssl) > TLS1_2_VERSION) {
     new_epoch.rn_encrypter =
         RecordNumberEncrypter::Create(new_epoch.aead->cipher(), traffic_secret);

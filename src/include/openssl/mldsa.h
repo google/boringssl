@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_MLDSA_H_
 #define OPENSSL_HEADER_MLDSA_H_
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {

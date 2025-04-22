@@ -8475,6 +8475,7 @@ vmovdqu 1320(%rdi), %ymm11
 vpaddw 2752(%r8), %ymm11, %ymm11
 vpand mask_mod8192(%rip), %ymm11, %ymm11
 vmovdqu %ymm11, 1320(%rdi)
+vzeroupper
 pop %r12
 .cfi_restore r12
 pop %rbp

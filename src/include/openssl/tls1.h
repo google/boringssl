@@ -17,7 +17,7 @@
 #ifndef OPENSSL_HEADER_TLS1_H
 #define OPENSSL_HEADER_TLS1_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #ifdef __cplusplus
 extern "C" {
@@ -131,6 +131,14 @@ extern "C" {
 
 // This is not an IANA defined extension number
 #define TLSEXT_TYPE_channel_id 30032
+
+// This is not an IANA defined extension number
+// TODO(crbug.com/398275713): Replace with the final codepoint once
+// standardization completes.
+#define TLSEXT_TYPE_trust_anchors 0xca34
+
+// ExtensionType value from draft-ietf-tls-tlsflags.
+#define TLSEXT_TYPE_tls_flags 62
 
 // status request value from RFC 3546
 #define TLSEXT_STATUSTYPE_nothing (-1)

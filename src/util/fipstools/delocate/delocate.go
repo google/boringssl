@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +49,7 @@ type inputFile struct {
 }
 
 type stringWriter interface {
+	io.Writer
 	WriteString(string) (int, error)
 }
 
@@ -145,6 +147,8 @@ func (d *delocation) processInput(input inputFile) (err error) {
 			statement, err = d.processDirective(statement, node.up)
 		case ruleLabelContainingDirective:
 			statement, err = d.processLabelContainingDirective(statement, node.up)
+		case ruleSymbolDefiningDirective:
+			statement, err = d.processSymbolDefiningDirective(statement, node.up)
 		case ruleLabel:
 			statement, err = d.processLabel(statement, node.up)
 		case ruleInstruction:
@@ -195,7 +199,7 @@ func (d *delocation) processDirective(statement, directive *node32) (*node32, er
 		if len(args) < 1 {
 			return nil, errors.New("comm directive has no arguments")
 		}
-		d.bssAccessorsNeeded[demangle(args[0])] = args[0]
+		d.bssAccessorsNeeded[args[0]] = args[0]
 		d.writeNode(statement)
 
 	case "data":
@@ -203,6 +207,10 @@ func (d *delocation) processDirective(statement, directive *node32) (*node32, er
 		// and adding references to symbols within it to the code. We
 		// will have to work around this in the future.
 		return nil, errors.New(".data section found in module")
+
+	case "bss":
+		d.writeNode(statement)
+		return d.handleBSS(statement)
 
 	case "section":
 		section := args[0]
@@ -339,6 +347,45 @@ func (d *delocation) processLabelContainingDirective(statement, directive *node3
 	return statement, nil
 }
 
+func (d *delocation) processSymbolDefiningDirective(statement, directive *node32) (*node32, error) {
+	changed := false
+	assertNodeType(directive, ruleSymbolDefiningDirectiveName)
+	name := d.contents(directive)
+
+	node := directive.next
+	assertNodeType(node, ruleWS)
+
+	node = node.next
+	symbol := d.contents(node)
+	isLocal := node.pegRule == ruleLocalSymbol
+	if isLocal {
+		symbol = d.mapLocalSymbol(symbol)
+		changed = true
+	} else {
+		assertNodeType(node, ruleSymbolName)
+	}
+
+	node = skipWS(node.next)
+	assertNodeType(node, ruleSymbolArg)
+	assertNodeType(node.up, ruleSymbolExpr)
+	var b strings.Builder
+	changed = d.processSymbolExpr(node.up, &b) || changed
+	arg := b.String()
+
+	if !changed {
+		d.writeNode(statement)
+	} else {
+		d.writeCommentedNode(statement)
+		fmt.Fprintf(d.output, "\t%s\t%s, %s\n", name, symbol, arg)
+	}
+
+	if !isLocal {
+		fmt.Fprintf(d.output, "\t%s\t%s, %s\n", name, localTargetName(symbol), arg)
+	}
+
+	return statement, nil
+}
+
 func (d *delocation) processLabel(statement, label *node32) (*node32, error) {
 	symbol := d.contents(label)
 
@@ -411,18 +458,13 @@ func (d *delocation) loadAarch64Address(statement *node32, targetReg string, sym
 		panic("non-zero offset for helper-based reference")
 	}
 
-	var helperFunc string
-	if symbol == "OPENSSL_armcap_P" {
-		helperFunc = ".LOPENSSL_armcap_P_addr"
-	} else {
-		// GOT helpers also dereference the GOT entry, thus the subsequent ldr
-		// instruction, which would normally do the dereferencing, needs to be
-		// dropped. GOT helpers have to include the dereference because the
-		// assembler doesn't support ":got_lo12:foo" offsets except in an ldr
-		// instruction.
-		d.gotExternalsNeeded[symbol] = struct{}{}
-		helperFunc = gotHelperName(symbol)
-	}
+	// GOT helpers also dereference the GOT entry, thus the subsequent ldr
+	// instruction, which would normally do the dereferencing, needs to be
+	// dropped. GOT helpers have to include the dereference because the
+	// assembler doesn't support ":got_lo12:foo" offsets except in an ldr
+	// instruction.
+	d.gotExternalsNeeded[symbol] = struct{}{}
+	helperFunc := gotHelperName(symbol)
 
 	// Clear the red-zone. I can't find a definitive answer about whether Linux
 	// Aarch64 includes a red-zone, but Microsoft has a 16-byte one and Apple a
@@ -969,37 +1011,6 @@ Args:
 			symbol, offset, section, didChange, symbolIsLocal, memRef := d.parseMemRef(arg.up)
 			changed = didChange
 
-			if symbol == "OPENSSL_ia32cap_P" && section == "" {
-				if instructionName != "leaq" {
-					return nil, fmt.Errorf("non-leaq instruction %q referenced OPENSSL_ia32cap_P directly", instructionName)
-				}
-
-				if i != 0 || len(argNodes) != 2 || !d.isRIPRelative(memRef) || len(offset) > 0 {
-					return nil, fmt.Errorf("invalid OPENSSL_ia32cap_P reference in instruction %q", instructionName)
-				}
-
-				target := argNodes[1]
-				assertNodeType(target, ruleRegisterOrConstant)
-				reg := d.contents(target)
-
-				if !strings.HasPrefix(reg, "%r") {
-					return nil, fmt.Errorf("tried to load OPENSSL_ia32cap_P into %q, which is not a standard register.", reg)
-				}
-
-				changed = true
-
-				// Flag-altering instructions (i.e. addq) are going to be used so the
-				// flags need to be preserved.
-				wrappers = append(wrappers, saveFlags(d.output, false /* Red Zone not yet cleared */))
-
-				wrappers = append(wrappers, func(k func()) {
-					d.output.WriteString("\tleaq\tOPENSSL_ia32cap_addr_delta(%rip), " + reg + "\n")
-					d.output.WriteString("\taddq\t(" + reg + "), " + reg + "\n")
-				})
-
-				break Args
-			}
-
 			switch section {
 			case "":
 				if _, knownSymbol := d.symbols[symbol]; knownSymbol {
@@ -1142,15 +1153,7 @@ Args:
 					redzoneCleared = true
 				}
 
-				if symbol == "OPENSSL_ia32cap_P" {
-					// Flag-altering instructions (i.e. addq) are going to be used so the
-					// flags need to be preserved.
-					wrappers = append(wrappers, saveFlags(d.output, redzoneCleared))
-					wrappers = append(wrappers, func(k func()) {
-						d.output.WriteString("\tleaq\tOPENSSL_ia32cap_addr_delta(%rip), " + targetReg + "\n")
-						d.output.WriteString("\taddq\t(" + targetReg + "), " + targetReg + "\n")
-					})
-				} else if useGOT {
+				if useGOT {
 					wrappers = append(wrappers, d.loadFromGOT(d.output, targetReg, symbol, section, redzoneCleared))
 				} else {
 					wrappers = append(wrappers, func(k func()) {
@@ -1180,6 +1183,10 @@ Args:
 				argStr += d.contents(memRef)
 			}
 
+			for suffix := arg.next; suffix != nil; suffix = suffix.next {
+				argStr += d.contents(suffix)
+			}
+
 			args = append(args, argStr)
 
 		case ruleGOTAddress:
@@ -1188,6 +1195,9 @@ Args:
 			}
 			if i != 0 || len(argNodes) != 2 {
 				return nil, fmt.Errorf("Load of _GLOBAL_OFFSET_TABLE_ address didn't have expected form")
+			}
+			if arg.next != nil {
+				return nil, fmt.Errorf("unexpected argument suffix")
 			}
 			d.gotDeltaNeeded = true
 			changed = true
@@ -1204,6 +1214,9 @@ Args:
 			}
 			if i != 0 || len(argNodes) != 2 {
 				return nil, fmt.Errorf("movabs of _GLOBAL_OFFSET_TABLE_ didn't expected form")
+			}
+			if arg.next != nil {
+				return nil, fmt.Errorf("unexpected argument suffix")
 			}
 
 			d.gotDeltaNeeded = true
@@ -1224,6 +1237,9 @@ Args:
 			}
 			if i != 0 || len(argNodes) != 2 {
 				return nil, fmt.Errorf("movabs of _GLOBAL_OFFSET_TABLE_ offset didn't have expected form")
+			}
+			if arg.next != nil {
+				return nil, fmt.Errorf("unexpected argument suffix")
 			}
 
 			assertNodeType(arg.up, ruleSymbolName)
@@ -1303,12 +1319,19 @@ func (d *delocation) handleBSS(statement *node32) (*node32, error) {
 				localSymbol := localTargetName(symbol)
 				d.output.WriteString(fmt.Sprintf("\n%s:\n", localSymbol))
 
-				d.bssAccessorsNeeded[demangle(symbol)] = localSymbol
+				d.bssAccessorsNeeded[symbol] = localSymbol
 			}
 
 		case ruleLabelContainingDirective:
 			var err error
 			statement, err = d.processLabelContainingDirective(statement, node.up)
+			if err != nil {
+				return nil, err
+			}
+
+		case ruleSymbolDefiningDirective:
+			var err error
+			statement, err = d.processSymbolDefiningDirective(statement, node.up)
 			if err != nil {
 				return nil, err
 			}
@@ -1355,9 +1378,6 @@ func transform(w stringWriter, inputs []inputFile) error {
 	// to match that behaviour otherwise warnings result.
 	fileDirectivesContainMD5 := false
 
-	// OPENSSL_ia32cap_get will be synthesized by this script.
-	symbols["OPENSSL_ia32cap_get"] = struct{}{}
-
 	for _, input := range inputs {
 		forEachPath(input.ast.up, func(node *node32) {
 			symbol := input.contents[node.begin:node.end]
@@ -1366,6 +1386,18 @@ func transform(w stringWriter, inputs []inputFile) error {
 			}
 			symbols[symbol] = struct{}{}
 		}, ruleStatement, ruleLabel, ruleSymbolName)
+
+		// Some directives also define symbols.
+		forEachPath(input.ast.up, func(node *node32) {
+			node = skipWS(node.next)
+			if node.pegRule == ruleLocalSymbol {
+				return
+			}
+			assertNodeType(node, ruleSymbolName)
+			symbol := input.contents[node.begin:node.end]
+			// Allow duplicates. A symbol may be set multiple times with .set.
+			symbols[symbol] = struct{}{}
+		}, ruleStatement, ruleSymbolDefiningDirective, ruleSymbolDefiningDirectiveName)
 
 		forEachPath(input.ast.up, func(node *node32) {
 			assertNodeType(node, ruleLocationDirective)
@@ -1503,12 +1535,6 @@ func transform(w stringWriter, inputs []inputFile) error {
 			})
 		}
 
-		writeAarch64Function(w, ".LOPENSSL_armcap_P_addr", func(w stringWriter) {
-			w.WriteString("\tadrp x0, OPENSSL_armcap_P\n")
-			w.WriteString("\tadd x0, x0, :lo12:OPENSSL_armcap_P\n")
-			w.WriteString("\tret\n")
-		})
-
 	case x86_64:
 		externalNames := sortedSet(d.gotExternalsNeeded)
 		for _, name := range externalNames {
@@ -1524,19 +1550,6 @@ func transform(w stringWriter, inputs []inputFile) error {
 			w.WriteString("\t.long " + symbol + "@" + section + "\n")
 			w.WriteString("\t.long 0\n")
 		}
-
-		w.WriteString(".type OPENSSL_ia32cap_get, @function\n")
-		w.WriteString(".globl OPENSSL_ia32cap_get\n")
-		w.WriteString(localTargetName("OPENSSL_ia32cap_get") + ":\n")
-		w.WriteString("OPENSSL_ia32cap_get:\n")
-		w.WriteString("\tleaq OPENSSL_ia32cap_P(%rip), %rax\n")
-		w.WriteString("\tret\n")
-
-		w.WriteString(".extern OPENSSL_ia32cap_P\n")
-		w.WriteString(".type OPENSSL_ia32cap_addr_delta, @object\n")
-		w.WriteString(".size OPENSSL_ia32cap_addr_delta, 8\n")
-		w.WriteString("OPENSSL_ia32cap_addr_delta:\n")
-		w.WriteString(".quad OPENSSL_ia32cap_P-OPENSSL_ia32cap_addr_delta\n")
 
 		if d.gotDeltaNeeded {
 			w.WriteString(".Lboringssl_got_delta:\n")
@@ -1805,48 +1818,11 @@ func localTargetName(name string) string {
 
 func isSynthesized(symbol string) bool {
 	return strings.HasSuffix(symbol, "_bss_get") ||
-		symbol == "OPENSSL_ia32cap_get" ||
 		strings.HasPrefix(symbol, "BORINGSSL_bcm_text_")
 }
 
 func redirectorName(symbol string) string {
 	return "bcm_redirector_" + symbol
-}
-
-// Optionally demangle C++ local variable names.
-func demangle(symbol string) string {
-	if !strings.HasPrefix(symbol, "_Z") {
-		return symbol
-	}
-
-	// The names must have the form "_ZL", followed by the length of the name
-	// in base 10, followed by the name.
-	if !strings.HasPrefix(symbol, "_ZL") {
-		panic("malformed symbol: starts with _Z but not _ZL")
-	}
-
-	if len(symbol) < 4 {
-		panic("malformed symbol: too short")
-	}
-
-	pos := 3
-	for pos < len(symbol) && '0' <= symbol[pos] && symbol[pos] <= '9' {
-		pos++
-	}
-	if pos == 3 {
-		panic("malformed symbol: no length digits")
-	}
-
-	length, err := strconv.Atoi(symbol[3:pos])
-	if err != nil {
-		panic("malformed symbol: invalid length")
-	}
-
-	if len(symbol[pos:]) != length {
-		panic("malformed symbol: length mismatch")
-	}
-
-	return symbol[pos:]
 }
 
 // sectionType returns the type of a section. I.e. a section called “.text.foo”

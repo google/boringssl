@@ -20,6 +20,7 @@
 #include <openssl/obj.h>
 
 #include "../asn1/internal.h"
+#include "internal.h"
 
 
 ASN1_SEQUENCE(X509_ALGOR) = {
@@ -104,4 +105,12 @@ int X509_ALGOR_cmp(const X509_ALGOR *a, const X509_ALGOR *b) {
     return 0;
   }
   return ASN1_TYPE_cmp(a->parameter, b->parameter);
+}
+
+int x509_marshal_algorithm(CBB *out, const X509_ALGOR *in) {
+  uint8_t *ptr;
+  int len = i2d_X509_ALGOR(in, NULL);
+  return len > 0 &&  //
+         CBB_add_space(out, &ptr, static_cast<size_t>(len)) &&
+         i2d_X509_ALGOR(in, &ptr) == len;
 }

@@ -527,4 +527,29 @@ TEST(MLKEMTest, Iterate1024) {
       0x04, 0xab, 0xdb, 0x94, 0x8b, 0x90, 0x8b, 0x75, 0xba, 0xd5};
   EXPECT_EQ(Bytes(result), Bytes(kExpected));
 }
+
+TEST(MLKEMTest, Self) { ASSERT_TRUE(boringssl_self_test_mlkem()); }
+
+TEST(MLKEMTest, PWCT) {
+  auto pub768 = std::make_unique<uint8_t[]>(BCM_MLKEM768_PUBLIC_KEY_BYTES);
+  auto priv768 = std::make_unique<BCM_mlkem768_private_key>();
+  ASSERT_EQ(
+      BCM_mlkem768_generate_key_fips(pub768.get(), nullptr, priv768.get()),
+      bcm_status::approved);
+
+  auto pub1024 = std::make_unique<uint8_t[]>(BCM_MLKEM1024_PUBLIC_KEY_BYTES);
+  auto priv1024 = std::make_unique<BCM_mlkem1024_private_key>();
+  ASSERT_EQ(
+      BCM_mlkem1024_generate_key_fips(pub1024.get(), nullptr, priv1024.get()),
+      bcm_status::approved);
+}
+
+TEST(MLKEMTest, NullptrArgumentsToCreate) {
+  // For FIPS reasons, this should fail rather than crash.
+  ASSERT_EQ(BCM_mlkem768_generate_key_fips(nullptr, nullptr, nullptr),
+            bcm_status::failure);
+  ASSERT_EQ(BCM_mlkem1024_generate_key_fips(nullptr, nullptr, nullptr),
+            bcm_status::failure);
+}
+
 }  // namespace

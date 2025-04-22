@@ -184,9 +184,7 @@ pub struct Prk {
     evp_md: *const bssl_sys::EVP_MD,
 }
 
-#[allow(clippy::let_unit_value,
-        clippy::unwrap_used,
-)]
+#[allow(clippy::let_unit_value, clippy::unwrap_used)]
 impl Prk {
     /// Creates a Prk from bytes.
     pub fn new<MD: digest::Algorithm>(prk_bytes: &[u8]) -> Option<Self> {
@@ -210,10 +208,11 @@ impl Prk {
 
     /// Returns the bytes of the pseudorandom key.
     pub fn as_bytes(&self) -> &[u8] {
-        self.prk.get(..self.len)
-        // unwrap:`self.len` must be less than the length of `self.prk` thus
-        // this is always in bounds.
-        .unwrap()
+        self.prk
+            .get(..self.len)
+            // unwrap:`self.len` must be less than the length of `self.prk` thus
+            // this is always in bounds.
+            .unwrap()
     }
 
     /// Derive key material for the given info parameter. Attempting

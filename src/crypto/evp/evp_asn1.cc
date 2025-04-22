@@ -435,25 +435,24 @@ int i2d_DSA_PUBKEY(const DSA *dsa, uint8_t **outp) {
 
 EC_KEY *d2i_EC_PUBKEY(EC_KEY **out, const uint8_t **inp, long len) {
   if (len < 0) {
-    return NULL;
+    return nullptr;
   }
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
-  EVP_PKEY *pkey = EVP_parse_public_key(&cbs);
-  if (pkey == NULL) {
-    return NULL;
+  bssl::UniquePtr<EVP_PKEY> pkey(EVP_parse_public_key(&cbs));
+  if (pkey == nullptr) {
+    return nullptr;
   }
-  EC_KEY *ec_key = EVP_PKEY_get1_EC_KEY(pkey);
-  EVP_PKEY_free(pkey);
-  if (ec_key == NULL) {
-    return NULL;
+  bssl::UniquePtr<EC_KEY> ec_key(EVP_PKEY_get1_EC_KEY(pkey.get()));
+  if (ec_key == nullptr) {
+    return nullptr;
   }
-  if (out != NULL) {
+  if (out != nullptr) {
     EC_KEY_free(*out);
-    *out = ec_key;
+    *out = ec_key.get();
   }
   *inp = CBS_data(&cbs);
-  return ec_key;
+  return ec_key.release();
 }
 
 int i2d_EC_PUBKEY(const EC_KEY *ec_key, uint8_t **outp) {

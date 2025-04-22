@@ -24,6 +24,7 @@
 
 #include <openssl/bio.h>
 #include <openssl/bytestring.h>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hpke.h>
@@ -34,6 +35,13 @@
 
 #include "../../crypto/internal.h"
 #include "./fuzzer_tags.h"
+
+#if defined(OPENSSL_WINDOWS)
+// Windows defines struct timeval in winsock2.h.
+#include <winsock2.h>
+#else
+#include <sys/time.h>
+#endif
 
 namespace {
 
@@ -275,10 +283,20 @@ class TLSFuzzer {
     kServer,
   };
 
-  TLSFuzzer(Protocol protocol, Role role)
+  enum FuzzerMode {
+    kFuzzerModeOn,
+    kFuzzerModeOff,
+  };
+
+  TLSFuzzer(Protocol protocol, Role role, FuzzerMode fuzzer_mode)
       : debug_(getenv("BORINGSSL_FUZZER_DEBUG") != nullptr),
         protocol_(protocol),
         role_(role) {
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+    if (fuzzer_mode == kFuzzerModeOn) {
+      CRYPTO_set_fuzzer_mode(1);
+    }
+#endif
     if (!Init()) {
       abort();
     }
@@ -298,7 +316,9 @@ class TLSFuzzer {
   }
 
   int TestOneInput(const uint8_t *buf, size_t len) {
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
     RAND_reset_for_fuzzing();
+#endif
 
     CBS cbs;
     CBS_init(&cbs, buf, len);
@@ -404,6 +424,12 @@ class TLSFuzzer {
                                                 sizeof(kSCT))) {
       return false;
     }
+
+    // Use a constant clock.
+    SSL_CTX_set_current_time_cb(ctx_.get(),
+                                [](const SSL *ssl, timeval *out_clock) {
+                                  *out_clock = {1234, 1234};
+                                });
 
     // When accepting peer certificates, allow any certificate.
     SSL_CTX_set_cert_verify_callback(

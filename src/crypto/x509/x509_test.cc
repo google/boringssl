@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -6463,6 +6464,31 @@ TEST(X509Test, ExtensionFromConf) {
       {"policyMappings", "invalid_oid:2.2.2.2", nullptr, {}},
       {"policyMappings", "1.1.1.1:invalid_oid", nullptr, {}},
 
+      // authorityInfoAccess is a comma-separated list of
+      // accessMethod;accessLocation tuples, where the latter specifies a
+      // GeneralName.
+      {"authorityInfoAccess",
+       "caIssuers;URI:http://example.com/1, "
+       "caIssuers;URI:http://example.com/2, OCSP;URI:http://example.com/3, "
+       "OCSP;DNS:non-uri-does-not-make-sense-but-is-allowed.test",
+       nullptr,
+       {0x30, 0x81, 0xb3, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x01,
+        0x01, 0x04, 0x81, 0xa6, 0x30, 0x81, 0xa3, 0x30, 0x20, 0x06, 0x08, 0x2b,
+        0x06, 0x01, 0x05, 0x05, 0x07, 0x30, 0x02, 0x86, 0x14, 0x68, 0x74, 0x74,
+        0x70, 0x3a, 0x2f, 0x2f, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e,
+        0x63, 0x6f, 0x6d, 0x2f, 0x31, 0x30, 0x20, 0x06, 0x08, 0x2b, 0x06, 0x01,
+        0x05, 0x05, 0x07, 0x30, 0x02, 0x86, 0x14, 0x68, 0x74, 0x74, 0x70, 0x3a,
+        0x2f, 0x2f, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f,
+        0x6d, 0x2f, 0x32, 0x30, 0x20, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05,
+        0x07, 0x30, 0x01, 0x86, 0x14, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f,
+        0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+        0x33, 0x30, 0x3b, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x30,
+        0x01, 0x82, 0x2f, 0x6e, 0x6f, 0x6e, 0x2d, 0x75, 0x72, 0x69, 0x2d, 0x64,
+        0x6f, 0x65, 0x73, 0x2d, 0x6e, 0x6f, 0x74, 0x2d, 0x6d, 0x61, 0x6b, 0x65,
+        0x2d, 0x73, 0x65, 0x6e, 0x73, 0x65, 0x2d, 0x62, 0x75, 0x74, 0x2d, 0x69,
+        0x73, 0x2d, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x2e, 0x74, 0x65,
+        0x73, 0x74}},
+
       // The "DER:" prefix just specifies an arbitrary byte string. Colons
       // separators are ignored.
       {kTestOID, "DER:0001020304", nullptr, {0x30, 0x15, 0x06, 0x0c, 0x2a, 0x86,
@@ -7126,20 +7152,16 @@ TEST(X509Test, NameAttributeValues) {
   static const char kOIDText[] = "1.2.840.113554.4.1.72585.0";
 
   auto encode_single_attribute_name =
-      [](CBS_ASN1_TAG tag,
-         const std::string &contents) -> std::vector<uint8_t> {
+      [](CBS_ASN1_TAG tag, std::string_view contents) -> std::vector<uint8_t> {
+    auto bytes = bssl::StringAsBytes(contents);
     bssl::ScopedCBB cbb;
-    CBB seq, rdn, attr, attr_type, attr_value;
+    CBB seq, rdn, attr;
     if (!CBB_init(cbb.get(), 128) ||
         !CBB_add_asn1(cbb.get(), &seq, CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1(&seq, &rdn, CBS_ASN1_SET) ||
         !CBB_add_asn1(&rdn, &attr, CBS_ASN1_SEQUENCE) ||
-        !CBB_add_asn1(&attr, &attr_type, CBS_ASN1_OBJECT) ||
-        !CBB_add_bytes(&attr_type, kOID, sizeof(kOID)) ||
-        !CBB_add_asn1(&attr, &attr_value, tag) ||
-        !CBB_add_bytes(&attr_value,
-                       reinterpret_cast<const uint8_t *>(contents.data()),
-                       contents.size()) ||
+        !CBB_add_asn1_element(&attr, CBS_ASN1_OBJECT, kOID, sizeof(kOID)) ||
+        !CBB_add_asn1_element(&attr, tag, bytes.data(), bytes.size()) ||
         !CBB_flush(cbb.get())) {
       ADD_FAILURE() << "Could not encode name";
       return {};
@@ -7165,35 +7187,52 @@ TEST(X509Test, NameAttributeValues) {
        V_ASN1_UNIVERSALSTRING, std::string("\0\0\0a", 4)},
       {CBS_ASN1_BMPSTRING, std::string("\0a", 2), V_ASN1_BMPSTRING,
        std::string("\0a", 2)},
+      {CBS_ASN1_OCTETSTRING, "abc", V_ASN1_OCTET_STRING, "abc"},
+      {CBS_ASN1_UTCTIME, "700101000000Z", V_ASN1_UTCTIME, "700101000000Z"},
+      {CBS_ASN1_GENERALIZEDTIME, "19700101000000Z", V_ASN1_GENERALIZEDTIME,
+       "19700101000000Z"},
 
       // ENUMERATED is supported but, currently, INTEGER is not.
+      {CBS_ASN1_INTEGER, "\x01", V_ASN1_INTEGER, "\x01"},
       {CBS_ASN1_ENUMERATED, "\x01", V_ASN1_ENUMERATED, "\x01"},
 
       // Test negative values. These are interesting because, when encoding, the
       // ASN.1 type must be determined from the string type, but the string type
       // has an extra |V_ASN1_NEG| bit.
+      {CBS_ASN1_INTEGER, "\xff", V_ASN1_NEG_INTEGER, "\x01"},
       {CBS_ASN1_ENUMERATED, "\xff", V_ASN1_NEG_ENUMERATED, "\x01"},
 
-      // SEQUENCE is supported but, currently, SET is not. Note the
-      // |ASN1_STRING| representation will include the tag and length.
+      // SEQUENCE and SET use their |ASN1_STRING| representation, which includes
+      // the tag and length.
       {CBS_ASN1_SEQUENCE, "", V_ASN1_SEQUENCE, std::string("\x30\x00", 2)},
+      {CBS_ASN1_SET, "", V_ASN1_SET, std::string("\x31\x00", 2)},
 
-      // These types are not actually supported by the library but,
-      // historically, we would parse them, and not other unsupported types, due
-      // to quirks of |ASN1_tag2bit|.
-      {7, "", V_ASN1_OBJECT_DESCRIPTOR, ""},
-      {8, "", V_ASN1_EXTERNAL, ""},
-      {9, "", V_ASN1_REAL, ""},
-      {11, "", 11 /* EMBEDDED PDV */, ""},
-      {13, "", 13 /* RELATIVE-OID */, ""},
-      {14, "", 14 /* TIME */, ""},
-      {15, "", 15 /* not a type; reserved value */, ""},
-      {29, "", 29 /* CHARACTER STRING */, ""},
+      // NULL, BOOLEAN, and OBJECT IDENTIFIER use non-|ASN1_STRING|
+      // representations, so they are represented with |V_ASN1_OTHER|.
+      {CBS_ASN1_NULL, "", V_ASN1_OTHER, std::string("\x05\x00", 2)},
+      {CBS_ASN1_BOOLEAN, std::string("\x00", 1), V_ASN1_OTHER,
+       std::string("\x01\x01\x00", 3)},
+      {CBS_ASN1_BOOLEAN, "\xff", V_ASN1_OTHER, "\x01\x01\xff"},
+      {CBS_ASN1_OBJECT, "\x01\x02\x03\x04", V_ASN1_OTHER,
+       "\x06\x04\x01\x02\x03\x04"},
 
-      // TODO(crbug.com/boringssl/412): Attribute values are an ANY DEFINED BY
-      // type, so we actually shoudl be accepting all ASN.1 types. We currently
-      // do not and only accept the above types. Extend this test when we fix
-      // this.
+      // These types are not actually supported by the library, but we accept
+      // them as |V_ASN1_OTHER|.
+      {7 /* ObjectDescriptor */, "", V_ASN1_OTHER, std::string("\x07\x00", 2)},
+      {8 /* EXTERNAL */, "", V_ASN1_OTHER, std::string("\x08\x00", 2)},
+      {9 /* REAL */, "", V_ASN1_OTHER, std::string("\x09\x00", 2)},
+      {11 /* EMBEDDED PDV */, "", V_ASN1_OTHER, std::string("\x0b\x00", 2)},
+      {13 /* RELATIVE-OID */, "", V_ASN1_OTHER, std::string("\x0d\x00", 2)},
+      {14 /* TIME */, "", V_ASN1_OTHER, std::string("\x0e\x00", 2)},
+      {15 /* not a type; reserved value */, "", V_ASN1_OTHER,
+       std::string("\x0f\x00", 2)},
+      {29 /* CHARACTER STRING */, "", V_ASN1_OTHER, std::string("\x1d\x00", 2)},
+
+      // Non-universal tags are allowed as |V_ASN1_OTHER| too.
+      {CBS_ASN1_APPLICATION | CBS_ASN1_CONSTRUCTED | 42, "", V_ASN1_OTHER,
+       std::string("\x7f\x2a\x00", 3)},
+      {CBS_ASN1_APPLICATION | 42, "", V_ASN1_OTHER,
+       std::string("\x5f\x2a\x00", 3)},
   };
   for (const auto &t : kTests) {
     SCOPED_TRACE(t.der_tag);
@@ -7256,7 +7295,9 @@ TEST(X509Test, NameAttributeValues) {
       // Errors in supported universal types should be handled.
       {CBS_ASN1_NULL, "not null"},
       {CBS_ASN1_BOOLEAN, "not bool"},
+      {CBS_ASN1_BOOLEAN, "\1"},  // BOOL in DER must be 0x00 or 0xff.
       {CBS_ASN1_OBJECT, ""},
+      {CBS_ASN1_OBJECT, "\x80\x01"},  // Non-minimal OID encoding
       {CBS_ASN1_INTEGER, std::string("\0\0", 2)},
       {CBS_ASN1_ENUMERATED, std::string("\0\0", 2)},
       {CBS_ASN1_BITSTRING, ""},
@@ -7265,25 +7306,11 @@ TEST(X509Test, NameAttributeValues) {
       {CBS_ASN1_UNIVERSALSTRING, "not utf-32"},
       {CBS_ASN1_UTCTIME, "not utctime"},
       {CBS_ASN1_GENERALIZEDTIME, "not generalizedtime"},
+      {CBS_ASN1_NULL | CBS_ASN1_CONSTRUCTED, ""},
+      {CBS_ASN1_OBJECT | CBS_ASN1_CONSTRUCTED, "\x01\x02\x03\x04"},
+      {CBS_ASN1_BOOLEAN | CBS_ASN1_CONSTRUCTED, "\xff"},
       {CBS_ASN1_UTF8STRING | CBS_ASN1_CONSTRUCTED, ""},
       {CBS_ASN1_SEQUENCE & ~CBS_ASN1_CONSTRUCTED, ""},
-
-      // TODO(crbug.com/boringssl/412): The following inputs should parse, but
-      // are currently rejected because they cannot be represented in
-      // |ASN1_PRINTABLE|, either because they don't fit in |ASN1_STRING| or
-      // simply in the |B_ASN1_PRINTABLE| bitmask.
-      {CBS_ASN1_NULL, ""},
-      {CBS_ASN1_BOOLEAN, std::string("\x00", 1)},
-      {CBS_ASN1_BOOLEAN, "\xff"},
-      {CBS_ASN1_OBJECT, "\x01\x02\x03\x04"},
-      {CBS_ASN1_INTEGER, "\x01"},
-      {CBS_ASN1_INTEGER, "\xff"},
-      {CBS_ASN1_OCTETSTRING, ""},
-      {CBS_ASN1_UTCTIME, "700101000000Z"},
-      {CBS_ASN1_GENERALIZEDTIME, "19700101000000Z"},
-      {CBS_ASN1_SET, ""},
-      {CBS_ASN1_APPLICATION | CBS_ASN1_CONSTRUCTED | 42, ""},
-      {CBS_ASN1_APPLICATION | 42, ""},
   };
   for (const auto &t : kInvalidTests) {
     SCOPED_TRACE(t.der_tag);

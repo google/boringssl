@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_EC_EXTRA_INTERNAL_H
-#define OPENSSL_HEADER_EC_EXTRA_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_EC_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_EC_INTERNAL_H
 
 #include <openssl/ec.h>
 
@@ -75,4 +75,4 @@ OPENSSL_EXPORT int ec_hash_to_scalar_p384_xmd_sha512_draft07(
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_EC_EXTRA_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_EC_INTERNAL_H

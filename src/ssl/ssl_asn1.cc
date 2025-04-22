@@ -68,6 +68,7 @@ BSSL_NAMESPACE_BEGIN
 //     peerALPS                [30] OCTET STRING OPTIONAL,
 //     -- Either both or none of localALPS and peerALPS must be present. If both
 //     -- are present, earlyALPN must be present and non-empty.
+//     resumableAcrossNames    [31] BOOLEAN OPTIONAL,
 // }
 //
 // Note: historically this serialization has included other optional
@@ -135,6 +136,9 @@ static const CBS_ASN1_TAG kLocalALPSTag =
     CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 29;
 static const CBS_ASN1_TAG kPeerALPSTag =
     CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 30;
+static const CBS_ASN1_TAG kResumableAcrossNamesTag =
+    CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 31;
+
 
 static int SSL_SESSION_to_bytes_full(const SSL_SESSION *in, CBB *cbb,
                                      int for_ticket) {
@@ -164,9 +168,8 @@ static int SSL_SESSION_to_bytes_full(const SSL_SESSION *in, CBB *cbb,
   // serialized instead.
   if (sk_CRYPTO_BUFFER_num(in->certs.get()) > 0 && !in->peer_sha256_valid) {
     const CRYPTO_BUFFER *buffer = sk_CRYPTO_BUFFER_value(in->certs.get(), 0);
-    if (!CBB_add_asn1(&session, &child, kPeerTag) ||
-        !CBB_add_bytes(&child, CRYPTO_BUFFER_data(buffer),
-                       CRYPTO_BUFFER_len(buffer))) {
+    if (!CBB_add_asn1_element(&session, kPeerTag, CRYPTO_BUFFER_data(buffer),
+                              CRYPTO_BUFFER_len(buffer))) {
       return 0;
     }
   }
@@ -338,6 +341,13 @@ static int SSL_SESSION_to_bytes_full(const SSL_SESSION *in, CBB *cbb,
         !CBB_add_asn1(&session, &child, kPeerALPSTag) ||
         !CBB_add_asn1_octet_string(&child, in->peer_application_settings.data(),
                                    in->peer_application_settings.size())) {
+      return 0;
+    }
+  }
+
+  if (in->is_resumable_across_names) {
+    if (!CBB_add_asn1(&session, &child, kResumableAcrossNamesTag) ||
+        !CBB_add_asn1_bool(&child, true)) {
       return 0;
     }
   }
@@ -664,18 +674,22 @@ UniquePtr<SSL_SESSION> SSL_SESSION_parse(CBS *cbs,
   }
 
   CBS settings;
-  int has_local_alps, has_peer_alps;
+  int has_local_alps, has_peer_alps, is_resumable_across_names;
   if (!CBS_get_optional_asn1_octet_string(&session, &settings, &has_local_alps,
                                           kLocalALPSTag) ||
       !ret->local_application_settings.CopyFrom(settings) ||
       !CBS_get_optional_asn1_octet_string(&session, &settings, &has_peer_alps,
                                           kPeerALPSTag) ||
       !ret->peer_application_settings.CopyFrom(settings) ||
+      !CBS_get_optional_asn1_bool(&session, &is_resumable_across_names,
+                                  kResumableAcrossNamesTag,
+                                  /*default_value=*/false) ||
       CBS_len(&session) != 0) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_SSL_SESSION);
     return nullptr;
   }
   ret->is_quic = is_quic;
+  ret->is_resumable_across_names = is_resumable_across_names;
 
   // The two ALPS values and ALPN must be consistent.
   if (has_local_alps != has_peer_alps ||

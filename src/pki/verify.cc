@@ -261,6 +261,15 @@ std::optional<std::vector<std::vector<std::string>>> CertificateVerifyInternal(
     case CertificateVerifyOptions::KeyPurpose::CLIENT_AUTH_STRICT_LEAF:
       key_purpose = KeyPurpose::CLIENT_AUTH_STRICT_LEAF;
       break;
+    case CertificateVerifyOptions::KeyPurpose::RCS_MLS_CLIENT_AUTH:
+      key_purpose = KeyPurpose::RCS_MLS_CLIENT_AUTH;
+      break;
+    case CertificateVerifyOptions::KeyPurpose::C2PA_TIMESTAMPING:
+      key_purpose = KeyPurpose::C2PA_TIMESTAMPING;
+      break;
+    case CertificateVerifyOptions::KeyPurpose::C2PA_MANIFEST:
+      key_purpose = KeyPurpose::C2PA_MANIFEST;
+      break;
   }
   CertPathBuilder path_builder(leaf_cert, trust_store, &path_builder_delegate,
                                verification_time, key_purpose,

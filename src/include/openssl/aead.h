@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_AEAD_H
 #define OPENSSL_HEADER_AEAD_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {
@@ -186,6 +186,16 @@ OPENSSL_EXPORT const EVP_AEAD *EVP_aead_aes_128_ccm_matter(void);
 // constant-time AES-GCM.
 OPENSSL_EXPORT int EVP_has_aes_hardware(void);
 
+// EVP_aead_aes_128_eax is AES-128 in EAX mode. Nonce size is either 12 or 16
+// bytes, tag length is 16 bytes.
+// See https://doi.org/10.1007/978-3-540-25937-4_25.
+OPENSSL_EXPORT const EVP_AEAD *EVP_aead_aes_128_eax(void);
+
+// EVP_aead_aes_256_eax is AES-256 in EAX mode. Nonce size is either 12 or 16
+// bytes, tag length is 16 bytes.
+// See https://doi.org/10.1007/978-3-540-25937-4_25.
+OPENSSL_EXPORT const EVP_AEAD *EVP_aead_aes_256_eax(void);
+
 
 // Utility functions.
 
@@ -210,7 +220,7 @@ OPENSSL_EXPORT size_t EVP_AEAD_max_tag_len(const EVP_AEAD *aead);
 // AEAD operations.
 
 union evp_aead_ctx_st_state {
-  uint8_t opaque[564];
+  uint8_t opaque[560];
   uint64_t alignment;
 };
 
@@ -356,12 +366,10 @@ OPENSSL_EXPORT int EVP_AEAD_CTX_open(const EVP_AEAD_CTX *ctx, uint8_t *out,
 // If |in| and |out| alias then |out| must be == |in|. |out_tag| may not alias
 // any other argument.
 OPENSSL_EXPORT int EVP_AEAD_CTX_seal_scatter(
-    const EVP_AEAD_CTX *ctx, uint8_t *out,
-    uint8_t *out_tag, size_t *out_tag_len, size_t max_out_tag_len,
-    const uint8_t *nonce, size_t nonce_len,
-    const uint8_t *in, size_t in_len,
-    const uint8_t *extra_in, size_t extra_in_len,
-    const uint8_t *ad, size_t ad_len);
+    const EVP_AEAD_CTX *ctx, uint8_t *out, uint8_t *out_tag,
+    size_t *out_tag_len, size_t max_out_tag_len, const uint8_t *nonce,
+    size_t nonce_len, const uint8_t *in, size_t in_len, const uint8_t *extra_in,
+    size_t extra_in_len, const uint8_t *ad, size_t ad_len);
 
 // EVP_AEAD_CTX_open_gather decrypts and authenticates |in_len| bytes from |in|
 // and authenticates |ad_len| bytes from |ad| using |in_tag_len| bytes of

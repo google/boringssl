@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_SERVICE_INDICATOR_INTERNAL_H
-#define OPENSSL_HEADER_SERVICE_INDICATOR_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_SERVICE_INDICATOR_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_SERVICE_INDICATOR_INTERNAL_H
 
 #include <openssl/base.h>
 #include <openssl/service_indicator.h>
@@ -86,4 +86,4 @@ inline void TLSKDF_verify_service_indicator(
 
 #endif  // BORINGSSL_FIPS
 
-#endif  // OPENSSL_HEADER_SERVICE_INDICATOR_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_SERVICE_INDICATOR_INTERNAL_H

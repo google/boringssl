@@ -26,7 +26,6 @@
             "crypto/fipsmodule/aes/key_wrap.cc.inc",
             "crypto/fipsmodule/aes/mode_wrappers.cc.inc",
             "crypto/fipsmodule/aes/ofb.cc.inc",
-            "crypto/fipsmodule/aes/polyval.cc.inc",
             "crypto/fipsmodule/bn/add.cc.inc",
             "crypto/fipsmodule/bn/asm/x86_64-gcc.cc.inc",
             "crypto/fipsmodule/bn/bn.cc.inc",
@@ -76,7 +75,9 @@
             "crypto/fipsmodule/hkdf/hkdf.cc.inc",
             "crypto/fipsmodule/hmac/hmac.cc.inc",
             "crypto/fipsmodule/keccak/keccak.cc.inc",
+            "crypto/fipsmodule/mldsa/fips_known_values.inc",
             "crypto/fipsmodule/mldsa/mldsa.cc.inc",
+            "crypto/fipsmodule/mlkem/fips_known_values.inc",
             "crypto/fipsmodule/mlkem/mlkem.cc.inc",
             "crypto/fipsmodule/rand/ctrdrbg.cc.inc",
             "crypto/fipsmodule/rand/rand.cc.inc",
@@ -95,6 +96,7 @@
             "crypto/fipsmodule/slhdsa/slhdsa.cc.inc",
             "crypto/fipsmodule/slhdsa/thash.cc.inc",
             "crypto/fipsmodule/slhdsa/wots.cc.inc",
+            "crypto/fipsmodule/slhdsa/fips_known_values.inc",
             "crypto/fipsmodule/tls/kdf.cc.inc"
         ],
         "asm": [
@@ -140,8 +142,8 @@
         ],
         "perlasm_x86_64": [
             {"src": "crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl"},
-            {"src": "crypto/fipsmodule/aes/asm/aes-gcm-avx10-x86_64.pl"},
             {"src": "crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl"},
+            {"src": "crypto/fipsmodule/aes/asm/aes-gcm-avx512-x86_64.pl"},
             {"src": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl"},
             {"src": "crypto/fipsmodule/aes/asm/ghash-ssse3-x86_64.pl"},
             {"src": "crypto/fipsmodule/aes/asm/ghash-x86_64.pl"},
@@ -158,7 +160,8 @@
         ]
     },
     "crypto": {
-        "srcs": [
+      "srcs": [
+            "crypto/aes/aes.cc",
             "crypto/asn1/a_bitstr.cc",
             "crypto/asn1/a_bool.cc",
             "crypto/asn1/a_d2i_fp.cc",
@@ -201,6 +204,9 @@
             "crypto/blake2/blake2.cc",
             "crypto/bn/bn_asn1.cc",
             "crypto/bn/convert.cc",
+            "crypto/bn/div.cc",
+            "crypto/bn/exponentiation.cc",
+            "crypto/bn/sqrt.cc",
             "crypto/buf/buf.cc",
             "crypto/bytestring/asn1_compat.cc",
             "crypto/bytestring/ber.cc",
@@ -211,6 +217,7 @@
             "crypto/cipher/derive_key.cc",
             "crypto/cipher/get_cipher.cc",
             "crypto/cipher/e_aesctrhmac.cc",
+            "crypto/cipher/e_aeseax.cc",
             "crypto/cipher/e_aesgcmsiv.cc",
             "crypto/cipher/e_chacha20poly1305.cc",
             "crypto/cipher/e_des.cc",
@@ -219,6 +226,7 @@
             "crypto/cipher/e_rc4.cc",
             "crypto/cipher/e_tls.cc",
             "crypto/cipher/tls_cbc.cc",
+            "crypto/cms/cms.cc",
             "crypto/conf/conf.cc",
             "crypto/cpu_aarch64_apple.cc",
             "crypto/cpu_aarch64_fuchsia.cc",
@@ -267,6 +275,7 @@
             "crypto/evp/sign.cc",
             "crypto/ex_data.cc",
             "crypto/fipsmodule/fips_shared_support.cc",
+            "crypto/fuzzer_mode.cc",
             "crypto/hpke/hpke.cc",
             "crypto/hrss/hrss.cc",
             "crypto/kyber/kyber.cc",
@@ -418,6 +427,7 @@
             "include/openssl/chacha.h",
             "include/openssl/cipher.h",
             "include/openssl/cmac.h",
+            "include/openssl/cms.h",
             "include/openssl/conf.h",
             "include/openssl/cpu.h",
             "include/openssl/crypto.h",
@@ -540,7 +550,7 @@
             "crypto/poly1305/internal.h",
             "crypto/pool/internal.h",
             "crypto/rand/getrandom_fillin.h",
-            "crypto/rand/sysrand_internal.h",
+            "crypto/rand/internal.h",
             "crypto/rsa/internal.h",
             "crypto/spake2plus/internal.h",
             "crypto/trust_token/internal.h",
@@ -804,6 +814,7 @@
             "crypto/chacha/chacha_test.cc",
             "crypto/cipher/aead_test.cc",
             "crypto/cipher/cipher_test.cc",
+            "crypto/cms/cms_test.cc",
             "crypto/compiler_test.cc",
             "crypto/conf/conf_test.cc",
             "crypto/constant_time_test.cc",
@@ -904,6 +915,9 @@
             "crypto/mlkem/mlkem768_keygen_tests.txt",
             "crypto/mlkem/mlkem768_nist_decap_tests.txt",
             "crypto/mlkem/mlkem768_nist_keygen_tests.txt",
+            "crypto/pkcs7/test/*.p7c",
+            "crypto/pkcs7/test/*.p7s",
+            "crypto/pkcs7/test/*.pem",
             "crypto/pkcs8/test/*.p12",
             "crypto/poly1305/poly1305_tests.txt",
             "crypto/siphash/siphash_tests.txt",
@@ -1041,6 +1055,15 @@
         "srcs": [
             "rust/bssl-crypto/src/*.rs",
             "rust/bssl-crypto/src/*/*.rs"
+        ]
+    },
+    "modulewrapper": {
+        "srcs": [
+            "util/fipstools/acvp/modulewrapper/main.cc",
+            "util/fipstools/acvp/modulewrapper/modulewrapper.cc"
+        ],
+        "internal_hdrs": [
+            "util/fipstools/acvp/modulewrapper/modulewrapper.h"
         ]
     }
 }

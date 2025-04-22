@@ -233,7 +233,10 @@ int main(int argc, char **argv) {
   }
   const TestConfig *config =
       initial_config.handshaker_resume ? &resume_config : &initial_config;
-#if defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+  if (initial_config.fuzzer_mode) {
+    CRYPTO_set_fuzzer_mode(1);
+  }
   if (initial_config.handshaker_resume) {
     // If the PRNG returns exactly the same values when trying to resume then a
     // "random" session ID will happen to exactly match the session ID
@@ -242,7 +245,7 @@ int main(int argc, char **argv) {
     uint8_t byte;
     RAND_bytes(&byte, 1);
   }
-#endif  // BORINGSSL_UNSAFE_DETERMINISTIC_MODE
+#endif  // FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
 
   // read() will return the entire message in one go, because it's a datagram
   // socket.

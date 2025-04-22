@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_AES_INTERNAL_H
-#define OPENSSL_HEADER_AES_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_AES_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_AES_INTERNAL_H
 
 #include <stdlib.h>
 
-#include <openssl/aes.h>
-
+#include "../bcm_interface.h"
 #include "../../internal.h"
 
 extern "C" {
@@ -29,7 +28,7 @@ extern "C" {
 // Unlike upstream OpenSSL, it and the other functions in this file hard-code
 // |AES_KEY|. It is undefined in C to call a function pointer with anything
 // other than the original type. Thus we either must match |block128_f| to the
-// type signature of |AES_encrypt| and friends or pass in |void*| wrapper
+// type signature of |BCM_aes_encrypt| and friends or pass in |void*| wrapper
 // functions.
 //
 // These functions are called exclusively with AES, so we use the former.
@@ -314,7 +313,7 @@ enum gcm_impl_t {
   gcm_separate = 0,  // No combined AES-GCM, but may have AES-CTR and GHASH.
   gcm_x86_aesni,
   gcm_x86_vaes_avx2,
-  gcm_x86_vaes_avx10_512,
+  gcm_x86_vaes_avx512,
   gcm_arm64_aes,
 };
 
@@ -455,18 +454,16 @@ void aes_gcm_dec_update_vaes_avx2(const uint8_t *in, uint8_t *out, size_t len,
                                   const AES_KEY *key, const uint8_t ivec[16],
                                   const u128 Htable[16], uint8_t Xi[16]);
 
-void gcm_init_vpclmulqdq_avx10_512(u128 Htable[16], const uint64_t H[2]);
-void gcm_gmult_vpclmulqdq_avx10(uint8_t Xi[16], const u128 Htable[16]);
-void gcm_ghash_vpclmulqdq_avx10_512(uint8_t Xi[16], const u128 Htable[16],
-                                    const uint8_t *in, size_t len);
-void aes_gcm_enc_update_vaes_avx10_512(const uint8_t *in, uint8_t *out,
-                                       size_t len, const AES_KEY *key,
-                                       const uint8_t ivec[16],
-                                       const u128 Htable[16], uint8_t Xi[16]);
-void aes_gcm_dec_update_vaes_avx10_512(const uint8_t *in, uint8_t *out,
-                                       size_t len, const AES_KEY *key,
-                                       const uint8_t ivec[16],
-                                       const u128 Htable[16], uint8_t Xi[16]);
+void gcm_init_vpclmulqdq_avx512(u128 Htable[16], const uint64_t H[2]);
+void gcm_gmult_vpclmulqdq_avx512(uint8_t Xi[16], const u128 Htable[16]);
+void gcm_ghash_vpclmulqdq_avx512(uint8_t Xi[16], const u128 Htable[16],
+                                 const uint8_t *in, size_t len);
+void aes_gcm_enc_update_vaes_avx512(const uint8_t *in, uint8_t *out, size_t len,
+                                    const AES_KEY *key, const uint8_t ivec[16],
+                                    const u128 Htable[16], uint8_t Xi[16]);
+void aes_gcm_dec_update_vaes_avx512(const uint8_t *in, uint8_t *out, size_t len,
+                                    const AES_KEY *key, const uint8_t ivec[16],
+                                    const u128 Htable[16], uint8_t Xi[16]);
 
 #endif  // OPENSSL_X86_64
 
@@ -572,32 +569,6 @@ size_t CRYPTO_cts128_encrypt_block(const uint8_t *in, uint8_t *out, size_t len,
                                    block128_f block);
 
 
-// POLYVAL.
-//
-// POLYVAL is a polynomial authenticator that operates over a field very
-// similar to the one that GHASH uses. See
-// https://www.rfc-editor.org/rfc/rfc8452.html#section-3.
-
-struct polyval_ctx {
-  uint8_t S[16];
-  u128 Htable[16];
-  gmult_func gmult;
-  ghash_func ghash;
-};
-
-// CRYPTO_POLYVAL_init initialises |ctx| using |key|.
-void CRYPTO_POLYVAL_init(struct polyval_ctx *ctx, const uint8_t key[16]);
-
-// CRYPTO_POLYVAL_update_blocks updates the accumulator in |ctx| given the
-// blocks from |in|. Only a whole number of blocks can be processed so |in_len|
-// must be a multiple of 16.
-void CRYPTO_POLYVAL_update_blocks(struct polyval_ctx *ctx, const uint8_t *in,
-                                  size_t in_len);
-
-// CRYPTO_POLYVAL_finish writes the accumulator from |ctx| to |out|.
-void CRYPTO_POLYVAL_finish(const struct polyval_ctx *ctx, uint8_t out[16]);
-
-
 }  // extern C
 
-#endif  // OPENSSL_HEADER_AES_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_AES_INTERNAL_H

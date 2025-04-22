@@ -19,17 +19,12 @@
 
 #include <stdint.h>
 
-OPENSSL_MSVC_PRAGMA(warning(push))
-OPENSSL_MSVC_PRAGMA(warning(disable : 4702))
-
 #include <functional>
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
-
-OPENSSL_MSVC_PRAGMA(warning(pop))
 
 // File-based test framework.
 //

@@ -119,6 +119,33 @@ uint64_t reconstruct_seqnum(uint16_t wire_seq, uint64_t seq_mask,
   return seqnum;
 }
 
+DTLSReadEpoch *dtls_get_read_epoch(const SSL *ssl, uint16_t epoch) {
+  if (epoch == ssl->d1->read_epoch.epoch) {
+    return &ssl->d1->read_epoch;
+  }
+  if (ssl->d1->next_read_epoch != nullptr &&
+      epoch == ssl->d1->next_read_epoch->epoch) {
+    return ssl->d1->next_read_epoch.get();
+  }
+  if (ssl->d1->prev_read_epoch != nullptr &&
+      epoch == ssl->d1->prev_read_epoch->epoch.epoch) {
+    return &ssl->d1->prev_read_epoch->epoch;
+  }
+  return nullptr;
+}
+
+DTLSWriteEpoch *dtls_get_write_epoch(const SSL *ssl, uint16_t epoch) {
+  if (ssl->d1->write_epoch.epoch() == epoch) {
+    return &ssl->d1->write_epoch;
+  }
+  for (const auto &e : ssl->d1->extra_write_epochs) {
+    if (e->epoch() == epoch) {
+      return e.get();
+    }
+  }
+  return nullptr;
+}
+
 static Span<uint8_t> cbs_to_writable_bytes(CBS cbs) {
   return Span(const_cast<uint8_t *>(CBS_data(&cbs)), CBS_len(&cbs));
 }
@@ -177,16 +204,7 @@ static bool parse_dtls13_record(SSL *ssl, CBS *in, ParsedDTLSRecord *out) {
 
   // Look up the corresponding epoch. This header form only matches encrypted
   // DTLS 1.3 epochs.
-  DTLSReadEpoch *read_epoch = nullptr;
-  if (epoch == ssl->d1->read_epoch.epoch) {
-    read_epoch = &ssl->d1->read_epoch;
-  } else if (ssl->d1->next_read_epoch != nullptr &&
-             epoch == ssl->d1->next_read_epoch->epoch) {
-    read_epoch = ssl->d1->next_read_epoch.get();
-  } else if (ssl->d1->prev_read_epoch != nullptr &&
-             epoch == ssl->d1->prev_read_epoch->epoch.epoch) {
-    read_epoch = &ssl->d1->prev_read_epoch->epoch;
-  }
+  DTLSReadEpoch *read_epoch = dtls_get_read_epoch(ssl, epoch);
   if (read_epoch != nullptr && use_dtls13_record_header(ssl, epoch)) {
     out->read_epoch = read_epoch;
 
@@ -406,18 +424,6 @@ enum ssl_open_record_t dtls_open_record(SSL *ssl, uint8_t *out_type,
   return ssl_open_record_success;
 }
 
-static DTLSWriteEpoch *get_write_epoch(const SSL *ssl, uint16_t epoch) {
-  if (ssl->d1->write_epoch.epoch() == epoch) {
-    return &ssl->d1->write_epoch;
-  }
-  for (const auto &e : ssl->d1->extra_write_epochs) {
-    if (e->epoch() == epoch) {
-      return e.get();
-    }
-  }
-  return nullptr;
-}
-
 size_t dtls_record_header_write_len(const SSL *ssl, uint16_t epoch) {
   if (!use_dtls13_record_header(ssl, epoch)) {
     return DTLS_PLAINTEXT_RECORD_HEADER_LENGTH;
@@ -431,7 +437,7 @@ size_t dtls_record_header_write_len(const SSL *ssl, uint16_t epoch) {
 }
 
 size_t dtls_max_seal_overhead(const SSL *ssl, uint16_t epoch) {
-  DTLSWriteEpoch *write_epoch = get_write_epoch(ssl, epoch);
+  DTLSWriteEpoch *write_epoch = dtls_get_write_epoch(ssl, epoch);
   if (write_epoch == nullptr) {
     return 0;
   }
@@ -445,7 +451,7 @@ size_t dtls_max_seal_overhead(const SSL *ssl, uint16_t epoch) {
 }
 
 size_t dtls_seal_prefix_len(const SSL *ssl, uint16_t epoch) {
-  DTLSWriteEpoch *write_epoch = get_write_epoch(ssl, epoch);
+  DTLSWriteEpoch *write_epoch = dtls_get_write_epoch(ssl, epoch);
   if (write_epoch == nullptr) {
     return 0;
   }
@@ -454,7 +460,7 @@ size_t dtls_seal_prefix_len(const SSL *ssl, uint16_t epoch) {
 }
 
 size_t dtls_seal_max_input_len(const SSL *ssl, uint16_t epoch, size_t max_out) {
-  DTLSWriteEpoch *write_epoch = get_write_epoch(ssl, epoch);
+  DTLSWriteEpoch *write_epoch = dtls_get_write_epoch(ssl, epoch);
   if (write_epoch == nullptr) {
     return 0;
   }
@@ -482,7 +488,7 @@ bool dtls_seal_record(SSL *ssl, DTLSRecordNumber *out_number, uint8_t *out,
   }
 
   // Determine the parameters for the current epoch.
-  DTLSWriteEpoch *write_epoch = get_write_epoch(ssl, epoch);
+  DTLSWriteEpoch *write_epoch = dtls_get_write_epoch(ssl, epoch);
   if (write_epoch == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;

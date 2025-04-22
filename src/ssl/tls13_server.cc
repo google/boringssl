@@ -192,6 +192,7 @@ static bool add_new_session_tickets(SSL_HANDSHAKE *hs, bool *out_sent_tickets) {
       session->ticket_max_early_data =
           SSL_is_quic(ssl) ? 0xffffffff : kMaxEarlyDataAccepted;
     }
+    session->is_resumable_across_names = ssl->resumption_across_names_enabled;
 
     static_assert(kMaxTickets < 256, "Too many tickets");
     assert(i < 256);
@@ -228,6 +229,14 @@ static bool add_new_session_tickets(SSL_HANDSHAKE *hs, bool *out_sent_tickets) {
           !CBB_flush(&extensions)) {
         return false;
       }
+    }
+
+    SSLFlags flags = 0;
+    if (session->is_resumable_across_names) {
+      flags |= kSSLFlagResumptionAcrossNames;
+    }
+    if (!ssl_add_flags_extension(&extensions, flags)) {
+      return false;
     }
 
     // Add a fake extension. See RFC 8701.
@@ -711,7 +720,8 @@ static enum ssl_hs_wait_t do_send_hello_retry_request(SSL_HANDSHAKE *hs) {
   ScopedCBB cbb;
   CBB body, session_id, extensions;
   if (!ssl->method->init_message(ssl, cbb.get(), &body, SSL3_MT_SERVER_HELLO) ||
-      !CBB_add_u16(&body, TLS1_2_VERSION) ||
+      !CBB_add_u16(&body,
+                   SSL_is_dtls(ssl) ? DTLS1_2_VERSION : TLS1_2_VERSION) ||
       !CBB_add_bytes(&body, kHelloRetryRequest, SSL3_RANDOM_SIZE) ||
       !CBB_add_u8_length_prefixed(&body, &session_id) ||
       !CBB_add_bytes(&session_id, hs->session_id.data(),
@@ -907,15 +917,12 @@ static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
     }
   }
 
-  uint16_t server_hello_version = TLS1_2_VERSION;
-  if (SSL_is_dtls(ssl)) {
-    server_hello_version = DTLS1_2_VERSION;
-  }
   Array<uint8_t> server_hello;
   ScopedCBB cbb;
   CBB body, extensions, session_id;
   if (!ssl->method->init_message(ssl, cbb.get(), &body, SSL3_MT_SERVER_HELLO) ||
-      !CBB_add_u16(&body, server_hello_version) ||
+      !CBB_add_u16(&body,
+                   SSL_is_dtls(ssl) ? DTLS1_2_VERSION : TLS1_2_VERSION) ||
       !CBB_add_bytes(&body, ssl->s3->server_random,
                      sizeof(ssl->s3->server_random)) ||
       !CBB_add_u8_length_prefixed(&body, &session_id) ||
@@ -979,11 +986,6 @@ static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
   if (!ssl->s3->session_reused && !hs->pake_verifier) {
     // Determine whether to request a client certificate.
     hs->cert_request = !!(hs->config->verify_mode & SSL_VERIFY_PEER);
-    // Only request a certificate if Channel ID isn't negotiated.
-    if ((hs->config->verify_mode & SSL_VERIFY_PEER_IF_NO_OBC) &&
-        hs->channel_id_negotiated) {
-      hs->cert_request = false;
-    }
   }
 
   // Send a CertificateRequest, if necessary.

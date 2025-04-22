@@ -32,9 +32,7 @@
 #define O_BINARY 0
 #endif
 #else
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #include <io.h>
 #if !defined(PATH_MAX)
 #define PATH_MAX MAX_PATH

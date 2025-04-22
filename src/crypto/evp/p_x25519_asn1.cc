@@ -143,11 +143,11 @@ static int x25519_pub_encode(CBB *out, const EVP_PKEY *pkey) {
   const X25519_KEY *key = reinterpret_cast<X25519_KEY *>(pkey->pkey);
 
   // See RFC 8410, section 4.
-  CBB spki, algorithm, oid, key_bitstring;
+  CBB spki, algorithm, key_bitstring;
   if (!CBB_add_asn1(out, &spki, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&spki, &algorithm, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, x25519_asn1_meth.oid, x25519_asn1_meth.oid_len) ||
+      !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, x25519_asn1_meth.oid,
+                            x25519_asn1_meth.oid_len) ||
       !CBB_add_asn1(&spki, &key_bitstring, CBS_ASN1_BITSTRING) ||
       !CBB_add_u8(&key_bitstring, 0 /* padding */) ||
       !CBB_add_bytes(&key_bitstring, key->pub, 32) ||  //
@@ -188,12 +188,12 @@ static int x25519_priv_encode(CBB *out, const EVP_PKEY *pkey) {
   }
 
   // See RFC 8410, section 7.
-  CBB pkcs8, algorithm, oid, private_key, inner;
+  CBB pkcs8, algorithm, private_key, inner;
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
       !CBB_add_asn1(&pkcs8, &algorithm, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, x25519_asn1_meth.oid, x25519_asn1_meth.oid_len) ||
+      !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, x25519_asn1_meth.oid,
+                            x25519_asn1_meth.oid_len) ||
       !CBB_add_asn1(&pkcs8, &private_key, CBS_ASN1_OCTETSTRING) ||
       !CBB_add_asn1(&private_key, &inner, CBS_ASN1_OCTETSTRING) ||
       // The PKCS#8 encoding stores only the 32-byte seed which is the first 32

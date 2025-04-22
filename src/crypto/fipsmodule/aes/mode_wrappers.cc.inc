@@ -19,6 +19,15 @@
 #include "../aes/internal.h"
 #include "../service_indicator/internal.h"
 
+namespace {
+void aes_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
+  BCM_aes_encrypt(in, out, key);
+}
+
+void aes_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
+  BCM_aes_decrypt(in, out, key);
+}
+}
 
 void AES_ctr128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
                         const AES_KEY *key, uint8_t ivec[AES_BLOCK_SIZE],
@@ -45,9 +54,9 @@ void AES_ecb_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key,
   assert((AES_ENCRYPT == enc) || (AES_DECRYPT == enc));
 
   if (AES_ENCRYPT == enc) {
-    AES_encrypt(in, out, key);
+    BCM_aes_encrypt(in, out, key);
   } else {
-    AES_decrypt(in, out, key);
+    BCM_aes_decrypt(in, out, key);
   }
 
   FIPS_service_indicator_update_state();
@@ -60,9 +69,9 @@ void AES_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t len,
   } else if (!vpaes_capable()) {
     aes_nohw_cbc_encrypt(in, out, len, key, ivec, enc);
   } else if (enc) {
-    CRYPTO_cbc128_encrypt(in, out, len, key, ivec, AES_encrypt);
+    CRYPTO_cbc128_encrypt(in, out, len, key, ivec, aes_encrypt);
   } else {
-    CRYPTO_cbc128_decrypt(in, out, len, key, ivec, AES_decrypt);
+    CRYPTO_cbc128_decrypt(in, out, len, key, ivec, aes_decrypt);
   }
 
   FIPS_service_indicator_update_state();
@@ -71,7 +80,7 @@ void AES_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t len,
 void AES_ofb128_encrypt(const uint8_t *in, uint8_t *out, size_t length,
                         const AES_KEY *key, uint8_t *ivec, int *num) {
   unsigned num_u = (unsigned)(*num);
-  CRYPTO_ofb128_encrypt(in, out, length, key, ivec, &num_u, AES_encrypt);
+  CRYPTO_ofb128_encrypt(in, out, length, key, ivec, &num_u, aes_encrypt);
   *num = (int)num_u;
 }
 
@@ -79,6 +88,6 @@ void AES_cfb128_encrypt(const uint8_t *in, uint8_t *out, size_t length,
                         const AES_KEY *key, uint8_t *ivec, int *num,
                         int enc) {
   unsigned num_u = (unsigned)(*num);
-  CRYPTO_cfb128_encrypt(in, out, length, key, ivec, &num_u, enc, AES_encrypt);
+  CRYPTO_cfb128_encrypt(in, out, length, key, ivec, &num_u, enc, aes_encrypt);
   *num = (int)num_u;
 }

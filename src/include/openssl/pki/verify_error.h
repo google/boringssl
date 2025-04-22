@@ -15,7 +15,7 @@
 #if !defined(OPENSSL_HEADER_BSSL_PKI_VERIFY_ERROR_H_) && defined(__cplusplus)
 #define OPENSSL_HEADER_BSSL_PKI_VERIFY_ERROR_H_
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <string>
 

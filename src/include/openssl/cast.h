@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_CAST_H
 #define OPENSSL_HEADER_CAST_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #ifdef  __cplusplus
 extern "C" {

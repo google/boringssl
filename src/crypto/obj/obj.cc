@@ -278,14 +278,8 @@ int OBJ_txt2nid(const char *s) {
 
 OPENSSL_EXPORT int OBJ_nid2cbb(CBB *out, int nid) {
   const ASN1_OBJECT *obj = OBJ_nid2obj(nid);
-  CBB oid;
-
-  if (obj == NULL || !CBB_add_asn1(out, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, obj->data, obj->length) || !CBB_flush(out)) {
-    return 0;
-  }
-
-  return 1;
+  return obj != NULL &&
+         CBB_add_asn1_element(out, CBS_ASN1_OBJECT, obj->data, obj->length);
 }
 
 const ASN1_OBJECT *OBJ_get_undef(void) {

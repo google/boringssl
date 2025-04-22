@@ -56,7 +56,9 @@ SSL_HANDSHAKE::SSL_HANDSHAKE(SSL *ssl_arg)
       apply_jdk11_workaround(false),
       can_release_private_key(false),
       channel_id_negotiated(false),
-      received_hello_verify_request(false) {
+      received_hello_verify_request(false),
+      matched_peer_trust_anchor(false),
+      peer_matched_trust_anchor(false) {
   assert(ssl);
 
   // Draw entropy for all GREASE values at once. This avoids calling
@@ -384,10 +386,10 @@ enum ssl_hs_wait_t ssl_get_finished(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
-  int finished_ok = CBS_mem_equal(&msg.body, finished, finished_len);
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  finished_ok = 1;
-#endif
+  bool finished_ok = CBS_mem_equal(&msg.body, finished, finished_len);
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    finished_ok = true;
+  }
   if (!finished_ok) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_DECRYPT_ERROR);
     OPENSSL_PUT_ERROR(SSL, SSL_R_DIGEST_CHECK_FAILED);

@@ -15,7 +15,7 @@
 #include <openssl/rand.h>
 
 #include "../bcm_support.h"
-#include "sysrand_internal.h"
+#include "internal.h"
 
 #if defined(OPENSSL_RAND_DETERMINISTIC)
 

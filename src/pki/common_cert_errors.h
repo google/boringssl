@@ -58,6 +58,10 @@ OPENSSL_EXPORT extern const CertErrorId kTargetCertShouldNotBeCa;
 // keyCertSign KeyUsage was not set.
 OPENSSL_EXPORT extern const CertErrorId kKeyCertSignBitNotSet;
 
+// The certificate is being used for RCS MLS but the required digitalSignature
+// bit was either not set, or was not the only bit set.
+OPENSSL_EXPORT extern const CertErrorId kKeyUsageIncorrectForRcsMlsClient;
+
 // The chain violates the max_path_length from BasicConstraints.
 OPENSSL_EXPORT extern const CertErrorId kMaxPathLengthViolated;
 
@@ -138,6 +142,15 @@ OPENSSL_EXPORT extern const CertErrorId kEkuHasProhibitedTimeStamping;
 
 // The certificate's EKU has Code Signing when it should not.
 OPENSSL_EXPORT extern const CertErrorId kEkuHasProhibitedCodeSigning;
+
+// The certificate's EKU is incorrect for an RcsMlsClient.
+OPENSSL_EXPORT extern const CertErrorId kEkuIncorrectForRcsMlsClient;
+
+// The certificate's EKU is incorrect for C2PA Time Stamping
+OPENSSL_EXPORT extern const CertErrorId kEkuIncorrectForC2PATimeStamping;
+
+// The certificate's EKU is incorrect for C2PA Manifest Signing
+OPENSSL_EXPORT extern const CertErrorId kEkuIncorrectForC2PAManifest;
 
 // The certificate does not have EKU.
 OPENSSL_EXPORT extern const CertErrorId kEkuNotPresent;

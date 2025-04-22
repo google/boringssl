@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_EVP_INTERNAL_H
-#define OPENSSL_HEADER_EVP_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_EVP_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_EVP_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -265,4 +265,4 @@ void evp_pkey_set_method(EVP_PKEY *pkey, const EVP_PKEY_ASN1_METHOD *method);
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_EVP_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_EVP_INTERNAL_H

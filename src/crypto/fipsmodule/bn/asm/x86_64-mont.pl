@@ -70,7 +70,7 @@ open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";
 # output, so this isn't useful anyway.
 $addx = 1;
 
-# int bn_mul_mont_nohw(
+# void bn_mul_mont_nohw(
 $rp="%rdi";	# BN_ULONG *rp,
 $ap="%rsi";	# const BN_ULONG *ap,
 $bp="%rdx";	# const BN_ULONG *bp,
@@ -315,7 +315,7 @@ $code.=<<___;
 
 	mov	8(%rsp,$num,8),%rsi	# restore %rsp
 .cfi_def_cfa	%rsi,8
-	mov	\$1,%rax
+	# No return value
 	mov	-48(%rsi),%r15
 .cfi_restore	%r15
 	mov	-40(%rsi),%r14
@@ -762,7 +762,7 @@ ___
 $code.=<<___;
 	mov	8(%rsp,$num,8),%rsi	# restore %rsp
 .cfi_def_cfa	%rsi, 8
-	mov	\$1,%rax
+	# No return value
 	mov	-48(%rsi),%r15
 .cfi_restore	%r15
 	mov	-40(%rsi),%r14
@@ -785,7 +785,7 @@ ___
 }}}
 {{{
 ######################################################################
-# int bn_sqr8x_mont(
+# void bn_sqr8x_mont(
 my $rptr="%rdi";	# const BN_ULONG *rptr,
 my $aptr="%rsi";	# const BN_ULONG *aptr,
 my $mulx_adx_capable="%rdx"; # Different than upstream!
@@ -976,7 +976,7 @@ $code.=<<___;
 	add	\$32,$num
 	jnz	.Lsqr8x_cond_copy
 
-	mov	\$1,%rax
+	# No return value
 	mov	-48(%rsi),%r15
 .cfi_restore	%r15
 	mov	-40(%rsi),%r14
@@ -1345,7 +1345,7 @@ $code.=<<___;
 
 	mov	%rdx,($tptr)
 
-	mov	\$1,%rax
+	# No return value
 	mov	-48(%rsi),%r15
 .cfi_restore	%r15
 	mov	-40(%rsi),%r14

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_SHA_H
 #define OPENSSL_HEADER_SHA_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <openssl/bcm_public.h> // IWYU pragma: export
 
 #if defined(__cplusplus)

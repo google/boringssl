@@ -296,7 +296,6 @@ class ChaChaRecordNumberEncrypter : public RecordNumberEncrypter {
   uint8_t key_[kKeySize];
 };
 
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
 class NullRecordNumberEncrypter : public RecordNumberEncrypter {
  public:
   size_t KeySize() override { return 0; }
@@ -306,7 +305,6 @@ class NullRecordNumberEncrypter : public RecordNumberEncrypter {
     return true;
   }
 };
-#endif  // BORINGSSL_UNSAFE_FUZZER_MODE
 
 }  // namespace
 
@@ -314,10 +312,9 @@ UniquePtr<RecordNumberEncrypter> RecordNumberEncrypter::Create(
     const SSL_CIPHER *cipher, Span<const uint8_t> traffic_secret) {
   const EVP_MD *digest = ssl_get_handshake_digest(TLS1_3_VERSION, cipher);
   UniquePtr<RecordNumberEncrypter> ret;
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  ret = MakeUnique<NullRecordNumberEncrypter>();
-#else
-  if (cipher->algorithm_enc == SSL_AES128GCM) {
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    ret = MakeUnique<NullRecordNumberEncrypter>();
+  } else if (cipher->algorithm_enc == SSL_AES128GCM) {
     ret = MakeUnique<AES128RecordNumberEncrypter>();
   } else if (cipher->algorithm_enc == SSL_AES256GCM) {
     ret = MakeUnique<AES256RecordNumberEncrypter>();
@@ -326,7 +323,6 @@ UniquePtr<RecordNumberEncrypter> RecordNumberEncrypter::Create(
   } else {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
   }
-#endif  // BORINGSSL_UNSAFE_FUZZER_MODE
   if (ret == nullptr) {
     return nullptr;
   }
@@ -474,7 +470,7 @@ bool tls13_derive_session_psk(SSL_SESSION *session, Span<const uint8_t> nonce,
 
 static const char kTLS13LabelExportKeying[] = "exporter";
 
-bool tls13_export_keying_material(SSL *ssl, Span<uint8_t> out,
+bool tls13_export_keying_material(const SSL *ssl, Span<uint8_t> out,
                                   Span<const uint8_t> secret,
                                   std::string_view label,
                                   Span<const uint8_t> context) {
@@ -628,9 +624,9 @@ bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
   bool binder_ok =
       CBS_len(&binder) == verify_data_len &&
       CRYPTO_memcmp(CBS_data(&binder), verify_data, verify_data_len) == 0;
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
-  binder_ok = true;
-#endif
+  if (CRYPTO_fuzzer_mode_enabled()) {
+    binder_ok = true;
+  }
   if (!binder_ok) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_DIGEST_CHECK_FAILED);
     return false;

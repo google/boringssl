@@ -50,10 +50,8 @@
 #include <utility>
 
 #include <io.h>
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
 #include <ws2tcpip.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 
 OPENSSL_MSVC_PRAGMA(comment(lib, "Ws2_32.lib"))
 #endif

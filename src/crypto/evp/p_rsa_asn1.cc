@@ -28,11 +28,11 @@
 static int rsa_pub_encode(CBB *out, const EVP_PKEY *key) {
   // See RFC 3279, section 2.3.1.
   const RSA *rsa = reinterpret_cast<const RSA *>(key->pkey);
-  CBB spki, algorithm, oid, null, key_bitstring;
+  CBB spki, algorithm, null, key_bitstring;
   if (!CBB_add_asn1(out, &spki, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&spki, &algorithm, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, rsa_asn1_meth.oid, rsa_asn1_meth.oid_len) ||
+      !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, rsa_asn1_meth.oid,
+                            rsa_asn1_meth.oid_len) ||
       !CBB_add_asn1(&algorithm, &null, CBS_ASN1_NULL) ||
       !CBB_add_asn1(&spki, &key_bitstring, CBS_ASN1_BITSTRING) ||
       !CBB_add_u8(&key_bitstring, 0 /* padding */) ||
@@ -76,12 +76,12 @@ static int rsa_pub_cmp(const EVP_PKEY *a, const EVP_PKEY *b) {
 
 static int rsa_priv_encode(CBB *out, const EVP_PKEY *key) {
   const RSA *rsa = reinterpret_cast<const RSA *>(key->pkey);
-  CBB pkcs8, algorithm, oid, null, private_key;
+  CBB pkcs8, algorithm, null, private_key;
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
       !CBB_add_asn1(&pkcs8, &algorithm, CBS_ASN1_SEQUENCE) ||
-      !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
-      !CBB_add_bytes(&oid, rsa_asn1_meth.oid, rsa_asn1_meth.oid_len) ||
+      !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, rsa_asn1_meth.oid,
+                            rsa_asn1_meth.oid_len) ||
       !CBB_add_asn1(&algorithm, &null, CBS_ASN1_NULL) ||
       !CBB_add_asn1(&pkcs8, &private_key, CBS_ASN1_OCTETSTRING) ||
       !RSA_marshal_private_key(&private_key, rsa) ||  //

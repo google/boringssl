@@ -156,16 +156,6 @@ L005sqr_sse2_loop:
 	popl	%ebx
 	popl	%ebp
 	ret
-.globl	_bn_div_words
-.private_extern	_bn_div_words
-.align	4
-_bn_div_words:
-L_bn_div_words_begin:
-	movl	4(%esp),%edx
-	movl	8(%esp),%eax
-	movl	12(%esp),%ecx
-	divl	%ecx
-	ret
 .globl	_bn_add_words
 .private_extern	_bn_add_words
 .align	4

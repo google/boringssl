@@ -18,9 +18,7 @@
 
 #if defined(OPENSSL_WINDOWS_THREADS)
 
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 
 #include <assert.h>
 #include <stdlib.h>

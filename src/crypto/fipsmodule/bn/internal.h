@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_BN_INTERNAL_H
-#define OPENSSL_HEADER_BN_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_BN_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_BN_INTERNAL_H
 
 #include <openssl/bn.h>
 
 #if defined(OPENSSL_X86_64) && defined(_MSC_VER)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <intrin.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #pragma intrinsic(__umulh, _umul128)
 #endif
 
@@ -263,11 +261,15 @@ int bn_rand_range_words(BN_ULONG *out, BN_ULONG min_inclusive,
 int bn_rand_secret_range(BIGNUM *r, int *out_is_uniform, BN_ULONG min_inclusive,
                          const BIGNUM *max_exclusive);
 
-// BN_MONTGOMERY_MAX_WORDS is the maximum numer of words allowed in a |BIGNUM|
+// BN_MONTGOMERY_MAX_WORDS is the maximum number of words allowed in a |BIGNUM|
 // used with Montgomery reduction. Ideally this limit would be applied to all
 // |BIGNUM|s, in |bn_wexpand|, but the exactfloat library needs to create 8 MiB
 // values for other operations.
-#define BN_MONTGOMERY_MAX_WORDS (8 * 1024 / sizeof(BN_ULONG))
+//
+// TODO(crbug.com/402677800): This is not quite tight enough to limit the
+// |bn_mul_mont| allocation to under a page. Lower the maximum RSA key and then
+// lower this to match.
+#define BN_MONTGOMERY_MAX_WORDS (16384 / BN_BITS2)
 
 #if !defined(OPENSSL_NO_ASM) &&                         \
     (defined(OPENSSL_X86) || defined(OPENSSL_X86_64) || \
@@ -275,14 +277,14 @@ int bn_rand_secret_range(BIGNUM *r, int *out_is_uniform, BN_ULONG min_inclusive,
 #define OPENSSL_BN_ASM_MONT
 // bn_mul_mont writes |ap| * |bp| mod |np| to |rp|, each |num| words
 // long. Inputs and outputs are in Montgomery form. |n0| is a pointer to the
-// corresponding field in |BN_MONT_CTX|. It returns one if |bn_mul_mont| handles
-// inputs of this size and zero otherwise.
+// corresponding field in |BN_MONT_CTX|.
 //
 // If at least one of |ap| or |bp| is fully reduced, |rp| will be fully reduced.
 // If neither is fully-reduced, the output may not be either.
 //
-// This function allocates |num| words on the stack, so |num| should be at most
-// |BN_MONTGOMERY_MAX_WORDS|.
+// This function allocates up to 2 * |num| words (plus a constant allocation) on
+// the stack, so |num| should be at most |BN_MONTGOMERY_MAX_WORDS|.
+// Additionally, |num| must be at least 128 / |BN_BITS2|.
 //
 // TODO(davidben): The x86_64 implementation expects a 32-bit input and masks
 // off upper bits. The aarch64 implementation expects a 64-bit input and does
@@ -291,39 +293,39 @@ int bn_rand_secret_range(BIGNUM *r, int *out_is_uniform, BN_ULONG min_inclusive,
 //
 // See also discussion in |ToWord| in abi_test.h for notes on smaller-than-word
 // inputs.
-int bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                 const BN_ULONG *np, const BN_ULONG *n0, size_t num);
 
 #if defined(OPENSSL_X86_64)
 inline int bn_mulx_adx_capable(void) {
   // MULX is in BMI2.
   return CRYPTO_is_BMI2_capable() && CRYPTO_is_ADX_capable();
 }
-int bn_mul_mont_nohw(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                     const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_mul_mont_nohw(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                      const BN_ULONG *np, const BN_ULONG *n0, size_t num);
 inline int bn_mul4x_mont_capable(size_t num) {
   return num >= 8 && (num & 3) == 0;
 }
-int bn_mul4x_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                  const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_mul4x_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                   const BN_ULONG *np, const BN_ULONG *n0, size_t num);
 inline int bn_mulx4x_mont_capable(size_t num) {
   return bn_mul4x_mont_capable(num) && bn_mulx_adx_capable();
 }
-int bn_mulx4x_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                   const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_mulx4x_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                    const BN_ULONG *np, const BN_ULONG *n0, size_t num);
 inline int bn_sqr8x_mont_capable(size_t num) {
   return num >= 8 && (num & 7) == 0;
 }
-int bn_sqr8x_mont(BN_ULONG *rp, const BN_ULONG *ap, BN_ULONG mulx_adx_capable,
-                  const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_sqr8x_mont(BN_ULONG *rp, const BN_ULONG *ap, BN_ULONG mulx_adx_capable,
+                   const BN_ULONG *np, const BN_ULONG *n0, size_t num);
 #elif defined(OPENSSL_ARM)
 inline int bn_mul8x_mont_neon_capable(size_t num) {
   return (num & 7) == 0 && CRYPTO_is_NEON_capable();
 }
-int bn_mul8x_mont_neon(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                       const BN_ULONG *np, const BN_ULONG *n0, size_t num);
-int bn_mul_mont_nohw(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
-                     const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_mul8x_mont_neon(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                        const BN_ULONG *np, const BN_ULONG *n0, size_t num);
+void bn_mul_mont_nohw(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
+                      const BN_ULONG *np, const BN_ULONG *n0, size_t num);
 #endif
 
 #endif  // OPENSSL_BN_ASM_MONT
@@ -721,4 +723,4 @@ void bn_words_to_big_endian(uint8_t *out, size_t out_len, const BN_ULONG *in,
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_BN_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_BN_INTERNAL_H

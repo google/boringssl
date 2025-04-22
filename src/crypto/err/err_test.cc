@@ -26,9 +26,7 @@
 #include "./internal.h"
 
 #if defined(OPENSSL_WINDOWS)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
 #else
 #include <errno.h>
 #endif

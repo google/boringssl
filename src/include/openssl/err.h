@@ -17,7 +17,7 @@
 
 #include <stdio.h>
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #if defined(__cplusplus)
 extern "C" {
@@ -253,6 +253,7 @@ enum {
   ERR_LIB_CIPHER,
   ERR_LIB_HKDF,
   ERR_LIB_TRUST_TOKEN,
+  ERR_LIB_CMS,
   ERR_LIB_USER,
   ERR_NUM_LIBS
 };

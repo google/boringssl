@@ -25,7 +25,6 @@ vars = {
   'checkout_nasm': False,
   'checkout_libcxx': False,
   'checkout_riscv64': False,
-  'vs_version': '2022',
 
   # Run the following command to see the latest builds in CIPD:
   #  cipd describe PACKAGE_NAME -version latest
@@ -34,26 +33,29 @@ vars = {
   # Keep this in sync with .bazelversion.
   'bazel_version': 'version:3@7.5.0.chromium.1',
   # infra/3pp/tools/cmake/linux-amd64
-  'cmake_version': 'version:3@3.31.5.chromium.8',
+  'cmake_version': 'version:3@3.31.7.chromium.8',
   # infra/3pp/tools/go/linux-amd64
-  'go_version': 'version:3@1.24.0',
+  'go_version': 'version:3@1.24.2',
   # infra/3pp/tools/perl/windows-amd64
-  'perl_version': 'version:2@5.32.1.1',
+  'perl_version': 'version:3@5.38.2.2',
+  # chrome_internal/third_party/sdk/windows, but if an update switches this to a
+  # new major VS release, keep some bots at the older version.
+  'windows_sdk_version': 'uploaded:2024-01-11',
 
   # Update the following from
   # https://chromium.googlesource.com/chromium/src/+/main/DEPS
-  'android_sdk_platform-tools_version': 'WihaseZR6cojZbkzIqwGhpTp92ztaGfqq8njBU8eTXYC',
+  'android_sdk_platform-tools_version': 'mjFmRj7k_XR9yj60pYbr9mG38FyEbU5oWdU56bZQ5cwC',
   'libfuzzer_revision': 'e31b99917861f891308269c36a32363b120126bb',
-  'libcxx_revision': '61c68567ca977656440757c3effe124057509e8f',
-  'libcxxabi_revision': '634228a732a1d9ae1a6d459556e8fc58707cf961',
-  'llvm_libc_revision': '5333472378a666cca9d0fcf6551b4d768c70a55c',
+  'libcxx_revision': 'bf30ab1b37bc976f82a46fa7f15e30235c4a1a49',
+  'libcxxabi_revision': 'e01dce316dd430f006c8af7d1179f83270236e24',
+  'llvm_libc_revision': 'f86693f91c5aa0566fa403f4189c943744155ca6',
   'ninja_version': 'version:2@1.12.1.chromium.4',
 
   # Update to the latest revision of
   # https://chromium.googlesource.com/chromium/src/tools/clang
-  'tools_clang_revision': '2ca96532f8f3dfc83e43070fca2549ed6393699d',
+  'tools_clang_revision': 'a7f7a7df1c3b38293f869dbdc74d494cb962bda7',
 
-  # The Android NDK cannot be updated until https://crbug.com/boringssl/454 is fixed.
+  # The Android NDK cannot be updated until https://crbug.com/42290318 is fixed.
   # We rely on an older NDK to test building without NEON instructions as the baseline.
   'android_ndk_revision': 'U0e8L6l52ySjBrUBB82Vdyhsg60vVMqH0ItTW3TRHAQC',
   'qemu_static_version': 'gYNEUqCr-Tu1C_vBu68YFtN31hjjLe61dnI2AtuyEsYC',
@@ -150,6 +152,15 @@ deps = {
       'dep_type': 'cipd',
   },
 
+  'boringssl/util/bot/windows_sdk': {
+    'packages': [{
+      'package': 'chrome_internal/third_party/sdk/windows',
+      'version': Var('windows_sdk_version'),
+    }],
+    'condition': 'host_os == "win"',
+    'dep_type': 'cipd',
+  },
+
   'boringssl/util/bot/tools/clang': {
     'url': Var('chromium_git') + '/chromium/src/tools/clang.git' + '@' + Var('tools_clang_revision'),
     'condition': 'checkout_clang',
@@ -172,16 +183,6 @@ hooks = [
                 '--no_auth',
                 '--bucket', 'chromium-tools',
                 '-s', 'boringssl/util/bot/nasm-win32.exe.sha1',
-    ],
-  },
-  {
-    'name': 'win_toolchain',
-    'pattern': '.',
-    'condition': 'host_os == "win"',
-    'action': [ 'python3',
-                'boringssl/util/bot/vs_toolchain.py',
-                'update',
-                Var('vs_version'),
     ],
   },
   {

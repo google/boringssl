@@ -31,6 +31,10 @@
 #include "internal.h"
 
 
+static_assert(OPENSSL_RSA_MAX_MODULUS_BITS <=
+                  BN_MONTGOMERY_MAX_WORDS * BN_BITS2,
+              "Max RSA size too big for Montgomery arithmetic");
+
 int rsa_check_public_key(const RSA *rsa) {
   if (rsa->n == NULL) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
@@ -442,8 +446,6 @@ int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
   }
 
   const unsigned rsa_size = RSA_size(rsa);
-  BIGNUM *f, *result;
-
   if (max_out < rsa_size) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_OUTPUT_BUFFER_TOO_SMALL);
     return 0;
@@ -454,18 +456,17 @@ int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
     return 0;
   }
 
-  BN_CTX *ctx = BN_CTX_new();
-  if (ctx == NULL) {
+  bssl::UniquePtr<BN_CTX> ctx(BN_CTX_new());
+  if (ctx == nullptr) {
     return 0;
   }
 
   int ret = 0;
-  uint8_t *buf = NULL;
-
-  BN_CTX_start(ctx);
-  f = BN_CTX_get(ctx);
-  result = BN_CTX_get(ctx);
-  if (f == NULL || result == NULL) {
+  uint8_t *buf = nullptr;
+  bssl::BN_CTXScope scope(ctx.get());
+  BIGNUM *f = BN_CTX_get(ctx.get());
+  BIGNUM *result = BN_CTX_get(ctx.get());
+  if (f == nullptr || result == nullptr) {
     goto err;
   }
 
@@ -474,12 +475,12 @@ int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
   } else {
     // Allocate a temporary buffer to hold the padded plaintext.
     buf = reinterpret_cast<uint8_t *>(OPENSSL_malloc(rsa_size));
-    if (buf == NULL) {
+    if (buf == nullptr) {
       goto err;
     }
   }
 
-  if (BN_bin2bn(in, in_len, f) == NULL) {
+  if (BN_bin2bn(in, in_len, f) == nullptr) {
     goto err;
   }
 
@@ -488,8 +489,9 @@ int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
     goto err;
   }
 
-  if (!BN_MONT_CTX_set_locked(&rsa->mont_n, &rsa->lock, rsa->n, ctx) ||
-      !BN_mod_exp_mont(result, f, rsa->e, &rsa->mont_n->N, ctx, rsa->mont_n)) {
+  if (!BN_MONT_CTX_set_locked(&rsa->mont_n, &rsa->lock, rsa->n, ctx.get()) ||
+      !BN_mod_exp_mont(result, f, rsa->e, &rsa->mont_n->N, ctx.get(),
+                       rsa->mont_n)) {
     goto err;
   }
 
@@ -518,8 +520,6 @@ int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
   }
 
 err:
-  BN_CTX_end(ctx);
-  BN_CTX_free(ctx);
   if (buf != out) {
     OPENSSL_free(buf);
   }
@@ -535,32 +535,28 @@ int RSA_verify_raw(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
 
 int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
                                   size_t len) {
-  if (rsa->n == NULL || rsa->d == NULL) {
+  if (rsa->n == nullptr || rsa->d == nullptr) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
 
-  BIGNUM *f, *result;
-  BN_CTX *ctx = NULL;
-  size_t blinding_index = 0;
-  BN_BLINDING *blinding = NULL;
-  int ret = 0, do_blinding;
-
-  ctx = BN_CTX_new();
-  if (ctx == NULL) {
-    goto err;
+  bssl::UniquePtr<BN_CTX> ctx(BN_CTX_new());
+  if (ctx == nullptr) {
+    return 0;
   }
-  BN_CTX_start(ctx);
-  f = BN_CTX_get(ctx);
-  result = BN_CTX_get(ctx);
-
-  if (f == NULL || result == NULL) {
+  size_t blinding_index = 0;
+  BN_BLINDING *blinding = nullptr;
+  int ret = 0, do_blinding;
+  bssl::BN_CTXScope scope(ctx.get());
+  BIGNUM *f = BN_CTX_get(ctx.get());
+  BIGNUM *result = BN_CTX_get(ctx.get());
+  if (f == nullptr || result == nullptr) {
     goto err;
   }
 
   // The caller should have ensured this.
   assert(len == BN_num_bytes(rsa->n));
-  if (BN_bin2bn(in, len, f) == NULL) {
+  if (BN_bin2bn(in, len, f) == nullptr) {
     goto err;
   }
 
@@ -572,7 +568,7 @@ int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
     goto err;
   }
 
-  if (!freeze_private_key(rsa, ctx)) {
+  if (!freeze_private_key(rsa, ctx.get())) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
     goto err;
   }
@@ -580,7 +576,7 @@ int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
   do_blinding =
       (rsa->flags & (RSA_FLAG_NO_BLINDING | RSA_FLAG_NO_PUBLIC_EXPONENT)) == 0;
 
-  if (rsa->e == NULL && do_blinding) {
+  if (rsa->e == nullptr && do_blinding) {
     // We cannot do blinding or verification without |e|, and continuing without
     // those countermeasures is dangerous. However, the Java/Android RSA API
     // requires support for keys where only |d| and |n| (and not |e|) are known.
@@ -594,29 +590,29 @@ int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
   }
 
   if (do_blinding) {
-    blinding = rsa_blinding_get(rsa, &blinding_index, ctx);
-    if (blinding == NULL) {
+    blinding = rsa_blinding_get(rsa, &blinding_index, ctx.get());
+    if (blinding == nullptr) {
       OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
       goto err;
     }
-    if (!BN_BLINDING_convert(f, blinding, rsa->e, rsa->mont_n, ctx)) {
+    if (!BN_BLINDING_convert(f, blinding, rsa->e, rsa->mont_n, ctx.get())) {
       goto err;
     }
   }
 
-  if (rsa->p != NULL && rsa->q != NULL && rsa->e != NULL && rsa->dmp1 != NULL &&
-      rsa->dmq1 != NULL && rsa->iqmp != NULL &&
+  if (rsa->p != nullptr && rsa->q != nullptr && rsa->e != nullptr &&
+      rsa->dmp1 != nullptr && rsa->dmq1 != nullptr && rsa->iqmp != nullptr &&
       // Require that we can reduce |f| by |rsa->p| and |rsa->q| in constant
       // time, which requires primes be the same size, rounded to the Montgomery
       // coefficient. (See |mod_montgomery|.) This is not required by RFC 8017,
       // but it is true for keys generated by us and all common implementations.
       bn_less_than_montgomery_R(rsa->q, rsa->mont_p) &&
       bn_less_than_montgomery_R(rsa->p, rsa->mont_q)) {
-    if (!rsa_mod_exp_crt(result, f, rsa, ctx)) {
+    if (!rsa_mod_exp_crt(result, f, rsa, ctx.get())) {
       goto err;
     }
-  } else if (!BN_mod_exp_mont_consttime(result, f, rsa->d_fixed, rsa->n, ctx,
-                                        rsa->mont_n)) {
+  } else if (!BN_mod_exp_mont_consttime(result, f, rsa->d_fixed, rsa->n,
+                                        ctx.get(), rsa->mont_n)) {
     goto err;
   }
 
@@ -630,17 +626,19 @@ int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
   //
   // This check is cheap assuming |e| is small, which we require in
   // |rsa_check_public_key|.
-  if (rsa->e != NULL) {
-    BIGNUM *vrfy = BN_CTX_get(ctx);
-    if (vrfy == NULL ||
-        !BN_mod_exp_mont(vrfy, result, rsa->e, rsa->n, ctx, rsa->mont_n) ||
+  if (rsa->e != nullptr) {
+    BIGNUM *vrfy = BN_CTX_get(ctx.get());
+    if (vrfy == nullptr ||
+        !BN_mod_exp_mont(vrfy, result, rsa->e, rsa->n, ctx.get(),
+                         rsa->mont_n) ||
         !constant_time_declassify_int(BN_equal_consttime(vrfy, f))) {
       OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
       goto err;
     }
   }
 
-  if (do_blinding && !BN_BLINDING_invert(result, blinding, rsa->mont_n, ctx)) {
+  if (do_blinding &&
+      !BN_BLINDING_invert(result, blinding, rsa->mont_n, ctx.get())) {
     goto err;
   }
 
@@ -659,11 +657,7 @@ int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
   ret = 1;
 
 err:
-  if (ctx != NULL) {
-    BN_CTX_end(ctx);
-    BN_CTX_free(ctx);
-  }
-  if (blinding != NULL) {
+  if (blinding != nullptr) {
     rsa_blinding_release(rsa, blinding, blinding_index);
   }
 
@@ -713,23 +707,19 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
   assert(rsa->dmq1 != NULL);
   assert(rsa->iqmp != NULL);
 
-  BIGNUM *r1, *m1;
-  int ret = 0;
-
-  BN_CTX_start(ctx);
-  r1 = BN_CTX_get(ctx);
-  m1 = BN_CTX_get(ctx);
-  BIGNUM *n, *p, *q;
+  bssl::BN_CTXScope scope(ctx);
+  BIGNUM *r1 = BN_CTX_get(ctx);
+  BIGNUM *m1 = BN_CTX_get(ctx);
   if (r1 == NULL || m1 == NULL) {
-    goto err;
+    return 0;
   }
 
   // Use the minimal-width versions of |n|, |p|, and |q|. Either works, but if
   // someone gives us non-minimal values, these will be slightly more efficient
   // on the non-Montgomery operations.
-  n = &rsa->mont_n->N;
-  p = &rsa->mont_p->N;
-  q = &rsa->mont_q->N;
+  BIGNUM *n = &rsa->mont_n->N;
+  BIGNUM *p = &rsa->mont_p->N;
+  BIGNUM *q = &rsa->mont_q->N;
 
   // This is a pre-condition for |mod_montgomery|. It was already checked by the
   // caller.
@@ -762,7 +752,7 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
       // [0, n).
       !bn_mul_consttime(r0, r0, q, ctx) ||  //
       !bn_uadd_consttime(r0, r0, m1)) {
-    goto err;
+    return 0;
   }
 
   // The result should be bounded by |n|, but fixed-width operations may
@@ -772,14 +762,10 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
   declassify_assert(BN_cmp(r0, n) < 0);
   bn_assert_fits_in_bytes(r0, BN_num_bytes(n));
   if (!bn_resize_words(r0, n->width)) {
-    goto err;
+    return 0;
   }
 
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
+  return 1;
 }
 
 static int ensure_bignum(BIGNUM **out) {
@@ -910,11 +896,11 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
   }
   int limit = BN_is_word(e, 3) ? bits * 8 : bits * 5;
 
-  int ret = 0, tries = 0, rand_tries = 0;
-  BN_CTX_start(ctx);
+  int tries = 0, rand_tries = 0;
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
   if (tmp == NULL) {
-    goto err;
+    return 0;
   }
 
   for (;;) {
@@ -923,13 +909,13 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
     // bound checked below in steps 4.4 and 5.5).
     if (!BN_rand(out, bits, BN_RAND_TOP_ONE, BN_RAND_BOTTOM_ODD) ||
         !BN_GENCB_call(cb, BN_GENCB_GENERATED, rand_tries++)) {
-      goto err;
+      return 0;
     }
 
     if (p != NULL) {
       // If |p| and |out| are too close, try again (step 5.4).
       if (!bn_abs_sub_consttime(tmp, out, p, ctx)) {
-        goto err;
+        return 0;
       }
       if (BN_cmp(tmp, pow2_bits_100) <= 0) {
         continue;
@@ -959,18 +945,17 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
       int relatively_prime;
       if (!bn_usub_consttime(tmp, out, BN_value_one()) ||
           !bn_is_relatively_prime(&relatively_prime, tmp, e, ctx)) {
-        goto err;
+        return 0;
       }
       if (constant_time_declassify_int(relatively_prime)) {
         // Test |out| for primality (steps 4.5.1 and 5.6.1).
         int is_probable_prime;
         if (!BN_primality_test(&is_probable_prime, out,
                                BN_prime_checks_for_generation, ctx, 0, cb)) {
-          goto err;
+          return 0;
         }
         if (is_probable_prime) {
-          ret = 1;
-          goto err;
+          return 1;
         }
       }
     }
@@ -980,16 +965,12 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
     tries++;
     if (tries >= limit) {
       OPENSSL_PUT_ERROR(RSA, RSA_R_TOO_MANY_ITERATIONS);
-      goto err;
+      return 0;
     }
     if (!BN_GENCB_call(cb, 2, tries)) {
-      goto err;
+      return 0;
     }
   }
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
 }
 
 // rsa_generate_key_impl generates an RSA key using a generalized version of
@@ -1025,29 +1006,31 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     return 0;
   }
 
-  int ret = 0;
-  int prime_bits = bits / 2;
-  BN_CTX *ctx = BN_CTX_new();
-  BIGNUM *totient, *pm1, *qm1, *sqrt2, *pow2_prime_bits_100, *pow2_prime_bits;
+  bssl::UniquePtr<BN_CTX> ctx(BN_CTX_new());
   int sqrt2_bits;
-  if (ctx == NULL) {
-    goto bn_err;
-  }
-  BN_CTX_start(ctx);
-  totient = BN_CTX_get(ctx);
-  pm1 = BN_CTX_get(ctx);
-  qm1 = BN_CTX_get(ctx);
-  sqrt2 = BN_CTX_get(ctx);
-  pow2_prime_bits_100 = BN_CTX_get(ctx);
-  pow2_prime_bits = BN_CTX_get(ctx);
-  if (totient == NULL || pm1 == NULL || qm1 == NULL || sqrt2 == NULL ||
-      pow2_prime_bits_100 == NULL || pow2_prime_bits == NULL ||
-      !BN_set_bit(pow2_prime_bits_100, prime_bits - 100) ||
-      !BN_set_bit(pow2_prime_bits, prime_bits)) {
-    goto bn_err;
+  if (ctx == nullptr) {
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
   }
 
-  // We need the RSA components non-NULL.
+  int prime_bits = bits / 2;
+  bssl::BN_CTXScope scope(ctx.get());
+  BIGNUM *totient = BN_CTX_get(ctx.get());
+  BIGNUM *pm1 = BN_CTX_get(ctx.get());
+  BIGNUM *qm1 = BN_CTX_get(ctx.get());
+  BIGNUM *sqrt2 = BN_CTX_get(ctx.get());
+  BIGNUM *pow2_prime_bits_100 = BN_CTX_get(ctx.get());
+  BIGNUM *pow2_prime_bits = BN_CTX_get(ctx.get());
+  if (totient == nullptr || pm1 == nullptr || qm1 == nullptr ||
+      sqrt2 == nullptr || pow2_prime_bits_100 == nullptr ||
+      pow2_prime_bits == nullptr ||
+      !BN_set_bit(pow2_prime_bits_100, prime_bits - 100) ||
+      !BN_set_bit(pow2_prime_bits, prime_bits)) {
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
+  }
+
+  // We need the RSA components non-null.
   if (!ensure_bignum(&rsa->n) ||     //
       !ensure_bignum(&rsa->d) ||     //
       !ensure_bignum(&rsa->e) ||     //
@@ -1056,16 +1039,19 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
       !ensure_bignum(&rsa->dmp1) ||  //
       !ensure_bignum(&rsa->dmq1) ||  //
       !ensure_bignum(&rsa->iqmp)) {
-    goto bn_err;
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
   }
 
   if (!BN_copy(rsa->e, e_value)) {
-    goto bn_err;
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
   }
 
   // Compute sqrt2 >= ⌊2^(prime_bits-1)×√2⌋.
   if (!bn_set_words(sqrt2, kBoringSSLRSASqrtTwo, kBoringSSLRSASqrtTwoLen)) {
-    goto bn_err;
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
   }
   sqrt2_bits = kBoringSSLRSASqrtTwoLen * BN_BITS2;
   assert(sqrt2_bits == (int)BN_num_bits(sqrt2));
@@ -1073,14 +1059,16 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     // For key sizes up to 4096 (prime_bits = 2048), this is exactly
     // ⌊2^(prime_bits-1)×√2⌋.
     if (!BN_rshift(sqrt2, sqrt2, sqrt2_bits - prime_bits)) {
-      goto bn_err;
+      OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+      return 0;
     }
   } else if (prime_bits > sqrt2_bits) {
     // For key sizes beyond 4096, this is approximate. We err towards retrying
     // to ensure our key is the right size and round up.
     if (!BN_add_word(sqrt2, 1) ||
         !BN_lshift(sqrt2, sqrt2, prime_bits - sqrt2_bits)) {
-      goto bn_err;
+      OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+      return 0;
     }
   }
   assert(prime_bits == (int)BN_num_bits(sqrt2));
@@ -1091,13 +1079,14 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     //
     // Each call to |generate_prime| fails with probability p = 2^-21. The
     // probability that either call fails is 1 - (1-p)^2, which is around 2^-20.
-    if (!generate_prime(rsa->p, prime_bits, rsa->e, NULL, sqrt2,
-                        pow2_prime_bits_100, ctx, cb) ||
+    if (!generate_prime(rsa->p, prime_bits, rsa->e, nullptr, sqrt2,
+                        pow2_prime_bits_100, ctx.get(), cb) ||
         !BN_GENCB_call(cb, 3, 0) ||
         !generate_prime(rsa->q, prime_bits, rsa->e, rsa->p, sqrt2,
-                        pow2_prime_bits_100, ctx, cb) ||
+                        pow2_prime_bits_100, ctx.get(), cb) ||
         !BN_GENCB_call(cb, 3, 1)) {
-      goto bn_err;
+      OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+      return 0;
     }
 
     if (BN_cmp(rsa->p, rsa->q) < 0) {
@@ -1116,9 +1105,11 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     int no_inverse;
     if (!bn_usub_consttime(pm1, rsa->p, BN_value_one()) ||
         !bn_usub_consttime(qm1, rsa->q, BN_value_one()) ||
-        !bn_lcm_consttime(totient, pm1, qm1, ctx) ||
-        !bn_mod_inverse_consttime(rsa->d, &no_inverse, rsa->e, totient, ctx)) {
-      goto bn_err;
+        !bn_lcm_consttime(totient, pm1, qm1, ctx.get()) ||
+        !bn_mod_inverse_consttime(rsa->d, &no_inverse, rsa->e, totient,
+                                  ctx.get())) {
+      OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+      return 0;
     }
 
     // Retry if |rsa->d| <= 2^|prime_bits|. See appendix B.3.1's guidance on
@@ -1129,12 +1120,15 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
   assert(BN_num_bits(pm1) == (unsigned)prime_bits);
   assert(BN_num_bits(qm1) == (unsigned)prime_bits);
   if (  // Calculate n.
-      !bn_mul_consttime(rsa->n, rsa->p, rsa->q, ctx) ||
+      !bn_mul_consttime(rsa->n, rsa->p, rsa->q, ctx.get()) ||
       // Calculate d mod (p-1).
-      !bn_div_consttime(NULL, rsa->dmp1, rsa->d, pm1, prime_bits, ctx) ||
+      !bn_div_consttime(nullptr, rsa->dmp1, rsa->d, pm1, prime_bits,
+                        ctx.get()) ||
       // Calculate d mod (q-1)
-      !bn_div_consttime(NULL, rsa->dmq1, rsa->d, qm1, prime_bits, ctx)) {
-    goto bn_err;
+      !bn_div_consttime(nullptr, rsa->dmq1, rsa->d, qm1, prime_bits,
+                        ctx.get())) {
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
   }
   bn_set_minimal_width(rsa->n);
 
@@ -1142,41 +1136,30 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
   bn_declassify(rsa->n);
 
   // Calculate q^-1 mod p.
-  rsa->mont_p = BN_MONT_CTX_new_consttime(rsa->p, ctx);
-  if (rsa->mont_p == NULL ||  //
-      !bn_mod_inverse_secret_prime(rsa->iqmp, rsa->q, rsa->p, ctx,
+  rsa->mont_p = BN_MONT_CTX_new_consttime(rsa->p, ctx.get());
+  if (rsa->mont_p == nullptr ||  //
+      !bn_mod_inverse_secret_prime(rsa->iqmp, rsa->q, rsa->p, ctx.get(),
                                    rsa->mont_p)) {
-    goto bn_err;
+    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
+    return 0;
   }
 
   // Sanity-check that |rsa->n| has the specified size. This is implied by
   // |generate_prime|'s bounds.
   if (BN_num_bits(rsa->n) != (unsigned)bits) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
-    goto err;
+    return 0;
   }
 
   // The key generation process is complex and thus error-prone. It could be
   // disastrous to generate and then use a bad key so double-check that the key
   // makes sense. Also, while |rsa| is mutable, fill in the cached components.
-  if (!RSA_check_key(rsa) ||
-      !freeze_private_key(rsa, ctx)) {
+  if (!RSA_check_key(rsa) || !freeze_private_key(rsa, ctx.get())) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_INTERNAL_ERROR);
-    goto err;
+    return 0;
   }
 
-  ret = 1;
-
-bn_err:
-  if (!ret) {
-    OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
-  }
-err:
-  if (ctx != NULL) {
-    BN_CTX_end(ctx);
-    BN_CTX_free(ctx);
-  }
-  return ret;
+  return 1;
 }
 
 static void replace_bignum(BIGNUM **out, BIGNUM **in) {

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_TRUST_TOKEN_H
 #define OPENSSL_HEADER_TRUST_TOKEN_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 #include <openssl/stack.h>
 
 #if defined(__cplusplus)

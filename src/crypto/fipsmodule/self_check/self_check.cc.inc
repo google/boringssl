@@ -44,14 +44,6 @@
 #include "../tls/internal.h"
 
 
-// MSVC wants to put a NUL byte at the end of non-char arrays and so cannot
-// compile the real logic.
-#if defined(_MSC_VER)
-
-int BORINGSSL_self_test(void) { return 0; }
-
-#else
-
 static void hexdump(FILE *out, const void *in, size_t len) {
   const uint8_t *in8 = reinterpret_cast<const uint8_t *>(in);
   for (size_t i = 0; i < len; i++) {
@@ -59,8 +51,8 @@ static void hexdump(FILE *out, const void *in, size_t len) {
   }
 }
 
-static int check_test(const void *expected, const void *actual,
-                      size_t expected_len, const char *name) {
+int BORINGSSL_check_test(const void *expected, const void *actual,
+                         size_t expected_len, const char *name) {
   if (OPENSSL_memcmp(actual, expected, expected_len) != 0) {
     FILE *err = CRYPTO_get_stderr();
     fprintf(err, "%s failed.\nExpected:   ", name);
@@ -73,6 +65,14 @@ static int check_test(const void *expected, const void *actual,
   }
   return 1;
 }
+
+// MSVC wants to put a NUL byte at the end of non-char arrays and so cannot
+// compile the real logic.
+#if defined(_MSC_VER)
+
+int BORINGSSL_self_test(void) { return 0; }
+
+#else
 
 static int set_bignum(BIGNUM **out, const uint8_t *in, size_t len) {
   *out = BN_bin2bn(in, len, NULL);
@@ -337,8 +337,8 @@ static int boringssl_self_test_rsa(void) {
   unsigned sig_len;
   if (!rsa_sign_no_self_test(NID_sha256, kRSASignDigest, sizeof(kRSASignDigest),
                              output, &sig_len, rsa_key) ||
-      !check_test(kRSASignSignature, output, sizeof(kRSASignSignature),
-                  "RSA-sign KAT")) {
+      !BORINGSSL_check_test(kRSASignSignature, output,
+                            sizeof(kRSASignSignature), "RSA-sign KAT")) {
     fprintf(CRYPTO_get_stderr(), "RSA signing test failed.\n");
     goto err;
   }
@@ -429,8 +429,9 @@ static int boringssl_self_test_ecc(void) {
           kECDSASignDigest, sizeof(kECDSASignDigest), ecdsa_sign_output,
           &ecdsa_sign_output_len, sizeof(ecdsa_sign_output), ec_key, ecdsa_k,
           sizeof(ecdsa_k)) ||
-      !check_test(kECDSASignSig, ecdsa_sign_output, sizeof(ecdsa_sign_output),
-                  "ECDSA-sign signature")) {
+      !BORINGSSL_check_test(kECDSASignSig, ecdsa_sign_output,
+                            sizeof(ecdsa_sign_output),
+                            "ECDSA-sign signature")) {
     fprintf(CRYPTO_get_stderr(), "ECDSA-sign KAT failed.\n");
     goto err;
   }
@@ -496,8 +497,8 @@ static int boringssl_self_test_ecc(void) {
                                  ec_scalar, NULL) ||
       !EC_POINT_point2oct(ec_group, ec_point_out, POINT_CONVERSION_UNCOMPRESSED,
                           z_comp_result, sizeof(z_comp_result), NULL) ||
-      !check_test(kP256PointResult, z_comp_result, sizeof(z_comp_result),
-                  "Z Computation Result")) {
+      !BORINGSSL_check_test(kP256PointResult, z_comp_result,
+                            sizeof(z_comp_result), "Z Computation Result")) {
     fprintf(CRYPTO_get_stderr(), "Z-computation KAT failed.\n");
     goto err;
   }
@@ -576,7 +577,7 @@ static int boringssl_self_test_ffdh(void) {
   if (dh == NULL || ffdhe2048_value == NULL || sizeof(dh_out) != DH_size(dh) ||
       dh_compute_key_padded_no_self_test(dh_out, ffdhe2048_value, dh) !=
           sizeof(dh_out) ||
-      !check_test(kDHOutput, dh_out, sizeof(dh_out), "FFC DH")) {
+      !BORINGSSL_check_test(kDHOutput, dh_out, sizeof(dh_out), "FFC DH")) {
     fprintf(CRYPTO_get_stderr(), "FFDH failed.\n");
     goto err;
   }
@@ -655,8 +656,8 @@ int boringssl_self_test_sha256(void) {
 
   // SHA-256 KAT
   SHA256(kInput, sizeof(kInput), output);
-  return check_test(kPlaintextSHA256, output, sizeof(kPlaintextSHA256),
-                    "SHA-256 KAT");
+  return BORINGSSL_check_test(kPlaintextSHA256, output,
+                              sizeof(kPlaintextSHA256), "SHA-256 KAT");
 }
 
 int boringssl_self_test_sha512(void) {
@@ -676,8 +677,8 @@ int boringssl_self_test_sha512(void) {
 
   // SHA-512 KAT
   SHA512(kInput, sizeof(kInput), output);
-  return check_test(kPlaintextSHA512, output, sizeof(kPlaintextSHA512),
-                    "SHA-512 KAT");
+  return BORINGSSL_check_test(kPlaintextSHA512, output,
+                              sizeof(kPlaintextSHA512), "SHA-512 KAT");
 }
 
 int boringssl_self_test_hmac_sha256(void) {
@@ -696,8 +697,8 @@ int boringssl_self_test_hmac_sha256(void) {
   HMAC(EVP_sha256(), kInput, sizeof(kInput), kInput, sizeof(kInput), output,
        &output_len);
   return output_len == sizeof(kPlaintextHMACSHA256) &&
-         check_test(kPlaintextHMACSHA256, output, sizeof(kPlaintextHMACSHA256),
-                    "HMAC-SHA-256 KAT");
+         BORINGSSL_check_test(kPlaintextHMACSHA256, output,
+                              sizeof(kPlaintextHMACSHA256), "HMAC-SHA-256 KAT");
 }
 
 static int boringssl_self_test_fast(void) {
@@ -706,10 +707,6 @@ static int boringssl_self_test_fast(void) {
       'y', 'p', 't', 'o', ' ', 'K', 'e', 'y',
   };
   static const uint8_t kAESIV[16] = {0};
-
-  EVP_AEAD_CTX aead_ctx;
-  EVP_AEAD_CTX_zero(&aead_ctx);
-  int ret = 0;
 
   AES_KEY aes_key;
   uint8_t aes_iv[16];
@@ -727,15 +724,17 @@ static int boringssl_self_test_fast(void) {
       0x50, 0x3a, 0xc5, 0x5e, 0x8e, 0x93, 0x40, 0xf2, 0x10, 0xd8,
   };
   memcpy(aes_iv, kAESIV, sizeof(kAESIV));
-  if (AES_set_encrypt_key(kAESKey, 8 * sizeof(kAESKey), &aes_key) != 0) {
-    fprintf(CRYPTO_get_stderr(), "AES_set_encrypt_key failed.\n");
-    goto err;
+  if (!bcm_success(
+          BCM_aes_set_encrypt_key(kAESKey, 8 * sizeof(kAESKey), &aes_key))) {
+    fprintf(CRYPTO_get_stderr(), "BCM_aes_set_encrypt_key failed.\n");
+    return 0;
   }
   AES_cbc_encrypt(kAESCBCEncPlaintext, output, sizeof(kAESCBCEncPlaintext),
                   &aes_key, aes_iv, AES_ENCRYPT);
-  if (!check_test(kAESCBCEncCiphertext, output, sizeof(kAESCBCEncCiphertext),
-                  "AES-CBC-encrypt KAT")) {
-    goto err;
+  if (!BORINGSSL_check_test(kAESCBCEncCiphertext, output,
+                            sizeof(kAESCBCEncCiphertext),
+                            "AES-CBC-encrypt KAT")) {
+    return 0;
   }
 
   // AES-CBC Decryption KAT
@@ -750,24 +749,27 @@ static int boringssl_self_test_fast(void) {
       0xb2, 0x25, 0x6f, 0xa6, 0xd0, 0xd2, 0x0e, 0x6f, 0x19, 0xb5,
   };
   memcpy(aes_iv, kAESIV, sizeof(kAESIV));
-  if (AES_set_decrypt_key(kAESKey, 8 * sizeof(kAESKey), &aes_key) != 0) {
-    fprintf(CRYPTO_get_stderr(), "AES_set_decrypt_key failed.\n");
-    goto err;
+  if (!bcm_success(
+          BCM_aes_set_decrypt_key(kAESKey, 8 * sizeof(kAESKey), &aes_key))) {
+    fprintf(CRYPTO_get_stderr(), "BCM_aes_set_decrypt_key failed.\n");
+    return 0;
   }
   AES_cbc_encrypt(kAESCBCDecCiphertext, output, sizeof(kAESCBCDecCiphertext),
                   &aes_key, aes_iv, AES_DECRYPT);
-  if (!check_test(kAESCBCDecPlaintext, output, sizeof(kAESCBCDecPlaintext),
-                  "AES-CBC-decrypt KAT")) {
-    goto err;
+  if (!BORINGSSL_check_test(kAESCBCDecPlaintext, output,
+                            sizeof(kAESCBCDecPlaintext),
+                            "AES-CBC-decrypt KAT")) {
+    return 0;
   }
 
   size_t out_len;
   uint8_t nonce[EVP_AEAD_MAX_NONCE_LENGTH];
   OPENSSL_memset(nonce, 0, sizeof(nonce));
-  if (!EVP_AEAD_CTX_init(&aead_ctx, EVP_aead_aes_128_gcm(), kAESKey,
+  bssl::ScopedEVP_AEAD_CTX aead_ctx;
+  if (!EVP_AEAD_CTX_init(aead_ctx.get(), EVP_aead_aes_128_gcm(), kAESKey,
                          sizeof(kAESKey), 0, NULL)) {
     fprintf(CRYPTO_get_stderr(), "EVP_AEAD_CTX_init for AES-128-GCM failed.\n");
-    goto err;
+    return 0;
   }
 
   // AES-GCM Encryption KAT
@@ -782,14 +784,14 @@ static int boringssl_self_test_fast(void) {
       0x1c, 0x63, 0x2e, 0x97, 0x93, 0x0f, 0xfb, 0xed, 0xb5, 0x9e, 0x1c, 0x20,
       0xb2, 0xb0, 0x58, 0xda, 0x48, 0x07, 0x2d, 0xbd, 0x96, 0x0d, 0x34, 0xc6,
   };
-  if (!EVP_AEAD_CTX_seal(&aead_ctx, output, &out_len, sizeof(output), nonce,
-                         EVP_AEAD_nonce_length(EVP_aead_aes_128_gcm()),
+  if (!EVP_AEAD_CTX_seal(aead_ctx.get(), output, &out_len, sizeof(output),
+                         nonce, EVP_AEAD_nonce_length(EVP_aead_aes_128_gcm()),
                          kAESGCMEncPlaintext, sizeof(kAESGCMEncPlaintext), NULL,
                          0) ||
-      !check_test(kAESGCMCiphertext, output, sizeof(kAESGCMCiphertext),
-                  "AES-GCM-encrypt KAT")) {
+      !BORINGSSL_check_test(kAESGCMCiphertext, output,
+                            sizeof(kAESGCMCiphertext), "AES-GCM-encrypt KAT")) {
     fprintf(CRYPTO_get_stderr(), "EVP_AEAD_CTX_seal for AES-128-GCM failed.\n");
-    goto err;
+    return 0;
   }
 
   // AES-GCM Decryption KAT
@@ -805,15 +807,16 @@ static int boringssl_self_test_fast(void) {
           0xa9, 0x99, 0x17, 0x6a, 0x45, 0x05, 0x5e, 0x99, 0x83, 0x56, 0x01,
           0xc0, 0x82, 0x40, 0x81, 0xd2, 0x48, 0x45, 0xf2, 0xcc, 0xc3,
       };
-  if (!EVP_AEAD_CTX_open(&aead_ctx, output, &out_len, sizeof(output), nonce,
-                         EVP_AEAD_nonce_length(EVP_aead_aes_128_gcm()),
+  if (!EVP_AEAD_CTX_open(aead_ctx.get(), output, &out_len, sizeof(output),
+                         nonce, EVP_AEAD_nonce_length(EVP_aead_aes_128_gcm()),
                          kAESGCMDecCiphertext, sizeof(kAESGCMDecCiphertext),
                          NULL, 0) ||
-      !check_test(kAESGCMDecPlaintext, output, sizeof(kAESGCMDecPlaintext),
-                  "AES-GCM-decrypt KAT")) {
+      !BORINGSSL_check_test(kAESGCMDecPlaintext, output,
+                            sizeof(kAESGCMDecPlaintext),
+                            "AES-GCM-decrypt KAT")) {
     fprintf(CRYPTO_get_stderr(),
             "AES-GCM-decrypt KAT failed because EVP_AEAD_CTX_open failed.\n");
-    goto err;
+    return 0;
   }
 
   // SHA-1 KAT
@@ -826,13 +829,14 @@ static int boringssl_self_test_fast(void) {
       0x09, 0x11, 0x6d, 0x1a, 0xfd, 0x0f, 0x1e, 0x11, 0xe3, 0xcb,
   };
   SHA1(kSHA1Input, sizeof(kSHA1Input), output);
-  if (!check_test(kSHA1Digest, output, sizeof(kSHA1Digest), "SHA-1 KAT")) {
-    goto err;
+  if (!BORINGSSL_check_test(kSHA1Digest, output, sizeof(kSHA1Digest),
+                            "SHA-1 KAT")) {
+    return 0;
   }
 
   if (!boringssl_self_test_sha256() || !boringssl_self_test_sha512() ||
       !boringssl_self_test_hmac_sha256()) {
-    goto err;
+    return 0;
   }
 
   // DBRG KAT
@@ -874,22 +878,23 @@ static int boringssl_self_test_fast(void) {
                      sizeof(kDRBGPersonalization)) ||
       !CTR_DRBG_generate(&drbg, output, sizeof(kDRBGOutput), kDRBGAD,
                          sizeof(kDRBGAD)) ||
-      !check_test(kDRBGOutput, output, sizeof(kDRBGOutput),
-                  "DRBG Generate KAT") ||
+      !BORINGSSL_check_test(kDRBGOutput, output, sizeof(kDRBGOutput),
+                            "DRBG Generate KAT") ||
       !CTR_DRBG_reseed(&drbg, kDRBGEntropy2, kDRBGAD, sizeof(kDRBGAD)) ||
       !CTR_DRBG_generate(&drbg, output, sizeof(kDRBGReseedOutput), kDRBGAD,
                          sizeof(kDRBGAD)) ||
-      !check_test(kDRBGReseedOutput, output, sizeof(kDRBGReseedOutput),
-                  "DRBG-reseed KAT")) {
+      !BORINGSSL_check_test(kDRBGReseedOutput, output,
+                            sizeof(kDRBGReseedOutput), "DRBG-reseed KAT")) {
     fprintf(CRYPTO_get_stderr(), "CTR-DRBG failed.\n");
-    goto err;
+    return 0;
   }
   CTR_DRBG_clear(&drbg);
 
   CTR_DRBG_STATE kZeroDRBG;
   memset(&kZeroDRBG, 0, sizeof(kZeroDRBG));
-  if (!check_test(&kZeroDRBG, &drbg, sizeof(drbg), "DRBG Clear KAT")) {
-    goto err;
+  if (!BORINGSSL_check_test(&kZeroDRBG, &drbg, sizeof(drbg),
+                            "DRBG Clear KAT")) {
+    return 0;
   }
 
   // TLS KDF KAT
@@ -918,10 +923,10 @@ static int boringssl_self_test_fast(void) {
                        kTLS10Secret, sizeof(kTLS10Secret), kTLSLabel,
                        sizeof(kTLSLabel), kTLSSeed1, sizeof(kTLSSeed1),
                        kTLSSeed2, sizeof(kTLSSeed2)) ||
-      !check_test(kTLS10Output, tls10_output, sizeof(kTLS10Output),
-                  "TLS10-KDF KAT")) {
+      !BORINGSSL_check_test(kTLS10Output, tls10_output, sizeof(kTLS10Output),
+                            "TLS10-KDF KAT")) {
     fprintf(CRYPTO_get_stderr(), "TLS KDF failed.\n");
-    goto err;
+    return 0;
   }
 
   static const uint8_t kTLS12Secret[32] = {
@@ -939,10 +944,10 @@ static int boringssl_self_test_fast(void) {
                        kTLS12Secret, sizeof(kTLS12Secret), kTLSLabel,
                        sizeof(kTLSLabel), kTLSSeed1, sizeof(kTLSSeed1),
                        kTLSSeed2, sizeof(kTLSSeed2)) ||
-      !check_test(kTLS12Output, tls12_output, sizeof(kTLS12Output),
-                  "TLS12-KDF KAT")) {
+      !BORINGSSL_check_test(kTLS12Output, tls12_output, sizeof(kTLS12Output),
+                            "TLS12-KDF KAT")) {
     fprintf(CRYPTO_get_stderr(), "TLS KDF failed.\n");
-    goto err;
+    return 0;
   }
 
   // TLS v1.3: derives a dummy client-early-traffic secret.
@@ -978,11 +983,11 @@ static int boringssl_self_test_fast(void) {
           EVP_sha256(), tls13_extract_output, sizeof(tls13_extract_output),
           kTLS13Label, sizeof(kTLS13Label) - 1, kTLS13ClientHelloHash,
           sizeof(kTLS13ClientHelloHash)) ||
-      !check_test(kTLS13ExpandLabelOutput, tls13_expand_label_output,
-                  sizeof(kTLS13ExpandLabelOutput),
-                  "CRYPTO_tls13_hkdf_expand_label")) {
+      !BORINGSSL_check_test(kTLS13ExpandLabelOutput, tls13_expand_label_output,
+                            sizeof(kTLS13ExpandLabelOutput),
+                            "CRYPTO_tls13_hkdf_expand_label")) {
     fprintf(CRYPTO_get_stderr(), "TLS13-KDF failed.\n");
-    goto err;
+    return 0;
   }
 
   // HKDF
@@ -1010,25 +1015,33 @@ static int boringssl_self_test_fast(void) {
   if (!HKDF(hkdf_output, sizeof(hkdf_output), EVP_sha256(), kHKDFSecret,
             sizeof(kHKDFSecret), kHKDFSalt, sizeof(kHKDFSalt), kHKDFInfo,
             sizeof(kHKDFInfo)) ||
-      !check_test(kHKDFOutput, hkdf_output, sizeof(kHKDFOutput), "HKDF")) {
+      !BORINGSSL_check_test(kHKDFOutput, hkdf_output, sizeof(kHKDFOutput),
+                            "HKDF")) {
     fprintf(CRYPTO_get_stderr(), "HKDF failed.\n");
-    goto err;
+    return 0;
   }
 
-  ret = 1;
-
-err:
-  EVP_AEAD_CTX_cleanup(&aead_ctx);
-
-  return ret;
+  return 1;
 }
 
 int BORINGSSL_self_test(void) {
   if (!boringssl_self_test_fast() ||
-      // When requested to run self tests, also run the lazy tests.
-      !boringssl_self_test_rsa() ||  //
-      !boringssl_self_test_ecc() ||  //
-      !boringssl_self_test_ffdh()) {
+      // When requested to run self tests, also run some of the lazy tests.
+      !boringssl_self_test_rsa() ||    //
+      !boringssl_self_test_ecc() ||    //
+      !boringssl_self_test_ffdh() ||   //
+      !boringssl_self_test_mlkem() ||  //
+      !boringssl_self_test_mldsa()) {
+    return 0;
+  }
+
+  return 1;
+}
+
+int BORINGSSL_self_test_all(void) {
+  if (!BORINGSSL_self_test() ||
+      // When requested to run all self tests, add in the really slow tests.
+      !boringssl_self_test_slhdsa()) {
     return 0;
   }
 

@@ -15,37 +15,20 @@
 
 set -ex
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 fuzzer_mode_build_dir no_fuzzer_mode_build_dir"
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 build_dir"
   exit 1
 fi
 
-fuzzer_mode_build_dir=$1
-no_fuzzer_mode_build_dir=$2
+build_dir=$1
 
 
-# Sanity-check the build directories.
+# Sanity-check the build directory.
 
-if ! grep -q '^FUZZ:' "$fuzzer_mode_build_dir/CMakeCache.txt"; then
-  echo "$fuzzer_mode_build_dir was not built with -DFUZZ=1"
+if ! grep -q '^FUZZ:' "$build_dir/CMakeCache.txt"; then
+  echo "$build_dir was not built with -DFUZZ=1"
   exit 1
 fi
-
-if grep -q '^NO_FUZZER_MODE:' "$fuzzer_mode_build_dir/CMakeCache.txt"; then
-  echo "$fuzzer_mode_build_dir was built with -DNO_FUZZER_MODE=1"
-  exit 1
-fi
-
-if ! grep -q '^FUZZ:' "$no_fuzzer_mode_build_dir/CMakeCache.txt"; then
-  echo "$no_fuzzer_mode_build_dir was not built with -DFUZZ=1"
-  exit 1
-fi
-
-if ! grep -q '^NO_FUZZER_MODE:' "$no_fuzzer_mode_build_dir/CMakeCache.txt"; then
-  echo "$no_fuzzer_mode_build_dir was not built with -DNO_FUZZER_MODE=1"
-  exit 1
-fi
-
 
 # Sanity-check the current working directory.
 
@@ -57,71 +40,60 @@ assert_directory() {
 }
 
 assert_directory client_corpus
-assert_directory client_corpus_no_fuzzer_mode
+assert_directory client_no_fuzzer_mode_corpus
 assert_directory server_corpus
-assert_directory server_corpus_no_fuzzer_mode
+assert_directory server_no_fuzzer_mode_corpus
 assert_directory dtls_client_corpus
 assert_directory dtls_server_corpus
 
 
 # Gather new transcripts. Ignore errors in running the tests.
 
-fuzzer_mode_shim=$(readlink -f "$fuzzer_mode_build_dir/ssl/test/bssl_shim")
-no_fuzzer_mode_shim=$(readlink -f \
-    "$no_fuzzer_mode_build_dir/ssl/test/bssl_shim")
-
-fuzzer_mode_handshaker=$(readlink -f \
-    "$fuzzer_mode_build_dir/ssl/test/handshaker")
-no_fuzzer_mode_handshaker=$(readlink -f \
-    "$no_fuzzer_mode_build_dir/ssl/test/handshaker")
+shim="$(readlink -f "$build_dir")/ssl/test/bssl_shim"
+handshaker="$(readlink -f "$build_dir")/ssl/test/handshaker"
 
 fuzzer_mode_transcripts=$(mktemp -d '/tmp/boringssl-transcript-fuzzer-mode.XXXXXX')
 no_fuzzer_mode_transcripts=$(mktemp -d '/tmp/boringssl-transcript-no-fuzzer-mode.XXXXXX')
 
 echo Recording fuzzer-mode transcripts
 (cd ../ssl/test/runner/ && go test \
-    -shim-path "$fuzzer_mode_shim" \
-    -handshaker-path "$fuzzer_mode_handshaker" \
+    -shim-path "$shim" \
+    -handshaker-path "$handshaker" \
     -transcript-dir "$fuzzer_mode_transcripts" \
     -fuzzer \
     -deterministic) || true
 
 echo Recording non-fuzzer-mode transcripts
 (cd ../ssl/test/runner/ && go test \
-    -shim-path "$no_fuzzer_mode_shim" \
-    -handshaker-path "$no_fuzzer_mode_handshaker" \
+    -shim-path "$shim" \
+    -handshaker-path "$handshaker" \
     -transcript-dir "$no_fuzzer_mode_transcripts" \
     -deterministic)
 
 
-# Minimize the existing corpora.
+# Update corpora.
 
-minimize_corpus() {
-  local fuzzer="$1"
-  local corpus="$2"
+update_corpus() {
+  local fuzzer_name="$1"
+  local transcript_dir="$2"
+
+  local fuzzer="$build_dir/fuzz/$fuzzer_name"
+  local corpus="${fuzzer_name}_corpus"
 
   echo "Minimizing ${corpus}"
   mv "$corpus" "${corpus}_old"
   mkdir "$corpus"
   "$fuzzer" -max_len=50000 -merge=1 "$corpus" "${corpus}_old"
   rm -Rf "${corpus}_old"
+
+  echo "Merging transcripts from ${transcript_dir} into ${corpus}"
+  "$fuzzer" -max_len=50000 -merge=1 "$corpus" "$transcript_dir"
 }
 
-minimize_corpus "$fuzzer_mode_build_dir/fuzz/client" client_corpus
-minimize_corpus "$fuzzer_mode_build_dir/fuzz/server" server_corpus
-minimize_corpus "$no_fuzzer_mode_build_dir/fuzz/client" client_corpus_no_fuzzer_mode
-minimize_corpus "$no_fuzzer_mode_build_dir/fuzz/server" server_corpus_no_fuzzer_mode
-minimize_corpus "$fuzzer_mode_build_dir/fuzz/dtls_client" dtls_client_corpus
-minimize_corpus "$fuzzer_mode_build_dir/fuzz/dtls_server" dtls_server_corpus
-minimize_corpus "$fuzzer_mode_build_dir/fuzz/decode_client_hello_inner" decode_client_hello_inner_corpus
-
-
-# Incorporate the new transcripts.
-
-"$fuzzer_mode_build_dir/fuzz/client" -max_len=50000 -merge=1 client_corpus "${fuzzer_mode_transcripts}/tls/client"
-"$fuzzer_mode_build_dir/fuzz/server" -max_len=50000 -merge=1 server_corpus "${fuzzer_mode_transcripts}/tls/server"
-"$no_fuzzer_mode_build_dir/fuzz/client" -max_len=50000 -merge=1 client_corpus_no_fuzzer_mode "${no_fuzzer_mode_transcripts}/tls/client"
-"$no_fuzzer_mode_build_dir/fuzz/server" -max_len=50000 -merge=1 server_corpus_no_fuzzer_mode "${no_fuzzer_mode_transcripts}/tls/server"
-"$fuzzer_mode_build_dir/fuzz/dtls_client" -max_len=50000 -merge=1 dtls_client_corpus "${fuzzer_mode_transcripts}/dtls/client"
-"$fuzzer_mode_build_dir/fuzz/dtls_server" -max_len=50000 -merge=1 dtls_server_corpus "${fuzzer_mode_transcripts}/dtls/server"
-"$fuzzer_mode_build_dir/fuzz/decode_client_hello_inner" -max_len=50000 -merge=1 decode_client_hello_inner_corpus "${fuzzer_mode_transcripts}/decode_client_hello_inner"
+update_corpus client "${fuzzer_mode_transcripts}/tls/client"
+update_corpus server "${fuzzer_mode_transcripts}/tls/server"
+update_corpus client_no_fuzzer_mode "${no_fuzzer_mode_transcripts}/tls/client"
+update_corpus server_no_fuzzer_mode "${no_fuzzer_mode_transcripts}/tls/server"
+update_corpus dtls_client "${fuzzer_mode_transcripts}/dtls/client"
+update_corpus dtls_server "${fuzzer_mode_transcripts}/dtls/server"
+update_corpus decode_client_hello_inner "${fuzzer_mode_transcripts}/decode_client_hello_inner"

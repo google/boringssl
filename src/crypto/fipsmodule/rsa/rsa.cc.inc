@@ -718,15 +718,15 @@ static int check_mod_inverse(int *out_ok, const BIGNUM *a, const BIGNUM *ainv,
   // Note |bn_mul_consttime| and |bn_div_consttime| do not scale linearly, but
   // checking |ainv| is in range bounds the running time, assuming |m|'s bounds
   // were checked by the caller.
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
-  int ret = tmp != NULL && bn_mul_consttime(tmp, a, ainv, ctx) &&
-            bn_div_consttime(NULL, tmp, tmp, m, m_min_bits, ctx);
-  if (ret) {
-    *out_ok = constant_time_declassify_int(BN_is_one(tmp));
+  if (tmp == nullptr ||  //
+      !bn_mul_consttime(tmp, a, ainv, ctx) ||
+      !bn_div_consttime(NULL, tmp, tmp, m, m_min_bits, ctx)) {
+    return 0;
   }
-  BN_CTX_end(ctx);
-  return ret;
+  *out_ok = constant_time_declassify_int(BN_is_one(tmp));
+  return 1;
 }
 
 int RSA_check_key(const RSA *key) {

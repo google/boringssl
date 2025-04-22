@@ -44,7 +44,6 @@
 #include "aes/key_wrap.cc.inc"
 #include "aes/mode_wrappers.cc.inc"
 #include "aes/ofb.cc.inc"
-#include "aes/polyval.cc.inc"
 #include "bn/add.cc.inc"
 #include "bn/asm/x86_64-gcc.cc.inc"
 #include "bn/bn.cc.inc"
@@ -198,7 +197,7 @@ int BORINGSSL_integrity_test(void) {
   const uint8_t *const start = BORINGSSL_bcm_text_start;
   const uint8_t *const end = BORINGSSL_bcm_text_end;
 
-  assert_within(start, reinterpret_cast<const void *>(AES_encrypt), end);
+  assert_within(start, reinterpret_cast<const void *>(BCM_aes_encrypt), end);
   assert_within(start, reinterpret_cast<const void *>(RSA_sign), end);
   assert_within(start, reinterpret_cast<const void *>(BCM_rand_bytes), end);
   assert_within(start, reinterpret_cast<const void *>(EC_GROUP_cmp), end);
@@ -258,7 +257,8 @@ int BORINGSSL_integrity_test(void) {
 
   const uint8_t *expected = BORINGSSL_bcm_text_hash;
 
-  if (!check_test(expected, result, sizeof(result), "FIPS integrity test")) {
+  if (!BORINGSSL_check_test(expected, result, sizeof(result),
+                            "FIPS integrity test")) {
 #if !defined(BORINGSSL_FIPS_BREAK_TESTS)
     return 0;
 #endif

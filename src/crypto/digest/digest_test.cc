@@ -282,9 +282,9 @@ TEST(DigestTest, ASN1) {
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   EXPECT_FALSE(EVP_marshal_digest_algorithm(cbb.get(), EVP_md5_sha1()));
 
-  static const uint8_t kSHA256[] = {0x30, 0x0d, 0x06, 0x09, 0x60,
-                                    0x86, 0x48, 0x01, 0x65, 0x03,
-                                    0x04, 0x02, 0x01, 0x05, 0x00};
+  static const uint8_t kSHA256NullParam[] = {0x30, 0x0d, 0x06, 0x09, 0x60,
+                                             0x86, 0x48, 0x01, 0x65, 0x03,
+                                             0x04, 0x02, 0x01, 0x05, 0x00};
   static const uint8_t kSHA256NoParam[] = {0x30, 0x0b, 0x06, 0x09, 0x60,
                                            0x86, 0x48, 0x01, 0x65, 0x03,
                                            0x04, 0x02, 0x01};
@@ -292,23 +292,24 @@ TEST(DigestTest, ASN1) {
       0x30, 0x0e, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
       0x65, 0x03, 0x04, 0x02, 0x01, 0x02, 0x01, 0x2a};
 
-  // Serialize SHA-256.
+  // Serialize SHA-256, with and without NULL.
   cbb.Reset();
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   ASSERT_TRUE(EVP_marshal_digest_algorithm(cbb.get(), EVP_sha256()));
-  uint8_t *der;
-  size_t der_len;
-  ASSERT_TRUE(CBB_finish(cbb.get(), &der, &der_len));
-  bssl::UniquePtr<uint8_t> free_der(der);
-  EXPECT_EQ(Bytes(kSHA256), Bytes(der, der_len));
+  EXPECT_EQ(Bytes(kSHA256NullParam),
+            Bytes(CBB_data(cbb.get()), CBB_len(cbb.get())));
+  cbb.Reset();
+  ASSERT_TRUE(CBB_init(cbb.get(), 0));
+  ASSERT_TRUE(EVP_marshal_digest_algorithm_no_params(cbb.get(), EVP_sha256()));
+  EXPECT_EQ(Bytes(kSHA256NoParam),
+            Bytes(CBB_data(cbb.get()), CBB_len(cbb.get())));
 
-  // Parse SHA-256.
+  // Parse SHA-256. Either absent or NULL parameters are tolerated for
+  // compatibility.
   CBS cbs;
-  CBS_init(&cbs, kSHA256, sizeof(kSHA256));
+  CBS_init(&cbs, kSHA256NullParam, sizeof(kSHA256NullParam));
   EXPECT_EQ(EVP_sha256(), EVP_parse_digest_algorithm(&cbs));
   EXPECT_EQ(0u, CBS_len(&cbs));
-
-  // Missing parameters are tolerated for compatibility.
   CBS_init(&cbs, kSHA256NoParam, sizeof(kSHA256NoParam));
   EXPECT_EQ(EVP_sha256(), EVP_parse_digest_algorithm(&cbs));
   EXPECT_EQ(0u, CBS_len(&cbs));

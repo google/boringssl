@@ -25,41 +25,6 @@
 extern "C" {
 #endif
 
-#if defined(OPENSSL_LINUX)
-// On linux we use MADVISE instead of pthread_atfork(), due
-// to concerns about clone() being used for address space
-// duplication.
-#define OPENSSL_FORK_DETECTION
-#define OPENSSL_FORK_DETECTION_MADVISE
-#elif defined(OPENSSL_MACOS) || defined(OPENSSL_IOS) || \
-    defined(OPENSSL_OPENBSD) || defined(OPENSSL_FREEBSD)
-// These platforms may detect address space duplication with pthread_atfork.
-// iOS doesn't normally allow fork in apps, but it's there.
-#define OPENSSL_FORK_DETECTION
-#define OPENSSL_FORK_DETECTION_PTHREAD_ATFORK
-#elif defined(OPENSSL_WINDOWS) || defined(OPENSSL_TRUSTY) || \
-    defined(__ZEPHYR__) || defined(CROS_EC)
-// These platforms do not fork.
-#define OPENSSL_DOES_NOT_FORK
-#endif
-
-#if defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
-#define OPENSSL_RAND_DETERMINISTIC
-#elif defined(OPENSSL_TRUSTY)
-#define OPENSSL_RAND_TRUSTY
-#elif defined(OPENSSL_WINDOWS)
-#define OPENSSL_RAND_WINDOWS
-#elif defined(OPENSSL_LINUX)
-#define OPENSSL_RAND_URANDOM
-#elif defined(OPENSSL_APPLE) && !defined(OPENSSL_MACOS)
-// Unlike macOS, iOS and similar hide away getentropy().
-#define OPENSSL_RAND_IOS
-#else
-// By default if you are integrating BoringSSL we expect you to
-// provide getentropy from the <unistd.h> header file.
-#define OPENSSL_RAND_GETENTROPY
-#endif
-
 // Provided by libcrypto, called from BCM
 
 // CRYPTO_init_sysrand initializes long-lived resources needed to draw entropy

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_license//rules:license.bzl", "license")
 load(
     ":gen/sources.bzl",
     "bcm_internal_headers",
@@ -43,7 +44,6 @@ load(
     "urandom_test_sources",
 )
 load(":util/util.bzl", "bssl_cc_binary", "bssl_cc_library", "bssl_cc_test")
-load("@rules_license//rules:license.bzl", "license")
 
 package(
     default_applicable_licenses = [":license"],

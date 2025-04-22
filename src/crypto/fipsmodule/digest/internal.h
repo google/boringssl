@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_DIGEST_INTERNAL_H
-#define OPENSSL_HEADER_DIGEST_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_DIGEST_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_DIGEST_INTERNAL_H
 
 #include <openssl/base.h>
 
@@ -67,4 +67,4 @@ struct evp_md_pctx_ops {
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_DIGEST_INTERNAL
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_DIGEST_INTERNAL_H

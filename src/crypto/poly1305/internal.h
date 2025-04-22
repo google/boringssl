@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_POLY1305_INTERNAL_H
-#define OPENSSL_HEADER_POLY1305_INTERNAL_H
+#ifndef OPENSSL_HEADER_CRYPTO_POLY1305_INTERNAL_H
+#define OPENSSL_HEADER_CRYPTO_POLY1305_INTERNAL_H
 
 #include <openssl/base.h>
 #include <openssl/poly1305.h>
@@ -38,4 +38,4 @@ void CRYPTO_poly1305_finish_neon(poly1305_state *state, uint8_t mac[16]);
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_POLY1305_INTERNAL_H
+#endif  // OPENSSL_HEADER_CRYPTO_POLY1305_INTERNAL_H

@@ -7,14 +7,14 @@
       "name": "Adam Langley"
     },
     {
-      "email": "bbe@google.com",
-      "github": "bob-beck",
-      "name": "Bob Beck"
-    },
-    {
       "email": "davidben@google.com",
       "github": "davidben",
       "name": "David Benjamin"
+    },
+    {
+      "email": "dadrian@google.com",
+      "github": "dadrian",
+      "name": "David Adrian"
     }
   ],
   "repository": [

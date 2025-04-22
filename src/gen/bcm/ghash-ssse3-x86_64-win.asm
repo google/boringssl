@@ -37,7 +37,7 @@ $L$SEH_endprologue_gcm_gmult_ssse3_5:
 	movdqa	xmm2,XMMWORD[$L$low4_mask]
 
 
-DB	102,65,15,56,0,194
+	pshufb	xmm0,xmm10
 
 
 	movdqa	xmm1,xmm2
@@ -57,7 +57,7 @@ $L$oop_row_1:
 
 
 	movdqa	xmm6,xmm2
-DB	102,15,58,15,243,1
+	palignr	xmm6,xmm3,1
 	movdqa	xmm3,xmm6
 	psrldq	xmm2,1
 
@@ -65,8 +65,8 @@ DB	102,15,58,15,243,1
 
 
 	movdqa	xmm5,xmm4
-DB	102,15,56,0,224
-DB	102,15,56,0,233
+	pshufb	xmm4,xmm0
+	pshufb	xmm5,xmm1
 
 
 	pxor	xmm2,xmm5
@@ -105,7 +105,7 @@ $L$oop_row_2:
 
 
 	movdqa	xmm6,xmm2
-DB	102,15,58,15,243,1
+	palignr	xmm6,xmm3,1
 	movdqa	xmm3,xmm6
 	psrldq	xmm2,1
 
@@ -113,8 +113,8 @@ DB	102,15,58,15,243,1
 
 
 	movdqa	xmm5,xmm4
-DB	102,15,56,0,224
-DB	102,15,56,0,233
+	pshufb	xmm4,xmm0
+	pshufb	xmm5,xmm1
 
 
 	pxor	xmm2,xmm5
@@ -153,7 +153,7 @@ $L$oop_row_3:
 
 
 	movdqa	xmm6,xmm2
-DB	102,15,58,15,243,1
+	palignr	xmm6,xmm3,1
 	movdqa	xmm3,xmm6
 	psrldq	xmm2,1
 
@@ -161,8 +161,8 @@ DB	102,15,58,15,243,1
 
 
 	movdqa	xmm5,xmm4
-DB	102,15,56,0,224
-DB	102,15,56,0,233
+	pshufb	xmm4,xmm0
+	pshufb	xmm5,xmm1
 
 
 	pxor	xmm2,xmm5
@@ -195,7 +195,7 @@ DB	102,15,56,0,233
 	pxor	xmm2,xmm3
 	pxor	xmm3,xmm3
 
-DB	102,65,15,56,0,210
+	pshufb	xmm2,xmm10
 	movdqu	XMMWORD[rcx],xmm2
 
 
@@ -243,14 +243,14 @@ $L$SEH_endprologue_gcm_ghash_ssse3_6:
 
 
 
-DB	102,65,15,56,0,194
+	pshufb	xmm0,xmm10
 
 
 	pxor	xmm3,xmm3
 $L$oop_ghash:
 
 	movdqu	xmm1,XMMWORD[r8]
-DB	102,65,15,56,0,202
+	pshufb	xmm1,xmm10
 	pxor	xmm0,xmm1
 
 
@@ -271,7 +271,7 @@ $L$oop_row_4:
 
 
 	movdqa	xmm6,xmm2
-DB	102,15,58,15,243,1
+	palignr	xmm6,xmm3,1
 	movdqa	xmm3,xmm6
 	psrldq	xmm2,1
 
@@ -279,8 +279,8 @@ DB	102,15,58,15,243,1
 
 
 	movdqa	xmm5,xmm4
-DB	102,15,56,0,224
-DB	102,15,56,0,233
+	pshufb	xmm4,xmm0
+	pshufb	xmm5,xmm1
 
 
 	pxor	xmm2,xmm5
@@ -319,7 +319,7 @@ $L$oop_row_5:
 
 
 	movdqa	xmm6,xmm2
-DB	102,15,58,15,243,1
+	palignr	xmm6,xmm3,1
 	movdqa	xmm3,xmm6
 	psrldq	xmm2,1
 
@@ -327,8 +327,8 @@ DB	102,15,58,15,243,1
 
 
 	movdqa	xmm5,xmm4
-DB	102,15,56,0,224
-DB	102,15,56,0,233
+	pshufb	xmm4,xmm0
+	pshufb	xmm5,xmm1
 
 
 	pxor	xmm2,xmm5
@@ -367,7 +367,7 @@ $L$oop_row_6:
 
 
 	movdqa	xmm6,xmm2
-DB	102,15,58,15,243,1
+	palignr	xmm6,xmm3,1
 	movdqa	xmm3,xmm6
 	psrldq	xmm2,1
 
@@ -375,8 +375,8 @@ DB	102,15,58,15,243,1
 
 
 	movdqa	xmm5,xmm4
-DB	102,15,56,0,224
-DB	102,15,56,0,233
+	pshufb	xmm4,xmm0
+	pshufb	xmm5,xmm1
 
 
 	pxor	xmm2,xmm5
@@ -419,7 +419,7 @@ DB	102,15,56,0,233
 	jnz	NEAR $L$oop_ghash
 
 
-DB	102,65,15,56,0,194
+	pshufb	xmm0,xmm10
 	movdqu	XMMWORD[rcx],xmm0
 
 

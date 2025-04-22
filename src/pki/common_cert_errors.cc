@@ -30,6 +30,9 @@ DEFINE_CERT_ERROR_ID(kChainIsEmpty, "Chain is empty");
 DEFINE_CERT_ERROR_ID(kUnconsumedCriticalExtension,
                      "Unconsumed critical extension");
 DEFINE_CERT_ERROR_ID(kKeyCertSignBitNotSet, "keyCertSign bit is not set");
+DEFINE_CERT_ERROR_ID(kKeyUsageIncorrectForRcsMlsClient,
+                     "KeyUsage must have only the digitalSignature bit set for "
+                     "rcsMlsClient auth");
 DEFINE_CERT_ERROR_ID(kMaxPathLengthViolated, "max_path_length reached");
 DEFINE_CERT_ERROR_ID(kBasicConstraintsIndicatesNotCa,
                      "Basic Constraints indicates not a CA");
@@ -70,6 +73,17 @@ DEFINE_CERT_ERROR_ID(kEkuHasProhibitedTimeStamping,
 DEFINE_CERT_ERROR_ID(kEkuHasProhibitedCodeSigning,
                      "The extended key usage includes code signing which "
                      "is not permitted for this use");
+DEFINE_CERT_ERROR_ID(kEkuIncorrectForRcsMlsClient,
+                     "The extended key usage does not contain only the "
+                     "rcsMlsClient key purpose.");
+DEFINE_CERT_ERROR_ID(kEkuIncorrectForC2PATimeStamping,
+                     "The extended key usage does not contain the time "
+                     "stamping key purpose, or contains prohibited key usages");
+DEFINE_CERT_ERROR_ID(
+    kEkuIncorrectForC2PAManifest,
+    "The extended key usage must contain at least one of: email protection or "
+    "document signing, and must not contain prohibited key usages");
+
 DEFINE_CERT_ERROR_ID(kEkuNotPresent,
                      "Certificate does not have extended key usage");
 DEFINE_CERT_ERROR_ID(kCertIsNotTrustAnchor,

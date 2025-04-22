@@ -16,14 +16,12 @@
 
 #include "../bcm_support.h"
 #include "../internal.h"
-#include "sysrand_internal.h"
+#include "internal.h"
 
 #if defined(OPENSSL_RAND_WINDOWS)
 
 #include <limits.h>
 #include <stdlib.h>
-
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
 
 #include <windows.h>
 
@@ -32,8 +30,6 @@ OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <bcrypt.h>
 OPENSSL_MSVC_PRAGMA(comment(lib, "bcrypt.lib"))
 #endif  // WINAPI_PARTITION_APP && !WINAPI_PARTITION_DESKTOP
-
-OPENSSL_MSVC_PRAGMA(warning(pop))
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP) && \
     !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)

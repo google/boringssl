@@ -26,10 +26,10 @@ import (
 )
 
 type wycheproofTest struct {
-	Algorithm        string            `json:"algorithm"`
-	GeneratorVersion string            `json:"generatorVersion"`
-	NumberOfTests    int               `json:"numberOfTests"`
-	Header           []string          `json:"header"`
+	Algorithm        string   `json:"algorithm"`
+	GeneratorVersion string   `json:"generatorVersion"`
+	NumberOfTests    int      `json:"numberOfTests"`
+	Header           []string `json:"header"`
 	// encoding/json does not support collecting unused keys, so we leave
 	// everything past this point as generic.
 	TestGroups []map[string]any `json:"testGroups"`
@@ -195,6 +195,7 @@ func convertWycheproof(f io.Writer, jsonPath string) error {
 var defaultInputs = []string{
 	"aes_cbc_pkcs5_test.json",
 	"aes_cmac_test.json",
+	"aes_eax_test.json",
 	"aes_gcm_siv_test.json",
 	"aes_gcm_test.json",
 	"chacha20_poly1305_test.json",

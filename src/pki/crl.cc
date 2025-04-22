@@ -17,6 +17,7 @@
 
 #include <openssl/base.h>
 #include <openssl/bytestring.h>
+#include <openssl/span.h>
 
 #include "cert_errors.h"
 #include "crl.h"
@@ -444,7 +445,7 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
   der::Input tbs_cert_list_tlv;
   der::Input signature_algorithm_tlv;
   der::BitString signature_value;
-  if (!ParseCrlCertificateList(der::Input(raw_crl), &tbs_cert_list_tlv,
+  if (!ParseCrlCertificateList(StringAsBytes(raw_crl), &tbs_cert_list_tlv,
                                &signature_algorithm_tlv, &signature_value)) {
     return CRLRevocationStatus::UNKNOWN;
   }
@@ -519,7 +520,8 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
   if (!NormalizeNameTLV(tbs_cert_list.issuer_tlv, &normalized_crl_issuer)) {
     return CRLRevocationStatus::UNKNOWN;
   }
-  if (der::Input(normalized_crl_issuer) != target_cert->normalized_issuer()) {
+  if (der::Input(StringAsBytes(normalized_crl_issuer)) !=
+      target_cert->normalized_issuer()) {
     return CRLRevocationStatus::UNKNOWN;
   }
 
@@ -639,7 +641,7 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
     //
     // As the |issuer_cert| is from the already validated chain, it is already
     // known to chain to the same trust anchor as the target certificate.
-    if (der::Input(normalized_crl_issuer) !=
+    if (der::Input(StringAsBytes(normalized_crl_issuer)) !=
         issuer_cert->normalized_subject()) {
       continue;
     }

@@ -45,11 +45,10 @@ int ec_GFp_simple_group_set_curve(EC_GROUP *group, const BIGNUM *p,
     return 0;
   }
 
-  int ret = 0;
-  BN_CTX_start(ctx);
+  bssl::BN_CTXScope scope(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
-  if (tmp == NULL) {
-    goto err;
+  if (tmp == nullptr) {
+    return 0;
   }
 
   if (!BN_MONT_CTX_set(&group->field, p, ctx) ||
@@ -57,21 +56,17 @@ int ec_GFp_simple_group_set_curve(EC_GROUP *group, const BIGNUM *p,
       !ec_bignum_to_felem(group, &group->b, b) ||
       // Reuse Z from the generator to cache the value one.
       !ec_bignum_to_felem(group, &group->generator.raw.Z, BN_value_one())) {
-    goto err;
+    return 0;
   }
 
   // group->a_is_minus3
   if (!BN_copy(tmp, a) ||
       !BN_add_word(tmp, 3)) {
-    goto err;
+    return 0;
   }
   group->a_is_minus3 = (0 == BN_cmp(tmp, &group->field.N));
 
-  ret = 1;
-
-err:
-  BN_CTX_end(ctx);
-  return ret;
+  return 1;
 }
 
 int ec_GFp_simple_group_get_curve(const EC_GROUP *group, BIGNUM *p, BIGNUM *a,

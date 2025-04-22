@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_MEM_H
 #define OPENSSL_HEADER_MEM_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <stdlib.h>
 #include <stdarg.h>

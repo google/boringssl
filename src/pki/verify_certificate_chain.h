@@ -40,10 +40,13 @@ enum class KeyPurpose {
   CLIENT_AUTH,
   SERVER_AUTH_STRICT,  // Skip ANY_EKU when checking, require EKU present in
                        // certificate.
-  SERVER_AUTH_STRICT_LEAF, // Same as above, but only for leaf cert.
+  SERVER_AUTH_STRICT_LEAF,  // Same as above, but only for leaf cert.
   CLIENT_AUTH_STRICT,  // Skip ANY_EKU when checking, require EKU present in
                        // certificate.
-  CLIENT_AUTH_STRICT_LEAF, // Same as above, but only for leaf ce
+  CLIENT_AUTH_STRICT_LEAF,  // Same as above, but only for leaf cert.
+  RCS_MLS_CLIENT_AUTH,      // Client auth for RCS-MLS.
+  C2PA_TIMESTAMPING,    // Leaf can sign timestamps for C2PA.
+  C2PA_MANIFEST,        // Leaf can sign manifests for C2PA.
 };
 
 enum class InitialExplicitPolicy {

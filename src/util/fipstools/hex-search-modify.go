@@ -32,7 +32,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
@@ -53,7 +52,7 @@ func main() {
 	}
 
 	// Read file contents
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error reading file:", err)
 		os.Exit(1)

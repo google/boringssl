@@ -128,7 +128,7 @@ pause () {
 }
 
 if [ "$MODE" = "local" ]; then
-  TEST_FIPS_BIN=${TEST_FIPS_BIN:-build/util/fipstools/test_fips}
+  TEST_FIPS_BIN=${TEST_FIPS_BIN:-build/test_fips}
   TEST_FIPS_BREAK_BIN=${TEST_FIPS_BREAK_BIN:-./test_fips_break}
   check_file "$TEST_FIPS_BIN"
   check_file "$TEST_FIPS_BREAK_BIN"

@@ -2057,44 +2057,8 @@ ___
 
 ####################################################################
 
-sub sha1rnds4 {
-    if (@_[0] =~ /\$([x0-9a-f]+),\s*%xmm([0-7]),\s*%xmm([0-7])/) {
-      my @opcode=(0x0f,0x3a,0xcc);
-	push @opcode,0xc0|($2&7)|(($3&7)<<3);		# ModR/M
-	my $c=$1;
-	push @opcode,$c=~/^0/?oct($c):$c;
-	return ".byte\t".join(',',@opcode);
-    } else {
-	return "sha1rnds4\t".@_[0];
-    }
-}
-
-sub sha1op38 {
-    my $instr = shift;
-    my %opcodelet = (
-		"sha1nexte" => 0xc8,
-  		"sha1msg1"  => 0xc9,
-		"sha1msg2"  => 0xca	);
-
-    if (defined($opcodelet{$instr}) && @_[0] =~ /%xmm([0-9]+),\s*%xmm([0-9]+)/) {
-      my @opcode=(0x0f,0x38);
-      my $rex=0;
-	$rex|=0x04			if ($2>=8);
-	$rex|=0x01			if ($1>=8);
-	unshift @opcode,0x40|$rex	if ($rex);
-	push @opcode,$opcodelet{$instr};
-	push @opcode,0xc0|($1&7)|(($2&7)<<3);		# ModR/M
-	return ".byte\t".join(',',@opcode);
-    } else {
-	return $instr."\t".@_[0];
-    }
-}
-
 foreach (split("\n",$code)) {
 	s/\`([^\`]*)\`/eval $1/geo;
-
-	s/\b(sha1rnds4)\s+(.*)/sha1rnds4($2)/geo	or
-	s/\b(sha1[^\s]*)\s+(.*)/sha1op38($1,$2)/geo;
 
 	print $_,"\n";
 }

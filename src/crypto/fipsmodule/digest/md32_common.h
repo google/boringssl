@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef OPENSSL_HEADER_DIGEST_MD32_COMMON_H
-#define OPENSSL_HEADER_DIGEST_MD32_COMMON_H
+#ifndef OPENSSL_HEADER_CRYPTO_FIPSMODULE_DIGEST_MD32_COMMON_H
+#define OPENSSL_HEADER_CRYPTO_FIPSMODULE_DIGEST_MD32_COMMON_H
 
 #include <openssl/base.h>
 
@@ -158,4 +158,4 @@ static inline void crypto_md32_final(crypto_md32_block_func block_func,
 }  // extern C
 #endif
 
-#endif  // OPENSSL_HEADER_DIGEST_MD32_COMMON_H
+#endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_DIGEST_MD32_COMMON_H

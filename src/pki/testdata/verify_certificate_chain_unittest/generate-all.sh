@@ -16,6 +16,11 @@
 
 set -e
 
+# As generate-chains.py calls out to the openssl command under the hood
+# this is suboptimal if you don't have openssl installed. We should
+# replace generate-chains.py
+# TODO(bbe): crbug.com/402461221
+
 for dir in */ ; do
   cd "$dir"
 

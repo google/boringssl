@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_ASN1_H
 #define OPENSSL_HEADER_ASN1_H
 
-#include <openssl/base.h>
+#include <openssl/base.h>   // IWYU pragma: export
 
 #include <time.h>
 
@@ -77,6 +77,10 @@ extern "C" {
 // V_ASN1_ANY is used by the ASN.1 templates to indicate an ANY type.
 #define V_ASN1_ANY (-4)
 
+// V_ASN1_ANY_AS_STRING is used by the ASN.1 templates to indicate an ANY type
+// represented with |ASN1_STRING| instead of |ASN1_TYPE|.
+#define V_ASN1_ANY_AS_STRING (-5)
+
 // The following constants are tag numbers for universal types.
 #define V_ASN1_EOC 0
 #define V_ASN1_BOOLEAN 1
@@ -128,21 +132,13 @@ extern "C" {
 #define B_ASN1_OCTET_STRING 0x0200
 #define B_ASN1_BIT_STRING 0x0400
 #define B_ASN1_BMPSTRING 0x0800
-#define B_ASN1_UNKNOWN 0x1000
 #define B_ASN1_UTF8STRING 0x2000
 #define B_ASN1_UTCTIME 0x4000
 #define B_ASN1_GENERALIZEDTIME 0x8000
 #define B_ASN1_SEQUENCE 0x10000
 
 // ASN1_tag2bit converts |tag| from the tag number of a universal type to a
-// corresponding |B_ASN1_*| constant, |B_ASN1_UNKNOWN|, or zero. If the
-// |B_ASN1_*| constant above is defined, it will map the corresponding
-// |V_ASN1_*| constant to it. Otherwise, whether it returns |B_ASN1_UNKNOWN| or
-// zero is ill-defined and callers should not rely on it.
-//
-// TODO(https://crbug.com/boringssl/412): Figure out what |B_ASN1_UNNOWN| vs
-// zero is meant to be. The main impact is what values go in |B_ASN1_PRINTABLE|.
-// To that end, we must return zero on types that can't go in |ASN1_STRING|.
+// corresponding |B_ASN1_*| constant, or zero if |tag| has no bitmask.
 OPENSSL_EXPORT unsigned long ASN1_tag2bit(int tag);
 
 // ASN1_tag2str returns a string representation of |tag|, interpret as a tag
@@ -1854,50 +1850,6 @@ OPENSSL_EXPORT void ASN1_STRING_TABLE_cleanup(void);
 #define M_ASN1_VISIBLESTRING_free(a) ASN1_VISIBLESTRING_free(a)
 #define M_ASN1_UTF8STRING_new() ASN1_UTF8STRING_new()
 #define M_ASN1_UTF8STRING_free(a) ASN1_UTF8STRING_free(a)
-
-// B_ASN1_PRINTABLE is a bitmask for an ad-hoc subset of string-like types. Note
-// the presence of |B_ASN1_UNKNOWN| means it includes types which |ASN1_tag2bit|
-// maps to |B_ASN1_UNKNOWN|.
-//
-// Do not use this. Despite the name, it has no connection to PrintableString or
-// printable characters. See https://crbug.com/boringssl/412.
-#define B_ASN1_PRINTABLE                                              \
-  (B_ASN1_NUMERICSTRING | B_ASN1_PRINTABLESTRING | B_ASN1_T61STRING | \
-   B_ASN1_IA5STRING | B_ASN1_BIT_STRING | B_ASN1_UNIVERSALSTRING |    \
-   B_ASN1_BMPSTRING | B_ASN1_UTF8STRING | B_ASN1_SEQUENCE | B_ASN1_UNKNOWN)
-
-// ASN1_PRINTABLE_new returns a newly-allocated |ASN1_STRING| with type -1, or
-// NULL on error. The resulting |ASN1_STRING| is not a valid ASN.1 value until
-// initialized with a value.
-OPENSSL_EXPORT ASN1_STRING *ASN1_PRINTABLE_new(void);
-
-// ASN1_PRINTABLE_free calls |ASN1_STRING_free|.
-OPENSSL_EXPORT void ASN1_PRINTABLE_free(ASN1_STRING *str);
-
-// d2i_ASN1_PRINTABLE parses up to |len| bytes from |*inp| as a DER-encoded
-// CHOICE of an ad-hoc subset of string-like types, as described in
-// |d2i_SAMPLE|.
-//
-// Do not use this. Despite, the name it has no connection to PrintableString or
-// printable characters. See https://crbug.com/boringssl/412.
-//
-// TODO(https://crbug.com/boringssl/354): This function currently also accepts
-// BER, but this will be removed in the future.
-OPENSSL_EXPORT ASN1_STRING *d2i_ASN1_PRINTABLE(ASN1_STRING **out,
-                                               const uint8_t **inp, long len);
-
-// i2d_ASN1_PRINTABLE marshals |in| as DER, as described in |i2d_SAMPLE|.
-//
-// Do not use this. Despite the name, it has no connection to PrintableString or
-// printable characters. See https://crbug.com/boringssl/412.
-OPENSSL_EXPORT int i2d_ASN1_PRINTABLE(const ASN1_STRING *in, uint8_t **outp);
-
-// ASN1_PRINTABLE is an |ASN1_ITEM| whose ASN.1 type is a CHOICE of an ad-hoc
-// subset of string-like types, and whose C type is |ASN1_STRING*|.
-//
-// Do not use this. Despite the name, it has no connection to PrintableString or
-// printable characters. See https://crbug.com/boringssl/412.
-DECLARE_ASN1_ITEM(ASN1_PRINTABLE)
 
 // ASN1_INTEGER_set sets |a| to an INTEGER with value |v|. It returns one on
 // success and zero on error.

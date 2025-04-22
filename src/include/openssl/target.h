@@ -192,11 +192,6 @@
 #define OPENSSL_THREADS
 #endif
 
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE) && \
-    !defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
-#define BORINGSSL_UNSAFE_DETERMINISTIC_MODE
-#endif
-
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define OPENSSL_ASAN
