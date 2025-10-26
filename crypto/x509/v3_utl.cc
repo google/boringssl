@@ -303,8 +303,6 @@ int bssl::X509V3_get_value_int(const CONF_VALUE *value, ASN1_INTEGER **aint) {
 #define HDR_NAME 1
 #define HDR_VALUE 2
 
-// #define DEBUG
-
 STACK_OF(CONF_VALUE) *bssl::X509V3_parse_list(const char *line) {
   char *p, *q, c;
   char *ntmp, *vtmp;
@@ -312,6 +310,8 @@ STACK_OF(CONF_VALUE) *bssl::X509V3_parse_list(const char *line) {
   char *linebuf;
   int state;
   // We are going to modify the line so copy it first
+  // TODO(davidben): Rewrite this parser with `std::string_view`. It doesn't
+  // need to copy the string.
   linebuf = OPENSSL_strdup(line);
   if (linebuf == nullptr) {
     goto err;
@@ -335,9 +335,6 @@ STACK_OF(CONF_VALUE) *bssl::X509V3_parse_list(const char *line) {
           *p = 0;
           ntmp = strip_spaces(q);
           q = p + 1;
-#if 0
-                printf("%s\n", ntmp);
-#endif
           if (!ntmp) {
             OPENSSL_PUT_ERROR(X509V3, X509V3_R_INVALID_NULL_NAME);
             goto err;
@@ -351,9 +348,6 @@ STACK_OF(CONF_VALUE) *bssl::X509V3_parse_list(const char *line) {
           state = HDR_NAME;
           *p = 0;
           vtmp = strip_spaces(q);
-#if 0
-                printf("%s\n", ntmp);
-#endif
           if (!vtmp) {
             OPENSSL_PUT_ERROR(X509V3, X509V3_R_INVALID_NULL_VALUE);
             goto err;
@@ -367,9 +361,6 @@ STACK_OF(CONF_VALUE) *bssl::X509V3_parse_list(const char *line) {
 
   if (state == HDR_VALUE) {
     vtmp = strip_spaces(q);
-#if 0
-        printf("%s=%s\n", ntmp, vtmp);
-#endif
     if (!vtmp) {
       OPENSSL_PUT_ERROR(X509V3, X509V3_R_INVALID_NULL_VALUE);
       goto err;
@@ -377,9 +368,6 @@ STACK_OF(CONF_VALUE) *bssl::X509V3_parse_list(const char *line) {
     X509V3_add_value(ntmp, vtmp, &values);
   } else {
     ntmp = strip_spaces(q);
-#if 0
-        printf("%s\n", ntmp);
-#endif
     if (!ntmp) {
       OPENSSL_PUT_ERROR(X509V3, X509V3_R_INVALID_NULL_NAME);
       goto err;
