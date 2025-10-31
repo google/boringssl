@@ -39,7 +39,7 @@ int CRYPTO_has_asm(void) {
 }
 
 uint32_t FIPS_version(void) {
-  return 0;
+  return 20251031;
 }
 
 int FIPS_query_algorithm_status(const char *algorithm) {
