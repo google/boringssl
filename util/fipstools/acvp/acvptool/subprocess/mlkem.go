@@ -58,13 +58,13 @@ type mlkemEncapDecapTestGroup struct {
 	TestType     string                `json:"testType"`
 	ParameterSet string                `json:"parameterSet"`
 	Function     string                `json:"function"`
-	DK           string                `json:"dk,omitempty"`
 	Tests        []mlkemEncapDecapTest `json:"tests"`
 }
 
 type mlkemEncapDecapTest struct {
 	ID uint64 `json:"tcId"`
 	EK string `json:"ek,omitempty"`
+	DK string `json:"dk,omitempty"`
 	M  string `json:"m,omitempty"`
 	C  string `json:"c,omitempty"`
 }
@@ -200,15 +200,16 @@ func (m *mlkem) processEncapDecap(vectorSet []byte, t Transactable) (any, error)
 
 		case "decapsulation":
 			cmdName := group.ParameterSet + "/decap"
-			dk, err := hex.DecodeString(group.DK)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode dk in group %d: %s",
-					group.ID, err)
-			}
 
 			for _, test := range group.Tests {
+				dk, err := hex.DecodeString(test.DK)
+				if err != nil || len(dk) == 0 {
+					return nil, fmt.Errorf("failed to decode dk in test case %d/%d: %s",
+						group.ID, test.ID, err)
+				}
+
 				c, err := hex.DecodeString(test.C)
-				if err != nil {
+				if err != nil || len(c) == 0 {
 					return nil, fmt.Errorf("failed to decode c in test case %d/%d: %s",
 						group.ID, test.ID, err)
 				}
