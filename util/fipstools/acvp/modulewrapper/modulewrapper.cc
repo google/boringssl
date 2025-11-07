@@ -752,7 +752,8 @@ static bool GetConfig(const Span<const uint8_t> args[],
           false
         ],
         "externalMu": [
-          false
+          false,
+          true
         ],
         "capabilities": [{
           "parameterSets": [
@@ -772,6 +773,10 @@ static bool GetConfig(const Span<const uint8_t> args[],
         "mode": "sigVer",
         "revision": "FIPS204",
         "signatureInterfaces": ["internal"],
+        "externalMu": [
+          false,
+          true
+        ],
         "capabilities": [{
           "messageLength": [{
             "min": 8,
@@ -2075,7 +2080,9 @@ template <typename PrivateKey, size_t SignatureBytes,
           bcm_status (*SignInternal)(uint8_t *, const PrivateKey *,
                                      const uint8_t *, size_t, const uint8_t *,
                                      size_t, const uint8_t *, size_t,
-                                     const uint8_t *)>
+                                     const uint8_t *),
+          bcm_status (*SignMuInternal)(uint8_t *, const PrivateKey *,
+                                       const uint8_t *, const uint8_t *)>
 static bool MLDSASigGen(const Span<const uint8_t> args[],
                         ReplyCallback write_reply) {
   CBS cbs = args[0];
@@ -2087,18 +2094,36 @@ static bool MLDSASigGen(const Span<const uint8_t> args[],
 
   const Span<const uint8_t> msg = args[1];
   const Span<const uint8_t> randomizer = args[2];
+  const Span<const uint8_t> context = args[3];
+  const Span<const uint8_t> mu = args[4];
 
   if (randomizer.size() != BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES) {
     LOG_ERROR("Bad randomizer size.\n");
     return false;
   }
 
+  if (!context.empty()) {
+    LOG_ERROR("ML-DSA context should be empty.\n");
+    return false;
+  }
+
+  if (mu.size() != 0 && mu.size() != MLDSA_MU_BYTES) {
+    LOG_ERROR("Bad ML-DSA mu length.\n");
+    return false;
+  }
+
   uint8_t signature[SignatureBytes];
-  if (SignInternal(signature, priv.get(), msg.data(), msg.size(),
-                   // It's not just an empty context, the context prefix
-                   // is omitted too.
-                   nullptr, 0, nullptr, 0,
-                   randomizer.data()) != bcm_status::approved) {
+  if (mu.size() != 0) {
+    if (SignMuInternal(signature, priv.get(), mu.data(), randomizer.data()) !=
+        bcm_status::approved) {
+      LOG_ERROR("ML-DSA mu-signing failed.\n");
+      return false;
+    }
+  } else if (SignInternal(signature, priv.get(), msg.data(), msg.size(),
+                          // It's not just an empty context, the context
+                          // prefix is omitted too.
+                          nullptr, 0, nullptr, 0,
+                          randomizer.data()) != bcm_status::approved) {
     LOG_ERROR("ML-DSA signing failed.\n");
     return false;
   }
@@ -2110,12 +2135,16 @@ template <typename PublicKey, size_t SignatureBytes,
           bcm_status (*ParsePublicKey)(PublicKey *, CBS *),
           bcm_status (*VerifyInternal)(const PublicKey *, const uint8_t *,
                                        const uint8_t *, size_t, const uint8_t *,
-                                       size_t, const uint8_t *, size_t)>
+                                       size_t, const uint8_t *, size_t),
+          bcm_status (*VerifyMu)(const PublicKey *, const uint8_t *,
+                                 const uint8_t *)>
 static bool MLDSASigVer(const Span<const uint8_t> args[],
                         ReplyCallback write_reply) {
   const Span<const uint8_t> pub_key_bytes = args[0];
   const Span<const uint8_t> msg = args[1];
   const Span<const uint8_t> signature = args[2];
+  const Span<const uint8_t> context = args[3];
+  const Span<const uint8_t> mu = args[4];
 
   CBS cbs = pub_key_bytes;
   auto pub = std::make_unique<PublicKey>();
@@ -2129,11 +2158,26 @@ static bool MLDSASigVer(const Span<const uint8_t> args[],
     return false;
   }
 
-  const uint8_t ok = bcm_success(
-      VerifyInternal(pub.get(), signature.data(), msg.data(), msg.size(),
-                     // It's not just an empty context, the context
-                     // prefix is omitted too.
-                     nullptr, 0, nullptr, 0));
+  if (!context.empty()) {
+    LOG_ERROR("ML-DSA context should be empty.\n");
+    return false;
+  }
+
+  if (mu.size() != 0 && mu.size() != MLDSA_MU_BYTES) {
+    LOG_ERROR("Bad ML-DSA mu length.\n");
+    return false;
+  }
+
+  uint8_t ok;
+  if (mu.size() != 0) {
+    ok = bcm_success(VerifyMu(pub.get(), signature.data(), mu.data()));
+  } else {
+    ok = bcm_success(VerifyInternal(pub.get(), signature.data(), msg.data(),
+                                    msg.size(),
+                                    // It's not just an empty context, the
+                                    // context prefix is omitted too.
+                                    nullptr, 0, nullptr, 0));
+  }
 
   return write_reply({Span<const uint8_t>(&ok, sizeof(ok))});
 }
@@ -2388,24 +2432,30 @@ static constexpr struct {
      MLDSAKeyGen<MLDSA87_private_key, MLDSA87_PUBLIC_KEY_BYTES,
                  BCM_mldsa87_generate_key_external_entropy_fips,
                  BCM_mldsa87_marshal_private_key>},
-    {"ML-DSA-44/sigGen", 3,
+    {"ML-DSA-44/sigGen", 5,
      MLDSASigGen<MLDSA44_private_key, MLDSA44_SIGNATURE_BYTES,
-                 BCM_mldsa44_parse_private_key, BCM_mldsa44_sign_internal>},
-    {"ML-DSA-65/sigGen", 3,
+                 BCM_mldsa44_parse_private_key, BCM_mldsa44_sign_internal,
+                 BCM_mldsa44_sign_mu_internal>},
+    {"ML-DSA-65/sigGen", 5,
      MLDSASigGen<MLDSA65_private_key, MLDSA65_SIGNATURE_BYTES,
-                 BCM_mldsa65_parse_private_key, BCM_mldsa65_sign_internal>},
-    {"ML-DSA-87/sigGen", 3,
+                 BCM_mldsa65_parse_private_key, BCM_mldsa65_sign_internal,
+                 BCM_mldsa65_sign_mu_internal>},
+    {"ML-DSA-87/sigGen", 5,
      MLDSASigGen<MLDSA87_private_key, MLDSA87_SIGNATURE_BYTES,
-                 BCM_mldsa87_parse_private_key, BCM_mldsa87_sign_internal>},
-    {"ML-DSA-44/sigVer", 3,
+                 BCM_mldsa87_parse_private_key, BCM_mldsa87_sign_internal,
+                 BCM_mldsa87_sign_mu_internal>},
+    {"ML-DSA-44/sigVer", 5,
      MLDSASigVer<MLDSA44_public_key, MLDSA44_SIGNATURE_BYTES,
-                 BCM_mldsa44_parse_public_key, BCM_mldsa44_verify_internal>},
-    {"ML-DSA-65/sigVer", 3,
+                 BCM_mldsa44_parse_public_key, BCM_mldsa44_verify_internal,
+                 BCM_mldsa44_verify_message_representative>},
+    {"ML-DSA-65/sigVer", 5,
      MLDSASigVer<MLDSA65_public_key, MLDSA65_SIGNATURE_BYTES,
-                 BCM_mldsa65_parse_public_key, BCM_mldsa65_verify_internal>},
-    {"ML-DSA-87/sigVer", 3,
+                 BCM_mldsa65_parse_public_key, BCM_mldsa65_verify_internal,
+                 BCM_mldsa65_verify_message_representative>},
+    {"ML-DSA-87/sigVer", 5,
      MLDSASigVer<MLDSA87_public_key, MLDSA87_SIGNATURE_BYTES,
-                 BCM_mldsa87_parse_public_key, BCM_mldsa87_verify_internal>},
+                 BCM_mldsa87_parse_public_key, BCM_mldsa87_verify_internal,
+                 BCM_mldsa87_verify_message_representative>},
     {"ML-KEM-768/keyGen", 1,
      MLKEMKeyGen<MLKEM768_private_key, MLKEM768_PUBLIC_KEY_BYTES,
                  BCM_mlkem768_generate_key_external_seed,

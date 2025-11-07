@@ -136,8 +136,8 @@ The other commands are as follows. (Note that you only need to implement the com
 | TLSKDF/1.2/&lt;HASH&gt; | Number output bytes, secret, label, seed1, seed2 | Output |
 | PBKDF                | HMAC name, key length (bits), salt, password, iteration count | Derived key |
 | ML-DSA-XX/keyGen     | Seed | Public key, private key |
-| ML-DSA-XX/sigGen     | Private key, message, randomizer | Signature |
-| ML-DSA-XX/sigVer     | Public key, message, signature | Single-byte validity flag |
+| ML-DSA-XX/sigGen     | Private key, message, randomizer, context, mu | Signature |
+| ML-DSA-XX/sigVer     | Public key, message, signature, context, mu | Single-byte validity flag |
 | ML-KEM-XX/keyGen     | Seed | Public key, private key |
 | ML-KEM-XX/encap      | Public key, entropy | Ciphertext, shared secret |
 | ML-KEM-XX/decap      | Private key, ciphertext | Shared secret |

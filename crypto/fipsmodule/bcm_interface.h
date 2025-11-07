@@ -330,6 +330,12 @@ OPENSSL_EXPORT bcm_status BCM_mldsa65_sign_internal(
     const uint8_t *context, size_t context_len,
     const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]);
 
+OPENSSL_EXPORT bcm_status BCM_mldsa65_sign_mu_internal(
+    uint8_t out_encoded_signature[MLDSA65_SIGNATURE_BYTES],
+    const MLDSA65_private_key *private_key,
+    const uint8_t msg_rep[MLDSA_MU_BYTES],
+    const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]);
+
 // BCM_mldsa5_verify_internal verifies that |encoded_signature| is a valid
 // signature of |msg| by |public_key|. The |context_prefix| and |context| are
 // prefixed to the message before verification, in that order.
@@ -442,6 +448,12 @@ OPENSSL_EXPORT bcm_status BCM_mldsa87_sign_internal(
     const uint8_t *context, size_t context_len,
     const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]);
 
+OPENSSL_EXPORT bcm_status BCM_mldsa87_sign_mu_internal(
+    uint8_t out_encoded_signature[MLDSA87_SIGNATURE_BYTES],
+    const MLDSA87_private_key *private_key,
+    const uint8_t msg_rep[MLDSA_MU_BYTES],
+    const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]);
+
 // BCM_mldsa87_verify_internal verifies that |encoded_signature| is a valid
 // signature of |msg| by |public_key|. The |context_prefix| and |context| are
 // prefixed to the message before verification, in that order.
@@ -551,6 +563,12 @@ OPENSSL_EXPORT bcm_status BCM_mldsa44_sign_internal(
     const MLDSA44_private_key *private_key, const uint8_t *msg, size_t msg_len,
     const uint8_t *context_prefix, size_t context_prefix_len,
     const uint8_t *context, size_t context_len,
+    const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]);
+
+OPENSSL_EXPORT bcm_status BCM_mldsa44_sign_mu_internal(
+    uint8_t out_encoded_signature[MLDSA44_SIGNATURE_BYTES],
+    const MLDSA44_private_key *private_key,
+    const uint8_t msg_rep[MLDSA_MU_BYTES],
     const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]);
 
 // BCM_mldsa44_verify_internal verifies that |encoded_signature| is a valid

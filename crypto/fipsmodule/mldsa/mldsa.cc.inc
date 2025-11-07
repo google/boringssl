@@ -1662,8 +1662,7 @@ int mldsa_finish_keygen(uint8_t out_encoded_public_key[public_key_bytes<K>()],
 template <int K, int L>
 int mldsa_generate_key_external_entropy_no_self_test(
     uint8_t out_encoded_public_key[public_key_bytes<K>()],
-    private_key<K, L> *priv,
-    const uint8_t entropy[MLDSA_SEED_BYTES]) {
+    private_key<K, L> *priv, const uint8_t entropy[MLDSA_SEED_BYTES]) {
   // Step 1-2.
   uint8_t augmented_entropy[MLDSA_SEED_BYTES + 2];
   OPENSSL_memcpy(augmented_entropy, entropy, MLDSA_SEED_BYTES);
@@ -1982,10 +1981,9 @@ int mldsa_verify_mu_no_self_test(
 // FIPS 204, Algorithm 8 (`ML-DSA.Verify_internal`), using a pre-computed mu.
 // Returns 1 on success and 0 on failure.
 template <int K, int L>
-int mldsa_verify_mu(
-    const public_key<K> *pub,
-    const uint8_t encoded_signature[signature_bytes<K>()],
-    const uint8_t mu[kMuBytes]) {
+int mldsa_verify_mu(const public_key<K> *pub,
+                    const uint8_t encoded_signature[signature_bytes<K>()],
+                    const uint8_t mu[kMuBytes]) {
   fips::ensure_verify_self_test();
   return mldsa_verify_mu_no_self_test<K, L>(pub, encoded_signature, mu);
 }
@@ -2386,7 +2384,7 @@ bcm_status BCM_mldsa65_public_from_private(
 }
 
 const MLDSA65_public_key *BCM_mldsa65_public_of_private(
-    const MLDSA65_private_key *private_key){
+    const MLDSA65_private_key *private_key) {
   return reinterpret_cast<const MLDSA65_public_key *>(
       &mldsa::private_key_from_external_65(private_key)->pub);
 }
@@ -2401,6 +2399,16 @@ bcm_status BCM_mldsa65_sign_internal(
       out_encoded_signature, mldsa::private_key_from_external_65(private_key),
       msg, msg_len, context_prefix, context_prefix_len, context, context_len,
       randomizer));
+}
+
+bcm_status BCM_mldsa65_sign_mu_internal(
+    uint8_t out_encoded_signature[MLDSA65_SIGNATURE_BYTES],
+    const MLDSA65_private_key *private_key,
+    const uint8_t msg_rep[MLDSA_MU_BYTES],
+    const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]) {
+  return bcm_as_approved_status(mldsa_sign_mu(
+      out_encoded_signature, mldsa::private_key_from_external_65(private_key),
+      msg_rep, randomizer));
 }
 
 // ML-DSA signature in randomized mode, filling the random bytes with
@@ -2614,7 +2622,7 @@ bcm_status BCM_mldsa87_public_from_private(
 }
 
 const MLDSA87_public_key *BCM_mldsa87_public_of_private(
-    const MLDSA87_private_key *private_key){
+    const MLDSA87_private_key *private_key) {
   return reinterpret_cast<const MLDSA87_public_key *>(
       &mldsa::private_key_from_external_87(private_key)->pub);
 }
@@ -2629,6 +2637,16 @@ bcm_status BCM_mldsa87_sign_internal(
       out_encoded_signature, mldsa::private_key_from_external_87(private_key),
       msg, msg_len, context_prefix, context_prefix_len, context, context_len,
       randomizer));
+}
+
+bcm_status BCM_mldsa87_sign_mu_internal(
+    uint8_t out_encoded_signature[MLDSA87_SIGNATURE_BYTES],
+    const MLDSA87_private_key *private_key,
+    const uint8_t msg_rep[MLDSA_MU_BYTES],
+    const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]) {
+  return bcm_as_approved_status(mldsa_sign_mu(
+      out_encoded_signature, mldsa::private_key_from_external_87(private_key),
+      msg_rep, randomizer));
 }
 
 // ML-DSA signature in randomized mode, filling the random bytes with
@@ -2841,7 +2859,7 @@ bcm_status BCM_mldsa44_public_from_private(
 }
 
 const MLDSA44_public_key *BCM_mldsa44_public_of_private(
-    const MLDSA44_private_key *private_key){
+    const MLDSA44_private_key *private_key) {
   return reinterpret_cast<const MLDSA44_public_key *>(
       &mldsa::private_key_from_external_44(private_key)->pub);
 }
@@ -2856,6 +2874,16 @@ bcm_status BCM_mldsa44_sign_internal(
       out_encoded_signature, mldsa::private_key_from_external_44(private_key),
       msg, msg_len, context_prefix, context_prefix_len, context, context_len,
       randomizer));
+}
+
+bcm_status BCM_mldsa44_sign_mu_internal(
+    uint8_t out_encoded_signature[MLDSA44_SIGNATURE_BYTES],
+    const MLDSA44_private_key *private_key,
+    const uint8_t msg_rep[MLDSA_MU_BYTES],
+    const uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES]) {
+  return bcm_as_approved_status(mldsa_sign_mu(
+      out_encoded_signature, mldsa::private_key_from_external_44(private_key),
+      msg_rep, randomizer));
 }
 
 // ML-DSA signature in randomized mode, filling the random bytes with
