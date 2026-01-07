@@ -22,6 +22,8 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 BUF_MEM *BUF_MEM_new() {
   return reinterpret_cast<BUF_MEM *>(OPENSSL_zalloc(sizeof(BUF_MEM)));
 }

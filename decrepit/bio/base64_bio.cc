@@ -34,6 +34,8 @@
 #define B64_DECODE 2
 #define EVP_ENCODE_LENGTH(l) (((l + 2) / 3 * 4) + (l / 48 + 1) * 2 + 80)
 
+using namespace bssl;
+
 typedef struct b64_struct {
   int buf_len;
   int buf_off;

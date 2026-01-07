@@ -22,6 +22,8 @@
 
 #include "test/test_util.h"
 
+
+BSSL_NAMESPACE_BEGIN
 namespace {
 
 // C and C++ have two forms of unspecified behavior: undefined behavior and
@@ -247,4 +249,6 @@ TEST(CompilerTest, NoStrictAliasing) {
   EXPECT_EQ(volatile_aba((uintptr_t *)aliased, (void **)aliased), (uintptr_t)0);
   EXPECT_EQ(Bytes(aliased), Bytes(zeros));
 }
+
 }  // namespace
+BSSL_NAMESPACE_END

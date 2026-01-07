@@ -282,7 +282,7 @@ const uint8_t *FIPS_module_hash() { return BORINGSSL_bcm_text_hash; }
 
 #endif  // OPENSSL_ASAN
 
-void BORINGSSL_FIPS_abort() {
+void bssl::BORINGSSL_FIPS_abort() {
   for (;;) {
     abort();
     exit(1);

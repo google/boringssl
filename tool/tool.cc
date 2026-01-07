@@ -30,6 +30,8 @@
 #include "internal.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 static bool IsFIPS(const std::vector<std::string> &args) {
   printf("%d\n", FIPS_mode());
   return true;
@@ -87,6 +89,10 @@ static tool_func_t FindTool(const std::string &name) {
     }
   }
 }
+
+BSSL_NAMESPACE_END
+
+using namespace bssl;
 
 int main(int argc, char **argv) {
 #if defined(OPENSSL_WINDOWS)

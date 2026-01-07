@@ -43,7 +43,7 @@ static int g_force_madv_wipeonfork;
 static int g_force_madv_wipeonfork_enabled;
 static CRYPTO_once_t g_fork_detect_once = CRYPTO_ONCE_INIT;
 static CRYPTO_MUTEX g_fork_detect_lock = CRYPTO_MUTEX_INIT;
-static bssl::Atomic<uint32_t> *g_fork_detect_addr;
+static Atomic<uint32_t> *g_fork_detect_addr;
 static uint64_t g_fork_generation;
 
 static void init_fork_detect() {

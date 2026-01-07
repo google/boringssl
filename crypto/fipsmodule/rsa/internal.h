@@ -58,10 +58,10 @@ struct rsa_st {
 
   // be careful using this if the RSA structure is shared
   CRYPTO_EX_DATA ex_data;
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
   int flags;
 
-  CRYPTO_MUTEX lock;
+  bssl::CRYPTO_MUTEX lock;
 
   // Used to cache montgomery values. The creation of these values is protected
   // by |lock|.

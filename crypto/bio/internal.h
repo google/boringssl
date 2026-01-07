@@ -67,7 +67,7 @@ struct bio_st {
   // num is a BIO-specific value. For example, in fd BIOs it's used to store a
   // file descriptor.
   int num;
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
   void *ptr;
   // next_bio points to the next |BIO| in a chain. This |BIO| owns a reference
   // to |next_bio|.

@@ -56,8 +56,8 @@ static void hexdump(FILE *out, const void *in, size_t len) {
   }
 }
 
-int BORINGSSL_check_test(const void *expected, const void *actual,
-                         size_t expected_len, const char *name) {
+int bssl::BORINGSSL_check_test(const void *expected, const void *actual,
+                               size_t expected_len, const char *name) {
   if (OPENSSL_memcmp(actual, expected, expected_len) != 0) {
     FILE *err = CRYPTO_get_stderr();
     fprintf(err, "%s failed.\nExpected:   ", name);
@@ -599,7 +599,7 @@ static void run_self_test_rsa() {
 
 DEFINE_STATIC_ONCE(g_self_test_once_rsa)
 
-void boringssl_ensure_rsa_self_test() {
+void bssl::boringssl_ensure_rsa_self_test() {
   CRYPTO_once(g_self_test_once_rsa_bss_get(), run_self_test_rsa);
 }
 
@@ -613,7 +613,7 @@ static void run_self_test_ecc() {
 
 DEFINE_STATIC_ONCE(g_self_test_once_ecc)
 
-void boringssl_ensure_ecc_self_test() {
+void bssl::boringssl_ensure_ecc_self_test() {
   CRYPTO_once(g_self_test_once_ecc_bss_get(), run_self_test_ecc);
 }
 
@@ -627,7 +627,7 @@ static void run_self_test_ffdh() {
 
 DEFINE_STATIC_ONCE(g_self_test_once_ffdh)
 
-void boringssl_ensure_ffdh_self_test() {
+void bssl::boringssl_ensure_ffdh_self_test() {
   CRYPTO_once(g_self_test_once_ffdh_bss_get(), run_self_test_ffdh);
 }
 
@@ -638,7 +638,7 @@ void boringssl_ensure_ffdh_self_test() {
 //
 // These tests are run at process start when in FIPS mode.
 
-int boringssl_self_test_sha256() {
+int bssl::boringssl_self_test_sha256() {
   static const uint8_t kInput[16] = {
       0xff, 0x3b, 0x85, 0x7d, 0xa7, 0x23, 0x6a, 0x2b,
       0xaa, 0x0f, 0x39, 0x6b, 0x51, 0x52, 0x22, 0x17,
@@ -656,7 +656,7 @@ int boringssl_self_test_sha256() {
                               sizeof(kPlaintextSHA256), "SHA-256 KAT");
 }
 
-int boringssl_self_test_sha512() {
+int bssl::boringssl_self_test_sha512() {
   static const uint8_t kInput[16] = {
       0x21, 0x25, 0x12, 0xf8, 0xd2, 0xad, 0x83, 0x22,
       0x78, 0x1c, 0x6c, 0x4d, 0x69, 0xa9, 0xda, 0xa1,
@@ -677,7 +677,7 @@ int boringssl_self_test_sha512() {
                               sizeof(kPlaintextSHA512), "SHA-512 KAT");
 }
 
-int boringssl_self_test_hmac_sha256() {
+int bssl::boringssl_self_test_hmac_sha256() {
   static const uint8_t kInput[16] = {
       0xda, 0xd9, 0x12, 0x93, 0xdf, 0xcf, 0x2a, 0x7c,
       0x8e, 0xcd, 0x13, 0xfe, 0x35, 0x3f, 0xa7, 0x5b,
@@ -1051,5 +1051,5 @@ int BORINGSSL_self_test_all() {
 }
 
 #if defined(BORINGSSL_FIPS)
-int boringssl_self_test_startup() { return boringssl_self_test_fast(); }
+int bssl::boringssl_self_test_startup() { return boringssl_self_test_fast(); }
 #endif

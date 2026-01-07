@@ -29,10 +29,10 @@ struct dsa_st {
   BIGNUM *priv_key;
 
   // Normally used to cache montgomery values
-  CRYPTO_MUTEX method_mont_lock;
+  bssl::CRYPTO_MUTEX method_mont_lock;
   BN_MONT_CTX *method_mont_p;
   BN_MONT_CTX *method_mont_q;
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
   CRYPTO_EX_DATA ex_data;
 };
 

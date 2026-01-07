@@ -24,6 +24,8 @@
 #include "internal.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 bool ReadAll(std::vector<uint8_t> *out, FILE *file) {
   out->clear();
 
@@ -66,3 +68,5 @@ bool WriteToFile(const std::string &path, bssl::Span<const uint8_t> in) {
   }
   return true;
 }
+
+BSSL_NAMESPACE_END

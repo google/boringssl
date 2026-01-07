@@ -29,6 +29,9 @@
 
 #include <emmintrin.h>
 
+
+using namespace bssl;
+
 typedef __m128i xmmi;
 
 alignas(16) static const uint32_t poly1305_x64_sse2_message_mask[4] = {

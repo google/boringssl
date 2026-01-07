@@ -26,6 +26,8 @@
 #include "internal.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 bool ParseKeyValueArguments(std::map<std::string, std::string> *out_args,
                             const std::vector<std::string> &args,
                             const struct argument *templates) {
@@ -136,3 +138,5 @@ std::string_view TrimSpace(std::string_view s) {
   s = s.substr(0, pos + 1);
   return s;
 }
+
+BSSL_NAMESPACE_END

@@ -25,6 +25,8 @@
 #include "internal.h"
 
 
+using namespace bssl;
+
 BIO *BIO_new_mem_buf(const void *buf, ossl_ssize_t len) {
   BIO *ret;
   BUF_MEM *b;

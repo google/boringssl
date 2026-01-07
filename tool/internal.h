@@ -24,6 +24,9 @@
 #include <openssl/base.h>
 #include <openssl/span.h>
 
+
+BSSL_NAMESPACE_BEGIN
+
 struct FileCloser {
   void operator()(FILE *file) { fclose(file); }
 };
@@ -149,5 +152,6 @@ extern const size_t kDERRSAPrivate3072Len;
 extern const uint8_t kDERRSAPrivate4096[];
 extern const size_t kDERRSAPrivate4096Len;
 
+BSSL_NAMESPACE_END
 
 #endif  // !OPENSSL_HEADER_TOOL_INTERNAL_H

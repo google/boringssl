@@ -25,7 +25,10 @@
 #include "../crypto/internal.h"
 #include "internal.h"
 
+
+BSSL_NAMESPACE_BEGIN
 namespace {
+
 // kTLSADLen is the number of bytes of additional data that TLS passes to
 // AEADs.
 const size_t kTLSADLen = 13;
@@ -39,7 +42,7 @@ void BM_SpeedAEAD(benchmark::State &state, size_t ad_len,
                   evp_aead_direction_t direction, const EVP_AEAD *aead) {
   const unsigned kAlignment = 16;
   size_t input_len = static_cast<size_t>(state.range(0));
-  bssl::ScopedEVP_AEAD_CTX ctx;
+  ScopedEVP_AEAD_CTX ctx;
   const size_t key_len = EVP_AEAD_key_length(aead);
   const size_t nonce_len = EVP_AEAD_nonce_length(aead);
   const size_t overhead_len = EVP_AEAD_max_overhead(aead);
@@ -117,7 +120,7 @@ static const int64_t kInputSizes[] = {16, 256, 1350, 8192, 16384};
 
 void SetInputLength(benchmark::internal::Benchmark *bench) {
   bench->ArgName("InputSize");
-  auto input_sizes = bssl::bench::GetInputSizes(bench);
+  auto input_sizes = bench::GetInputSizes(bench);
   if (input_sizes.empty()) {
     bench->ArgsProduct(
         {std::vector<int64_t>(kInputSizes, std::end(kInputSizes))});
@@ -256,3 +259,4 @@ BSSL_BENCH_LAZY_REGISTER() {
 }
 
 }  // namespace
+BSSL_NAMESPACE_END

@@ -23,6 +23,8 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 struct stack_st {
   // num contains the number of valid pointers in |data|.
   size_t num;

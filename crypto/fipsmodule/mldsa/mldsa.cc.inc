@@ -3000,7 +3000,7 @@ int bssl::BCM_mldsa44_public_keys_equal(const MLDSA44_public_key *a,
                         sizeof(a_pub->public_key_hash)) == 0;
 }
 
-int boringssl_self_test_mldsa() {
+int bssl::boringssl_self_test_mldsa() {
   return mldsa::fips::keygen_self_test() && mldsa::fips::sign_self_test() &&
          mldsa::fips::verify_self_test();
 }

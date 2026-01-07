@@ -37,7 +37,7 @@ void x509_pubkey_init(X509_PUBKEY *key);
 void x509_pubkey_cleanup(X509_PUBKEY *key);
 
 int x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
-                          bssl::Span<const EVP_PKEY_ALG *const> algs);
+                          Span<const EVP_PKEY_ALG *const> algs);
 int x509_marshal_public_key(CBB *cbb, const X509_PUBKEY *in);
 int x509_pubkey_set1(X509_PUBKEY *key, EVP_PKEY *pkey);
 
@@ -139,7 +139,7 @@ struct x509_st {
   // TODO(davidben): Now every parsed |X509| has an underlying |CRYPTO_BUFFER|,
   // but |X509|s created peacemeal do not. Can we make this more uniform?
   CRYPTO_BUFFER *buf;
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
   CRYPTO_EX_DATA ex_data;
   // These contain copies of various extension values
   long ex_pathlen;
@@ -153,7 +153,7 @@ struct x509_st {
   NAME_CONSTRAINTS *nc;
   unsigned char cert_hash[SHA256_DIGEST_LENGTH];
   bssl::X509_CERT_AUX *aux;
-  CRYPTO_MUTEX lock;
+  bssl::CRYPTO_MUTEX lock;
 } /* X509 */;
 
 BSSL_NAMESPACE_BEGIN
@@ -242,7 +242,7 @@ struct X509_crl_st {
   bssl::X509_CRL_INFO *crl;
   X509_ALGOR *sig_alg;
   ASN1_BIT_STRING *signature;
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
   int flags;
   // Copies of various extensions
   AUTHORITY_KEYID *akid;
@@ -332,7 +332,7 @@ BSSL_NAMESPACE_END
 struct x509_store_st {
   // The following is a cache of trusted certs
   STACK_OF(X509_OBJECT) *objs;  // Cache of all objects
-  CRYPTO_MUTEX objs_lock;
+  bssl::CRYPTO_MUTEX objs_lock;
 
   // These are external lookup methods
   bssl::StackOfX509Lookup *get_cert_methods;
@@ -342,7 +342,7 @@ struct x509_store_st {
   // Callbacks for various operations
   X509_STORE_CTX_verify_cb verify_cb;       // error callback
 
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
 } /* X509_STORE */;
 
 // This is the functions plus an instance of the local variables.
@@ -435,12 +435,12 @@ int x509_digest_verify_init(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
 // |in|. It returns one if the signature is valid and zero on error.
 int x509_verify_signature(const X509_ALGOR *sigalg,
                           const ASN1_BIT_STRING *signature,
-                          bssl::Span<const uint8_t> in, EVP_PKEY *pkey);
+                          Span<const uint8_t> in, EVP_PKEY *pkey);
 
 // x509_sign_to_bit_string signs |in| using |ctx| and saves the result in |out|.
 // It returns the length of the signature on success and zero on error.
 int x509_sign_to_bit_string(EVP_MD_CTX *ctx, ASN1_BIT_STRING *out,
-                            bssl::Span<const uint8_t> in);
+                            Span<const uint8_t> in);
 
 
 // Path-building functions.

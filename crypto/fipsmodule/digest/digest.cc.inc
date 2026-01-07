@@ -24,6 +24,8 @@
 #include "internal.h"
 
 
+using namespace bssl;
+
 int EVP_MD_type(const EVP_MD *md) { return md->type; }
 
 int EVP_MD_nid(const EVP_MD *md) { return EVP_MD_type(md); }
@@ -187,7 +189,7 @@ int EVP_DigestFinal(EVP_MD_CTX *ctx, uint8_t *md, unsigned int *size) {
 
 int EVP_Digest(const void *data, size_t count, uint8_t *out_md,
                unsigned int *out_size, const EVP_MD *type, ENGINE *impl) {
-  bssl::ScopedEVP_MD_CTX ctx;
+  ScopedEVP_MD_CTX ctx;
   return EVP_DigestInit_ex(ctx.get(), type, impl) &&
          EVP_DigestUpdate(ctx.get(), data, count) &&
          EVP_DigestFinal_ex(ctx.get(), out_md, out_size);

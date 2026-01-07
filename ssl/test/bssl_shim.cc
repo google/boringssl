@@ -70,6 +70,8 @@ OPENSSL_MSVC_PRAGMA(comment(lib, "Ws2_32.lib"))
 #endif
 
 
+using namespace bssl;
+
 #if !defined(OPENSSL_WINDOWS)
 using Socket = int;
 #define INVALID_SOCKET (-1)

@@ -170,7 +170,7 @@ static void fe_tobytes(uint8_t s[32], const fe *f) {
 }
 
 // h = 0
-static void fe_0(bssl::fe *h) { OPENSSL_memset(h, 0, sizeof(fe)); }
+static void fe_0(fe *h) { OPENSSL_memset(h, 0, sizeof(fe)); }
 
 static void fe_loose_0(fe_loose *h) { OPENSSL_memset(h, 0, sizeof(fe_loose)); }
 
@@ -301,9 +301,7 @@ static void fe_cmov(fe_loose *f, const fe_loose *g, fe_limb_t b) {
 }
 
 // h = f
-static void fe_copy(bssl::fe *h, const bssl::fe *f) {
-  OPENSSL_memmove(h, f, sizeof(fe));
-}
+static void fe_copy(fe *h, const fe *f) { OPENSSL_memmove(h, f, sizeof(fe)); }
 
 static void fe_copy_lt(fe_loose *h, const fe *f) {
   static_assert(sizeof(fe_loose) == sizeof(fe), "fe and fe_loose mismatch");

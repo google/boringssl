@@ -21,11 +21,13 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 int PKCS5_PBKDF2_HMAC(const char *password, size_t password_len,
                       const uint8_t *salt, size_t salt_len, uint32_t iterations,
                       const EVP_MD *digest, size_t key_len, uint8_t *out_key) {
   // See RFC 8018, section 5.2.
-  bssl::ScopedHMAC_CTX hctx;
+  ScopedHMAC_CTX hctx;
   if (!HMAC_Init_ex(hctx.get(), password, password_len, digest, nullptr)) {
     return 0;
   }

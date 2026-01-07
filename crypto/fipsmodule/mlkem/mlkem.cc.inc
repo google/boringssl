@@ -1391,7 +1391,7 @@ bcm_status bssl::BCM_mlkem1024_parse_private_key(
   return bcm_status::approved;
 }
 
-int boringssl_self_test_mlkem() {
+int bssl::boringssl_self_test_mlkem() {
   return mlkem::fips::keygen_self_test() && mlkem::fips::encap_self_test() &&
          mlkem::fips::decap_self_test();
 }

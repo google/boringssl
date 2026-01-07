@@ -21,10 +21,8 @@
 
 #include "internal.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
 
+BSSL_NAMESPACE_BEGIN
 
 // The cpuinfo parser lives in a header file so it may be accessible from
 // cross-platform fuzzers without adding code to those platforms normally.
@@ -45,7 +43,7 @@ typedef struct {
   size_t len;
 } STRING_PIECE;
 
-static int STRING_PIECE_equals(const STRING_PIECE *a, const char *b) {
+inline int STRING_PIECE_equals(const STRING_PIECE *a, const char *b) {
   size_t b_len = strlen(b);
   return a->len == b_len && OPENSSL_memcmp(a->data, b, b_len) == 0;
 }
@@ -53,7 +51,7 @@ static int STRING_PIECE_equals(const STRING_PIECE *a, const char *b) {
 // STRING_PIECE_split finds the first occurrence of |sep| in |in| and, if found,
 // sets |*out_left| and |*out_right| to |in| split before and after it. It
 // returns one if |sep| was found and zero otherwise.
-static int STRING_PIECE_split(STRING_PIECE *out_left, STRING_PIECE *out_right,
+inline int STRING_PIECE_split(STRING_PIECE *out_left, STRING_PIECE *out_right,
                               const STRING_PIECE *in, char sep) {
   const char *p = (const char *)OPENSSL_memchr(in->data, sep, in->len);
   if (p == nullptr) {
@@ -72,7 +70,8 @@ static int STRING_PIECE_split(STRING_PIECE *out_left, STRING_PIECE *out_right,
 // to |out| and updating |s| to point beyond it. It returns one on success and
 // zero if |s| is empty. If |s| is has no copies of |sep| and is non-empty, it
 // reads the entire string to |out|.
-static int STRING_PIECE_get_delimited(STRING_PIECE *s, STRING_PIECE *out, char sep) {
+inline int STRING_PIECE_get_delimited(STRING_PIECE *s, STRING_PIECE *out,
+                                      char sep) {
   if (s->len == 0) {
     return 0;
   }
@@ -86,7 +85,7 @@ static int STRING_PIECE_get_delimited(STRING_PIECE *s, STRING_PIECE *out, char s
 }
 
 // STRING_PIECE_trim removes leading and trailing whitespace from |s|.
-static void STRING_PIECE_trim(STRING_PIECE *s) {
+inline void STRING_PIECE_trim(STRING_PIECE *s) {
   while (s->len != 0 && (s->data[0] == ' ' || s->data[0] == '\t')) {
     s->data++;
     s->len--;
@@ -100,7 +99,7 @@ static void STRING_PIECE_trim(STRING_PIECE *s) {
 // extract_cpuinfo_field extracts a /proc/cpuinfo field named |field| from
 // |in|. If found, it sets |*out| to the value and returns one. Otherwise, it
 // returns zero.
-static int extract_cpuinfo_field(STRING_PIECE *out, const STRING_PIECE *in,
+inline int extract_cpuinfo_field(STRING_PIECE *out, const STRING_PIECE *in,
                                  const char *field) {
   // Process |in| one line at a time.
   STRING_PIECE remaining = *in, line;
@@ -122,7 +121,7 @@ static int extract_cpuinfo_field(STRING_PIECE *out, const STRING_PIECE *in,
 
 // has_list_item treats |list| as a space-separated list of items and returns
 // one if |item| is contained in |list| and zero otherwise.
-static int has_list_item(const STRING_PIECE *list, const char *item) {
+inline int has_list_item(const STRING_PIECE *list, const char *item) {
   STRING_PIECE remaining = *list, feature;
   while (STRING_PIECE_get_delimited(&remaining, &feature, ' ')) {
     if (STRING_PIECE_equals(&feature, item)) {
@@ -134,7 +133,7 @@ static int has_list_item(const STRING_PIECE *list, const char *item) {
 
 // crypto_get_arm_hwcap2_from_cpuinfo returns an equivalent ARM |AT_HWCAP2|
 // value from |cpuinfo|.
-static unsigned long crypto_get_arm_hwcap2_from_cpuinfo(
+inline unsigned long crypto_get_arm_hwcap2_from_cpuinfo(
     const STRING_PIECE *cpuinfo) {
   STRING_PIECE features;
   if (!extract_cpuinfo_field(&features, cpuinfo, "Features")) {
@@ -157,9 +156,6 @@ static unsigned long crypto_get_arm_hwcap2_from_cpuinfo(
   return ret;
 }
 
-
-#if defined(__cplusplus)
-}  // extern C
-#endif
+BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_HEADER_CRYPTO_CPU_ARM_LINUX_H

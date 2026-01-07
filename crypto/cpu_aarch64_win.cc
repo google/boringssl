@@ -25,7 +25,9 @@
 #define PF_ARM_SHA512_INSTRUCTIONS_AVAILABLE 65
 #endif
 
-void OPENSSL_cpuid_setup() {
+using namespace bssl;
+
+void bssl::OPENSSL_cpuid_setup() {
   // We do not need to check for the presence of NEON, as Armv8-A always has it
   OPENSSL_armcap_P |= ARMV7_NEON;
 

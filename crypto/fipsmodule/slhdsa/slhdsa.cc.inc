@@ -687,7 +687,7 @@ bcm_status bssl::BCM_slhdsa_shake_256f_verify_internal(
                          msg_len);
 }
 
-int boringssl_self_test_slhdsa() {
+int bssl::boringssl_self_test_slhdsa() {
   return fips::keygen_self_test() && fips::sign_self_test() &&
          fips::verify_self_test();
 }

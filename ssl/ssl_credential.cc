@@ -265,8 +265,7 @@ void ssl_credential_st::ClearIntermediateCerts() {
   }
 }
 
-bool ssl_credential_st::ChainContainsIssuer(
-    bssl::Span<const uint8_t> dn) const {
+bool ssl_credential_st::ChainContainsIssuer(Span<const uint8_t> dn) const {
   if (UsesX509()) {
     // TODO(bbe) This is used for matching a chain by CA name for the CA
     // extension. If we require a chain to be present, we could remove any

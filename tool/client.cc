@@ -34,6 +34,8 @@
 #include "transport_common.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 static const struct argument kArguments[] = {
     {
         "-connect",
@@ -645,3 +647,5 @@ bool Client(const std::vector<std::string> &args) {
 
   return DoConnection(ctx.get(), args_map, &TransferData);
 }
+
+BSSL_NAMESPACE_END

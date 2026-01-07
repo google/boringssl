@@ -23,39 +23,43 @@
 #include <stdlib.h>
 #include <string.h>
 
-void CRYPTO_MUTEX_init(CRYPTO_MUTEX *lock) {
+using namespace bssl;
+
+void bssl::CRYPTO_MUTEX_init(CRYPTO_MUTEX *lock) {
   if (pthread_rwlock_init(lock, nullptr) != 0) {
     abort();
   }
 }
 
-void CRYPTO_MUTEX_lock_read(CRYPTO_MUTEX *lock) {
+void bssl::CRYPTO_MUTEX_lock_read(CRYPTO_MUTEX *lock) {
   if (pthread_rwlock_rdlock(lock) != 0) {
     abort();
   }
 }
 
-void CRYPTO_MUTEX_lock_write(CRYPTO_MUTEX *lock) {
+void bssl::CRYPTO_MUTEX_lock_write(CRYPTO_MUTEX *lock) {
   if (pthread_rwlock_wrlock(lock) != 0) {
     abort();
   }
 }
 
-void CRYPTO_MUTEX_unlock_read(CRYPTO_MUTEX *lock) {
+void bssl::CRYPTO_MUTEX_unlock_read(CRYPTO_MUTEX *lock) {
   if (pthread_rwlock_unlock(lock) != 0) {
     abort();
   }
 }
 
-void CRYPTO_MUTEX_unlock_write(CRYPTO_MUTEX *lock) {
+void bssl::CRYPTO_MUTEX_unlock_write(CRYPTO_MUTEX *lock) {
   if (pthread_rwlock_unlock(lock) != 0) {
     abort();
   }
 }
 
-void CRYPTO_MUTEX_cleanup(CRYPTO_MUTEX *lock) { pthread_rwlock_destroy(lock); }
+void bssl::CRYPTO_MUTEX_cleanup(CRYPTO_MUTEX *lock) {
+  pthread_rwlock_destroy(lock);
+}
 
-void CRYPTO_once(CRYPTO_once_t *once, void (*init)()) {
+void bssl::CRYPTO_once(bssl::CRYPTO_once_t *once, void (*init)()) {
   if (pthread_once(once, init) != 0) {
     abort();
   }
@@ -98,7 +102,7 @@ static void thread_local_init() {
       pthread_key_create(&g_thread_local_key, thread_local_destructor) == 0;
 }
 
-void *CRYPTO_get_thread_local(thread_local_data_t index) {
+void *bssl::CRYPTO_get_thread_local(thread_local_data_t index) {
   CRYPTO_once(&g_thread_local_init_once, thread_local_init);
   if (!g_thread_local_key_created) {
     return nullptr;
@@ -112,8 +116,8 @@ void *CRYPTO_get_thread_local(thread_local_data_t index) {
   return pointers[index];
 }
 
-int CRYPTO_set_thread_local(thread_local_data_t index, void *value,
-                            thread_local_destructor_t destructor) {
+int bssl::CRYPTO_set_thread_local(thread_local_data_t index, void *value,
+                                  thread_local_destructor_t destructor) {
   CRYPTO_once(&g_thread_local_init_once, thread_local_init);
   if (!g_thread_local_key_created) {
     destructor(value);

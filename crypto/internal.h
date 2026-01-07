@@ -58,10 +58,8 @@
 #include "intrin.h"
 #endif
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
 
+BSSL_NAMESPACE_BEGIN
 
 #if !defined(OPENSSL_NO_ASM) && !defined(OPENSSL_STATIC_ARMCAP) && \
     (defined(OPENSSL_X86) || defined(OPENSSL_X86_64) ||            \
@@ -83,9 +81,9 @@ inline void OPENSSL_init_cpuid() {}
 
 #if (defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)) && \
     !defined(OPENSSL_STATIC_ARMCAP)
-// OPENSSL_get_armcap_pointer_for_test returns a pointer to |OPENSSL_armcap_P|
-// for unit tests. Any modifications to the value must be made before any other
-// function call in BoringSSL.
+// OPENSSL_get_armcap_pointer_for_test returns a pointer to
+// |OPENSSL_armcap_P| for unit tests. Any modifications to the value must be
+// made before any other function call in BoringSSL.
 OPENSSL_EXPORT uint32_t *OPENSSL_get_armcap_pointer_for_test();
 #endif
 
@@ -550,8 +548,6 @@ OPENSSL_EXPORT void CRYPTO_once(CRYPTO_once_t *once, void (*init)());
 // std::memory_order, we will need to wrap these too, or fix the embedded
 // platforms to provide a no-op std::atomic. See https://crbug.com/442112336.
 
-extern "C++" {
-BSSL_NAMESPACE_BEGIN
 #if defined(OPENSSL_THREADS)
 template <typename T>
 using Atomic = std::atomic<T>;
@@ -591,8 +587,6 @@ class Atomic {
   T value_;
 };
 #endif
-BSSL_NAMESPACE_END
-}  // extern "C++"
 
 
 // Reference counting.
@@ -600,7 +594,7 @@ BSSL_NAMESPACE_END
 // CRYPTO_REFCOUNT_MAX is the value at which the reference count saturates.
 #define CRYPTO_REFCOUNT_MAX 0xffffffff
 
-using CRYPTO_refcount_t = bssl::Atomic<uint32_t>;
+using CRYPTO_refcount_t = Atomic<uint32_t>;
 
 // CRYPTO_refcount_inc atomically increments the value at |*count| unless the
 // value would overflow. It's safe for multiple threads to concurrently call
@@ -657,11 +651,6 @@ OPENSSL_EXPORT void CRYPTO_MUTEX_unlock_write(CRYPTO_MUTEX *lock);
 // CRYPTO_MUTEX_cleanup releases all resources held by |lock|.
 OPENSSL_EXPORT void CRYPTO_MUTEX_cleanup(CRYPTO_MUTEX *lock);
 
-#if defined(__cplusplus)
-extern "C++" {
-
-BSSL_NAMESPACE_BEGIN
-
 namespace internal {
 
 // MutexLockBase is a RAII helper for CRYPTO_MUTEX locking.
@@ -687,11 +676,6 @@ using MutexWriteLock =
     internal::MutexLockBase<CRYPTO_MUTEX_lock_write, CRYPTO_MUTEX_unlock_write>;
 using MutexReadLock =
     internal::MutexLockBase<CRYPTO_MUTEX_lock_read, CRYPTO_MUTEX_unlock_read>;
-
-BSSL_NAMESPACE_END
-
-}  // extern "C++"
-#endif  // defined(__cplusplus)
 
 
 // Thread local storage.
@@ -736,9 +720,13 @@ OPENSSL_EXPORT int CRYPTO_set_thread_local(
 
 // ex_data
 
+BSSL_NAMESPACE_END
+
 struct crypto_ex_data_st {
   STACK_OF(void) *sk;
 } /* CRYPTO_EX_DATA */;
+
+BSSL_NAMESPACE_BEGIN
 
 typedef struct crypto_ex_data_func_st CRYPTO_EX_DATA_FUNCS;
 
@@ -752,7 +740,7 @@ typedef struct {
   // final entry of |funcs|, or NULL if empty.
   CRYPTO_EX_DATA_FUNCS *funcs, *last;
   // num_funcs is the number of entries in |funcs|.
-  bssl::Atomic<uint32_t> num_funcs;
+  Atomic<uint32_t> num_funcs;
   // num_reserved is one if the ex_data index zero is reserved for legacy
   // |TYPE_get_app_data| functions.
   uint8_t num_reserved;
@@ -836,9 +824,6 @@ static inline uint64_t CRYPTO_bswap8(uint64_t x) {
 // Note |OPENSSL_memcmp| is a different function from |CRYPTO_memcmp|.
 
 // C++ defines |memchr| as a const-correct overload.
-#if defined(__cplusplus)
-extern "C++" {
-
 static inline const void *OPENSSL_memchr(const void *s, int c, size_t n) {
   if (n == 0) {
     return nullptr;
@@ -854,19 +839,6 @@ static inline void *OPENSSL_memchr(void *s, int c, size_t n) {
 
   return memchr(s, c, n);
 }
-
-}  // extern "C++"
-#else  // __cplusplus
-
-static inline void *OPENSSL_memchr(const void *s, int c, size_t n) {
-  if (n == 0) {
-    return nullptr;
-  }
-
-  return memchr(s, c, n);
-}
-
-#endif  // __cplusplus
 
 static inline int OPENSSL_memcmp(const void *s1, const void *s2, size_t n) {
   if (n == 0) {
@@ -1442,7 +1414,7 @@ inline int CRYPTO_is_ARMv8_SHA512_capable() {
 //   5: vpaes_set_encrypt_key
 //   6: aes_gcm_enc_update_vaes_avx2
 //   7: aes_gcm_enc_update_vaes_avx512
-extern uint8_t BORINGSSL_function_hit[8];
+extern "C" uint8_t BORINGSSL_function_hit[8];
 #endif  // BORINGSSL_DISPATCH_TEST
 
 
@@ -1466,10 +1438,6 @@ int CRYPTO_fuzzer_mode_enabled();
 inline int CRYPTO_fuzzer_mode_enabled() { return 0; }
 #endif
 
-
-#if defined(__cplusplus)
-}  // extern C
-#endif
 
 // Arithmetic functions.
 
@@ -1623,7 +1591,6 @@ static inline uint64_t CRYPTO_subc_u64(uint64_t x, uint64_t y, uint64_t borrow,
 #endif
 
 
-BSSL_NAMESPACE_BEGIN
 // Cleanup implements a custom scope guard, when the cleanup logic does not fit
 // in a destructor. Usage:
 //
@@ -1644,6 +1611,7 @@ class Cleanup {
 };
 template <typename F>
 Cleanup(F func) -> Cleanup<F>;
+
 BSSL_NAMESPACE_END
 
 

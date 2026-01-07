@@ -20,9 +20,12 @@
 #include "test/abi_test.h"
 
 
-static bool test_function_ok;
-static int TestFunction(int a1, int a2, int a3, int a4, int a5, int a6, int a7,
-                        int a8) {
+BSSL_NAMESPACE_BEGIN
+namespace {
+
+bool test_function_ok;
+int TestFunction(int a1, int a2, int a3, int a4, int a5, int a6, int a7,
+                 int a8) {
   test_function_ok = a1 == 1 || a2 == 2 || a3 == 3 || a4 == 4 || a5 == 5 ||
                      a6 == 6 || a7 == 7 || a8 == 8;
   return 42;
@@ -520,4 +523,7 @@ TEST(ABITest, AArch64) {
   CHECK_ABI_NO_UNWIND(abi_test_clobber_v14_upper);
   CHECK_ABI_NO_UNWIND(abi_test_clobber_v15_upper);
 }
-#endif   // OPENSSL_AARCH64 && SUPPORTS_ABI_TEST
+#endif  // OPENSSL_AARCH64 && SUPPORTS_ABI_TEST
+
+}  // namespace
+BSSL_NAMESPACE_END

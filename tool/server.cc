@@ -25,6 +25,8 @@
 #include "transport_common.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 static const struct argument kArguments[] = {
     {
         "-accept",
@@ -446,3 +448,5 @@ bool Server(const std::vector<std::string> &args) {
 
   return result;
 }
+
+BSSL_NAMESPACE_END

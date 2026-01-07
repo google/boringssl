@@ -18,6 +18,8 @@
 #include "../delocate.h"
 
 
+using namespace bssl;
+
 int FIPS_mode() {
 #if defined(BORINGSSL_FIPS) && !defined(OPENSSL_ASAN)
   return 1;
@@ -92,7 +94,7 @@ size_t FIPS_read_counter(enum fips_counter_t counter) {
   return array[index];
 }
 
-void boringssl_fips_inc_counter(enum fips_counter_t counter) {
+void bssl::boringssl_fips_inc_counter(enum fips_counter_t counter) {
   size_t index = (size_t)counter;
   if (index > fips_counter_max) {
     abort();

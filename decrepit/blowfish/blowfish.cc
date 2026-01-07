@@ -24,6 +24,8 @@
 #include "../macros.h"
 
 
+using namespace bssl;
+
 #define BF_ENC(LL, R, S, P)                                               \
   (LL ^= P,                                                               \
    LL ^=                                                                  \

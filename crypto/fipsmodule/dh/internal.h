@@ -31,11 +31,11 @@ struct dh_st {
   // the private value will be the same length as |p|.
   unsigned priv_length;
 
-  CRYPTO_MUTEX method_mont_p_lock;
+  bssl::CRYPTO_MUTEX method_mont_p_lock;
   BN_MONT_CTX *method_mont_p;
 
   int flags;
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
 };
 
 BSSL_NAMESPACE_BEGIN

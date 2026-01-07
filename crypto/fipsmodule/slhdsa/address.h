@@ -36,40 +36,40 @@ extern "C" {
 static inline void slhdsa_set_chain_addr(const slh_dsa_config *config, uint8_t addr[32],
                                   uint32_t chain) {
   if (config->compressed_addresses) {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_CHAIN, chain);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_CHAIN, chain);
   } else {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_CHAIN, chain);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_CHAIN, chain);
   }
 }
 
 static inline void slhdsa_set_hash_addr(const slh_dsa_config *config, uint8_t addr[32],
                                  uint32_t hash) {
   if (config->compressed_addresses) {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_HASH, hash);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_HASH, hash);
   } else {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_HASH, hash);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_HASH, hash);
   }
 }
 
 static inline void slhdsa_set_keypair_addr(const slh_dsa_config *config,
                                     uint8_t addr[32], uint32_t keypair) {
   if (config->compressed_addresses) {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_KEYPAIR, keypair);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_KEYPAIR, keypair);
   } else {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_KEYPAIR, keypair);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_KEYPAIR, keypair);
   }
 }
 
 static inline void slhdsa_copy_keypair_addr(const slh_dsa_config *config,
                                      uint8_t out[32], const uint8_t in[32]) {
   if (config->compressed_addresses) {
-    OPENSSL_memcpy(out, in, SLHDSA_ADDR_COMP_OFFSET_TYPE);
-    OPENSSL_memcpy(out + SLHDSA_ADDR_COMP_OFFSET_KEYPAIR,
-                   in + SLHDSA_ADDR_COMP_OFFSET_KEYPAIR, 4);
+    bssl::OPENSSL_memcpy(out, in, SLHDSA_ADDR_COMP_OFFSET_TYPE);
+    bssl::OPENSSL_memcpy(out + SLHDSA_ADDR_COMP_OFFSET_KEYPAIR,
+                         in + SLHDSA_ADDR_COMP_OFFSET_KEYPAIR, 4);
   } else {
-    OPENSSL_memcpy(out, in, SLHDSA_ADDR_FULL_OFFSET_TYPE);
-    OPENSSL_memcpy(out + SLHDSA_ADDR_FULL_OFFSET_KEYPAIR,
-                   in + SLHDSA_ADDR_FULL_OFFSET_KEYPAIR, 4);
+    bssl::OPENSSL_memcpy(out, in, SLHDSA_ADDR_FULL_OFFSET_TYPE);
+    bssl::OPENSSL_memcpy(out + SLHDSA_ADDR_FULL_OFFSET_KEYPAIR,
+                         in + SLHDSA_ADDR_FULL_OFFSET_KEYPAIR, 4);
   }
 }
 
@@ -78,19 +78,19 @@ static inline void slhdsa_set_layer_addr(const slh_dsa_config *config, uint8_t a
   if (config->compressed_addresses) {
     addr[SLHDSA_ADDR_COMP_OFFSET_LAYER] = (uint8_t)layer;
   } else {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_LAYER, layer);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_LAYER, layer);
   }
 }
 
 static inline void slhdsa_set_tree_addr(const slh_dsa_config *config, uint8_t addr[32],
                                  uint64_t tree) {
   if (config->compressed_addresses) {
-    CRYPTO_store_u64_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE, tree);
+    bssl::CRYPTO_store_u64_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE, tree);
   } else {
     // The tree address is 12 bytes in this configuration. Just zero the top
     // four bytes.
-    OPENSSL_memset(addr + SLHDSA_ADDR_FULL_OFFSET_TREE, 0, 4);
-    CRYPTO_store_u64_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE + 4, tree);
+    bssl::OPENSSL_memset(addr + SLHDSA_ADDR_FULL_OFFSET_TREE, 0, 4);
+    bssl::CRYPTO_store_u64_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE + 4, tree);
   }
 }
 
@@ -101,44 +101,44 @@ static inline void slhdsa_set_type(const slh_dsa_config *config, uint8_t addr[32
   //
   // The behavior here is only correct for the SHA-2 instantiations.
   if (config->compressed_addresses) {
-    OPENSSL_memset(addr + SLHDSA_ADDR_COMP_ZERO_START, 0,
-                   SLHDSA_ADDR_COMP_ZERO_LEN);
+    bssl::OPENSSL_memset(addr + SLHDSA_ADDR_COMP_ZERO_START, 0,
+                         SLHDSA_ADDR_COMP_ZERO_LEN);
     addr[SLHDSA_ADDR_COMP_OFFSET_TYPE] = (uint8_t)type;
   } else {
-    OPENSSL_memset(addr + SLHDSA_ADDR_FULL_ZERO_START, 0,
-                   SLHDSA_ADDR_FULL_ZERO_LEN);
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TYPE, type);
+    bssl::OPENSSL_memset(addr + SLHDSA_ADDR_FULL_ZERO_START, 0,
+                         SLHDSA_ADDR_FULL_ZERO_LEN);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TYPE, type);
   }
 }
 
 static inline void slhdsa_set_tree_height(const slh_dsa_config *config, uint8_t addr[32],
                                    uint32_t tree_height) {
   if (config->compressed_addresses) {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE_HEIGHT,
-                        tree_height);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE_HEIGHT,
+                              tree_height);
   } else {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE_HEIGHT,
-                        tree_height);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE_HEIGHT,
+                              tree_height);
   }
 }
 
 static inline void slhdsa_set_tree_index(const slh_dsa_config *config, uint8_t addr[32],
                                   uint32_t tree_index) {
   if (config->compressed_addresses) {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE_INDEX,
-                        tree_index);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE_INDEX,
+                              tree_index);
   } else {
-    CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE_INDEX,
-                        tree_index);
+    bssl::CRYPTO_store_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE_INDEX,
+                              tree_index);
   }
 }
 
 static inline uint32_t slhdsa_get_tree_index(const slh_dsa_config *config,
                                       uint8_t addr[32]) {
   if (config->compressed_addresses) {
-    return CRYPTO_load_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE_INDEX);
+    return bssl::CRYPTO_load_u32_be(addr + SLHDSA_ADDR_COMP_OFFSET_TREE_INDEX);
   }
-  return CRYPTO_load_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE_INDEX);
+  return bssl::CRYPTO_load_u32_be(addr + SLHDSA_ADDR_FULL_OFFSET_TREE_INDEX);
 }
 
 

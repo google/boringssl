@@ -26,6 +26,8 @@
 #include "internal.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 struct crypto_ex_data_func_st {
   long argl;   // Arbitrary long
   void *argp;  // Arbitrary void pointer
@@ -135,5 +137,7 @@ void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class,
   sk_void_free(ad->sk);
   ad->sk = nullptr;
 }
+
+BSSL_NAMESPACE_END
 
 void CRYPTO_cleanup_all_ex_data() {}

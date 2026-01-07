@@ -26,6 +26,7 @@
 #include "../internal.h"
 
 
+BSSL_NAMESPACE_BEGIN
 // abi_test provides routines for verifying that functions satisfy platform ABI
 // requirements.
 namespace abi_test {
@@ -396,14 +397,14 @@ bool UnwindTestsEnabled();
 #endif
 
 // CHECK_ABI_SEH behaves like |CHECK_ABI| but enables unwind testing on Windows.
-#define CHECK_ABI_SEH(...)                                               \
-  abi_test::internal::CheckGTest(#__VA_ARGS__, __FILE__, __LINE__, true, \
-                                 __VA_ARGS__)
+#define CHECK_ABI_SEH(...)                                                     \
+  bssl::abi_test::internal::CheckGTest(#__VA_ARGS__, __FILE__, __LINE__, true, \
+                                       __VA_ARGS__)
 
 // CHECK_ABI_NO_UNWIND behaves like |CHECK_ABI| but disables unwind testing.
-#define CHECK_ABI_NO_UNWIND(...)                                          \
-  abi_test::internal::CheckGTest(#__VA_ARGS__, __FILE__, __LINE__, false, \
-                                 __VA_ARGS__)
+#define CHECK_ABI_NO_UNWIND(...)                                         \
+  bssl::abi_test::internal::CheckGTest(#__VA_ARGS__, __FILE__, __LINE__, \
+                                       false, __VA_ARGS__)
 
 
 // Internal functions.
@@ -477,6 +478,8 @@ int abi_test_set_direction_flag();
 
 }  // extern C
 #endif  // SUPPORTS_ABI_TEST
+
+BSSL_NAMESPACE_END
 
 
 #endif  // OPENSSL_HEADER_CRYPTO_TEST_ABI_TEST_H

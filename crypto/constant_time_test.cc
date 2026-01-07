@@ -27,6 +27,9 @@
 #include <openssl/rand.h>
 
 
+BSSL_NAMESPACE_BEGIN
+namespace {
+
 static uint8_t FromBool8(bool b) {
   return b ? CONSTTIME_TRUE_8 : CONSTTIME_FALSE_8;
 }
@@ -215,3 +218,6 @@ TEST(ConstantTimeTest, MemCxor) {
     }
   }
 }
+
+}  // namespace
+BSSL_NAMESPACE_END

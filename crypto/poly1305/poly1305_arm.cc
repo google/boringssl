@@ -26,6 +26,8 @@
 
 #if defined(OPENSSL_POLY1305_NEON)
 
+using namespace bssl;
+
 typedef struct {
   uint32_t v[12];  // for alignment; only using 10
 } fe1305x2;

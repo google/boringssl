@@ -56,37 +56,37 @@ static_assert(sizeof(ossl_ssize_t) == sizeof(size_t),
 // archive, linking on OS X will fail to resolve common symbols. By
 // initialising it to zero, it becomes a "data symbol", which isn't so
 // affected.
-HIDDEN uint8_t BORINGSSL_function_hit[8] = {0};
+HIDDEN uint8_t bssl::BORINGSSL_function_hit[8] = {0};
 #endif
 
 #if defined(OPENSSL_X86) || defined(OPENSSL_X86_64)
 
 // This value must be explicitly initialized to zero. See similar comment above.
-HIDDEN uint32_t OPENSSL_ia32cap_P[4] = {0};
+HIDDEN uint32_t bssl::OPENSSL_ia32cap_P[4] = {0};
 
-uint32_t OPENSSL_get_ia32cap(int idx) {
+uint32_t bssl::OPENSSL_get_ia32cap(int idx) {
   OPENSSL_init_cpuid();
   return OPENSSL_ia32cap_P[idx];
 }
 
 #elif (defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)) && \
     !defined(OPENSSL_STATIC_ARMCAP)
-HIDDEN uint32_t OPENSSL_armcap_P = 0;
+HIDDEN uint32_t bssl::OPENSSL_armcap_P = 0;
 
-uint32_t *OPENSSL_get_armcap_pointer_for_test() {
+uint32_t *bssl::OPENSSL_get_armcap_pointer_for_test() {
   OPENSSL_init_cpuid();
   return &OPENSSL_armcap_P;
 }
 
-uint32_t OPENSSL_get_armcap() {
+uint32_t bssl::OPENSSL_get_armcap() {
   OPENSSL_init_cpuid();
   return OPENSSL_armcap_P;
 }
 #endif
 
 #if defined(NEED_CPUID)
-static CRYPTO_once_t once = CRYPTO_ONCE_INIT;
-void OPENSSL_init_cpuid() { CRYPTO_once(&once, OPENSSL_cpuid_setup); }
+static bssl::CRYPTO_once_t once = CRYPTO_ONCE_INIT;
+void bssl::OPENSSL_init_cpuid() { CRYPTO_once(&once, OPENSSL_cpuid_setup); }
 #endif
 
 void CRYPTO_library_init() {}

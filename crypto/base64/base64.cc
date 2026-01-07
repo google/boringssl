@@ -21,6 +21,8 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 // constant_time_lt_args_8 behaves like |constant_time_lt_8| but takes |uint8_t|
 // arguments for a slightly simpler implementation.
 static inline uint8_t constant_time_lt_args_8(uint8_t a, uint8_t b) {

@@ -33,6 +33,8 @@
 #include "../../crypto/internal.h"
 
 
+using namespace bssl;
+
 namespace {
 
 constexpr uint8_t kOpcodePacket = 'P';

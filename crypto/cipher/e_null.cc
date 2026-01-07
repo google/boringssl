@@ -22,6 +22,8 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 static int null_init_key(EVP_CIPHER_CTX *ctx, const uint8_t *key,
                          const uint8_t *iv, int enc) {
   return 1;

@@ -125,7 +125,7 @@ struct evp_pkey_asn1_method_st {
 BSSL_NAMESPACE_END
 
 struct evp_pkey_st {
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
 
   // pkey contains a pointer to a structure dependent on |ameth|.
   void *pkey;

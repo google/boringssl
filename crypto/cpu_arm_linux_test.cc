@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 
+BSSL_NAMESPACE_BEGIN
 namespace {
 
 TEST(ARMLinuxTest, CPUInfo) {
@@ -152,3 +153,4 @@ TEST(ARMLinuxTest, CPUInfo) {
 }
 
 }  // namespace
+BSSL_NAMESPACE_END

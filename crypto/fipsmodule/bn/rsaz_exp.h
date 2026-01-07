@@ -44,16 +44,16 @@ void RSAZ_1024_mod_exp_avx2(BN_ULONG result[16], const BN_ULONG base_norm[16],
                             BN_ULONG k0,
                             BN_ULONG storage_words[MOD_EXP_CTIME_STORAGE_LEN]);
 
-inline int rsaz_avx2_capable() { return CRYPTO_is_AVX2_capable(); }
+inline int rsaz_avx2_capable() { return bssl::CRYPTO_is_AVX2_capable(); }
 
 inline int rsaz_avx2_preferred() {
-  if (CRYPTO_is_BMI1_capable() && CRYPTO_is_BMI2_capable() &&
-      CRYPTO_is_ADX_capable()) {
+  if (bssl::CRYPTO_is_BMI1_capable() && bssl::CRYPTO_is_BMI2_capable() &&
+      bssl::CRYPTO_is_ADX_capable()) {
     // If BMI1, BMI2, and ADX are available, x86_64-mont5.pl is faster. See the
     // .Lmulx4x_enter and .Lpowerx5_enter branches.
     return 0;
   }
-  return CRYPTO_is_AVX2_capable();
+  return bssl::CRYPTO_is_AVX2_capable();
 }
 
 

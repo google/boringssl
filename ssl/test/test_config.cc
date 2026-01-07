@@ -48,6 +48,9 @@
 #include <sys/time.h>
 #endif
 
+
+using namespace bssl;
+
 namespace {
 
 template <typename Config>

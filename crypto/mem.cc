@@ -36,6 +36,8 @@
 #include "internal.h"
 
 
+using namespace bssl;
+
 #define OPENSSL_MALLOC_PREFIX 8
 static_assert(OPENSSL_MALLOC_PREFIX >= sizeof(size_t), "size_t too large");
 
@@ -158,20 +160,20 @@ static int should_fail_allocation() {
   return should_fail;
 }
 
-void OPENSSL_reset_malloc_counter_for_testing() {
+void bssl::OPENSSL_reset_malloc_counter_for_testing() {
   CRYPTO_MUTEX_lock_write(&malloc_failure_lock);
   current_malloc_count = 0;
   CRYPTO_MUTEX_unlock_write(&malloc_failure_lock);
 }
 
-void OPENSSL_disable_malloc_failures_for_testing() {
+void bssl::OPENSSL_disable_malloc_failures_for_testing() {
   CRYPTO_MUTEX_lock_write(&malloc_failure_lock);
   BSSL_CHECK(!disable_malloc_failures);
   disable_malloc_failures = 1;
   CRYPTO_MUTEX_unlock_write(&malloc_failure_lock);
 }
 
-void OPENSSL_enable_malloc_failures_for_testing() {
+void bssl::OPENSSL_enable_malloc_failures_for_testing() {
   CRYPTO_MUTEX_lock_write(&malloc_failure_lock);
   BSSL_CHECK(disable_malloc_failures);
   disable_malloc_failures = 0;
@@ -456,8 +458,8 @@ int BIO_vsnprintf(char *buf, size_t n, const char *format, va_list args) {
   return vsnprintf(buf, n, format, args);
 }
 
-int OPENSSL_vasprintf_internal(char **str, const char *format, va_list args,
-                               int system_malloc) {
+int bssl::OPENSSL_vasprintf_internal(char **str, const char *format,
+                                     va_list args, int system_malloc) {
   void *(*allocate)(size_t) = system_malloc ? malloc : OPENSSL_malloc;
   void (*deallocate)(void *) = system_malloc ? free : OPENSSL_free;
   void *(*reallocate)(void *, size_t) =

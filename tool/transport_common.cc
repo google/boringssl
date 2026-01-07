@@ -65,6 +65,8 @@ OPENSSL_MSVC_PRAGMA(comment(lib, "Ws2_32.lib"))
 #include "transport_common.h"
 
 
+BSSL_NAMESPACE_BEGIN
+
 #if defined(OPENSSL_WINDOWS)
 using socket_result_t = int;
 #else
@@ -337,7 +339,7 @@ void PrintConnectionInfo(BIO *bio, const SSL *ssl) {
              SSL_ech_accepted(ssl) ? "yes" : "no");
 
   // Print the server cert subject and issuer names.
-  bssl::UniquePtr<X509> peer(SSL_get_peer_certificate(ssl));
+  UniquePtr<X509> peer(SSL_get_peer_certificate(ssl));
   if (peer != nullptr) {
     BIO_printf(bio, "  Cert subject: ");
     X509_NAME_print_ex(bio, X509_get_subject_name(peer.get()), 0,
@@ -980,3 +982,5 @@ bool DoHTTPTunnel(int sock, const std::string &hostname_and_port) {
     fprintf(stderr, "%s\n", line.c_str());
   }
 }
+
+BSSL_NAMESPACE_END

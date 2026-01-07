@@ -25,9 +25,12 @@
 #include "../crypto/internal.h"
 #include "./internal.h"
 
+
+BSSL_NAMESPACE_BEGIN
 namespace {
+
 void BM_SpeedECDSASign(benchmark::State &state, const EC_GROUP *group) {
-  bssl::UniquePtr<EC_KEY> key(EC_KEY_new());
+  UniquePtr<EC_KEY> key(EC_KEY_new());
   if (!key || !EC_KEY_set_group(key.get(), group) ||
       !EC_KEY_generate_key(key.get())) {
     state.SkipWithError("keygen failed");
@@ -54,7 +57,7 @@ void BM_SpeedECDSASign(benchmark::State &state, const EC_GROUP *group) {
 
 
 void BM_SpeedECDSAVerify(benchmark::State &state, const EC_GROUP *group) {
-  bssl::UniquePtr<EC_KEY> key(EC_KEY_new());
+  UniquePtr<EC_KEY> key(EC_KEY_new());
   if (!key || !EC_KEY_set_group(key.get(), group) ||
       !EC_KEY_generate_key(key.get())) {
     state.SkipWithError("keygen failed");
@@ -87,22 +90,23 @@ void BM_SpeedECDSAVerify(benchmark::State &state, const EC_GROUP *group) {
 
 BSSL_BENCH_LAZY_REGISTER() {
   BENCHMARK_CAPTURE(BM_SpeedECDSASign, p224, EC_group_p224())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDSASign, p256, EC_group_p256())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDSASign, p384, EC_group_p384())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDSASign, p521, EC_group_p521())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
 
   BENCHMARK_CAPTURE(BM_SpeedECDSAVerify, p224, EC_group_p224())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDSAVerify, p256, EC_group_p256())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDSAVerify, p384, EC_group_p384())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDSAVerify, p521, EC_group_p521())
-      ->Apply(bssl::bench::SetThreads);
+      ->Apply(bench::SetThreads);
 }
 
 }  // namespace
+BSSL_NAMESPACE_END

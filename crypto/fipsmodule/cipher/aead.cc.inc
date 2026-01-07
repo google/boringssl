@@ -29,6 +29,8 @@
 #include "internal.h"
 
 
+using namespace bssl;
+
 size_t EVP_AEAD_key_length(const EVP_AEAD *aead) { return aead->key_len; }
 
 size_t EVP_AEAD_nonce_length(const EVP_AEAD *aead) { return aead->nonce_len; }
@@ -128,7 +130,7 @@ int EVP_AEAD_CTX_seal(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
                       size_t nonce_len, const uint8_t *in, size_t in_len,
                       const uint8_t *ad, size_t ad_len) {
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't send raw data.
@@ -167,7 +169,7 @@ int EVP_AEAD_CTX_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
                               size_t extra_in_len, const uint8_t *ad,
                               size_t ad_len) {
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't send raw data.
@@ -198,7 +200,7 @@ int EVP_AEAD_CTX_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
   return 1;
 }
 
-static bool check_iovec_internal_alias(bssl::Span<const CRYPTO_IOVEC> iovecs) {
+static bool check_iovec_internal_alias(Span<const CRYPTO_IOVEC> iovecs) {
   for (size_t i = 0; i < iovecs.size(); ++i) {
     // Same index check.
     if (!check_alias(iovecs[i].in, iovecs[i].len, iovecs[i].out,
@@ -224,7 +226,7 @@ static bool check_iovec_internal_alias(bssl::Span<const CRYPTO_IOVEC> iovecs) {
 }
 
 #if !defined(NDEBUG)
-static bool check_ivec_buf_alias(bssl::Span<const CRYPTO_IVEC> ivecs,
+static bool check_ivec_buf_alias(Span<const CRYPTO_IVEC> ivecs,
                                  const uint8_t *buf, size_t buf_len) {
   for (const CRYPTO_IVEC &ivec : ivecs) {
     if (buffers_alias(ivec.in, ivec.len, buf, buf_len)) {
@@ -234,8 +236,8 @@ static bool check_ivec_buf_alias(bssl::Span<const CRYPTO_IVEC> ivecs,
   return true;
 }
 
-static bool check_iovec_out_ivec_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
-                                       bssl::Span<const CRYPTO_IVEC> ivecs) {
+static bool check_iovec_out_ivec_alias(Span<const CRYPTO_IOVEC> iovecs,
+                                       Span<const CRYPTO_IVEC> ivecs) {
   for (const CRYPTO_IOVEC &iovec : iovecs) {
     if (!check_ivec_buf_alias(ivecs, iovec.out, iovec.len)) {
       return false;
@@ -244,7 +246,7 @@ static bool check_iovec_out_ivec_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
   return true;
 }
 
-static bool check_iovec_buf_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
+static bool check_iovec_buf_alias(Span<const CRYPTO_IOVEC> iovecs,
                                   const uint8_t *buf, size_t buf_len) {
   for (const CRYPTO_IOVEC &iovec : iovecs) {
     if (buffers_alias(iovec.in, iovec.len, buf, buf_len)) {
@@ -257,7 +259,7 @@ static bool check_iovec_buf_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
   return true;
 }
 
-static bool check_iovec_out_buf_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
+static bool check_iovec_out_buf_alias(Span<const CRYPTO_IOVEC> iovecs,
                                       const uint8_t *buf, size_t buf_len) {
   for (const CRYPTO_IOVEC &iovec : iovecs) {
     if (buffers_alias(iovec.out, iovec.len, buf, buf_len)) {
@@ -268,8 +270,8 @@ static bool check_iovec_out_buf_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
 }
 #endif
 
-static bool check_iovec_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
-                              bssl::Span<const CRYPTO_IVEC> aadvecs,
+static bool check_iovec_alias(Span<const CRYPTO_IOVEC> iovecs,
+                              Span<const CRYPTO_IVEC> aadvecs,
                               const uint8_t *out, size_t out_len,
                               const uint8_t *in1, size_t in1_len,
                               const uint8_t *in2, size_t in2_len) {
@@ -297,7 +299,7 @@ static bool check_iovec_alias(bssl::Span<const CRYPTO_IOVEC> iovecs,
       check_iovec_internal_alias(iovecs);
 }
 
-static void clear_iovec(bssl::Span<const CRYPTO_IOVEC> iovecs) {
+static void clear_iovec(Span<const CRYPTO_IOVEC> iovecs) {
   for (const CRYPTO_IOVEC &iovec : iovecs) {
     OPENSSL_memset(iovec.out, 0, iovec.len);
   }
@@ -308,11 +310,11 @@ int EVP_AEAD_CTX_sealv(const EVP_AEAD_CTX *ctx, const CRYPTO_IOVEC *iovec,
                        size_t max_out_tag_len, const uint8_t *nonce,
                        size_t nonce_len, const CRYPTO_IVEC *aadvec,
                        size_t num_aadvec) {
-  bssl::Span<const CRYPTO_IOVEC> iovecs(iovec, num_iovec);
-  bssl::Span<const CRYPTO_IVEC> aadvecs(aadvec, num_aadvec);
+  Span<const CRYPTO_IOVEC> iovecs(iovec, num_iovec);
+  Span<const CRYPTO_IVEC> aadvecs(aadvec, num_aadvec);
 
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't send raw data.
@@ -341,8 +343,8 @@ int EVP_AEAD_CTX_sealv(const EVP_AEAD_CTX *ctx, const CRYPTO_IOVEC *iovec,
     return 0;
   }
 
-  if (ctx->aead->sealv(ctx, iovecs, bssl::Span(out_tag, max_out_tag_len),
-                       out_tag_len, bssl::Span(nonce, nonce_len), aadvecs)) {
+  if (ctx->aead->sealv(ctx, iovecs, Span(out_tag, max_out_tag_len), out_tag_len,
+                       Span(nonce, nonce_len), aadvecs)) {
     ok = true;
     return 1;
   }
@@ -355,7 +357,7 @@ int EVP_AEAD_CTX_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
                       size_t nonce_len, const uint8_t *in, size_t in_len,
                       const uint8_t *ad, size_t ad_len) {
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't try and process bad
@@ -423,7 +425,7 @@ int EVP_AEAD_CTX_open_gather(const EVP_AEAD_CTX *ctx, uint8_t *out,
                              const uint8_t *in_tag, size_t in_tag_len,
                              const uint8_t *ad, size_t ad_len) {
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't try and process bad
@@ -451,11 +453,11 @@ int EVP_AEAD_CTX_openv(const EVP_AEAD_CTX *ctx, const CRYPTO_IOVEC *iovec,
                        size_t num_iovec, size_t *out_total_bytes,
                        const uint8_t *nonce, size_t nonce_len,
                        const CRYPTO_IVEC *aadvec, size_t num_aadvec) {
-  bssl::Span<const CRYPTO_IOVEC> iovecs(iovec, num_iovec);
-  bssl::Span<const CRYPTO_IVEC> aadvecs(aadvec, num_aadvec);
+  Span<const CRYPTO_IOVEC> iovecs(iovec, num_iovec);
+  Span<const CRYPTO_IVEC> aadvecs(aadvec, num_aadvec);
 
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't try and process bad
@@ -482,14 +484,12 @@ int EVP_AEAD_CTX_openv(const EVP_AEAD_CTX *ctx, const CRYPTO_IOVEC *iovec,
   if (!ctx->aead->openv) {
     if (ctx->tag_len && ctx->aead->openv_detached) {
       // Try with a detached tag.
-      bssl::InplaceVector<CRYPTO_IOVEC, CRYPTO_IOVEC_MAX> detached_iovecs;
+      InplaceVector<CRYPTO_IOVEC, CRYPTO_IOVEC_MAX> detached_iovecs;
       detached_iovecs.CopyFrom(iovecs);
 
       uint8_t tagbuf[EVP_AEAD_MAX_OVERHEAD];
-      std::optional<bssl::Span<const uint8_t>> tag =
-          bssl::iovec::GetAndRemoveSuffix(
-              bssl::Span(tagbuf).first(ctx->tag_len),
-              bssl::Span(detached_iovecs));
+      std::optional<Span<const uint8_t>> tag = bssl::iovec::GetAndRemoveSuffix(
+          Span(tagbuf).first(ctx->tag_len), Span(detached_iovecs));
 
       if (!tag.has_value()) {  // I.e. no |ctx->tag_len| bytes available.
         OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BAD_DECRYPT);
@@ -497,11 +497,9 @@ int EVP_AEAD_CTX_openv(const EVP_AEAD_CTX *ctx, const CRYPTO_IOVEC *iovec,
       }
 
       if (ctx->aead->openv_detached(ctx, detached_iovecs,
-                                    bssl::Span(nonce, nonce_len), *tag,
-                                    aadvecs)) {
+                                    Span(nonce, nonce_len), *tag, aadvecs)) {
         ok = true;
-        *out_total_bytes =
-            bssl::iovec::TotalLength(bssl::Span(detached_iovecs));
+        *out_total_bytes = bssl::iovec::TotalLength(Span(detached_iovecs));
         return 1;
       }
       return 0;
@@ -511,8 +509,8 @@ int EVP_AEAD_CTX_openv(const EVP_AEAD_CTX *ctx, const CRYPTO_IOVEC *iovec,
     return 0;
   }
 
-  if (ctx->aead->openv(ctx, iovecs, out_total_bytes,
-                       bssl::Span(nonce, nonce_len), aadvecs)) {
+  if (ctx->aead->openv(ctx, iovecs, out_total_bytes, Span(nonce, nonce_len),
+                       aadvecs)) {
     ok = true;
     return 1;
   }
@@ -525,11 +523,11 @@ int EVP_AEAD_CTX_openv_detached(const EVP_AEAD_CTX *ctx,
                                 const uint8_t *nonce, size_t nonce_len,
                                 const uint8_t *in_tag, size_t in_tag_len,
                                 const CRYPTO_IVEC *aadvec, size_t num_aadvec) {
-  bssl::Span<const CRYPTO_IOVEC> iovecs(iovec, num_iovec);
-  bssl::Span<const CRYPTO_IVEC> aadvecs(aadvec, num_aadvec);
+  Span<const CRYPTO_IOVEC> iovecs(iovec, num_iovec);
+  Span<const CRYPTO_IVEC> aadvecs(aadvec, num_aadvec);
 
   bool ok = false;
-  bssl::Cleanup cleanup([&] {
+  Cleanup cleanup([&] {
     if (!ok) {
       // In the event of an error, clear the output buffer so that a caller
       // that doesn't check the return value doesn't try and process bad
@@ -566,8 +564,8 @@ int EVP_AEAD_CTX_openv_detached(const EVP_AEAD_CTX *ctx,
     return 0;
   }
 
-  if (ctx->aead->openv_detached(ctx, iovecs, bssl::Span(nonce, nonce_len),
-                                bssl::Span(in_tag, in_tag_len), aadvecs)) {
+  if (ctx->aead->openv_detached(ctx, iovecs, Span(nonce, nonce_len),
+                                Span(in_tag, in_tag_len), aadvecs)) {
     ok = true;
     return 1;
   }

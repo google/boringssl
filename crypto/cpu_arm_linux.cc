@@ -26,6 +26,8 @@
 
 #include "cpu_arm_linux.h"
 
+using namespace bssl;
+
 static int open_eintr(const char *path, int flags) {
   int ret;
   do {
@@ -96,7 +98,7 @@ err:
 
 static int g_needs_hwcap2_workaround;
 
-void OPENSSL_cpuid_setup() {
+void bssl::OPENSSL_cpuid_setup() {
   // We ignore the return value of |read_file| and proceed with an empty
   // /proc/cpuinfo on error. If |getauxval| works, we will still detect
   // capabilities.

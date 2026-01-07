@@ -21,6 +21,8 @@
 #include <sys/types.h>
 
 
+using namespace bssl;
+
 static int has_hw_feature(const char *name) {
   int value;
   size_t len = sizeof(value);
@@ -43,7 +45,7 @@ static int has_hw_feature(const char *name) {
   return value != 0;
 }
 
-void OPENSSL_cpuid_setup() {
+void bssl::OPENSSL_cpuid_setup() {
   // Apple ARM64 platforms have NEON and cryptography extensions available
   // statically, so we do not need to query them. In particular, there sometimes
   // are no sysctls corresponding to such features. See below.

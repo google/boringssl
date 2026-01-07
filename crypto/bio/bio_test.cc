@@ -43,6 +43,8 @@
 #include <ws2tcpip.h>
 #endif
 
+
+BSSL_NAMESPACE_BEGIN
 namespace {
 
 #if !defined(OPENSSL_WINDOWS)
@@ -230,7 +232,7 @@ TEST(BIOTest, SocketConnect) {
   }
 
   // Connect to it with a connect BIO.
-  bssl::UniquePtr<BIO> bio(BIO_new_connect(hostname));
+  UniquePtr<BIO> bio(BIO_new_connect(hostname));
   ASSERT_TRUE(bio);
 
   // Write a test message to the BIO. This is assumed to be smaller than the
@@ -264,8 +266,7 @@ TEST(BIOTest, SocketNonBlocking) {
   ASSERT_EQ(connect(connect_sock.get(), addr.addr(), addr.len), 0)
       << LastSocketError();
   ASSERT_TRUE(SocketSetNonBlocking(connect_sock.get())) << LastSocketError();
-  bssl::UniquePtr<BIO> connect_bio(
-      BIO_new_socket(connect_sock.get(), BIO_NOCLOSE));
+  UniquePtr<BIO> connect_bio(BIO_new_socket(connect_sock.get(), BIO_NOCLOSE));
   ASSERT_TRUE(connect_bio);
 
   // Make a corresponding accepting socket.
@@ -273,8 +274,7 @@ TEST(BIOTest, SocketNonBlocking) {
       accept(listening_sock.get(), addr.addr_mut(), &addr.len));
   ASSERT_TRUE(accept_sock.is_valid()) << LastSocketError();
   ASSERT_TRUE(SocketSetNonBlocking(accept_sock.get())) << LastSocketError();
-  bssl::UniquePtr<BIO> accept_bio(
-      BIO_new_socket(accept_sock.get(), BIO_NOCLOSE));
+  UniquePtr<BIO> accept_bio(BIO_new_socket(accept_sock.get(), BIO_NOCLOSE));
   ASSERT_TRUE(accept_bio);
 
   // Exchange data through the socket.
@@ -339,7 +339,7 @@ TEST(BIOTest, Printf) {
   // 256 (the size of the buffer) to ensure edge cases are correct.
   static const size_t kLengths[] = {5, 250, 251, 252, 253, 254, 1023};
 
-  bssl::UniquePtr<BIO> bio(BIO_new(BIO_s_mem()));
+  UniquePtr<BIO> bio(BIO_new(BIO_s_mem()));
   ASSERT_TRUE(bio);
 
   for (size_t length : kLengths) {
@@ -354,7 +354,7 @@ TEST(BIOTest, Printf) {
     const uint8_t *contents;
     size_t len;
     ASSERT_TRUE(BIO_mem_contents(bio.get(), &contents, &len));
-    EXPECT_EQ("test " + in, bssl::BytesAsStringView(bssl::Span(contents, len)));
+    EXPECT_EQ("test " + in, BytesAsStringView(Span(contents, len)));
 
     ASSERT_TRUE(BIO_reset(bio.get()));
   }
@@ -407,7 +407,7 @@ TEST(BIOTest, ReadASN1) {
     std::vector<uint8_t> input = t.input;
     input.resize(input.size() + t.suffix_len, 0);
 
-    bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(input.data(), input.size()));
+    UniquePtr<BIO> bio(BIO_new_mem_buf(input.data(), input.size()));
     ASSERT_TRUE(bio);
 
     uint8_t *out;
@@ -416,7 +416,7 @@ TEST(BIOTest, ReadASN1) {
     if (!ok) {
       out = nullptr;
     }
-    bssl::UniquePtr<uint8_t> out_storage(out);
+    UniquePtr<uint8_t> out_storage(out);
 
     ASSERT_EQ(t.should_succeed, (ok == 1));
     if (t.should_succeed) {
@@ -428,7 +428,7 @@ TEST(BIOTest, ReadASN1) {
 TEST(BIOTest, MemReadOnly) {
   // A memory BIO created from |BIO_new_mem_buf| is a read-only buffer.
   static const char kData[] = "abcdefghijklmno";
-  bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(kData, strlen(kData)));
+  UniquePtr<BIO> bio(BIO_new_mem_buf(kData, strlen(kData)));
   ASSERT_TRUE(bio);
 
   // Writing to read-only buffers should fail.
@@ -490,7 +490,7 @@ TEST(BIOTest, MemReadOnly) {
 
 TEST(BIOTest, MemWritable) {
   // A memory BIO created from |BIO_new| is writable.
-  bssl::UniquePtr<BIO> bio(BIO_new(BIO_s_mem()));
+  UniquePtr<BIO> bio(BIO_new(BIO_s_mem()));
   ASSERT_TRUE(bio);
 
   auto check_bio_contents = [&](Bytes b) {
@@ -633,13 +633,13 @@ TEST(BIOTest, Gets) {
 
     {
       SCOPED_TRACE("memory");
-      bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(t.bio.data(), t.bio.size()));
+      UniquePtr<BIO> bio(BIO_new_mem_buf(t.bio.data(), t.bio.size()));
       ASSERT_TRUE(bio);
       check_bio_gets(bio.get());
     }
 
-    if (!bssl::SkipTempFileTests()) {
-      bssl::TemporaryFile file;
+    if (!SkipTempFileTests()) {
+      TemporaryFile file;
       ASSERT_TRUE(file.Init(t.bio));
 
       // TODO(crbug.com/boringssl/585): If the line has an embedded NUL, file
@@ -648,7 +648,7 @@ TEST(BIOTest, Gets) {
         SCOPED_TRACE("file");
 
         // Test |BIO_new_file|.
-        bssl::UniquePtr<BIO> bio(BIO_new_file(file.path().c_str(), "rb"));
+        UniquePtr<BIO> bio(BIO_new_file(file.path().c_str(), "rb"));
         ASSERT_TRUE(bio);
         check_bio_gets(bio.get());
 
@@ -659,7 +659,7 @@ TEST(BIOTest, Gets) {
         check_bio_gets(bio.get());
 
         // Test |BIO_NOCLOSE|.
-        bssl::ScopedFILE file_obj = file.Open("rb");
+        ScopedFILE file_obj = file.Open("rb");
         ASSERT_TRUE(file_obj);
         bio.reset(BIO_new_fp(file_obj.get(), BIO_NOCLOSE));
         ASSERT_TRUE(bio);
@@ -678,9 +678,9 @@ TEST(BIOTest, Gets) {
         SCOPED_TRACE("fd");
 
         // Test |BIO_NOCLOSE|.
-        bssl::ScopedFD fd = file.OpenFD(kOpenReadOnlyBinary);
+        ScopedFD fd = file.OpenFD(kOpenReadOnlyBinary);
         ASSERT_TRUE(fd.is_valid());
-        bssl::UniquePtr<BIO> bio(BIO_new_fd(fd.get(), BIO_NOCLOSE));
+        UniquePtr<BIO> bio(BIO_new_fd(fd.get(), BIO_NOCLOSE));
         ASSERT_TRUE(bio);
         check_bio_gets(bio.get());
 
@@ -696,7 +696,7 @@ TEST(BIOTest, Gets) {
   }
 
   // Negative and zero lengths should not output anything, even a trailing NUL.
-  bssl::UniquePtr<BIO> bio(BIO_new_mem_buf("12345", -1));
+  UniquePtr<BIO> bio(BIO_new_mem_buf("12345", -1));
   ASSERT_TRUE(bio);
   char c = 'a';
   EXPECT_EQ(0, BIO_gets(bio.get(), &c, -1));
@@ -706,11 +706,11 @@ TEST(BIOTest, Gets) {
 
 // Test that, on Windows, file BIOs correctly handle text vs binary mode.
 TEST(BIOTest, FileMode) {
-  if (bssl::SkipTempFileTests()) {
+  if (SkipTempFileTests()) {
     GTEST_SKIP();
   }
 
-  bssl::TemporaryFile temp;
+  TemporaryFile temp;
   ASSERT_TRUE(temp.Init("hello\r\nworld"));
 
   auto expect_file_contents = [](BIO *bio, const std::string &str) {
@@ -732,7 +732,7 @@ TEST(BIOTest, FileMode) {
   };
 
   // |BIO_read_filename| should open in binary mode.
-  bssl::UniquePtr<BIO> bio(BIO_new(BIO_s_file()));
+  UniquePtr<BIO> bio(BIO_new(BIO_s_file()));
   ASSERT_TRUE(bio);
   ASSERT_TRUE(BIO_read_filename(bio.get(), temp.path().c_str()));
   expect_binary_mode(bio.get());
@@ -747,7 +747,7 @@ TEST(BIOTest, FileMode) {
   expect_text_mode(bio.get());
 
   // |BIO_new_fp| inherits the file's existing mode by default.
-  bssl::ScopedFILE file = temp.Open("rb");
+  ScopedFILE file = temp.Open("rb");
   ASSERT_TRUE(file);
   bio.reset(BIO_new_fp(file.get(), BIO_NOCLOSE));
   ASSERT_TRUE(bio);
@@ -774,7 +774,7 @@ TEST(BIOTest, FileMode) {
   expect_text_mode(bio.get());
 
   // |BIO_new_fd| inherits the FD's existing mode.
-  bssl::ScopedFD fd = temp.OpenFD(kOpenReadOnlyBinary);
+  ScopedFD fd = temp.OpenFD(kOpenReadOnlyBinary);
   ASSERT_TRUE(fd.is_valid());
   bio.reset(BIO_new_fd(fd.get(), BIO_NOCLOSE));
   ASSERT_TRUE(bio);
@@ -793,7 +793,7 @@ class BIOPairTest : public testing::TestWithParam<bool> {};
 TEST_P(BIOPairTest, TestPair) {
   BIO *bio1_raw, *bio2_raw;
   ASSERT_TRUE(BIO_new_bio_pair(&bio1_raw, 10, &bio2_raw, 10));
-  bssl::UniquePtr<BIO> bio1(bio1_raw), bio2(bio2_raw);
+  UniquePtr<BIO> bio1(bio1_raw), bio2(bio2_raw);
 
   if (GetParam()) {
     std::swap(bio1, bio2);
@@ -924,3 +924,4 @@ TEST_P(BIOPairTest, TestPair) {
 INSTANTIATE_TEST_SUITE_P(All, BIOPairTest, testing::Values(false, true));
 
 }  // namespace
+BSSL_NAMESPACE_END

@@ -24,6 +24,8 @@
 #include "internal.h"
 
 
+using namespace bssl;
+
 namespace {
 struct bio_bio_st {
   BIO *peer;  // NULL if buf == NULL.

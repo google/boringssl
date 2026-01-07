@@ -597,7 +597,7 @@ struct ec_group_st {
   // otherwise.
   int field_greater_than_order;
 
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
 } /* EC_GROUP */;
 
 BSSL_NAMESPACE_BEGIN
@@ -713,7 +713,7 @@ struct ec_key_st {
   unsigned int enc_flag;
   point_conversion_form_t conv_form;
 
-  CRYPTO_refcount_t references;
+  bssl::CRYPTO_refcount_t references;
 
   ECDSA_METHOD *ecdsa_meth;
 

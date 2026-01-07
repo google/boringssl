@@ -26,6 +26,9 @@
 #include "test/test_util.h"
 
 
+BSSL_NAMESPACE_BEGIN
+namespace {
+
 #if defined(OPENSSL_THREADS)
 
 static unsigned g_once_init_called = 0;
@@ -146,3 +149,6 @@ TEST(ThreadTest, PreSandboxInitThreads) {
 }
 
 #endif  // OPENSSL_THREADS
+
+}  // namespace
+BSSL_NAMESPACE_END

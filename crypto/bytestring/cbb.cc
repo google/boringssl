@@ -24,6 +24,8 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 void CBB_zero(CBB *cbb) { OPENSSL_memset(cbb, 0, sizeof(CBB)); }
 
 static void cbb_init(CBB *cbb, uint8_t *buf, size_t cap, int can_resize) {

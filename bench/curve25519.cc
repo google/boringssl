@@ -26,7 +26,9 @@
 #include "./internal.h"
 
 
+BSSL_NAMESPACE_BEGIN
 namespace {
+
 void BM_SpeedEd25519(benchmark::State &state) {
   uint8_t public_key[32], private_key[64];
   for (auto _ : state) {
@@ -91,13 +93,12 @@ void BM_SpeedCurve25519ArbitraryPointMultiply(benchmark::State &state) {
 }
 
 BSSL_BENCH_LAZY_REGISTER() {
-  BENCHMARK(BM_SpeedEd25519)->Apply(bssl::bench::SetThreads);
-  BENCHMARK(BM_SpeedEd25519Sign)->Apply(bssl::bench::SetThreads);
-  BENCHMARK(BM_SpeedEd25519Verify)->Apply(bssl::bench::SetThreads);
-  BENCHMARK(BM_SpeedCurve25519BasePointMultiply)
-      ->Apply(bssl::bench::SetThreads);
-  BENCHMARK(BM_SpeedCurve25519ArbitraryPointMultiply)
-      ->Apply(bssl::bench::SetThreads);
+  BENCHMARK(BM_SpeedEd25519)->Apply(bench::SetThreads);
+  BENCHMARK(BM_SpeedEd25519Sign)->Apply(bench::SetThreads);
+  BENCHMARK(BM_SpeedEd25519Verify)->Apply(bench::SetThreads);
+  BENCHMARK(BM_SpeedCurve25519BasePointMultiply)->Apply(bench::SetThreads);
+  BENCHMARK(BM_SpeedCurve25519ArbitraryPointMultiply)->Apply(bench::SetThreads);
 }
 
 }  // namespace
+BSSL_NAMESPACE_END

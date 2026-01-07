@@ -20,6 +20,9 @@
 
 #include <string>
 
+
+BSSL_NAMESPACE_BEGIN
+
 // InitSocketLibrary calls the Windows socket init functions, if needed.
 bool InitSocketLibrary();
 
@@ -67,5 +70,7 @@ bool DoSMTPStartTLS(int sock);
 // DoHTTPTunnel sends an HTTP CONNECT request over |sock|. It returns true on
 // success and false otherwise.
 bool DoHTTPTunnel(int sock, const std::string &hostname_and_port);
+
+BSSL_NAMESPACE_END
 
 #endif  // !OPENSSL_HEADER_TOOL_TRANSPORT_COMMON_H
