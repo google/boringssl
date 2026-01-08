@@ -29,8 +29,6 @@
 
 using namespace bssl;
 
-static X509_CERT_AUX *aux_get(X509 *x);
-
 BSSL_NAMESPACE_BEGIN
 
 ASN1_SEQUENCE(X509_CERT_AUX) = {
@@ -44,7 +42,7 @@ IMPLEMENT_ASN1_FUNCTIONS_const(X509_CERT_AUX)
 
 BSSL_NAMESPACE_END
 
-static X509_CERT_AUX *aux_get(X509 *x) {
+static X509_CERT_AUX *aux_get(X509Impl *x) {
   if (!x) {
     return nullptr;
   }
@@ -55,19 +53,20 @@ static X509_CERT_AUX *aux_get(X509 *x) {
 }
 
 int X509_alias_set1(X509 *x, const uint8_t *name, ossl_ssize_t len) {
+  auto *impl = FromOpaque(x);
   X509_CERT_AUX *aux;
   // TODO(davidben): Empty aliases are not meaningful in PKCS#12, and the
   // getters cannot quite represent them. Also erase the object if |len| is
   // zero.
   if (!name) {
-    if (!x || !x->aux || !x->aux->alias) {
+    if (!impl || !impl->aux || !impl->aux->alias) {
       return 1;
     }
-    ASN1_UTF8STRING_free(x->aux->alias);
-    x->aux->alias = nullptr;
+    ASN1_UTF8STRING_free(impl->aux->alias);
+    impl->aux->alias = nullptr;
     return 1;
   }
-  if (!(aux = aux_get(x))) {
+  if (!(aux = aux_get(impl))) {
     return 0;
   }
   if (!aux->alias && !(aux->alias = ASN1_UTF8STRING_new())) {
@@ -77,19 +76,20 @@ int X509_alias_set1(X509 *x, const uint8_t *name, ossl_ssize_t len) {
 }
 
 int X509_keyid_set1(X509 *x, const uint8_t *id, ossl_ssize_t len) {
+  auto *impl = FromOpaque(x);
   X509_CERT_AUX *aux;
   // TODO(davidben): Empty key IDs are not meaningful in PKCS#12, and the
   // getters cannot quite represent them. Also erase the object if |len| is
   // zero.
   if (!id) {
-    if (!x || !x->aux || !x->aux->keyid) {
+    if (!impl || !impl->aux || !impl->aux->keyid) {
       return 1;
     }
-    ASN1_OCTET_STRING_free(x->aux->keyid);
-    x->aux->keyid = nullptr;
+    ASN1_OCTET_STRING_free(impl->aux->keyid);
+    impl->aux->keyid = nullptr;
     return 1;
   }
-  if (!(aux = aux_get(x))) {
+  if (!(aux = aux_get(impl))) {
     return 0;
   }
   if (!aux->keyid && !(aux->keyid = ASN1_OCTET_STRING_new())) {
@@ -99,7 +99,9 @@ int X509_keyid_set1(X509 *x, const uint8_t *id, ossl_ssize_t len) {
 }
 
 const uint8_t *X509_alias_get0(const X509 *x, int *out_len) {
-  const ASN1_UTF8STRING *alias = x->aux != nullptr ? x->aux->alias : nullptr;
+  auto *impl = FromOpaque(x);
+  const ASN1_UTF8STRING *alias =
+      impl->aux != nullptr ? impl->aux->alias : nullptr;
   if (out_len != nullptr) {
     *out_len = alias != nullptr ? alias->length : 0;
   }
@@ -107,7 +109,9 @@ const uint8_t *X509_alias_get0(const X509 *x, int *out_len) {
 }
 
 const uint8_t *X509_keyid_get0(const X509 *x, int *out_len) {
-  const ASN1_OCTET_STRING *keyid = x->aux != nullptr ? x->aux->keyid : nullptr;
+  auto *impl = FromOpaque(x);
+  const ASN1_OCTET_STRING *keyid =
+      impl->aux != nullptr ? impl->aux->keyid : nullptr;
   if (out_len != nullptr) {
     *out_len = keyid != nullptr ? keyid->length : 0;
   }
@@ -115,11 +119,12 @@ const uint8_t *X509_keyid_get0(const X509 *x, int *out_len) {
 }
 
 int X509_add1_trust_object(X509 *x, const ASN1_OBJECT *obj) {
+  auto *impl = FromOpaque(x);
   UniquePtr<ASN1_OBJECT> objtmp(OBJ_dup(obj));
   if (objtmp == nullptr) {
     return 0;
   }
-  X509_CERT_AUX *aux = aux_get(x);
+  X509_CERT_AUX *aux = aux_get(impl);
   if (aux->trust == nullptr) {
     aux->trust = sk_ASN1_OBJECT_new_null();
     if (aux->trust == nullptr) {
@@ -130,11 +135,12 @@ int X509_add1_trust_object(X509 *x, const ASN1_OBJECT *obj) {
 }
 
 int X509_add1_reject_object(X509 *x, const ASN1_OBJECT *obj) {
+  auto *impl = FromOpaque(x);
   UniquePtr<ASN1_OBJECT> objtmp(OBJ_dup(obj));
   if (objtmp == nullptr) {
     return 0;
   }
-  X509_CERT_AUX *aux = aux_get(x);
+  X509_CERT_AUX *aux = aux_get(impl);
   if (aux->reject == nullptr) {
     aux->reject = sk_ASN1_OBJECT_new_null();
     if (aux->reject == nullptr) {
@@ -145,15 +151,17 @@ int X509_add1_reject_object(X509 *x, const ASN1_OBJECT *obj) {
 }
 
 void X509_trust_clear(X509 *x) {
-  if (x->aux && x->aux->trust) {
-    sk_ASN1_OBJECT_pop_free(x->aux->trust, ASN1_OBJECT_free);
-    x->aux->trust = nullptr;
+  auto *impl = FromOpaque(x);
+  if (impl->aux && impl->aux->trust) {
+    sk_ASN1_OBJECT_pop_free(impl->aux->trust, ASN1_OBJECT_free);
+    impl->aux->trust = nullptr;
   }
 }
 
 void X509_reject_clear(X509 *x) {
-  if (x->aux && x->aux->reject) {
-    sk_ASN1_OBJECT_pop_free(x->aux->reject, ASN1_OBJECT_free);
-    x->aux->reject = nullptr;
+  auto *impl = FromOpaque(x);
+  if (impl->aux && impl->aux->reject) {
+    sk_ASN1_OBJECT_pop_free(impl->aux->reject, ASN1_OBJECT_free);
+    impl->aux->reject = nullptr;
   }
 }

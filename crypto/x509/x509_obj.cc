@@ -43,6 +43,8 @@ char *X509_NAME_oneline(const X509_NAME *a, char *buf, int len) {
   int gs_doit[4];
   char tmp_buf[80];
 
+  const auto *name = a ? FromOpaque(a) : nullptr;
+
   if (buf == nullptr) {
     if ((b = BUF_MEM_new()) == nullptr) {
       goto err;
@@ -66,8 +68,8 @@ char *X509_NAME_oneline(const X509_NAME *a, char *buf, int len) {
 
   len--;  // space for '\0'
   l = 0;
-  for (i = 0; i < sk_X509_NAME_ENTRY_num(a->entries); i++) {
-    ne = sk_X509_NAME_ENTRY_value(a->entries, i);
+  for (i = 0; i < sk_X509_NAME_ENTRY_num(name->entries); i++) {
+    ne = sk_X509_NAME_ENTRY_value(name->entries, i);
     n = OBJ_obj2nid(ne->object);
     if ((n == NID_undef) || ((s = OBJ_nid2sn(n)) == nullptr)) {
       i2t_ASN1_OBJECT(tmp_buf, sizeof(tmp_buf), ne->object);

@@ -36,7 +36,7 @@ typedef struct {
   CBB info;
 } HKDF_PKEY_CTX;
 
-static int pkey_hkdf_init(EVP_PKEY_CTX *ctx) {
+static int pkey_hkdf_init(EvpPkeyCtx *ctx) {
   HKDF_PKEY_CTX *hctx =
       reinterpret_cast<HKDF_PKEY_CTX *>(OPENSSL_zalloc(sizeof(HKDF_PKEY_CTX)));
   if (hctx == nullptr) {
@@ -52,7 +52,7 @@ static int pkey_hkdf_init(EVP_PKEY_CTX *ctx) {
   return 1;
 }
 
-static int pkey_hkdf_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) {
+static int pkey_hkdf_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
   if (!pkey_hkdf_init(dst)) {
     return 0;
   }
@@ -89,7 +89,7 @@ static int pkey_hkdf_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) {
   return 1;
 }
 
-static void pkey_hkdf_cleanup(EVP_PKEY_CTX *ctx) {
+static void pkey_hkdf_cleanup(EvpPkeyCtx *ctx) {
   HKDF_PKEY_CTX *hctx = reinterpret_cast<HKDF_PKEY_CTX *>(ctx->data);
   if (hctx != nullptr) {
     OPENSSL_free(hctx->key);
@@ -100,7 +100,7 @@ static void pkey_hkdf_cleanup(EVP_PKEY_CTX *ctx) {
   }
 }
 
-static int pkey_hkdf_derive(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *out_len) {
+static int pkey_hkdf_derive(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len) {
   HKDF_PKEY_CTX *hctx = reinterpret_cast<HKDF_PKEY_CTX *>(ctx->data);
   if (hctx->md == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
@@ -141,7 +141,7 @@ static int pkey_hkdf_derive(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *out_len) {
   return 0;
 }
 
-static int pkey_hkdf_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2) {
+static int pkey_hkdf_ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
   HKDF_PKEY_CTX *hctx = reinterpret_cast<HKDF_PKEY_CTX *>(ctx->data);
   switch (type) {
     case EVP_PKEY_CTRL_HKDF_MODE:

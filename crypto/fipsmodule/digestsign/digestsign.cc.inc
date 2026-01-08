@@ -35,8 +35,8 @@ DEFINE_LOCAL_DATA(struct evp_md_pctx_ops, md_pctx_ops) {
 }
 
 static int uses_prehash(EVP_MD_CTX *ctx, enum evp_sign_verify_t op) {
-  return (op == evp_sign) ? (ctx->pctx->pmeth->sign != nullptr)
-                          : (ctx->pctx->pmeth->verify != nullptr);
+  return (op == evp_sign) ? (FromOpaque(ctx->pctx)->pmeth->sign != nullptr)
+                          : (FromOpaque(ctx->pctx)->pmeth->verify != nullptr);
 }
 
 static int do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
@@ -183,13 +183,13 @@ int EVP_DigestSign(EVP_MD_CTX *ctx, uint8_t *out_sig, size_t *out_sig_len,
     goto end;
   }
 
-  if (ctx->pctx->pmeth->sign_message == nullptr) {
+  if (FromOpaque(ctx->pctx)->pmeth->sign_message == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     goto end;
   }
 
-  ret = ctx->pctx->pmeth->sign_message(ctx->pctx, out_sig, out_sig_len, data,
-                                       data_len);
+  ret = FromOpaque(ctx->pctx)->pmeth->sign_message(
+      FromOpaque(ctx->pctx), out_sig, out_sig_len, data, data_len);
 
 end:
   FIPS_service_indicator_unlock_state();
@@ -210,12 +210,13 @@ int EVP_DigestVerify(EVP_MD_CTX *ctx, const uint8_t *sig, size_t sig_len,
     goto end;
   }
 
-  if (ctx->pctx->pmeth->verify_message == nullptr) {
+  if (FromOpaque(ctx->pctx)->pmeth->verify_message == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     goto end;
   }
 
-  ret = ctx->pctx->pmeth->verify_message(ctx->pctx, sig, sig_len, data, len);
+  ret = FromOpaque(ctx->pctx)->pmeth->verify_message(FromOpaque(ctx->pctx), sig,
+                                                     sig_len, data, len);
 
 end:
   FIPS_service_indicator_unlock_state();

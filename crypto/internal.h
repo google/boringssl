@@ -1630,6 +1630,66 @@ class Cleanup {
 template <typename F>
 Cleanup(F func) -> Cleanup<F>;
 
+// IMPLEMENTING_OPAQUE_STRUCT defines a public struct |Public| with an
+// implementation struct |Impl|.
+//
+// To prevent accidents, the |Public| struct will be neither constructable, nor
+// copyable/movable, nor deletable.
+//
+// It must be used from inside the |bssl| namespace; however, |Public| will be
+// defined outside.
+//
+// Usage:
+//
+// DECLARE_OPAQUE_STRUCT(public_st, PublicImpl)
+//
+// BSSL_NAMESPACE_BEGIN
+//
+// class PublicImpl : public public_st {
+//  public:
+//   PublicImpl();
+//   ~PublicImpl();
+//   void foo();
+// };
+//
+// BSSL_NAMESPACE_END
+//
+// The implementation struct can be converted to the public struct implicitly;
+// to convert the public struct to the implementation struct, call
+// |FromOpaque| on it. It is explicitly allowed to call |FromOpaque| on a
+// |nullptr|.
+//
+// Note that nothing in the definition of |Public| should be a data member or
+// create linker symbols (as ensured by this macro).
+#define DECLARE_OPAQUE_STRUCT(public_name, impl_name)     \
+  BSSL_NAMESPACE_BEGIN                                    \
+                                                          \
+  class impl_name;                                        \
+                                                          \
+  BSSL_NAMESPACE_END                                      \
+                                                          \
+  struct public_name {                                    \
+    using ImplType = bssl::impl_name;                     \
+                                                          \
+   private:                                               \
+    public_name() = default;                              \
+    ~public_name() = default;                             \
+    public_name(const public_name &) = delete;            \
+    public_name &operator=(const public_name &) = delete; \
+                                                          \
+    friend class bssl::impl_name;                         \
+  };
+
+template <typename Public>
+inline typename Public::ImplType *FromOpaque(Public *p) {
+  return static_cast<typename Public::ImplType *>(p);
+}
+
+template <typename Public>
+inline const typename Public::ImplType *FromOpaque(const Public *p) {
+  return static_cast<const typename Public::ImplType *>(p);
+}
+
 BSSL_NAMESPACE_END
 
 

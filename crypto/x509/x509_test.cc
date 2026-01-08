@@ -3084,12 +3084,12 @@ TEST(X509Test, TestFromBuffer) {
   UniquePtr<X509> root(X509_parse_from_buffer(buf.get()));
   ASSERT_TRUE(root);
 
-  EXPECT_EQ(buf.get(), root->buf);
+  EXPECT_EQ(buf.get(), FromOpaque(root.get())->buf);
   buf.reset();
 
   // This ensures the X509 took a reference to |buf|, otherwise this will be a
   // reference to free memory and ASAN should notice.
-  CRYPTO_BUFFER_len(root->buf);
+  CRYPTO_BUFFER_len(FromOpaque(root.get())->buf);
 }
 
 TEST(X509Test, TestFromBufferWithTrailingData) {
@@ -3148,7 +3148,7 @@ TEST(X509Test, TestFromBufferReused) {
   size_t data2_len;
   UniquePtr<uint8_t> data2;
   ASSERT_TRUE(PEMToDER(&data2, &data2_len, kLeafPEM));
-  EXPECT_EQ(root->buf, buf.get());
+  EXPECT_EQ(FromOpaque(root.get())->buf, buf.get());
 
   // Historically, this function tested the interaction between
   // |X509_parse_from_buffer| and object reuse. We no longer support object
@@ -3161,7 +3161,7 @@ TEST(X509Test, TestFromBufferReused) {
   root.reset(raw);
 
   ASSERT_EQ(root.get(), ret);
-  ASSERT_NE(buf.get(), root->buf);
+  ASSERT_NE(buf.get(), FromOpaque(root.get())->buf);
 
   // Free |data2| and ensure that |root| took its own copy. Otherwise
   // serializing |root|, below, will trigger a use-after-free.

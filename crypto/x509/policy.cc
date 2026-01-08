@@ -697,7 +697,7 @@ int bssl::X509_policy_check(const STACK_OF(X509) *certs,
     if (!x509v3_cache_extensions(cert)) {
       goto err;
     }
-    const int is_self_issued = (cert->ex_flags & EXFLAG_SI) != 0;
+    const int is_self_issued = (FromOpaque(cert)->ex_flags & EXFLAG_SI) != 0;
 
     if (level == nullptr) {
       assert(i == num_certs - 2);

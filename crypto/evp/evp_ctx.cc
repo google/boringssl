@@ -45,9 +45,9 @@ static const EVP_PKEY_CTX_METHOD *evp_pkey_meth_find(int type) {
   return nullptr;
 }
 
-static EVP_PKEY_CTX *evp_pkey_ctx_new(EVP_PKEY *pkey,
-                                      const EVP_PKEY_CTX_METHOD *pmeth) {
-  UniquePtr<EVP_PKEY_CTX> ret = MakeUnique<EVP_PKEY_CTX>();
+static EvpPkeyCtx *evp_pkey_ctx_new(EVP_PKEY *pkey,
+                                    const EVP_PKEY_CTX_METHOD *pmeth) {
+  UniquePtr<EvpPkeyCtx> ret = MakeUnique<EvpPkeyCtx>();
   if (!ret) {
     return nullptr;
   }
@@ -91,29 +91,31 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
   return evp_pkey_ctx_new(nullptr, pkey_method);
 }
 
-evp_pkey_ctx_st::~evp_pkey_ctx_st() {
+EvpPkeyCtx::~EvpPkeyCtx() {
   if (pmeth && pmeth->cleanup) {
     pmeth->cleanup(this);
   }
 }
 
-void EVP_PKEY_CTX_free(EVP_PKEY_CTX *ctx) { bssl::Delete(ctx); }
+void EVP_PKEY_CTX_free(EVP_PKEY_CTX *ctx) { Delete(FromOpaque(ctx)); }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_dup(EVP_PKEY_CTX *ctx) {
-  if (!ctx->pmeth || !ctx->pmeth->copy) {
+  auto *impl = FromOpaque(ctx);
+
+  if (!impl->pmeth || !impl->pmeth->copy) {
     return nullptr;
   }
 
-  UniquePtr<EVP_PKEY_CTX> ret = MakeUnique<EVP_PKEY_CTX>();
+  UniquePtr<EvpPkeyCtx> ret = MakeUnique<EvpPkeyCtx>();
   if (!ret) {
     return nullptr;
   }
 
-  ret->pmeth = ctx->pmeth;
-  ret->operation = ctx->operation;
-  ret->pkey = UpRef(ctx->pkey);
-  ret->peerkey = UpRef(ctx->peerkey);
-  if (ctx->pmeth->copy(ret.get(), ctx) <= 0) {
+  ret->pmeth = impl->pmeth;
+  ret->operation = impl->operation;
+  ret->pkey = UpRef(impl->pkey);
+  ret->peerkey = UpRef(impl->peerkey);
+  if (impl->pmeth->copy(ret.get(), impl) <= 0) {
     ret->pmeth = nullptr;  // Don't call |pmeth->cleanup|.
     OPENSSL_PUT_ERROR(EVP, ERR_LIB_EVP);
     return nullptr;
@@ -122,171 +124,186 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_dup(EVP_PKEY_CTX *ctx) {
   return ret.release();
 }
 
-EVP_PKEY *EVP_PKEY_CTX_get0_pkey(EVP_PKEY_CTX *ctx) { return ctx->pkey.get(); }
+EVP_PKEY *EVP_PKEY_CTX_get0_pkey(EVP_PKEY_CTX *ctx) {
+  auto *impl = FromOpaque(ctx);
+  return impl->pkey.get();
+}
 
 int bssl::EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype, int cmd,
                             int p1, void *p2) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->ctrl) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->ctrl) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_COMMAND_NOT_SUPPORTED);
     return 0;
   }
-  if (keytype != -1 && ctx->pmeth->pkey_id != keytype) {
+  if (keytype != -1 && impl->pmeth->pkey_id != keytype) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  if (ctx->operation == EVP_PKEY_OP_UNDEFINED) {
+  if (impl->operation == EVP_PKEY_OP_UNDEFINED) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_OPERATION_SET);
     return 0;
   }
 
-  if (optype != -1 && !(ctx->operation & optype)) {
+  if (optype != -1 && !(impl->operation & optype)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_OPERATION);
     return 0;
   }
 
-  return ctx->pmeth->ctrl(ctx, cmd, p1, p2);
+  return impl->pmeth->ctrl(impl, cmd, p1, p2);
 }
 
 int EVP_PKEY_sign_init(EVP_PKEY_CTX *ctx) {
-  if (ctx == nullptr || ctx->pmeth == nullptr ||
-      (ctx->pmeth->sign == nullptr && ctx->pmeth->sign_message == nullptr)) {
+  auto *impl = FromOpaque(ctx);
+  if (!ctx || impl->pmeth == nullptr ||
+      (impl->pmeth->sign == nullptr && impl->pmeth->sign_message == nullptr)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  ctx->operation = EVP_PKEY_OP_SIGN;
+  impl->operation = EVP_PKEY_OP_SIGN;
   return 1;
 }
 
 int EVP_PKEY_sign(EVP_PKEY_CTX *ctx, uint8_t *sig, size_t *sig_len,
                   const uint8_t *digest, size_t digest_len) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->sign) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->sign) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_SIGN) {
+  if (impl->operation != EVP_PKEY_OP_SIGN) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
-  return ctx->pmeth->sign(ctx, sig, sig_len, digest, digest_len);
+  return impl->pmeth->sign(impl, sig, sig_len, digest, digest_len);
 }
 
 int EVP_PKEY_verify_init(EVP_PKEY_CTX *ctx) {
-  if (ctx == nullptr || ctx->pmeth == nullptr ||
-      (ctx->pmeth->verify == nullptr &&
-       ctx->pmeth->verify_message == nullptr)) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || impl->pmeth == nullptr ||
+      (impl->pmeth->verify == nullptr &&
+       impl->pmeth->verify_message == nullptr)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_VERIFY;
+  impl->operation = EVP_PKEY_OP_VERIFY;
   return 1;
 }
 
 int EVP_PKEY_verify(EVP_PKEY_CTX *ctx, const uint8_t *sig, size_t sig_len,
                     const uint8_t *digest, size_t digest_len) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->verify) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->verify) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_VERIFY) {
+  if (impl->operation != EVP_PKEY_OP_VERIFY) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
-  return ctx->pmeth->verify(ctx, sig, sig_len, digest, digest_len);
+  return impl->pmeth->verify(impl, sig, sig_len, digest, digest_len);
 }
 
 int EVP_PKEY_encrypt_init(EVP_PKEY_CTX *ctx) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->encrypt) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->encrypt) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_ENCRYPT;
+  impl->operation = EVP_PKEY_OP_ENCRYPT;
   return 1;
 }
 
 int EVP_PKEY_encrypt(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *outlen,
                      const uint8_t *in, size_t inlen) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->encrypt) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->encrypt) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_ENCRYPT) {
+  if (impl->operation != EVP_PKEY_OP_ENCRYPT) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
-  return ctx->pmeth->encrypt(ctx, out, outlen, in, inlen);
+  return impl->pmeth->encrypt(impl, out, outlen, in, inlen);
 }
 
 int EVP_PKEY_decrypt_init(EVP_PKEY_CTX *ctx) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->decrypt) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->decrypt) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_DECRYPT;
+  impl->operation = EVP_PKEY_OP_DECRYPT;
   return 1;
 }
 
 int EVP_PKEY_decrypt(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *outlen,
                      const uint8_t *in, size_t inlen) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->decrypt) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->decrypt) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_DECRYPT) {
+  if (impl->operation != EVP_PKEY_OP_DECRYPT) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
-  return ctx->pmeth->decrypt(ctx, out, outlen, in, inlen);
+  return impl->pmeth->decrypt(impl, out, outlen, in, inlen);
 }
 
 int EVP_PKEY_verify_recover_init(EVP_PKEY_CTX *ctx) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->verify_recover) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->verify_recover) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_VERIFYRECOVER;
+  impl->operation = EVP_PKEY_OP_VERIFYRECOVER;
   return 1;
 }
 
 int EVP_PKEY_verify_recover(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *out_len,
                             const uint8_t *sig, size_t sig_len) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->verify_recover) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->verify_recover) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_VERIFYRECOVER) {
+  if (impl->operation != EVP_PKEY_OP_VERIFYRECOVER) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
-  return ctx->pmeth->verify_recover(ctx, out, out_len, sig, sig_len);
+  return impl->pmeth->verify_recover(impl, out, out_len, sig, sig_len);
 }
 
 int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->derive) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->derive) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_DERIVE;
+  impl->operation = EVP_PKEY_OP_DERIVE;
   return 1;
 }
 
 int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer) {
-  int ret;
-  if (!ctx || !ctx->pmeth ||
-      !(ctx->pmeth->derive || ctx->pmeth->encrypt || ctx->pmeth->decrypt) ||
-      !ctx->pmeth->ctrl) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth ||
+      !(impl->pmeth->derive || impl->pmeth->encrypt || impl->pmeth->decrypt) ||
+      !impl->pmeth->ctrl) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_DERIVE &&
-      ctx->operation != EVP_PKEY_OP_ENCRYPT &&
-      ctx->operation != EVP_PKEY_OP_DECRYPT) {
+  if (impl->operation != EVP_PKEY_OP_DERIVE &&
+      impl->operation != EVP_PKEY_OP_ENCRYPT &&
+      impl->operation != EVP_PKEY_OP_DECRYPT) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
 
-  ret = ctx->pmeth->ctrl(ctx, EVP_PKEY_CTRL_PEER_KEY, 0, peer);
+  int ret = impl->pmeth->ctrl(impl, EVP_PKEY_CTRL_PEER_KEY, 0, peer);
 
   if (ret <= 0) {
     return 0;
@@ -296,12 +313,12 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer) {
     return 1;
   }
 
-  if (!ctx->pkey) {
+  if (!impl->pkey) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
     return 0;
   }
 
-  if (EVP_PKEY_id(ctx->pkey.get()) != EVP_PKEY_id(peer)) {
+  if (EVP_PKEY_id(impl->pkey.get()) != EVP_PKEY_id(peer)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DIFFERENT_KEY_TYPES);
     return 0;
   }
@@ -312,15 +329,15 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer) {
   // (different key types) is impossible here because it is checked earlier.
   // -2 is OK for us here, as well as 1, so we can check for 0 only.
   if (!EVP_PKEY_missing_parameters(peer) &&
-      !EVP_PKEY_cmp_parameters(ctx->pkey.get(), peer)) {
+      !EVP_PKEY_cmp_parameters(impl->pkey.get(), peer)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DIFFERENT_PARAMETERS);
     return 0;
   }
 
-  ctx->peerkey = UpRef(peer);
-  ret = ctx->pmeth->ctrl(ctx, EVP_PKEY_CTRL_PEER_KEY, 1, peer);
+  impl->peerkey = UpRef(peer);
+  ret = impl->pmeth->ctrl(impl, EVP_PKEY_CTRL_PEER_KEY, 1, peer);
   if (ret <= 0) {
-    ctx->peerkey = nullptr;
+    impl->peerkey = nullptr;
     return 0;
   }
 
@@ -328,32 +345,35 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer) {
 }
 
 int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, uint8_t *key, size_t *out_key_len) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->derive) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->derive) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_DERIVE) {
+  if (impl->operation != EVP_PKEY_OP_DERIVE) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
-  return ctx->pmeth->derive(ctx, key, out_key_len);
+  return impl->pmeth->derive(impl, key, out_key_len);
 }
 
 int EVP_PKEY_keygen_init(EVP_PKEY_CTX *ctx) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->keygen) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->keygen) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_KEYGEN;
+  impl->operation = EVP_PKEY_OP_KEYGEN;
   return 1;
 }
 
 int EVP_PKEY_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->keygen) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->keygen) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_KEYGEN) {
+  if (impl->operation != EVP_PKEY_OP_KEYGEN) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
@@ -370,7 +390,7 @@ int EVP_PKEY_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
     }
   }
 
-  if (!ctx->pmeth->keygen(ctx, *out_pkey)) {
+  if (!impl->pmeth->keygen(impl, *out_pkey)) {
     EVP_PKEY_free(*out_pkey);
     *out_pkey = nullptr;
     return 0;
@@ -379,20 +399,22 @@ int EVP_PKEY_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
 }
 
 int EVP_PKEY_paramgen_init(EVP_PKEY_CTX *ctx) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->paramgen) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->paramgen) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  ctx->operation = EVP_PKEY_OP_PARAMGEN;
+  impl->operation = EVP_PKEY_OP_PARAMGEN;
   return 1;
 }
 
 int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
-  if (!ctx || !ctx->pmeth || !ctx->pmeth->paramgen) {
+  auto *impl = FromOpaque(ctx);
+  if (!impl || !impl->pmeth || !impl->pmeth->paramgen) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
-  if (ctx->operation != EVP_PKEY_OP_PARAMGEN) {
+  if (impl->operation != EVP_PKEY_OP_PARAMGEN) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     return 0;
   }
@@ -409,7 +431,7 @@ int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
     }
   }
 
-  if (!ctx->pmeth->paramgen(ctx, *out_pkey)) {
+  if (!impl->pmeth->paramgen(impl, *out_pkey)) {
     EVP_PKEY_free(*out_pkey);
     *out_pkey = nullptr;
     return 0;

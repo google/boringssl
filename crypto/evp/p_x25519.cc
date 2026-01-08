@@ -273,9 +273,9 @@ const EVP_PKEY_ALG *EVP_pkey_x25519() {
 }
 
 // X25519 has no parameters to copy.
-static int pkey_x25519_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) { return 1; }
+static int pkey_x25519_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
-static int pkey_x25519_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
+static int pkey_x25519_keygen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
   X25519_KEY *key =
       reinterpret_cast<X25519_KEY *>(OPENSSL_malloc(sizeof(X25519_KEY)));
   if (key == nullptr) {
@@ -288,8 +288,7 @@ static int pkey_x25519_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
   return 1;
 }
 
-static int pkey_x25519_derive(EVP_PKEY_CTX *ctx, uint8_t *out,
-                              size_t *out_len) {
+static int pkey_x25519_derive(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len) {
   if (ctx->pkey == nullptr || ctx->peerkey == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_KEYS_NOT_SET);
     return 0;
@@ -324,7 +323,7 @@ static int pkey_x25519_derive(EVP_PKEY_CTX *ctx, uint8_t *out,
   return 1;
 }
 
-static int pkey_x25519_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2) {
+static int pkey_x25519_ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
   switch (type) {
     case EVP_PKEY_CTRL_PEER_KEY:
       // |EVP_PKEY_derive_set_peer| requires the key implement this command,

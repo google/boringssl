@@ -24,6 +24,8 @@
 #include "../internal.h"
 
 
+DECLARE_OPAQUE_STRUCT(evp_pkey_ctx_st, EvpPkeyCtx)
+
 BSSL_NAMESPACE_BEGIN
 
 typedef struct evp_pkey_asn1_method_st EVP_PKEY_ASN1_METHOD;
@@ -214,10 +216,11 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
 #define EVP_PKEY_CTRL_HKDF_INFO (EVP_PKEY_ALG_CTRL + 18)
 #define EVP_PKEY_CTRL_DH_PAD (EVP_PKEY_ALG_CTRL + 19)
 
-BSSL_NAMESPACE_END
+class EvpPkeyCtx : public evp_pkey_ctx_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
 
-struct evp_pkey_ctx_st {
-  ~evp_pkey_ctx_st();
+  ~EvpPkeyCtx();
 
   // Method associated with this operation
   const bssl::EVP_PKEY_CTX_METHOD *pmeth = nullptr;
@@ -232,45 +235,43 @@ struct evp_pkey_ctx_st {
   // creation, this should instead be a base class, with the algorithm-specific
   // data on the subclass, coming from the same allocation.
   void *data = nullptr;
-} /* EVP_PKEY_CTX */;
-
-BSSL_NAMESPACE_BEGIN
+};
 
 struct evp_pkey_ctx_method_st {
   int pkey_id;
 
-  int (*init)(EVP_PKEY_CTX *ctx);
-  int (*copy)(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src);
-  void (*cleanup)(EVP_PKEY_CTX *ctx);
+  int (*init)(EvpPkeyCtx *ctx);
+  int (*copy)(EvpPkeyCtx *dst, EvpPkeyCtx *src);
+  void (*cleanup)(EvpPkeyCtx *ctx);
 
-  int (*keygen)(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
+  int (*keygen)(EvpPkeyCtx *ctx, EVP_PKEY *pkey);
 
-  int (*sign)(EVP_PKEY_CTX *ctx, uint8_t *sig, size_t *siglen,
-              const uint8_t *tbs, size_t tbslen);
+  int (*sign)(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen, const uint8_t *tbs,
+              size_t tbslen);
 
-  int (*sign_message)(EVP_PKEY_CTX *ctx, uint8_t *sig, size_t *siglen,
+  int (*sign_message)(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
                       const uint8_t *tbs, size_t tbslen);
 
-  int (*verify)(EVP_PKEY_CTX *ctx, const uint8_t *sig, size_t siglen,
+  int (*verify)(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
                 const uint8_t *tbs, size_t tbslen);
 
-  int (*verify_message)(EVP_PKEY_CTX *ctx, const uint8_t *sig, size_t siglen,
+  int (*verify_message)(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
                         const uint8_t *tbs, size_t tbslen);
 
-  int (*verify_recover)(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *out_len,
+  int (*verify_recover)(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len,
                         const uint8_t *sig, size_t sig_len);
 
-  int (*encrypt)(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *outlen,
+  int (*encrypt)(EvpPkeyCtx *ctx, uint8_t *out, size_t *outlen,
                  const uint8_t *in, size_t inlen);
 
-  int (*decrypt)(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *outlen,
+  int (*decrypt)(EvpPkeyCtx *ctx, uint8_t *out, size_t *outlen,
                  const uint8_t *in, size_t inlen);
 
-  int (*derive)(EVP_PKEY_CTX *ctx, uint8_t *key, size_t *keylen);
+  int (*derive)(EvpPkeyCtx *ctx, uint8_t *key, size_t *keylen);
 
-  int (*paramgen)(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
+  int (*paramgen)(EvpPkeyCtx *ctx, EVP_PKEY *pkey);
 
-  int (*ctrl)(EVP_PKEY_CTX *ctx, int type, int p1, void *p2);
+  int (*ctrl)(EvpPkeyCtx *ctx, int type, int p1, void *p2);
 } /* EVP_PKEY_CTX_METHOD */;
 
 extern const EVP_PKEY_CTX_METHOD rsa_pkey_meth;

@@ -380,7 +380,7 @@ typedef struct {
   const EC_GROUP *gen_group;
 } EC_PKEY_CTX;
 
-static int pkey_ec_init(EVP_PKEY_CTX *ctx) {
+static int pkey_ec_init(EvpPkeyCtx *ctx) {
   EC_PKEY_CTX *dctx =
       reinterpret_cast<EC_PKEY_CTX *>(OPENSSL_zalloc(sizeof(EC_PKEY_CTX)));
   if (!dctx) {
@@ -391,7 +391,7 @@ static int pkey_ec_init(EVP_PKEY_CTX *ctx) {
   return 1;
 }
 
-static int pkey_ec_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) {
+static int pkey_ec_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
   if (!pkey_ec_init(dst)) {
     return 0;
   }
@@ -403,7 +403,7 @@ static int pkey_ec_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) {
   return 1;
 }
 
-static void pkey_ec_cleanup(EVP_PKEY_CTX *ctx) {
+static void pkey_ec_cleanup(EvpPkeyCtx *ctx) {
   EC_PKEY_CTX *dctx = reinterpret_cast<EC_PKEY_CTX *>(ctx->data);
   if (!dctx) {
     return;
@@ -412,7 +412,7 @@ static void pkey_ec_cleanup(EVP_PKEY_CTX *ctx) {
   OPENSSL_free(dctx);
 }
 
-static int pkey_ec_sign(EVP_PKEY_CTX *ctx, uint8_t *sig, size_t *siglen,
+static int pkey_ec_sign(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
                         const uint8_t *tbs, size_t tbslen) {
   const EC_KEY *ec = reinterpret_cast<EC_KEY *>(ctx->pkey->pkey);
   if (!sig) {
@@ -431,13 +431,13 @@ static int pkey_ec_sign(EVP_PKEY_CTX *ctx, uint8_t *sig, size_t *siglen,
   return 1;
 }
 
-static int pkey_ec_verify(EVP_PKEY_CTX *ctx, const uint8_t *sig, size_t siglen,
+static int pkey_ec_verify(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
                           const uint8_t *tbs, size_t tbslen) {
   const EC_KEY *ec_key = reinterpret_cast<EC_KEY *>(ctx->pkey->pkey);
   return ECDSA_verify(0, tbs, tbslen, sig, siglen, ec_key);
 }
 
-static int pkey_ec_derive(EVP_PKEY_CTX *ctx, uint8_t *key, size_t *keylen) {
+static int pkey_ec_derive(EvpPkeyCtx *ctx, uint8_t *key, size_t *keylen) {
   if (!ctx->pkey || !ctx->peerkey) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_KEYS_NOT_SET);
     return 0;
@@ -465,7 +465,7 @@ static int pkey_ec_derive(EVP_PKEY_CTX *ctx, uint8_t *key, size_t *keylen) {
   return 1;
 }
 
-static int pkey_ec_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2) {
+static int pkey_ec_ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
   EC_PKEY_CTX *dctx = reinterpret_cast<EC_PKEY_CTX *>(ctx->data);
 
   switch (type) {
@@ -501,7 +501,7 @@ static int pkey_ec_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2) {
   }
 }
 
-static int pkey_ec_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
+static int pkey_ec_keygen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
   EC_PKEY_CTX *dctx = reinterpret_cast<EC_PKEY_CTX *>(ctx->data);
   const EC_GROUP *group = dctx->gen_group;
   if (group == nullptr) {
@@ -521,7 +521,7 @@ static int pkey_ec_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
   return 1;
 }
 
-static int pkey_ec_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
+static int pkey_ec_paramgen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
   EC_PKEY_CTX *dctx = reinterpret_cast<EC_PKEY_CTX *>(ctx->data);
   if (dctx->gen_group == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_PARAMETERS_SET);

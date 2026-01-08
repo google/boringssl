@@ -256,9 +256,9 @@ const EVP_PKEY_ASN1_METHOD ed25519_asn1_meth = {
 };
 
 // Ed25519 has no parameters to copy.
-static int pkey_ed25519_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) { return 1; }
+static int pkey_ed25519_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
-static int pkey_ed25519_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
+static int pkey_ed25519_keygen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
   ED25519_KEY *key =
       reinterpret_cast<ED25519_KEY *>(OPENSSL_malloc(sizeof(ED25519_KEY)));
   if (key == nullptr) {
@@ -273,7 +273,7 @@ static int pkey_ed25519_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
   return 1;
 }
 
-static int pkey_ed25519_sign_message(EVP_PKEY_CTX *ctx, uint8_t *sig,
+static int pkey_ed25519_sign_message(EvpPkeyCtx *ctx, uint8_t *sig,
                                      size_t *siglen, const uint8_t *tbs,
                                      size_t tbslen) {
   const ED25519_KEY *key =
@@ -301,7 +301,7 @@ static int pkey_ed25519_sign_message(EVP_PKEY_CTX *ctx, uint8_t *sig,
   return 1;
 }
 
-static int pkey_ed25519_verify_message(EVP_PKEY_CTX *ctx, const uint8_t *sig,
+static int pkey_ed25519_verify_message(EvpPkeyCtx *ctx, const uint8_t *sig,
                                        size_t siglen, const uint8_t *tbs,
                                        size_t tbslen) {
   const ED25519_KEY *key =

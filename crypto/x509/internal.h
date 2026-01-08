@@ -25,6 +25,9 @@
 
 // Internal structures.
 
+DECLARE_OPAQUE_STRUCT(x509_st, X509Impl)
+DECLARE_OPAQUE_STRUCT(X509_name_st, X509Name)
+
 struct X509_pubkey_st {
   X509_ALGOR algor;
   ASN1_BIT_STRING public_key;
@@ -71,12 +74,13 @@ struct X509_NAME_CACHE {
   size_t der_len;
 };
 
-BSSL_NAMESPACE_END
-
-struct X509_name_st {
+class X509Name : public X509_name_st {
+ public:
   STACK_OF(X509_NAME_ENTRY) *entries;
   mutable bssl::Atomic<bssl::X509_NAME_CACHE *> cache;
 } /* X509_NAME */;
+
+BSSL_NAMESPACE_END
 
 struct x509_attributes_st {
   ASN1_OBJECT *object;
@@ -116,17 +120,20 @@ BSSL_NAMESPACE_BEGIN
 // (RFC 5280) and C type is |STACK_OF(X509_EXTENSION)*|.
 DECLARE_ASN1_ITEM(X509_EXTENSIONS)
 
-BSSL_NAMESPACE_END
+class X509Impl : public x509_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
 
-struct x509_st {
+  ~X509Impl();
+
   // TBSCertificate fields:
   uint8_t version;  // One of the |X509_VERSION_*| constants.
   ASN1_INTEGER serialNumber;
   X509_ALGOR tbs_sig_alg;
-  X509_NAME issuer;
+  X509Name issuer;
   ASN1_TIME notBefore;
   ASN1_TIME notAfter;
-  X509_NAME subject;
+  X509Name subject;
   X509_PUBKEY key;
   ASN1_BIT_STRING *issuerUID;            // [ 1 ] optional in v2
   ASN1_BIT_STRING *subjectUID;           // [ 2 ] optional in v2
@@ -155,8 +162,6 @@ struct x509_st {
   bssl::X509_CERT_AUX *aux;
   bssl::CRYPTO_MUTEX lock;
 } /* X509 */;
-
-BSSL_NAMESPACE_BEGIN
 
 int x509_marshal_tbs_cert(CBB *cbb, const X509 *x509);
 

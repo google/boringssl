@@ -112,9 +112,10 @@ static int set_dist_point_name(DIST_POINT_NAME **pdp, const X509V3_CTX *ctx,
     if (!nm) {
       return -1;
     }
-    int ret = X509V3_NAME_from_section(nm, dnsect, MBSTRING_ASC);
-    rnm = nm->entries;
-    nm->entries = nullptr;
+    auto *impl = FromOpaque(nm);
+    int ret = X509V3_NAME_from_section(impl, dnsect, MBSTRING_ASC);
+    rnm = impl->entries;
+    impl->entries = nullptr;
     X509_NAME_free(nm);
     if (!ret || sk_X509_NAME_ENTRY_num(rnm) <= 0) {
       goto err;
@@ -458,7 +459,7 @@ static int print_distpoint(BIO *out, DIST_POINT_NAME *dpn, int indent) {
     BIO_printf(out, "%*sFull Name:\n", indent, "");
     print_gens(out, dpn->name.fullname, indent);
   } else {
-    X509_NAME ntmp;
+    X509Name ntmp;
     ntmp.entries = dpn->name.relativename;
     BIO_printf(out, "%*sRelative Name:\n%*s", indent, "", indent + 2, "");
     X509_NAME_print_ex(out, &ntmp, 0, XN_FLAG_ONELINE);

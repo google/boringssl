@@ -348,9 +348,9 @@ struct MLDSAImplementation {
 
   // There is, for now, no context state to copy. When we add support for
   // streaming signing, that will change.
-  static int CopyContext(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) { return 1; }
+  static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
-  static int SignMessage(EVP_PKEY_CTX *ctx, uint8_t *sig, size_t *siglen,
+  static int SignMessage(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
                          const uint8_t *tbs, size_t tbslen) {
     const auto *priv_data = GetKeyData(ctx->pkey.get())->AsPrivateKeyData();
     if (priv_data == nullptr) {
@@ -373,7 +373,7 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static int VerifyMessage(EVP_PKEY_CTX *ctx, const uint8_t *sig, size_t siglen,
+  static int VerifyMessage(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
                            const uint8_t *tbs, size_t tbslen) {
     const auto *pub = GetKeyData(ctx->pkey.get())->GetPublicKey();
     if (!Traits::Verify(pub, sig, siglen, tbs, tbslen, /*context=*/nullptr,
