@@ -686,6 +686,7 @@ crypto_internal_headers = [
     "crypto/spake2plus/internal.h",
     "crypto/trust_token/internal.h",
     "crypto/x509/internal.h",
+    "include/openssl/prefix_symbols.h",
     "third_party/fiat/bedrock_unverified_bareminimum.c.inc",
     "third_party/fiat/bedrock_unverified_platform.c.inc",
     "third_party/fiat/curve25519_32.h",

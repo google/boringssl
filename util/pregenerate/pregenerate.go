@@ -178,7 +178,7 @@ func run() error {
 		allAsmSrcs = append(allAsmSrcs, targetAsmSrcs...)
 	}
 
-	tasks = append(tasks, MakePrefixingIncludes(targetsIn)...)
+	tasks = append(tasks, MakePrefixingIncludes(targetsIn, targetsOut)...)
 	tasks = append(tasks, MakeBuildFiles(targetsOut)...)
 	tasks = append(tasks, MakeCollectAsmGlobalTasks(perlAsmTasks, allAsmSrcs)...)
 	tasks = append(tasks, NewSimpleTask("gen/README.md", func() ([]byte, error) {

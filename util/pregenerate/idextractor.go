@@ -52,10 +52,10 @@ func isClangCL(clang string) (bool, error) {
 	return strings.TrimSuffix(strings.ToLower(filepath.Base(clang)), ".exe") == "clang-cl", nil
 }
 
-// BuildCRenamingMacros calls Clang to extract the AST of the headers, then processes them to extract the symbols.
+// BuildCRenamingHeader calls Clang to extract the AST of the headers, then processes them to extract the symbols.
 //
 // It returns an include for C.
-func BuildCRenamingIncludes(headers []string) (cInclude []byte, err error) {
+func BuildCRenamingHeader(headers []string) (cInclude []byte, err error) {
 	cmd := *clangPath
 	if cmd == "" {
 		return nil, fmt.Errorf("%w: clang has been disabled by flag", TaskSkipped)
@@ -198,7 +198,24 @@ func BuildCRenamingIncludes(headers []string) (cInclude []byte, err error) {
 
 	var cOutput bytes.Buffer
 	writeHeader(&cOutput, "//")
-	cOutput.WriteString("\n")
+	cOutput.WriteString(`
+#ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_H
+#define OPENSSL_HEADER_PREFIX_SYMBOLS_H
+
+
+#define BORINGSSL_ADD_PREFIX_CONCAT_INNER(a, b) a##_##b
+#define BORINGSSL_ADD_PREFIX_CONCAT(a, b) \
+  BORINGSSL_ADD_PREFIX_CONCAT_INNER(a, b)
+#define BORINGSSL_ADD_PREFIX(s) BORINGSSL_ADD_PREFIX_CONCAT(BORINGSSL_PREFIX, s)
+
+#if defined(__APPLE__)
+#define BORINGSSL_SYMBOL_INNER(s) _##s
+#define BORINGSSL_SYMBOL(s) BORINGSSL_SYMBOL_INNER(s)
+#else  // __APPLE__
+#define BORINGSSL_SYMBOL(s) s
+#endif  // __APPLE__
+
+`)
 	cOutput.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME)\n")
 	cOutput.WriteString("\n")
 	for _, sym := range slices.Sorted(maps.Keys(viaRedefineExtname)) {
@@ -216,5 +233,8 @@ func BuildCRenamingIncludes(headers []string) (cInclude []byte, err error) {
 	for _, sym := range slices.Sorted(maps.Keys(viaMacro)) {
 		fmt.Fprintf(&cOutput, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
+	cOutput.WriteString(`
+#endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_H
+`)
 	return cOutput.Bytes(), nil
 }

@@ -215,11 +215,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := writeCHeader(symbols, filepath.Join(*out, "boringssl_prefix_symbols.h")); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing boringssl_prefix_symbols.h: %s\n", err)
-		os.Exit(1)
-	}
-
 	if err := writeASMHeader(symbols, filepath.Join(*out, "boringssl_prefix_symbols_asm.h")); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing boringssl_prefix_symbols_asm.h: %s\n", err)
 		os.Exit(1)
