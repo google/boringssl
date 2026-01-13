@@ -40,6 +40,8 @@ type InputTarget struct {
 	PerlasmArm     []PerlasmSource `json:"perlasm_arm,omitempty"`
 	PerlasmX86     []PerlasmSource `json:"perlasm_x86,omitempty"`
 	PerlasmX86_64  []PerlasmSource `json:"perlasm_x86_64,omitempty"`
+	// Hdrs are C++ headers.
+	Hdrs []string `json:"hdrs,omitempty"`
 }
 
 type PerlasmSource struct {
@@ -348,4 +350,17 @@ func MakeCollectAsmGlobalTask(perlAsmTasks []WaitableTask, allAsmSrcs []string) 
 		}
 		return out, nil
 	})
+}
+
+// MakePrefixingIncludes returns the tasks to generate the header files for symbol prefixing.
+func MakePrefixingIncludes(in map[string]InputTarget) []Task {
+	var tasks []Task
+	if *clangPath != "" {
+		var headers []string
+		for _, t := range in {
+			headers = append(headers, t.Hdrs...)
+		}
+		tasks = append(tasks, &IDExtractorTask{Headers: headers, Dst: "gen/boringssl_prefix_symbols_c.inc"})
+	}
+	return tasks
 }

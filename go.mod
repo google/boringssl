@@ -5,6 +5,7 @@ go 1.24
 require (
 	cloud.google.com/go/storage v1.51.0
 	filippo.io/edwards25519 v1.1.0
+	github.com/hexops/gotextdiff v1.0.3
 	golang.org/x/crypto v0.37.0
 	golang.org/x/net v0.39.0
 	google.golang.org/api v0.229.0

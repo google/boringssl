@@ -16,7 +16,7 @@ vars = {
   'chromium_git': 'https://chromium.googlesource.com',
 
   'checkout_bazel': False,
-  'checkout_clang': False,
+  # 'checkout_clang': True,  # // TODO(crbug.com/42220000): remove.
   'checkout_cmake': True,
   'checkout_go': True,
   'checkout_fuzzer': False,
@@ -174,7 +174,7 @@ deps = {
   'boringssl/util/bot/tools/clang': {
     'url': Var('chromium_git') + '/chromium/src/tools/clang.git' + '@' + Var('tools_clang_revision'),
     # tools/rust/update_rust.py depends upon tools/clang/scripts/update.py.
-    'condition': 'checkout_clang or checkout_rust',
+    # Also, on non-Mac builds, packaged clang is needed for pregenerate.
   },
 
   'boringssl/util/bot/tools/rust': {
@@ -204,7 +204,7 @@ hooks = [
     'name': 'clang',
     'pattern': '.',
     # bindgen in the packaged rust-toolchain requires packaged clang.
-    'condition': 'checkout_clang or checkout_rust',
+    # Also, on non-Mac builds, packaged clang is needed for pregenerate.
     'action': [ 'python3',
                 'boringssl/util/bot/tools/clang/scripts/update.py',
                 '--output-dir', 'boringssl/util/bot/llvm-build',
