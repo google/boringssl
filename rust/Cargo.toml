@@ -2,5 +2,6 @@
 members = [
   "bssl-crypto",
   "bssl-sys",
+  "bssl-tls",
 ]
 resolver = "3"
