@@ -520,6 +520,15 @@ impl Drop for Key {
     }
 }
 
+impl Clone for Key {
+    fn clone(&self) -> Self {
+        unsafe {
+            bssl_sys::EC_KEY_up_ref(self.0);
+        }
+        Self(self.0)
+    }
+}
+
 /// Serialize a finite point to X9.62 format.
 ///
 /// Callers must ensure that the arguments are valid, that the point has the

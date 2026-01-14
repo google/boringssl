@@ -54,6 +54,7 @@ pub const SIGNATURE_LEN: usize = bssl_sys::ED25519_SIGNATURE_LEN as usize;
 const KEYPAIR_LEN: usize = bssl_sys::ED25519_PRIVATE_KEY_LEN as usize;
 
 /// An Ed25519 private key.
+#[derive(Clone)]
 pub struct PrivateKey([u8; KEYPAIR_LEN]);
 
 /// An Ed25519 public key used to verify a signature + message.

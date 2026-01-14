@@ -149,6 +149,15 @@ pub struct PrivateKey<C: ec::Curve> {
     marker: PhantomData<C>,
 }
 
+impl<C: ec::Curve> Clone for PrivateKey<C> {
+    fn clone(&self) -> Self {
+        Self {
+            key: self.key.clone(),
+            marker: PhantomData,
+        }
+    }
+}
+
 impl<C: ec::Curve> PrivateKey<C> {
     /// Generate a random private key.
     pub fn generate() -> Self {

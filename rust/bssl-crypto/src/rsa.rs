@@ -60,6 +60,7 @@ use crate::{
     ForeignTypeRef, InvalidSignatureError,
 };
 use alloc::vec::Vec;
+use bssl_sys::RSA_up_ref;
 use core::ptr::null_mut;
 
 /// An RSA public key.
@@ -181,6 +182,16 @@ pub enum KeySize {
 
 /// An RSA private key.
 pub struct PrivateKey(*mut bssl_sys::RSA);
+
+impl Clone for PrivateKey {
+    fn clone(&self) -> Self {
+        // Safety:
+        // `self.0` is valid by construction and
+        // at this point we definitely own one reference to the object.
+        unsafe { RSA_up_ref(self.0) };
+        Self(self.0)
+    }
+}
 
 impl PrivateKey {
     /// Generate a fresh RSA private key of the given size.
