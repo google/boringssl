@@ -2845,6 +2845,7 @@ rust_bssl_crypto_sources = [
     "rust/bssl-crypto/src/scoped.rs",
     "rust/bssl-crypto/src/slhdsa.rs",
     "rust/bssl-crypto/src/test_helpers.rs",
+    "rust/bssl-crypto/src/tls12_prf.rs",
     "rust/bssl-crypto/src/x25519.rs",
 ]
 

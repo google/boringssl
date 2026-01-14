@@ -56,6 +56,7 @@ pub mod mldsa;
 pub mod mlkem;
 pub mod rsa;
 pub mod slhdsa;
+pub mod tls12_prf;
 pub mod x25519;
 
 mod scoped;
