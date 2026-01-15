@@ -63,12 +63,8 @@ bool RetryAsync(SSL *ssl, int ret) {
   }
 
   if (test_state->packeted_bio != nullptr &&
-      PacketedBioAdvanceClock(test_state->packeted_bio)) {
-    int timeout_ret = DTLSv1_handle_timeout(ssl);
-    if (timeout_ret >= 0) {
-      return true;
-    }
-    ssl_err = SSL_get_error(ssl, timeout_ret);
+      PacketedBioHasInterrupt(test_state->packeted_bio)) {
+    return PacketedBioHandleInterrupt(test_state->packeted_bio);
   }
 
   // See if we needed to read or write more. If so, allow one byte through on
@@ -99,19 +95,8 @@ bool RetryAsync(SSL *ssl, int ret) {
           fprintf(stderr, "-private-key-delay-ms requires DTLS.\n");
           return false;
         }
-        timeval *clock = PacketedBioGetClock(test_state->packeted_bio);
-        clock->tv_sec += config->private_key_delay_ms / 1000;
-        clock->tv_usec += (config->private_key_delay_ms % 1000) * 1000;
-        if (clock->tv_usec >= 1000000) {
-          clock->tv_usec -= 1000000;
-          clock->tv_sec++;
-        }
-        int timeout_ret = DTLSv1_handle_timeout(ssl);
-        if (timeout_ret < 0) {
-          if (SSL_get_error(ssl, timeout_ret) == SSL_ERROR_WANT_WRITE) {
-            AsyncBioAllowWrite(test_state->async_bio, 1);
-            return true;
-          }
+        if (!PacketedBioAdvanceClock(test_state->packeted_bio,
+                                     config->private_key_delay_ms * 1000)) {
           return false;
         }
       }

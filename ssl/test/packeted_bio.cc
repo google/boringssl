@@ -29,6 +29,7 @@
 #include <openssl/bio.h>
 #include <openssl/mem.h>
 #include <openssl/span.h>
+#include <openssl/ssl.h>
 
 #include "../../crypto/internal.h"
 
@@ -44,17 +45,11 @@ constexpr uint8_t kOpcodeMTU = 'M';
 constexpr uint8_t kOpcodeExpectNextTimeout = 'E';
 
 struct PacketedBio {
-  PacketedBio(timeval *clock_arg,
-              std::function<bool(timeval *)> get_timeout_arg,
-              std::function<bool(uint32_t)> set_mtu_arg)
-      : clock(clock_arg),
-        get_timeout(std::move(get_timeout_arg)),
-        set_mtu(std::move(set_mtu_arg)) {}
-
-  std::optional<timeval> timeout;
-  timeval *clock;
-  std::function<bool(timeval *)> get_timeout;
-  std::function<bool(uint32_t)> set_mtu;
+  PacketedBio(timeval *clock_arg, SSL *ssl_arg)
+      : clock(clock_arg), ssl(ssl_arg) {}
+  timeval *clock = nullptr;
+  SSL *ssl = nullptr;
+  std::function<bool(void)> interrupt;
 };
 
 static int PacketedBioMethodType() {
@@ -124,23 +119,21 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
 
   BIO_clear_retry_flags(bio);
 
-  for (;;) {
-    // Read the opcode.
-    uint8_t opcode;
-    int ret = ReadAll(next, bssl::Span(&opcode, 1));
-    if (ret <= 0) {
-      BIO_copy_next_retry(bio);
-      return ret;
-    }
+  if (data->interrupt) {
+    BIO_set_retry_read(bio);
+    return -1;
+  }
 
-    if (opcode == kOpcodeTimeout) {
-      // The caller is required to advance any pending timeouts before
-      // continuing.
-      if (data->timeout.has_value()) {
-        fprintf(stderr, "Unprocessed timeout!\n");
-        return -1;
-      }
+  // Read the opcode.
+  uint8_t opcode;
+  int ret = ReadAll(next, bssl::Span(&opcode, 1));
+  if (ret <= 0) {
+    BIO_copy_next_retry(bio);
+    return ret;
+  }
 
+  switch (opcode) {
+    case kOpcodeTimeout: {
       // Process the timeout.
       uint8_t buf[8];
       ret = ReadAll(next, buf);
@@ -150,10 +143,7 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
       }
       uint64_t timeout = CRYPTO_load_u64_be(buf);
       timeout /= 1000;  // Convert nanoseconds to microseconds.
-
-      data->timeout.emplace();
-      data->timeout->tv_sec = timeout / 1000000;
-      data->timeout->tv_usec = timeout % 1000000;
+      data->interrupt = [=] { return PacketedBioAdvanceClock(bio, timeout); };
 
       // Send an ACK to the peer.
       ret = BIO_write(next, &kOpcodeTimeoutAck, 1);
@@ -161,13 +151,11 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
         return ret;
       }
       assert(ret == 1);
-
-      // Signal to the caller to retry the read, after advancing the clock.
       BIO_set_retry_read(bio);
       return -1;
     }
 
-    if (opcode == kOpcodeMTU) {
+    case kOpcodeMTU: {
       uint8_t buf[4];
       ret = ReadAll(next, buf);
       if (ret <= 0) {
@@ -175,83 +163,87 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
         return ret;
       }
       uint32_t mtu = CRYPTO_load_u32_be(buf);
-      if (!data->set_mtu(mtu)) {
-        fprintf(stderr, "Error setting MTU\n");
-        return -1;
-      }
-      // Continue reading.
-      continue;
+      data->interrupt = [=]() -> bool { return SSL_set_mtu(data->ssl, mtu); };
+      BIO_set_retry_read(bio);
+      return -1;
     }
 
-    if (opcode == kOpcodeExpectNextTimeout) {
+    case kOpcodeExpectNextTimeout: {
       uint8_t buf[8];
       ret = ReadAll(next, buf);
       if (ret <= 0) {
         BIO_copy_next_retry(bio);
         return ret;
       }
-      uint64_t expected = CRYPTO_load_u64_be(buf);
-      timeval timeout;
-      bool has_timeout = data->get_timeout(&timeout);
-      if (expected == UINT64_MAX) {
-        if (has_timeout) {
-          fprintf(stderr,
-                  "Expected no timeout, but got %" PRIu64 ".%06" PRIu64 "s.\n",
-                  static_cast<uint64_t>(timeout.tv_sec),
-                  static_cast<uint64_t>(timeout.tv_usec));
-          return -1;
+      uint64_t expected_ns = CRYPTO_load_u64_be(buf);
+      data->interrupt = [=]() -> bool {
+        timeval timeout;
+        bool has_timeout = DTLSv1_get_timeout(data->ssl, &timeout);
+        if (expected_ns == UINT64_MAX) {
+          if (has_timeout) {
+            fprintf(stderr,
+                    "Expected no timeout, but got %" PRIu64 ".%06" PRIu64
+                    "s.\n",
+                    static_cast<uint64_t>(timeout.tv_sec),
+                    static_cast<uint64_t>(timeout.tv_usec));
+            return false;
+          }
+        } else {
+          // Convert nanoseconds to microseconds.
+          uint64_t expected_usec = expected_ns / 1000;
+          // Split into seconds and fractional part.
+          uint64_t expected_sec = expected_usec / 1000000;
+          expected_usec %= 1000000;
+          if (!has_timeout) {
+            fprintf(stderr,
+                    "Expected timeout of %" PRIu64 ".%06" PRIu64
+                    "s, but got none.\n",
+                    expected_sec, expected_usec);
+            return false;
+          }
+          if (static_cast<uint64_t>(timeout.tv_sec) != expected_sec ||
+              static_cast<uint64_t>(timeout.tv_usec) != expected_usec) {
+            fprintf(stderr,
+                    "Expected timeout of %" PRIu64 ".%06" PRIu64
+                    "s, but got %" PRIu64 ".%06" PRIu64 "s.\n",
+                    expected_sec, expected_usec,
+                    static_cast<uint64_t>(timeout.tv_sec),
+                    static_cast<uint64_t>(timeout.tv_usec));
+            return false;
+          }
         }
-      } else {
-        expected /= 1000;  // Convert nanoseconds to microseconds.
-        uint64_t expected_sec = expected / 1000000;
-        uint64_t expected_usec = expected % 1000000;
-        if (!has_timeout) {
-          fprintf(stderr,
-                  "Expected timeout of %" PRIu64 ".%06" PRIu64
-                  "s, but got none.\n",
-                  expected_sec, expected_usec);
-          return -1;
-        }
-        if (static_cast<uint64_t>(timeout.tv_sec) != expected_sec ||
-            static_cast<uint64_t>(timeout.tv_usec) != expected_usec) {
-          fprintf(stderr,
-                  "Expected timeout of %" PRIu64 ".%06" PRIu64
-                  "s, but got %" PRIu64 ".%06" PRIu64 "s.\n",
-                  expected_sec, expected_usec,
-                  static_cast<uint64_t>(timeout.tv_sec),
-                  static_cast<uint64_t>(timeout.tv_usec));
-          return -1;
-        }
-      }
-      // Continue reading.
-      continue;
+        return true;
+      };
+
+      BIO_set_retry_read(bio);
+      return -1;
     }
 
-    if (opcode != kOpcodePacket) {
+    case kOpcodePacket: {
+      // Read the length prefix.
+      uint8_t len_bytes[4];
+      ret = ReadAll(next, len_bytes);
+      if (ret <= 0) {
+        BIO_copy_next_retry(bio);
+        return ret;
+      }
+
+      std::vector<uint8_t> buf(CRYPTO_load_u32_be(len_bytes), 0);
+      ret = ReadAll(next, bssl::Span(buf));
+      if (ret <= 0) {
+        fprintf(stderr, "Packeted BIO was truncated\n");
+        return -1;
+      }
+
+      if (static_cast<size_t>(outl) > buf.size()) {
+        outl = static_cast<int>(buf.size());
+      }
+      OPENSSL_memcpy(out, buf.data(), outl);
+      return outl;
+    }
+    default:
       fprintf(stderr, "Unknown opcode, %u\n", opcode);
       return -1;
-    }
-
-    // Read the length prefix.
-    uint8_t len_bytes[4];
-    ret = ReadAll(next, len_bytes);
-    if (ret <= 0) {
-      BIO_copy_next_retry(bio);
-      return ret;
-    }
-
-    std::vector<uint8_t> buf(CRYPTO_load_u32_be(len_bytes), 0);
-    ret = ReadAll(next, bssl::Span(buf));
-    if (ret <= 0) {
-      fprintf(stderr, "Packeted BIO was truncated\n");
-      return -1;
-    }
-
-    if (static_cast<size_t>(outl) > buf.size()) {
-      outl = static_cast<int>(buf.size());
-    }
-    OPENSSL_memcpy(out, buf.data(), outl);
-    return outl;
   }
 }
 
@@ -300,41 +292,45 @@ static const BIO_METHOD *PacketedBioMethod() {
 
 }  // namespace
 
-bssl::UniquePtr<BIO> PacketedBioCreate(
-    timeval *clock, std::function<bool(timeval *)> get_timeout,
-    std::function<bool(uint32_t)> set_mtu) {
+bssl::UniquePtr<BIO> PacketedBioCreate(timeval *clock, SSL *ssl) {
   bssl::UniquePtr<BIO> bio(BIO_new(PacketedBioMethod()));
   if (!bio) {
     return nullptr;
   }
-  BIO_set_data(bio.get(), new PacketedBio(clock, std::move(get_timeout),
-                                          std::move(set_mtu)));
+  BIO_set_data(bio.get(), new PacketedBio(clock, ssl));
   BIO_set_init(bio.get(), 1);
   return bio;
 }
 
-bool PacketedBioAdvanceClock(BIO *bio) {
+bool PacketedBioHasInterrupt(BIO *bio) {
   PacketedBio *data = GetData(bio);
-  if (data == nullptr) {
-    return false;
-  }
-
-  if (!data->timeout.has_value()) {
-    return false;
-  }
-
-  data->clock->tv_usec += data->timeout->tv_usec;
-  data->clock->tv_sec += data->clock->tv_usec / 1000000;
-  data->clock->tv_usec %= 1000000;
-  data->clock->tv_sec += data->timeout->tv_sec;
-  data->timeout = std::nullopt;
-  return true;
+  return data != nullptr && data->interrupt;
 }
 
-timeval *PacketedBioGetClock(BIO *bio) {
+bool PacketedBioHandleInterrupt(BIO *bio) {
+  PacketedBio *data = GetData(bio);
+  if (data == nullptr || !data->interrupt) {
+    return false;
+  }
+  return std::exchange(data->interrupt, {})();
+}
+
+bool PacketedBioAdvanceClock(BIO *bio, uint64_t microseconds) {
   PacketedBio *data = GetData(bio);
   if (data == nullptr) {
-    return nullptr;
+    return false;
   }
-  return data->clock;
+
+  data->clock->tv_sec += microseconds / 1000000;
+  data->clock->tv_usec += microseconds % 1000000;
+  if (data->clock->tv_usec >= 1000000) {
+    data->clock->tv_usec -= 1000000;
+    data->clock->tv_sec++;
+  }
+
+  // If DTLSv1_handle_timeout returns 1 (successfully handled timer), 0 (no
+  // timers), or SSL_ERROR_WANT_WRITE (handled timeout but transport wasn't
+  // ready), retry the operation.
+  int ret = DTLSv1_handle_timeout(data->ssl);
+  return ret >= 0 || SSL_get_error(data->ssl, ret) == SSL_ERROR_WANT_WRITE;
 }
