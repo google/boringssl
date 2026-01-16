@@ -75,39 +75,17 @@ foreach(VAR CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_ASM_FLAGS)
          "${${VAR}_RELEASE}")
 endforeach()
 
-if(BORINGSSL_PREFIX AND BORINGSSL_PREFIX_SYMBOLS)
+if(BORINGSSL_PREFIX)
   if(FIPS AND NOT BUILD_SHARED_LIBS)
     # Symbol prefixing is currently incompatible with delocate.
     message(FATAL_ERROR "Cannot use BORINGSSL_PREFIX with FIPS and static libraries")
   endif()
-  require_go()
+
   add_definitions(-DBORINGSSL_PREFIX=${BORINGSSL_PREFIX})
+
   # CMake automatically connects include_directories to the NASM command-line,
   # but not add_definitions.
   set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DBORINGSSL_PREFIX=${BORINGSSL_PREFIX}")
-
-  # Use "symbol_prefix_include" to store generated header files
-  include_directories(${CMAKE_CURRENT_BINARY_DIR}/symbol_prefix_include)
-  add_custom_command(
-    OUTPUT symbol_prefix_include/boringssl_prefix_symbols.h
-           symbol_prefix_include/boringssl_prefix_symbols_asm.h
-           symbol_prefix_include/boringssl_prefix_symbols_nasm.inc
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/symbol_prefix_include
-    COMMAND ${GO_EXECUTABLE} run ${CMAKE_CURRENT_SOURCE_DIR}/util/make_prefix_headers.go -out ${CMAKE_CURRENT_BINARY_DIR}/symbol_prefix_include ${BORINGSSL_PREFIX_SYMBOLS}
-    DEPENDS util/make_prefix_headers.go
-            ${BORINGSSL_PREFIX_SYMBOLS})
-
-  # add_dependencies needs a target, not a file, so we add an intermediate
-  # target.
-  add_custom_target(
-    boringssl_prefix_symbols
-    DEPENDS symbol_prefix_include/boringssl_prefix_symbols.h
-            symbol_prefix_include/boringssl_prefix_symbols_asm.h
-            symbol_prefix_include/boringssl_prefix_symbols_nasm.inc)
-elseif(BORINGSSL_PREFIX OR BORINGSSL_PREFIX_SYMBOLS)
-  message(FATAL_ERROR "Must specify both or neither of BORINGSSL_PREFIX and BORINGSSL_PREFIX_SYMBOLS")
-else()
-  add_custom_target(boringssl_prefix_symbols)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -578,7 +556,6 @@ if(FIPS_DELOCATE)
   add_library(bcm_c_generated_asm STATIC ${BCM_SOURCES})
   # The C++ code in libcrypto shouldn't depend on libstdc++.
   target_compile_options(bcm_c_generated_asm PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${NO_CXX_RUNTIME_FLAGS}> "-S")
-  add_dependencies(bcm_c_generated_asm boringssl_prefix_symbols)
   target_include_directories(bcm_c_generated_asm PRIVATE ${PROJECT_SOURCE_DIR}/include)
   set_target_properties(bcm_c_generated_asm PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(CLANG)
@@ -638,7 +615,6 @@ elseif(FIPS_SHARED)
   add_library(bcm_library STATIC ${BCM_SOURCES} ${BCM_SOURCES_ASM_USED})
   # The C++ code in libcrypto shouldn't depend on libstdc++.
   target_compile_options(bcm_library PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${NO_CXX_RUNTIME_FLAGS}>)
-  add_dependencies(bcm_library boringssl_prefix_symbols)
   target_include_directories(bcm_library PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
   add_custom_command(
@@ -652,7 +628,6 @@ else()
   add_library(fipsmodule OBJECT ${BCM_SOURCES} ${BCM_SOURCES_ASM_USED})
   # The C++ code in libcrypto shouldn't depend on libstdc++.
   target_compile_options(fipsmodule PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${NO_CXX_RUNTIME_FLAGS}>)
-  add_dependencies(fipsmodule boringssl_prefix_symbols)
   target_include_directories(fipsmodule PRIVATE ${PROJECT_SOURCE_DIR}/include)
   set(CRYPTO_FIPS_OBJECTS $<TARGET_OBJECTS:fipsmodule>)
 endif()
@@ -682,7 +657,6 @@ if(FIPS_SHARED)
   )
 endif()
 
-add_dependencies(crypto boringssl_prefix_symbols)
 if(WIN32)
   target_link_libraries(crypto ws2_32)
 endif()

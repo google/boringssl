@@ -339,29 +339,33 @@ func addGeneratedHeader(targetsOut map[string]build.Target, header string) {
 
 // Construct a task to collect assembly global symbols into the file "gen/asm.syms".
 // This task should only run after all the `PerlAsmTask`s in `perlAsmTasks` complete.
-func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string) []*Task {
+func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string, targetsOut map[string]build.Target) []*Task {
 	var syms []string
 	var err error
-	buildIncludesOnce := func() {
+	buildHeadersOnce := func() {
 		syms, err = CollectAsmGlobals(allAsmSrcs)
 	}
 	var once sync.Once
+	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols_internal_c.h")
+	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols_internal_S.h")
+	addGeneratedHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_win_asm.inc")
+	addGeneratedHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc")
 	return []*Task{
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_c.inc", func() ([]byte, error) {
-			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsCInclude(syms), err
+		NewSimpleTask("include/openssl/prefix_symbols_internal_c.h", func() ([]byte, error) {
+			once.Do(buildHeadersOnce)
+			return BuildAsmGlobalsCHeader(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_S.inc", func() ([]byte, error) {
-			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsGasInclude(syms), err
+		NewSimpleTask("include/openssl/prefix_symbols_internal_S.h", func() ([]byte, error) {
+			once.Do(buildHeadersOnce)
+			return BuildAsmGlobalsGasHeader(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_asm.inc", func() ([]byte, error) {
-			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsNasmX86Include(syms), err
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_win_asm.inc", func() ([]byte, error) {
+			once.Do(buildHeadersOnce)
+			return BuildAsmGlobalsNasmX86Header(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_64_asm.inc", func() ([]byte, error) {
-			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsNasmX8664Include(syms), err
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc", func() ([]byte, error) {
+			once.Do(buildHeadersOnce)
+			return BuildAsmGlobalsNasmX8664Header(syms), err
 		}, perlAsmTasks...),
 	}
 }

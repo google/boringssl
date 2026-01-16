@@ -292,7 +292,7 @@ ___
     if ($win32) {
         print <<___ unless $masm;
 \%ifdef BORINGSSL_PREFIX
-\%include "boringssl_prefix_symbols_nasm.inc"
+\%include "@{[ '../' x ($0 =~ m![/\\]!g) ]}boringssl_prefix_symbols_internal_x86_win_asm.inc"
 \%endif
 \%ifidn __OUTPUT_FORMAT__, win32
 ___

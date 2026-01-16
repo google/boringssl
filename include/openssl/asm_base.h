@@ -40,7 +40,7 @@
 #if defined(__ASSEMBLER__)
 
 #if defined(BORINGSSL_PREFIX)
-#include <boringssl_prefix_symbols_asm.h>
+#include <openssl/prefix_symbols_internal_S.h>
 #endif
 
 #if defined(__ELF__)

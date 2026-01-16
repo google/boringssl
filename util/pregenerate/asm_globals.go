@@ -75,24 +75,41 @@ func CollectAsmGlobals(srcs []string) ([]string, error) {
 	return ret, nil
 }
 
-// BuildAsmGlobalsCInclude builds a symbol prefixing include for C.
-func BuildAsmGlobalsCInclude(syms []string) []byte {
+// BuildAsmGlobalsCHeader builds a symbol prefixing include for C.
+func BuildAsmGlobalsCHeader(syms []string) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, "//")
-	output.WriteString("\n")
+	output.WriteString(`
+#ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H
+#define OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H
+
+#include <openssl/prefix_symbols.h>
+
+
+`)
 	// Not using redefine_extname here, as some asm symbols are conditionally inline functions
 	// (on platforms with no asm implementation).
 	for _, sym := range syms {
 		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
+	output.WriteString(`
+#endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H
+`)
 	return output.Bytes()
 }
 
-// BuildAsmGlobalsGasInclude builds a symbol prefixing include for the GNU Assembler (gas).
-func BuildAsmGlobalsGasInclude(syms []string) []byte {
+// BuildAsmGlobalsGasHeader builds a symbol prefixing include for the GNU Assembler (gas).
+func BuildAsmGlobalsGasHeader(syms []string) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, "//")
-	output.WriteString("\n")
+	output.WriteString(`
+#ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_S_H
+#define OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_S_H
+
+#include <openssl/prefix_symbols.h>
+
+
+`)
 	fmt.Fprintf(&output, "#if defined(__APPLE__)\n")
 	output.WriteString("\n")
 	for _, sym := range syms {
@@ -106,27 +123,46 @@ func BuildAsmGlobalsGasInclude(syms []string) []byte {
 	}
 	output.WriteString("\n")
 	fmt.Fprintf(&output, "#endif  // __APPLE__\n")
+	output.WriteString(`
+#endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_S_H
+`)
 	return output.Bytes()
 }
 
-// BuildAsmGlobalsNasmX86Include builds a symbol prefixing include for the Netwide Assembler (nasm).
-func BuildAsmGlobalsNasmX86Include(syms []string) []byte {
+// BuildAsmGlobalsNasmX86Header builds a symbol prefixing include for the Netwide Assembler (nasm).
+func BuildAsmGlobalsNasmX86Header(syms []string) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, ";")
-	output.WriteString("\n")
+	output.WriteString(`
+%ifndef OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
+%define OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
+
+
+`)
 	for _, sym := range syms {
 		fmt.Fprintf(&output, "%%define _%s _ %%+ BORINGSSL_PREFIX %%+ _%s\n", sym, sym)
 	}
+	output.WriteString(`
+%endif  ; OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
+`)
 	return output.Bytes()
 }
 
-// BuildAsmGlobalsNasmInclude builds a symbol prefixing include for the Netwide Assembler (nasm).
-func BuildAsmGlobalsNasmX8664Include(syms []string) []byte {
+// BuildAsmGlobalsNasmHeader builds a symbol prefixing include for the Netwide Assembler (nasm).
+func BuildAsmGlobalsNasmX8664Header(syms []string) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, ";")
-	output.WriteString("\n")
+	output.WriteString(`
+%ifndef OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_64_WIN_ASM_H
+%define OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_64_WIN_ASM_H
+
+
+`)
 	for _, sym := range syms {
 		fmt.Fprintf(&output, "%%define %s BORINGSSL_PREFIX %%+ _%s\n", sym, sym)
 	}
+	output.WriteString(`
+%endif  ; OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_64_WIN_ASM_H
+`)
 	return output.Bytes()
 }

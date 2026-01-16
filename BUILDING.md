@@ -119,25 +119,15 @@ supported.
 
 BoringSSL's build system has experimental support for adding a custom prefix to
 all symbols. This can be useful when linking multiple versions of BoringSSL in
-the same project to avoid symbol conflicts. Symbol prefixing requires the most
-recent stable version of [Go](https://go.dev/).
+the same project to avoid symbol conflicts.
 
 In order to build with prefixed symbols, the `BORINGSSL_PREFIX` CMake variable
-should specify the prefix to add to all symbols, and the
-`BORINGSSL_PREFIX_SYMBOLS` CMake variable should specify the path to a file
-which contains a list of symbols which should be prefixed (one per line;
-comments are supported with `#`). In other words, `cmake -B build
--DBORINGSSL_PREFIX=MY_CUSTOM_PREFIX
--DBORINGSSL_PREFIX_SYMBOLS=/path/to/symbols.txt` will configure the build to add
-the prefix `MY_CUSTOM_PREFIX` to all of the symbols listed in
-`/path/to/symbols.txt`.
+should specify the prefix to add to all symbols. In other words, `cmake -B build
+-DBORINGSSL_PREFIX=MY_CUSTOM_PREFIX` will configure the build to add
+the prefix `MY_CUSTOM_PREFIX` to all of the symbols defined by the library.
 
-It is currently the caller's responsibility to create and maintain the list of
-symbols to be prefixed. Alternatively, `util/read_symbols.go` reads the list of
-exported symbols from a `.a` file, and can be used in a build script to generate
-the symbol list on the fly (by building without prefixing, using
-`read_symbols.go` to construct a symbol list, and then building again with
-prefixing).
+Note that symbol prefixing cannot be used with the combination of FIPS and
+static libraries.
 
 This mechanism is under development and may change over time. Please contact the
 BoringSSL maintainers if making use of it.

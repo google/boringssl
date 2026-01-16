@@ -15,6 +15,7 @@
 #ifndef OPENSSL_HEADER_CRYPTO_INTERNAL_H
 #define OPENSSL_HEADER_CRYPTO_INTERNAL_H
 
+#include <openssl/base.h>
 #include <openssl/crypto.h>
 #include <openssl/ex_data.h>
 #include <openssl/stack.h>
@@ -56,6 +57,10 @@
 
 #if defined(_M_X64) || defined(_M_IX86)
 #include "intrin.h"
+#endif
+
+#if defined(BORINGSSL_PREFIX)
+#include <openssl/prefix_symbols_internal_c.h>
 #endif
 
 

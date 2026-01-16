@@ -51,7 +51,7 @@ add_custom_command(
           # https://doc.rust-lang.org/nightly/rustc/platform-support.html
           --target=${RUST_BINDINGS}
   COMMAND_EXPAND_LISTS
-  DEPENDS wrapper.h boringssl_prefix_symbols
+  DEPENDS wrapper.h
   DEPFILE ${CMAKE_CURRENT_BINARY_DIR}/${wrapper_rs}.d
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
