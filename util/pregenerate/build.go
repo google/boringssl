@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"boringssl.googlesource.com/boringssl.git/util/build"
 )
@@ -330,26 +331,33 @@ func MakeBuildFiles(targets map[string]build.Target) []Task {
 
 // Construct a task to collect assembly global symbols into the file "gen/asm.syms".
 // This task should only run after all the `PerlAsmTask`s in `perlAsmTasks` complete.
-func MakeCollectAsmGlobalTask(perlAsmTasks []WaitableTask, allAsmSrcs []string) Task {
-	return NewSimpleTask("gen/asm.syms", func() ([]byte, error) {
+func MakeCollectAsmGlobalTasks(perlAsmTasks []WaitableTask, allAsmSrcs []string) []Task {
+	var syms []string
+	var err error
+	buildIncludesOnce := func() {
 		for _, t := range perlAsmTasks {
-			err := t.Wait()
+			err = t.Wait()
 			if err != nil {
-				return nil, err
+				return
 			}
 		}
-
-		syms, err := CollectAsmGlobals(allAsmSrcs)
-		if err != nil {
-			return nil, err
-		}
-		var out []byte
-		for _, sym := range syms {
-			out = append(out, []byte(sym)...)
-			out = append(out, '\n')
-		}
-		return out, nil
-	})
+		syms, err = CollectAsmGlobals(allAsmSrcs)
+	}
+	var once sync.Once
+	return []Task{
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_c.inc", func() ([]byte, error) {
+			once.Do(buildIncludesOnce)
+			return BuildAsmGlobalsCHeader(syms), err
+		}),
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_S.inc", func() ([]byte, error) {
+			once.Do(buildIncludesOnce)
+			return BuildAsmGlobalsGasHeader(syms), err
+		}),
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_asm.inc", func() ([]byte, error) {
+			once.Do(buildIncludesOnce)
+			return BuildAsmGlobalsNasmHeader(syms), err
+		}),
+	}
 }
 
 // MakePrefixingIncludes returns the tasks to generate the header files for symbol prefixing.
