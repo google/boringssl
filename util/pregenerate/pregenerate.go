@@ -149,11 +149,26 @@ func run() error {
 		var filtered []Task
 		for _, t := range tasks {
 			dst := t.Destination()
+			matched := false
 			for _, arg := range args {
 				if strings.Contains(dst, arg) {
-					filtered = append(filtered, t)
+					matched = true
 					break
 				}
+			}
+			if matched {
+				filtered = append(filtered, t)
+			} else if wt, ok := t.(WaitableTask); ok {
+				// A filtered-out task can be assumed to have finished _successfully_.
+				// After all, usually one can assume CI has already run it
+				// and compared its output.
+				//
+				// In case the output file does not exist,
+				// the dependent task will sure notice and fail.
+				//
+				// This allows filtering out tasks one e.g. can't currently run
+				// while still running other tasks that depend on them.
+				wt.Close(nil)
 			}
 		}
 		tasks = filtered

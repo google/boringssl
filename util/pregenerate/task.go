@@ -39,6 +39,9 @@ type WaitableTask interface {
 
 	// Wait waits for the task to finish, and returns its status.
 	Wait() error
+
+	// Close closes this task. Waiting on it will return err.
+	Close(err error)
 }
 
 // WaitableTaskImpl is an implementation of a waitable task.
@@ -58,8 +61,7 @@ func (t *WaitableTaskImpl) Run() (out []byte, err error) {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("panic caught: %v", p)
 		}
-		t.Err = err
-		close(t.FinishedC)
+		t.Close(err)
 	}()
 	return t.Task.Run()
 }
@@ -68,6 +70,12 @@ func (t *WaitableTaskImpl) Run() (out []byte, err error) {
 func (t *WaitableTaskImpl) Wait() error {
 	<-t.FinishedC
 	return t.Err
+}
+
+// Close closes the task.
+func (t *WaitableTaskImpl) Close(err error) {
+	t.Err = err
+	close(t.FinishedC)
 }
 
 type SimpleTask struct {
