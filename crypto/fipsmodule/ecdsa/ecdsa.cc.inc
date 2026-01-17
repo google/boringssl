@@ -123,14 +123,7 @@ static int ecdsa_sign_impl(const EC_GROUP *group, int *out_retry, uint8_t *sig,
                            const uint8_t *digest, size_t digest_len) {
   *out_retry = 0;
 
-  // Check that the size of the group order is FIPS compliant (FIPS 186-4
-  // B.5.2).
   const BIGNUM *order = EC_GROUP_get0_order(group);
-  if (BN_num_bits(order) < 160) {
-    OPENSSL_PUT_ERROR(EC, EC_R_INVALID_GROUP_ORDER);
-    return 0;
-  }
-
   size_t sig_len = 2 * BN_num_bytes(order);
   if (sig_len > max_sig_len) {
     OPENSSL_PUT_ERROR(EC, EC_R_BUFFER_TOO_SMALL);
@@ -230,6 +223,15 @@ int bssl::ecdsa_sign_fixed(const uint8_t *digest, size_t digest_len,
   }
   const BIGNUM *order = EC_GROUP_get0_order(group);
   const EC_SCALAR *priv_key = &eckey->priv_key->scalar;
+
+  // Generate the ECDSA per-message secret number by rejection sampling. This
+  // function implements FIPS 186-5, A.3.2, repeating the process on failure.
+
+  // Check the group order is large enough. See step 1 of FIPS 186-5, A.3.2.
+  if (BN_num_bits(order) < 224) {
+    OPENSSL_PUT_ERROR(EC, EC_R_INVALID_GROUP_ORDER);
+    return 0;
+  }
 
   // Pass a SHA512 hash of the private key and digest as additional data
   // into the RBG. This is a hardening measure against entropy failure.

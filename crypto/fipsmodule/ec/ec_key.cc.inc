@@ -430,8 +430,11 @@ int EC_KEY_generate_key(EC_KEY *key) {
     return 0;
   }
 
-  // Check that the group order is FIPS compliant (FIPS 186-4 B.4.2).
-  if (EC_GROUP_order_bits(key->group) < 160) {
+  // Generate an ECDSA key pair via rejection sampling. This function implements
+  // FIPS 186-5, A.2.2, repeating the process on failure.
+
+  // Check the group order is large enough. See step 1 of FIPS 186-5, A.2.2.
+  if (EC_GROUP_order_bits(key->group) < 224) {
     OPENSSL_PUT_ERROR(EC, EC_R_INVALID_GROUP_ORDER);
     return 0;
   }
@@ -440,7 +443,6 @@ int EC_KEY_generate_key(EC_KEY *key) {
   EC_WRAPPED_SCALAR *priv_key = ec_wrapped_scalar_new(key->group);
   EC_POINT *pub_key = EC_POINT_new(key->group);
   if (priv_key == nullptr || pub_key == nullptr ||
-      // Generate the private key by testing candidates (FIPS 186-4 B.4.2).
       !ec_random_nonzero_scalar(key->group, &priv_key->scalar,
                                 kDefaultAdditionalData) ||
       !ec_point_mul_scalar_base(key->group, &pub_key->raw, &priv_key->scalar)) {
