@@ -272,7 +272,7 @@ static int probable_prime_dh_safe(BIGNUM *rnd, int bits, const BIGNUM *add,
 
 BN_GENCB *BN_GENCB_new() { return NewZeroed<BN_GENCB>(); }
 
-void BN_GENCB_free(BN_GENCB *callback) { OPENSSL_free(callback); }
+void BN_GENCB_free(BN_GENCB *callback) { Delete(callback); }
 
 void BN_GENCB_set(BN_GENCB *callback,
                   int (*f)(int event, int n, struct bn_gencb_st *), void *arg) {

@@ -56,7 +56,7 @@ int EVP_CIPHER_CTX_cleanup(EVP_CIPHER_CTX *c) {
 void EVP_CIPHER_CTX_free(EVP_CIPHER_CTX *ctx) {
   if (ctx) {
     EVP_CIPHER_CTX_cleanup(ctx);
-    OPENSSL_free(ctx);
+    Delete(ctx);
   }
 }
 

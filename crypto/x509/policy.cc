@@ -100,7 +100,7 @@ static void x509_policy_node_free(X509_POLICY_NODE *node) {
   if (node != nullptr) {
     ASN1_OBJECT_free(node->policy);
     sk_ASN1_OBJECT_pop_free(node->parent_policies, ASN1_OBJECT_free);
-    OPENSSL_free(node);
+    Delete(node);
   }
 }
 
@@ -127,7 +127,7 @@ static int x509_policy_node_cmp(const X509_POLICY_NODE *const *a,
 static void x509_policy_level_free(X509_POLICY_LEVEL *level) {
   if (level != nullptr) {
     sk_X509_POLICY_NODE_pop_free(level->nodes, x509_policy_node_free);
-    OPENSSL_free(level);
+    Delete(level);
   }
 }
 

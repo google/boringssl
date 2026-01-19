@@ -37,7 +37,7 @@ ENGINE *ENGINE_new() { return NewZeroed<ENGINE>(); }
 
 int ENGINE_free(ENGINE *engine) {
   // Methods are currently required to be static so are not unref'ed.
-  OPENSSL_free(engine);
+  Delete(engine);
   return 1;
 }
 

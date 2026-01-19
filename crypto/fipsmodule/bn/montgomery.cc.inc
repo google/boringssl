@@ -55,7 +55,7 @@ void BN_MONT_CTX_free(BN_MONT_CTX *mont) {
     return;
   }
   bn_mont_ctx_cleanup(mont);
-  OPENSSL_free(mont);
+  Delete(mont);
 }
 
 BN_MONT_CTX *BN_MONT_CTX_copy(BN_MONT_CTX *to, const BN_MONT_CTX *from) {

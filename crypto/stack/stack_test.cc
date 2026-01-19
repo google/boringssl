@@ -35,7 +35,7 @@ BSSL_NAMESPACE_BEGIN
 // Define a custom stack type for testing.
 using TEST_INT = int;
 
-static void TEST_INT_free(TEST_INT *x) { OPENSSL_free(x); }
+static void TEST_INT_free(TEST_INT *x) { Delete(x); }
 
 BORINGSSL_MAKE_DELETER(TEST_INT, TEST_INT_free)
 

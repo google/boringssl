@@ -62,7 +62,7 @@ OPENSSL_STACK *OPENSSL_sk_new(OPENSSL_sk_cmp_func comp) {
   return ret;
 
 err:
-  OPENSSL_free(ret);
+  Delete(ret);
   return nullptr;
 }
 
@@ -103,7 +103,7 @@ void OPENSSL_sk_free(OPENSSL_STACK *sk) {
     return;
   }
   OPENSSL_free(sk->data);
-  OPENSSL_free(sk);
+  Delete(sk);
 }
 
 void OPENSSL_sk_pop_free_ex(OPENSSL_STACK *sk,

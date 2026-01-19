@@ -307,7 +307,7 @@ void SPAKE2_CTX_free(SPAKE2_CTX *ctx) {
 
   OPENSSL_free(ctx->my_name);
   OPENSSL_free(ctx->their_name);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 // left_shift_3 sets |n| to |n|*8, where |n| is represented in little-endian

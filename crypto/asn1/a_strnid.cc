@@ -194,7 +194,7 @@ int ASN1_STRING_TABLE_add(int nid, long minsize, long maxsize,
   tbl->mask = mask;
   ASN1_STRING_TABLE *old_tbl;
   if (!lh_ASN1_STRING_TABLE_insert(string_tables, &old_tbl, tbl)) {
-    OPENSSL_free(tbl);
+    Delete(tbl);
     goto err;
   }
   assert(old_tbl == nullptr);

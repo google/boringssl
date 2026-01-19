@@ -175,7 +175,7 @@ void ECDSA_SIG_free(ECDSA_SIG *sig) {
 
   BN_free(sig->r);
   BN_free(sig->s);
-  OPENSSL_free(sig);
+  Delete(sig);
 }
 
 const BIGNUM *ECDSA_SIG_get0_r(const ECDSA_SIG *sig) { return sig->r; }

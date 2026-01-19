@@ -314,7 +314,7 @@ void ASN1_STRING_free(ASN1_STRING *str) {
     return;
   }
   asn1_string_cleanup(str);
-  OPENSSL_free(str);
+  Delete(str);
 }
 
 int ASN1_STRING_cmp(const ASN1_STRING *a, const ASN1_STRING *b) {

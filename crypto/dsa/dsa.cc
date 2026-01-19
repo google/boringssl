@@ -79,7 +79,7 @@ void DSA_free(DSA *dsa) {
   BN_MONT_CTX_free(dsa->method_mont_p);
   BN_MONT_CTX_free(dsa->method_mont_q);
   CRYPTO_MUTEX_cleanup(&dsa->method_mont_lock);
-  OPENSSL_free(dsa);
+  Delete(dsa);
 }
 
 int DSA_up_ref(DSA *dsa) {
@@ -489,7 +489,7 @@ void DSA_SIG_free(DSA_SIG *sig) {
 
   BN_free(sig->r);
   BN_free(sig->s);
-  OPENSSL_free(sig);
+  Delete(sig);
 }
 
 void DSA_SIG_get0(const DSA_SIG *sig, const BIGNUM **out_r,

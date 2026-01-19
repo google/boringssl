@@ -32,7 +32,7 @@ void BUF_MEM_free(BUF_MEM *buf) {
     return;
   }
   OPENSSL_free(buf->data);
-  OPENSSL_free(buf);
+  Delete(buf);
 }
 
 int BUF_MEM_reserve(BUF_MEM *buf, size_t cap) {

@@ -78,7 +78,7 @@ void EVP_MD_CTX_free(EVP_MD_CTX *ctx) {
   }
 
   EVP_MD_CTX_cleanup(ctx);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 void EVP_MD_CTX_destroy(EVP_MD_CTX *ctx) { EVP_MD_CTX_free(ctx); }

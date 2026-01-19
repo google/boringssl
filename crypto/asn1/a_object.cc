@@ -168,7 +168,7 @@ void ASN1_OBJECT_free(ASN1_OBJECT *a) {
     a->length = 0;
   }
   if (a->flags & ASN1_OBJECT_FLAG_DYNAMIC) {
-    OPENSSL_free(a);
+    Delete(a);
   }
 }
 

@@ -57,7 +57,7 @@ void X509_NAME_ENTRY_free(X509_NAME_ENTRY *entry) {
   if (entry != nullptr) {
     ASN1_OBJECT_free(entry->object);
     asn1_string_cleanup(&entry->value);
-    OPENSSL_free(entry);
+    Delete(entry);
   }
 }
 
@@ -126,7 +126,7 @@ static void x509_name_cache_free(X509_NAME_CACHE *cache) {
   if (cache != nullptr) {
     OPENSSL_free(cache->canon);
     OPENSSL_free(cache->der);
-    OPENSSL_free(cache);
+    Delete(cache);
   }
 }
 
@@ -146,7 +146,7 @@ X509_NAME *X509_NAME_new() { return NewZeroed<X509Name>(); }
 void X509_NAME_free(X509_NAME *name) {
   if (name != nullptr) {
     x509_name_cleanup(name);
-    OPENSSL_free(name);
+    Delete(FromOpaque(name));
   }
 }
 

@@ -165,7 +165,7 @@ int X509V3_EXT_add_alias(int nid_to, int nid_from) {
   *tmpext = *ext;
   tmpext->ext_nid = nid_to;
   if (!X509V3_EXT_add(tmpext)) {
-    OPENSSL_free(tmpext);
+    Delete(tmpext);
     return 0;
   }
   return 1;

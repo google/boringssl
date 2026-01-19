@@ -86,7 +86,7 @@ void HMAC_CTX_free(HMAC_CTX *ctx) {
   }
 
   HMAC_CTX_cleanup(ctx);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,

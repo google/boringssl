@@ -62,13 +62,13 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^__cxa_.*`),                      // libc++abi
 	regexp.MustCompile(`^__dynamic_cast$`),               // libc++abi
 	regexp.MustCompile(`^__emutls_get_address$`),         // emulated TLS
-	regexp.MustCompile(`^__g\w+_personality_`),           // unwinding
+	regexp.MustCompile(`^__g\w+_personality_.*`),         // unwinding
 	regexp.MustCompile(`^__llvm_fs_discriminator__$`),    // FS-AutoFDO
 	regexp.MustCompile(`^__msan_.*`),                     // MemorySanitizer
 
 	// Symbols on Windows.
 	regexp.MustCompile(`.*<lambda.*`),                                   // Lambda classes
-	regexp.MustCompile(`.*@std(@.*)?`),                                  // std::
+	regexp.MustCompile(`.*@std(@.*)?$`),                                 // std::
 	regexp.MustCompile(`^(.*\?\?)?__local_stdio_printf_options(@.*)?$`), // stdio
 	regexp.MustCompile(`^(.*\?\?)?gai_strerrorA(@.*)?$`),                // gai_strerrorA()
 	regexp.MustCompile(`^RtlSecureZeroMemory$`),                         // RtlSecureZeroMemory()

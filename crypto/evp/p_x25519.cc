@@ -37,7 +37,8 @@ struct X25519_KEY {
 extern const EVP_PKEY_ASN1_METHOD x25519_asn1_meth;
 
 static void x25519_free(EVP_PKEY *pkey) {
-  OPENSSL_free(pkey->pkey);
+  X25519_KEY *key = reinterpret_cast<X25519_KEY *>(pkey->pkey);
+  OPENSSL_free(key);
   pkey->pkey = nullptr;
 }
 

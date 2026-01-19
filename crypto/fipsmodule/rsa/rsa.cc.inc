@@ -232,7 +232,7 @@ void RSA_free(RSA *rsa) {
   BN_free(rsa->iqmp);
   rsa_invalidate_key(rsa);
   CRYPTO_MUTEX_cleanup(&rsa->lock);
-  OPENSSL_free(rsa);
+  Delete(rsa);
 }
 
 int RSA_up_ref(RSA *rsa) {

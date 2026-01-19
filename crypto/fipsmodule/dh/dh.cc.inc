@@ -60,7 +60,7 @@ void DH_free(DH *dh) {
   BN_clear_free(dh->priv_key);
   CRYPTO_MUTEX_cleanup(&dh->method_mont_p_lock);
 
-  OPENSSL_free(dh);
+  Delete(dh);
 }
 
 unsigned DH_bits(const DH *dh) { return BN_num_bits(dh->p); }

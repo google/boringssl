@@ -64,7 +64,7 @@ void EVP_AEAD_CTX_free(EVP_AEAD_CTX *ctx) {
     return;
   }
   EVP_AEAD_CTX_cleanup(ctx);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 int EVP_AEAD_CTX_init(EVP_AEAD_CTX *ctx, const EVP_AEAD *aead,

@@ -54,7 +54,7 @@ CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_new() {
 
   pool->bufs = lh_CRYPTO_BUFFER_new(CRYPTO_BUFFER_hash, CRYPTO_BUFFER_cmp);
   if (pool->bufs == nullptr) {
-    OPENSSL_free(pool);
+    Delete(pool);
     return nullptr;
   }
 
@@ -77,14 +77,14 @@ void CRYPTO_BUFFER_POOL_free(CRYPTO_BUFFER_POOL *pool) {
 
   lh_CRYPTO_BUFFER_free(pool->bufs);
   CRYPTO_MUTEX_cleanup(&pool->lock);
-  OPENSSL_free(pool);
+  Delete(pool);
 }
 
 static void crypto_buffer_free_object(CryptoBuffer *buf) {
   if (!buf->data_is_static) {
     OPENSSL_free(buf->data);
   }
-  OPENSSL_free(buf);
+  Delete(buf);
 }
 
 static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
@@ -125,7 +125,7 @@ static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
   } else {
     buf->data = reinterpret_cast<uint8_t *>(OPENSSL_memdup(data, len));
     if (len != 0 && buf->data == nullptr) {
-      OPENSSL_free(buf);
+      Delete(buf);
       return nullptr;
     }
   }
@@ -182,7 +182,7 @@ CRYPTO_BUFFER *CRYPTO_BUFFER_alloc(uint8_t **out_data, size_t len) {
 
   buf->data = reinterpret_cast<uint8_t *>(OPENSSL_malloc(len));
   if (len != 0 && buf->data == nullptr) {
-    OPENSSL_free(buf);
+    Delete(buf);
     return nullptr;
   }
   buf->len = len;

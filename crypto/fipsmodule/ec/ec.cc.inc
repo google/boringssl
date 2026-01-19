@@ -295,7 +295,7 @@ void EC_GROUP_free(EC_GROUP *group) {
 
   bn_mont_ctx_cleanup(&group->order);
   bn_mont_ctx_cleanup(&group->field);
-  OPENSSL_free(group);
+  Delete(group);
 }
 
 EC_GROUP *EC_GROUP_dup(const EC_GROUP *a) {
@@ -428,7 +428,7 @@ static void ec_point_free(EC_POINT *point, int free_group) {
   if (free_group) {
     EC_GROUP_free(point->group);
   }
-  OPENSSL_free(point);
+  Delete(point);
 }
 
 void EC_POINT_free(EC_POINT *point) {

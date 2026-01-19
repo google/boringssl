@@ -45,7 +45,7 @@ BIO *BIO_new(const BIO_METHOD *method) {
   CRYPTO_new_ex_data(&ret->ex_data);
 
   if (method->create != nullptr && !method->create(ret)) {
-    OPENSSL_free(ret);
+    Delete(ret);
     return nullptr;
   }
 
@@ -67,7 +67,7 @@ int BIO_free(BIO *bio) {
     }
 
     CRYPTO_free_ex_data(&g_ex_data_class, &bio->ex_data);
-    OPENSSL_free(bio);
+    Delete(bio);
   }
   return 1;
 }
@@ -598,7 +598,7 @@ BIO_METHOD *BIO_meth_new(int type, const char *name) {
   return method;
 }
 
-void BIO_meth_free(BIO_METHOD *method) { OPENSSL_free(method); }
+void BIO_meth_free(BIO_METHOD *method) { Delete(method); }
 
 int BIO_meth_set_create(BIO_METHOD *method, int (*create_func)(BIO *)) {
   method->create = create_func;

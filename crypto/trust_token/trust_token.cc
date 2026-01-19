@@ -120,7 +120,7 @@ const TRUST_TOKEN_METHOD *TRUST_TOKEN_pst_v1_pmb() {
 
 
 void bssl::TRUST_TOKEN_PRETOKEN_free(TRUST_TOKEN_PRETOKEN *pretoken) {
-  OPENSSL_free(pretoken);
+  Delete(pretoken);
 }
 
 TRUST_TOKEN *TRUST_TOKEN_new(const uint8_t *data, size_t len) {
@@ -130,7 +130,7 @@ TRUST_TOKEN *TRUST_TOKEN_new(const uint8_t *data, size_t len) {
   }
   ret->data = reinterpret_cast<uint8_t *>(OPENSSL_memdup(data, len));
   if (len != 0 && ret->data == nullptr) {
-    OPENSSL_free(ret);
+    Delete(ret);
     return nullptr;
   }
   ret->len = len;
@@ -142,7 +142,7 @@ void TRUST_TOKEN_free(TRUST_TOKEN *token) {
     return;
   }
   OPENSSL_free(token->data);
-  OPENSSL_free(token);
+  Delete(token);
 }
 
 int TRUST_TOKEN_generate_key(const TRUST_TOKEN_METHOD *method,
@@ -225,7 +225,7 @@ void TRUST_TOKEN_CLIENT_free(TRUST_TOKEN_CLIENT *ctx) {
   }
   EVP_PKEY_free(ctx->srr_key);
   sk_TRUST_TOKEN_PRETOKEN_pop_free(ctx->pretokens, TRUST_TOKEN_PRETOKEN_free);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 static TRUST_TOKEN_PRETOKEN *dup_pretoken(const TRUST_TOKEN_PRETOKEN *in) {
@@ -489,7 +489,7 @@ void TRUST_TOKEN_ISSUER_free(TRUST_TOKEN_ISSUER *ctx) {
   }
   EVP_PKEY_free(ctx->srr_key);
   OPENSSL_free(ctx->metadata_key);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 int TRUST_TOKEN_ISSUER_add_key(TRUST_TOKEN_ISSUER *ctx, const uint8_t *key,

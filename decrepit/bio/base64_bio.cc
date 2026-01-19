@@ -68,7 +68,8 @@ static int b64_free(BIO *bio) {
   if (bio == nullptr) {
     return 0;
   }
-  OPENSSL_free(bio->ptr);
+  BIO_B64_CTX *ctx = (BIO_B64_CTX *)bio->ptr;
+  Delete(ctx);
   bio->ptr = nullptr;
   bio->init = 0;
   bio->flags = 0;

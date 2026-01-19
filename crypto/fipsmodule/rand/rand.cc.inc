@@ -140,7 +140,7 @@ static void rand_thread_state_free(void *state_in) {
   CTR_DRBG_clear(&state->drbg);
 #endif
 
-  OPENSSL_free(state);
+  Delete(state);
 }
 
 #if defined(OPENSSL_X86_64) && !defined(OPENSSL_NO_ASM) && \

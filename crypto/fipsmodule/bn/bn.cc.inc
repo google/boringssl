@@ -60,7 +60,7 @@ void BN_free(BIGNUM *bn) {
   }
 
   if (bn->flags & BN_FLG_MALLOCED) {
-    OPENSSL_free(bn);
+    Delete(bn);
   } else {
     bn->d = nullptr;
   }

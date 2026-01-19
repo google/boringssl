@@ -72,7 +72,7 @@ _LHASH *OPENSSL_lh_new(lhash_hash_func hash, lhash_cmp_func comp) {
   ret->buckets = reinterpret_cast<LHASH_ITEM **>(
       OPENSSL_calloc(ret->num_buckets, sizeof(LHASH_ITEM *)));
   if (ret->buckets == nullptr) {
-    OPENSSL_free(ret);
+    Delete(ret);
     return nullptr;
   }
 
@@ -90,12 +90,12 @@ void OPENSSL_lh_free(_LHASH *lh) {
     LHASH_ITEM *next;
     for (LHASH_ITEM *n = lh->buckets[i]; n != nullptr; n = next) {
       next = n->next;
-      OPENSSL_free(n);
+      Delete(n);
     }
   }
 
   OPENSSL_free(lh->buckets);
-  OPENSSL_free(lh);
+  Delete(lh);
 }
 
 size_t OPENSSL_lh_num_items(const _LHASH *lh) { return lh->num_items; }
@@ -273,7 +273,7 @@ void *OPENSSL_lh_delete(_LHASH *lh, const void *data,
   item = *next_ptr;
   *next_ptr = item->next;
   ret = reinterpret_cast<LHASH_ITEM *>(item->data);
-  OPENSSL_free(item);
+  Delete(item);
 
   lh->num_items--;
   lh_maybe_resize(lh);

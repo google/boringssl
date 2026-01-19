@@ -51,7 +51,7 @@ static X509_LOOKUP *X509_LOOKUP_new(const X509_LOOKUP_METHOD *method,
   ret->method = method;
   ret->store_ctx = store;
   if (method->new_item != nullptr && !method->new_item(ret)) {
-    OPENSSL_free(ret);
+    Delete(ret);
     return nullptr;
   }
   return ret;
@@ -64,7 +64,7 @@ void X509_LOOKUP_free(X509_LOOKUP *ctx) {
   if (ctx->method != nullptr && ctx->method->free != nullptr) {
     (*ctx->method->free)(ctx);
   }
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 int X509_LOOKUP_ctrl(X509_LOOKUP *ctx, int cmd, const char *argc, long argl,
@@ -162,7 +162,7 @@ void X509_STORE_free(X509_STORE *vfy) {
   sk_X509_LOOKUP_pop_free(vfy->get_cert_methods, X509_LOOKUP_free);
   sk_X509_OBJECT_pop_free(vfy->objs, X509_OBJECT_free);
   X509_VERIFY_PARAM_free(vfy->param);
-  OPENSSL_free(vfy);
+  Delete(vfy);
 }
 
 X509_LOOKUP *X509_STORE_add_lookup(X509_STORE *v, const X509_LOOKUP_METHOD *m) {
@@ -264,7 +264,7 @@ void X509_OBJECT_free(X509_OBJECT *obj) {
     return;
   }
   X509_OBJECT_free_contents(obj);
-  OPENSSL_free(obj);
+  Delete(obj);
 }
 
 static int X509_OBJECT_up_ref_count(X509_OBJECT *a) {

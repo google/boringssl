@@ -44,7 +44,7 @@ static int pkey_hkdf_init(EvpPkeyCtx *ctx) {
   }
 
   if (!CBB_init(&hctx->info, 0)) {
-    OPENSSL_free(hctx);
+    Delete(hctx);
     return 0;
   }
 
@@ -95,7 +95,7 @@ static void pkey_hkdf_cleanup(EvpPkeyCtx *ctx) {
     OPENSSL_free(hctx->key);
     OPENSSL_free(hctx->salt);
     CBB_cleanup(&hctx->info);
-    OPENSSL_free(hctx);
+    Delete(hctx);
     ctx->data = nullptr;
   }
 }

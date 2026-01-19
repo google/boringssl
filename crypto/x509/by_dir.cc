@@ -105,7 +105,7 @@ static int new_dir(X509_LOOKUP *lu) {
   return 1;
 }
 
-static void by_dir_hash_free(BY_DIR_HASH *hash) { OPENSSL_free(hash); }
+static void by_dir_hash_free(BY_DIR_HASH *hash) { Delete(hash); }
 
 static int by_dir_hash_cmp(const BY_DIR_HASH *const *a,
                            const BY_DIR_HASH *const *b) {
@@ -121,9 +121,9 @@ static int by_dir_hash_cmp(const BY_DIR_HASH *const *a,
 static void by_dir_entry_free(BY_DIR_ENTRY *ent) {
   if (ent != nullptr) {
     CRYPTO_MUTEX_cleanup(&ent->lock);
-    OPENSSL_free(ent->dir);
+    Delete(ent->dir);
     sk_BY_DIR_HASH_pop_free(ent->hashes, by_dir_hash_free);
-    OPENSSL_free(ent);
+    Delete(ent);
   }
 }
 
@@ -131,7 +131,7 @@ static void free_dir(X509_LOOKUP *lu) {
   BY_DIR *a = reinterpret_cast<BY_DIR *>(lu->method_data);
   if (a != nullptr) {
     sk_BY_DIR_ENTRY_pop_free(a->dirs, by_dir_entry_free);
-    OPENSSL_free(a);
+    Delete(a);
   }
 }
 
@@ -319,7 +319,7 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, const X509_NAME *name,
           hent->suffix = k;
           if (!sk_BY_DIR_HASH_push(ent->hashes, hent)) {
             CRYPTO_MUTEX_unlock_write(&ent->lock);
-            OPENSSL_free(hent);
+            Delete(hent);
             ok = 0;
             goto finish;
           }

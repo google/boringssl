@@ -101,7 +101,7 @@ void CMAC_CTX_free(CMAC_CTX *ctx) {
   }
 
   CMAC_CTX_cleanup(ctx);
-  OPENSSL_free(ctx);
+  Delete(ctx);
 }
 
 int CMAC_CTX_copy(CMAC_CTX *out, const CMAC_CTX *in) {

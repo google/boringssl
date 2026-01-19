@@ -910,7 +910,7 @@ EVP_HPKE_KEY *EVP_HPKE_KEY_new() {
 void EVP_HPKE_KEY_free(EVP_HPKE_KEY *key) {
   if (key != nullptr) {
     EVP_HPKE_KEY_cleanup(key);
-    OPENSSL_free(key);
+    Delete(key);
   }
 }
 
@@ -1135,7 +1135,7 @@ EVP_HPKE_CTX *EVP_HPKE_CTX_new() {
 void EVP_HPKE_CTX_free(EVP_HPKE_CTX *ctx) {
   if (ctx != nullptr) {
     EVP_HPKE_CTX_cleanup(ctx);
-    OPENSSL_free(ctx);
+    Delete(ctx);
   }
 }
 

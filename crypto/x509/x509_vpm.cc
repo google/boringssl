@@ -93,7 +93,7 @@ void X509_VERIFY_PARAM_free(X509_VERIFY_PARAM *param) {
   sk_OPENSSL_STRING_pop_free(param->hosts, str_free);
   OPENSSL_free(param->email);
   OPENSSL_free(param->ip);
-  OPENSSL_free(param);
+  Delete(param);
 }
 
 static int should_copy(int dest_is_set, int src_is_set, int prefer_src) {

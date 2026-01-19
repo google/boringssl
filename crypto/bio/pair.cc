@@ -101,7 +101,7 @@ static int bio_free(BIO *bio) {
   }
 
   OPENSSL_free(b->buf);
-  OPENSSL_free(b);
+  Delete(b);
 
   return 1;
 }

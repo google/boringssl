@@ -557,9 +557,9 @@ static int voprf_sign_tt(const VOPRF_METHOD *method,
   }
 
 err:
-  OPENSSL_free(BTs);
-  OPENSSL_free(Zs);
-  OPENSSL_free(es);
+  Delete(BTs);
+  Delete(Zs);
+  Delete(es);
   CBB_cleanup(&batch_cbb);
   return ret;
 }
@@ -666,9 +666,9 @@ static STACK_OF(TRUST_TOKEN) *voprf_unblind_tt(
   ok = 1;
 
 err:
-  OPENSSL_free(BTs);
-  OPENSSL_free(Zs);
-  OPENSSL_free(es);
+  Delete(BTs);
+  Delete(Zs);
+  Delete(es);
   CBB_cleanup(&batch_cbb);
   if (!ok) {
     sk_TRUST_TOKEN_pop_free(ret, TRUST_TOKEN_free);
@@ -924,9 +924,9 @@ static int voprf_sign_impl(const VOPRF_METHOD *method,
   }
 
 err:
-  OPENSSL_free(BTs);
-  OPENSSL_free(Zs);
-  OPENSSL_free(dis);
+  Delete(BTs);
+  Delete(Zs);
+  Delete(dis);
   return ret;
 }
 
@@ -1049,9 +1049,9 @@ static STACK_OF(TRUST_TOKEN) *voprf_unblind(
   ok = 1;
 
 err:
-  OPENSSL_free(BTs);
-  OPENSSL_free(Zs);
-  OPENSSL_free(dis);
+  Delete(BTs);
+  Delete(Zs);
+  Delete(dis);
   if (!ok) {
     sk_TRUST_TOKEN_pop_free(ret, TRUST_TOKEN_free);
     ret = nullptr;

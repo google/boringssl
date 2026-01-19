@@ -915,11 +915,11 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
   }
 
 err:
-  OPENSSL_free(Tps);
-  OPENSSL_free(Sps);
-  OPENSSL_free(Wps);
-  OPENSSL_free(Wsps);
-  OPENSSL_free(es);
+  Delete(Tps);
+  Delete(Sps);
+  Delete(Wps);
+  Delete(Wsps);
+  Delete(es);
   CBB_cleanup(&batch_cbb);
   return ret;
 }
@@ -1057,11 +1057,11 @@ static STACK_OF(TRUST_TOKEN) *pmbtoken_unblind(
   ok = 1;
 
 err:
-  OPENSSL_free(Tps);
-  OPENSSL_free(Sps);
-  OPENSSL_free(Wps);
-  OPENSSL_free(Wsps);
-  OPENSSL_free(es);
+  Delete(Tps);
+  Delete(Sps);
+  Delete(Wps);
+  Delete(Wsps);
+  Delete(es);
   CBB_cleanup(&batch_cbb);
   if (!ok) {
     sk_TRUST_TOKEN_pop_free(ret, TRUST_TOKEN_free);

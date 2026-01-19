@@ -83,7 +83,7 @@ int EVP_EncodedLength(size_t *out_len, size_t len) {
 
 EVP_ENCODE_CTX *EVP_ENCODE_CTX_new() { return NewZeroed<EVP_ENCODE_CTX>(); }
 
-void EVP_ENCODE_CTX_free(EVP_ENCODE_CTX *ctx) { OPENSSL_free(ctx); }
+void EVP_ENCODE_CTX_free(EVP_ENCODE_CTX *ctx) { Delete(ctx); }
 
 void EVP_EncodeInit(EVP_ENCODE_CTX *ctx) {
   OPENSSL_memset(ctx, 0, sizeof(EVP_ENCODE_CTX));

@@ -41,7 +41,8 @@ extern const EVP_PKEY_ASN1_METHOD ed25519_asn1_meth;
 #define ED25519_PUBLIC_KEY_OFFSET 32
 
 static void ed25519_free(EVP_PKEY *pkey) {
-  OPENSSL_free(pkey->pkey);
+  ED25519_KEY *key = reinterpret_cast<ED25519_KEY *>(pkey->pkey);
+  Delete(key);
   pkey->pkey = nullptr;
 }
 

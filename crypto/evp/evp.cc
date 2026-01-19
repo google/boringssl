@@ -57,7 +57,7 @@ void EVP_PKEY_free(EVP_PKEY *pkey) {
   }
 
   evp_pkey_set0(pkey, nullptr, nullptr);
-  OPENSSL_free(pkey);
+  Delete(pkey);
 }
 
 int EVP_PKEY_up_ref(EVP_PKEY *pkey) {

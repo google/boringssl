@@ -271,7 +271,7 @@ static void BIO_CONNECT_free(BIO_CONNECT *c) {
   }
   OPENSSL_free(c->param_hostname);
   OPENSSL_free(c->param_port);
-  OPENSSL_free(c);
+  Delete(c);
 }
 
 static int conn_new(BIO *bio) {

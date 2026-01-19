@@ -409,7 +409,7 @@ static void pkey_ec_cleanup(EvpPkeyCtx *ctx) {
     return;
   }
 
-  OPENSSL_free(dctx);
+  Delete(dctx);
 }
 
 static int pkey_ec_sign(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,

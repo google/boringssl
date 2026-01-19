@@ -359,9 +359,9 @@ void PKCS7_free(PKCS7 *p7) {
   if (p7->d.sign != nullptr) {
     sk_X509_pop_free(p7->d.sign->cert, X509_free);
     sk_X509_CRL_pop_free(p7->d.sign->crl, X509_CRL_free);
-    OPENSSL_free(p7->d.sign);
+    Delete(p7->d.sign);
   }
-  OPENSSL_free(p7);
+  Delete(p7);
 }
 
 // We only support signed data, so these getters are no-ops.

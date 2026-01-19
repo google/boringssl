@@ -709,7 +709,7 @@ PKCS12 *d2i_PKCS12(PKCS12 **out_p12, const uint8_t **ber_bytes,
   p12->ber_bytes =
       reinterpret_cast<uint8_t *>(OPENSSL_memdup(*ber_bytes, ber_len));
   if (!p12->ber_bytes) {
-    OPENSSL_free(p12);
+    Delete(p12);
     return nullptr;
   }
 
@@ -1307,7 +1307,7 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
 
     ret = New<PKCS12>();
     if (ret == nullptr || !CBB_finish(&cbb, &ret->ber_bytes, &ret->ber_len)) {
-      OPENSSL_free(ret);
+      Delete(ret);
       ret = nullptr;
       goto err;
     }
@@ -1324,5 +1324,5 @@ void PKCS12_free(PKCS12 *p12) {
     return;
   }
   OPENSSL_free(p12->ber_bytes);
-  OPENSSL_free(p12);
+  Delete(p12);
 }

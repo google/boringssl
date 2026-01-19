@@ -176,7 +176,7 @@ CTR_DRBG_STATE *CTR_DRBG_new_df(const uint8_t *entropy, size_t entropy_len,
   return drbg;
 }
 
-void CTR_DRBG_free(CTR_DRBG_STATE *state) { OPENSSL_free(state); }
+void CTR_DRBG_free(CTR_DRBG_STATE *state) { Delete(state); }
 
 int bssl::CTR_DRBG_init(CTR_DRBG_STATE *drbg, int df, const uint8_t *entropy,
                         size_t entropy_len,
