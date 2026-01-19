@@ -14,14 +14,20 @@ static __inline__ uint64_t fiat_value_barrier_u64(uint64_t a) {
   return a;
 }
 
-__attribute__((target("adx,bmi2")))
-static inline void fe4_mul(fe4 out, const fe4 x, const fe4 y) { fiat_curve25519_adx_mul(out, x, y); }
+__attribute__((target("adx,bmi2"))) static inline void fe4_mul(fe4 out,
+                                                               const fe4 x,
+                                                               const fe4 y) {
+  bssl::fiat_curve25519_adx_mul(out, x, y);
+}
 
-__attribute__((target("adx,bmi2")))
-static inline void fe4_sq(fe4 out, const fe4 x) { fiat_curve25519_adx_square(out, x); }
+__attribute__((target("adx,bmi2"))) static inline void fe4_sq(fe4 out,
+                                                              const fe4 x) {
+  bssl::fiat_curve25519_adx_square(out, x);
+}
 
 /*
- * The function fiat_mulx_u64 is a multiplication, returning the full double-width result.
+ * The function fiat_mulx_u64 is a multiplication, returning the full
+ * double-width result.
  *
  * Postconditions:
  *   out1 = (arg1 * arg2) mod 2^64
@@ -466,9 +472,8 @@ static void fe4_invert(fe4 out, const fe4 z) {
   fe4_mul(out, t1, t0);
 }
 
-__attribute__((target("adx,bmi2")))
-void x25519_scalar_mult_adx(uint8_t out[32], const uint8_t scalar[32],
-                            const uint8_t point[32]) {
+__attribute__((target("adx,bmi2"))) void bssl::x25519_scalar_mult_adx(
+    uint8_t out[32], const uint8_t scalar[32], const uint8_t point[32]) {
   uint8_t e[32];
   bssl::OPENSSL_memcpy(e, scalar, 32);
   e[0] &= 248;
@@ -646,8 +651,8 @@ static inline void table_select_4(ge_precomp_4 *t, const int pos,
 //
 // Preconditions:
 //   a[31] <= 127
-__attribute__((target("adx,bmi2")))
-void x25519_ge_scalarmult_base_adx(uint8_t h[4][32], const uint8_t a[32]) {
+__attribute__((target("adx,bmi2"))) void bssl::x25519_ge_scalarmult_base_adx(
+    uint8_t h[4][32], const uint8_t a[32]) {
   signed char e[64];
   signed char carry;
 

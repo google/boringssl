@@ -189,11 +189,9 @@ extern "C" void vpaes_encrypt_key_to_bsaes(AES_KEY *out_bsaes,
                                            const AES_KEY *vpaes);
 extern "C" void vpaes_decrypt_key_to_bsaes(AES_KEY *out_bsaes,
                                            const AES_KEY *vpaes);
-extern "C" void vpaes_ctr32_encrypt_blocks_with_bsaes(const uint8_t *in,
-                                                      uint8_t *out,
-                                                      size_t blocks,
-                                                      const AES_KEY *key,
-                                                      const uint8_t ivec[16]);
+void vpaes_ctr32_encrypt_blocks_with_bsaes(const uint8_t *in, uint8_t *out,
+                                           size_t blocks, const AES_KEY *key,
+                                           const uint8_t ivec[16]);
 #else
 inline int bsaes_capable() { return 0; }
 
@@ -442,7 +440,7 @@ extern "C" void gcm_gmult_clmul(uint8_t Xi[16], const u128 Htable[16]);
 extern "C" void gcm_ghash_clmul(uint8_t Xi[16], const u128 Htable[16],
                                 const uint8_t *inp, size_t len);
 
-extern "C" void gcm_init_ssse3(u128 Htable[16], const uint64_t Xi[2]);
+void gcm_init_ssse3(u128 Htable[16], const uint64_t Xi[2]);
 extern "C" void gcm_gmult_ssse3(uint8_t Xi[16], const u128 Htable[16]);
 extern "C" void gcm_ghash_ssse3(uint8_t Xi[16], const u128 Htable[16],
                                 const uint8_t *in, size_t len);

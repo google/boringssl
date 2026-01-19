@@ -24,9 +24,9 @@
 #include "internal.h"
 
 
-#if defined(OPENSSL_POLY1305_NEON)
+BSSL_NAMESPACE_BEGIN
 
-using namespace bssl;
+#if defined(OPENSSL_POLY1305_NEON)
 
 typedef struct {
   uint32_t v[12];  // for alignment; only using 10
@@ -310,3 +310,5 @@ void CRYPTO_poly1305_finish_neon(poly1305_state *state, uint8_t mac[16]) {
 }
 
 #endif  // OPENSSL_POLY1305_NEON
+
+BSSL_NAMESPACE_END

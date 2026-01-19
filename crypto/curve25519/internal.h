@@ -33,8 +33,6 @@ extern "C" void x25519_NEON(uint8_t out[32], const uint8_t scalar[32],
     defined(__GNUC__) && defined(__x86_64__) && !defined(OPENSSL_WINDOWS)
 #define BORINGSSL_FE25519_ADX
 
-BSSL_NAMESPACE_END
-
 // fiat_curve25519_adx_mul is defined in
 // third_party/fiat/asm/fiat_curve25519_adx_mul.S
 extern "C" void __attribute__((sysv_abi)) fiat_curve25519_adx_mul(
@@ -46,13 +44,9 @@ extern "C" void __attribute__((sysv_abi)) fiat_curve25519_adx_square(
     uint64_t out[4], const uint64_t in[4]);
 
 // x25519_scalar_mult_adx is defined in third_party/fiat/curve25519_64_adx.h
-extern "C" void x25519_scalar_mult_adx(uint8_t out[32],
-                                       const uint8_t scalar[32],
-                                       const uint8_t point[32]);
-extern "C" void x25519_ge_scalarmult_base_adx(uint8_t h[4][32],
-                                              const uint8_t a[32]);
-
-BSSL_NAMESPACE_BEGIN
+void x25519_scalar_mult_adx(uint8_t out[32], const uint8_t scalar[32],
+                            const uint8_t point[32]);
+void x25519_ge_scalarmult_base_adx(uint8_t h[4][32], const uint8_t a[32]);
 
 #endif
 

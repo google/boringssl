@@ -32,6 +32,7 @@ import (
 //
 // They will always be included in the prefixing headers.
 var platformDependentRedefineExtnameSymbols = []string{
+	"CRYPTO_has_broken_NEON",
 	"CRYPTO_needs_hwcap2_workaround",
 	"CRYPTO_set_fuzzer_mode",
 	"RAND_enable_fork_unsafe_buffering",
@@ -167,15 +168,19 @@ func (t *IDExtractorTask) Run() (out []byte, err error) {
 			// Already in a namespace.
 			return nil
 		}
-		can_redefine_extname := true
+		canRedefineExtname := true
 		switch id.Linkage {
-		case "static", "static inline":
+		case "", "static", "static inline":
 			// Definitely not linked.
 			return nil
 		case `extern "C" inline`, `extern "C++" inline`:
 			// Sorry, can't redefine_extname inline functions:
 			// error: #pragma redefine_extname is applicable to external C declarations only; not applied to function
-			can_redefine_extname = false
+			canRedefineExtname = false
+		case `extern "C"`:
+			// Link those.
+		default:
+			return fmt.Errorf("unexpected linkage: %q", id.Linkage)
 		}
 		switch id.Tag {
 		case "enumerator", "typedef", "using":
@@ -186,7 +191,7 @@ func (t *IDExtractorTask) Run() (out []byte, err error) {
 			// however cannot be namespaced as known callers forward declare them.
 			return nil
 		case "function", "var":
-			if can_redefine_extname {
+			if canRedefineExtname {
 				viaRedefineExtname[id.Symbol] = struct{}{}
 			} else {
 				viaMacro[id.Symbol] = struct{}{}
