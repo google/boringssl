@@ -278,6 +278,7 @@
 #define md5_block_asm_data_order BORINGSSL_ADD_PREFIX(md5_block_asm_data_order)
 #define openssl_poly1305_neon2_addmulmod BORINGSSL_ADD_PREFIX(openssl_poly1305_neon2_addmulmod)
 #define openssl_poly1305_neon2_blocks BORINGSSL_ADD_PREFIX(openssl_poly1305_neon2_blocks)
+#define p_thread_callback_boringssl BORINGSSL_ADD_PREFIX(p_thread_callback_boringssl)
 #define poly_Rq_mul BORINGSSL_ADD_PREFIX(poly_Rq_mul)
 #define rsaz_1024_gather5_avx2 BORINGSSL_ADD_PREFIX(rsaz_1024_gather5_avx2)
 #define rsaz_1024_mul_avx2 BORINGSSL_ADD_PREFIX(rsaz_1024_mul_avx2)

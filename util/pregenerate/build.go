@@ -341,15 +341,19 @@ func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string) []*Tas
 	return []*Task{
 		NewSimpleTask("gen/boringssl_prefix_symbols_internal_c.inc", func() ([]byte, error) {
 			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsCHeader(syms), err
+			return BuildAsmGlobalsCInclude(syms), err
 		}, perlAsmTasks...),
 		NewSimpleTask("gen/boringssl_prefix_symbols_internal_S.inc", func() ([]byte, error) {
 			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsGasHeader(syms), err
+			return BuildAsmGlobalsGasInclude(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_asm.inc", func() ([]byte, error) {
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_asm.inc", func() ([]byte, error) {
 			once.Do(buildIncludesOnce)
-			return BuildAsmGlobalsNasmHeader(syms), err
+			return BuildAsmGlobalsNasmX86Include(syms), err
+		}, perlAsmTasks...),
+		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_64_asm.inc", func() ([]byte, error) {
+			once.Do(buildIncludesOnce)
+			return BuildAsmGlobalsNasmX8664Include(syms), err
 		}, perlAsmTasks...),
 	}
 }
