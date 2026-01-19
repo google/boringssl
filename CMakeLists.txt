@@ -833,6 +833,20 @@ if(BUILD_TESTING)
   endif()
 endif()
 
+if(BORINGSSL_PREFIX)
+  require_go()
+  add_custom_target(
+    verify_boringssl_prefix ALL
+    COMMENT "Verifying symbol prefixing"
+    COMMAND ${GO_EXECUTABLE}
+            run ${CMAKE_CURRENT_SOURCE_DIR}/util/audit_symbols.go
+            -ignore-symbols-with ${BORINGSSL_PREFIX}
+            $<TARGET_FILE:crypto>
+    DEPENDS crypto
+    USES_TERMINAL
+  )
+endif()
+
 if(INSTALL_ENABLED)
   install(TARGETS crypto ssl EXPORT OpenSSLTargets)
   install(TARGETS bssl)
