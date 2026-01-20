@@ -372,14 +372,25 @@ func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string, target
 
 // MakePrefixingIncludes returns the tasks to generate the header files for symbol prefixing.
 func MakePrefixingIncludes(in map[string]InputTarget, targetsOut map[string]build.Target) []*Task {
-	var headers []string
-	for _, t := range in {
-		headers = append(headers, t.Hdrs...)
+	var cHeader, bindgenInclude []byte
+	var err error
+	buildHeadersOnce := func() {
+		var headers []string
+		for _, t := range in {
+			headers = append(headers, t.Hdrs...)
+		}
+		cHeader, bindgenInclude, err = BuildCRenamingIncludes(headers)
 	}
 	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols.h")
+	var once sync.Once
 	return []*Task{
 		NewSimpleTask("include/openssl/prefix_symbols.h", func() ([]byte, error) {
-			return BuildCRenamingHeader(headers)
+			once.Do(buildHeadersOnce)
+			return cHeader, err
+		}),
+		NewSimpleTask("rust/bssl-sys/boringssl_prefix_symbols_bindgen.rs.in", func() ([]byte, error) {
+			once.Do(buildHeadersOnce)
+			return bindgenInclude, err
 		}),
 	}
 }

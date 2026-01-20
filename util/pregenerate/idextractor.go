@@ -54,11 +54,11 @@ func isClangCL(clang string) (bool, error) {
 
 // BuildCRenamingHeader calls Clang to extract the AST of the headers, then processes them to extract the symbols.
 //
-// It returns an include for C.
-func BuildCRenamingHeader(headers []string) (cInclude []byte, err error) {
+// It returns a header for C and a matching one for Rust's bindgen.
+func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []byte, err error) {
 	cmd := *clangPath
 	if cmd == "" {
-		return nil, fmt.Errorf("%w: clang has been disabled by flag", TaskSkipped)
+		return nil, nil, fmt.Errorf("%w: clang has been disabled by flag", TaskSkipped)
 	}
 
 	defer func() {
@@ -69,7 +69,7 @@ func BuildCRenamingHeader(headers []string) (cInclude []byte, err error) {
 
 	isCL, err := isClangCL(cmd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var args []string
@@ -115,13 +115,13 @@ func BuildCRenamingHeader(headers []string) (cInclude []byte, err error) {
 
 	stdout, err := c.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer stdout.Close()
 
 	err = c.Start()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var viaRedefineExtname = map[string]struct{}{}
@@ -181,19 +181,19 @@ func BuildCRenamingHeader(headers []string) (cInclude []byte, err error) {
 
 	for sym := range viaMacro {
 		if _, found := viaRedefineExtname[sym]; found {
-			return nil, fmt.Errorf("symbol %q both marked for macro and redefine_extname renaming; please fix", sym)
+			return nil, nil, fmt.Errorf("symbol %q both marked for macro and redefine_extname renaming; please fix", sym)
 		}
 	}
 
 	err = idextractor.New(report, idextractor.Options{Language: "C++"}).Parse(stdout)
 	if err != nil {
 		c.Process.Kill()
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = c.Wait()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var cOutput bytes.Buffer
@@ -236,5 +236,13 @@ func BuildCRenamingHeader(headers []string) (cInclude []byte, err error) {
 	cOutput.WriteString(`
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_H
 `)
-	return cOutput.Bytes(), nil
+
+	var bindgenOutput bytes.Buffer
+	writeHeader(&bindgenOutput, "//")
+	bindgenOutput.WriteString("\n")
+	for _, sym := range slices.Sorted(maps.Keys(viaMacro)) {
+		fmt.Fprintf(&bindgenOutput, "pub use ${BORINGSSL_PREFIX}_%s as %s;\n", sym, sym)
+	}
+
+	return cOutput.Bytes(), bindgenOutput.Bytes(), nil
 }
