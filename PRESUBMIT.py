@@ -17,6 +17,8 @@
 Run by the presubmit API in depot_tools, e.g. by running `git cl presubmit`.
 """
 
+import shutil
+
 PRESUBMIT_VERSION = '2.0.0'
 USE_PYTHON3 = True
 
@@ -29,8 +31,7 @@ def _PassResult(stdout, stderr, retcode):
 def _RunTool(input_api,
              output_api,
              command,
-             handle_result=_PassResult,
-             explain_error=None):
+             handle_result=_PassResult):
   """
   Runs a command and processes its result.
 
@@ -42,8 +43,6 @@ def _RunTool(input_api,
     output_api: API to generate presubmit errors/warning to return.
     handle_result: function receiving (stdout, stderr, retcode) parsing the
       command result and turning it into a list of output_api.PresubmitResult.
-    explain_error: function receiving error turning it into a list of
-      output_api.PresubmitResult.
 
   Returns:
     List of presubmit errors.
@@ -56,40 +55,49 @@ def _RunTool(input_api,
         encoding='utf-8')
     return handle_result(out[0], out[1], retcode)
   except input_api.subprocess.CalledProcessError as e:
-    errors = []
-    if explain_error:
-      errors += explain_error(e)
-    errors += [
+    return [
         output_api.PresubmitPromptOrNotify(
             'Command "%s" returned exit code %d. Output: \n\n%s' %
             ' '.join(command), e.returncode, e.output)
     ]
-    return errors
 
 
 def CheckPregeneratedFiles(input_api, output_api):
   """Checks that pregenerated files are properly updated."""
   # TODO(chlily): Make this compatible with the util/bot environment for CI/CQ.
   # Check that `go` is available on the $PATH.
-  if error := _RunTool(input_api, output_api, ['go', 'version']):
-    return error
+  go_path = shutil.which('go')
+  if not go_path:
+    return [
+        output_api.PresubmitPromptOrNotify(
+            'Could not check pregenerated files: Command "go" not found.')
+    ]
 
-  def HandlePregenerateResult(stdout, stderr, retcode):
-    del stdout  # All output we care for is in stderr.
-    if retcode:
-      return [
-          output_api.PresubmitError(
-              ('Found out-of-date generated files. '
-               'Run `go run ./util/pregenerate` to update them.'),
-              stderr.splitlines())
-      ]
-    return []  # Check passed.
+  # Find `clang` path. If not found, turn off the clang steps in pregenerate.
+  clang_path = shutil.which('clang')
 
   pregenerate_script_path = input_api.os_path.join(
       input_api.change.RepositoryRoot(), 'util', 'pregenerate')
+  command = [go_path, 'run', pregenerate_script_path,
+             '-check', f'-clang={clang_path if clang_path is not None else ""}']
+
+  def HandlePregenerateResult(stdout, stderr, retcode):
+    del stdout  # All output we care for is in stderr.
+    results = []
+    if not clang_path:
+      results.append(output_api.PresubmitPromptOrNotify(
+          ('Ran `go run ./util/pregenerate -check` but could not find "clang": '
+           'CheckPregeneratedFiles results may not be complete.')))
+    if retcode:
+      results.append(output_api.PresubmitError(
+          ('Found out-of-date generated files. '
+           'Run `go run ./util/pregenerate` to update them.'),
+          stderr.splitlines()))
+    return results
+
   return _RunTool(input_api,
                   output_api,
-                  ['go', 'run', pregenerate_script_path, '-check'],
+                  command,
                   handle_result=HandlePregenerateResult)
 
 
@@ -116,20 +124,16 @@ def CheckBuildifier(input_api, output_api):
   if not file_paths:
     return []  # Check passed.
 
-  def ExplainBuildifierError(e):
-    del e  # Right now only one error string can be output.
-    return [
-        output_api.PresubmitNotifyResult(
-            ('You can download buildifier from '
-             'https://github.com/bazelbuild/buildtools/releases'))
-    ]
-
   # Check that `buildifier` is available on the $PATH.
   # TODO(chlily): Make this compatible with the util/bot environment for CI/CQ.
-  if error := _RunTool(input_api,
-                       output_api, ['buildifier', '--version'],
-                       explain_error=ExplainBuildifierError):
-    return error
+  buildifier_path = shutil.which('buildifier')
+  if not buildifier_path:
+    return [
+        output_api.PresubmitPromptOrNotify(
+            'Could not check *.bzl and *.bazel formatting: '
+            'Command "buildifier" not found. You can download buildifier from '
+            'https://github.com/bazelbuild/buildtools/releases')
+    ]
 
   def HandleBuildifierResult(stdout, stderr, retcode):
     del stderr  # This only parses stdout, as nothing failed.
@@ -139,7 +143,8 @@ def CheckBuildifier(input_api, output_api):
               ('Found incorrectly formatted *.bzl or *.bazel files. '
                'Run `buildifier` to update them.'), stdout.splitlines())
       ]
+    return []  # Check passed.
 
   return _RunTool(input_api,
-                  output_api, ['buildifier', '--mode=check'] + file_paths,
+                  output_api, [buildifier_path, '--mode=check'] + file_paths,
                   handle_result=HandleBuildifierResult)
