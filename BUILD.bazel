@@ -89,12 +89,12 @@ bssl_cc_library(
     srcs = ssl_sources,
     hdrs = ssl_headers,
     copts = ["-DBORINGSSL_IMPLEMENTATION"],
+    # ssl_sources also depend on :crypto's internal headers.
+    implementation_deps = [":crypto_internal"],
     internal_hdrs = ssl_internal_headers,
     visibility = ["//visibility:public"],
     # ssl_headers depend on :crypto's exported headers.
     deps = [":crypto"],
-    # ssl_sources also depend on :crypto's internal headers.
-    implementation_deps = [":crypto_internal"],
 )
 
 bssl_cc_library(
