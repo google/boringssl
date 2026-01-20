@@ -14,9 +14,11 @@
 
 #include "../crypto/cpu_arm_linux.h"
 
+#include <openssl/span.h>
+
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *buf, size_t len) {
-  bssl::STRING_PIECE sp = {reinterpret_cast<const char *>(buf), len};
-  crypto_get_arm_hwcap2_from_cpuinfo(&sp);
+  bssl::armcap::GetHWCAP2FromCpuinfo(
+      bssl::BytesAsStringView(bssl::Span(buf, len)));
   return 0;
 }

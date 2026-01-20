@@ -147,8 +147,7 @@ TEST(ARMLinuxTest, CPUInfo) {
 
   for (const auto &t : kTests) {
     SCOPED_TRACE(t.cpuinfo);
-    STRING_PIECE sp = {t.cpuinfo, strlen(t.cpuinfo)};
-    EXPECT_EQ(t.hwcap2, crypto_get_arm_hwcap2_from_cpuinfo(&sp));
+    EXPECT_EQ(t.hwcap2, armcap::GetHWCAP2FromCpuinfo(t.cpuinfo));
   }
 }
 

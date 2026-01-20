@@ -22,6 +22,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <string_view>
+
 #include <openssl/mem.h>
 
 #include "cpu_arm_linux.h"
@@ -99,16 +101,6 @@ err:
 static int g_needs_hwcap2_workaround;
 
 void bssl::OPENSSL_cpuid_setup() {
-  // We ignore the return value of |read_file| and proceed with an empty
-  // /proc/cpuinfo on error. If |getauxval| works, we will still detect
-  // capabilities.
-  char *cpuinfo_data = nullptr;
-  size_t cpuinfo_len = 0;
-  read_file(&cpuinfo_data, &cpuinfo_len, "/proc/cpuinfo");
-  STRING_PIECE cpuinfo;
-  cpuinfo.data = cpuinfo_data;
-  cpuinfo.len = cpuinfo_len;
-
   // Matching OpenSSL, only report other features if NEON is present.
   unsigned long hwcap = getauxval(AT_HWCAP);
   if (hwcap & CRYPTO_HWCAP_NEON) {
@@ -119,14 +111,22 @@ void bssl::OPENSSL_cpuid_setup() {
     OPENSSL_armcap_P |= ARMV7_NEON;
 
     // Some ARMv8 Android devices don't expose AT_HWCAP2. Fall back to
-    // /proc/cpuinfo. See https://crbug.com/boringssl/46. As of February 2021,
-    // this is now rare (see Chrome's Net.NeedsHWCAP2Workaround metric), but AES
-    // and PMULL extensions are very useful, so we still carry the workaround
-    // for now.
+    // /proc/cpuinfo. See https://crbug.com/40644934. The fix was added to
+    // Android CTS in N, so, after Net.NeedsHWCAP2Workaround confirms this, we
+    // should be able to disable this when __ANDROID_MIN_SDK_VERSION__ is high
+    // enough. (It may not be worth carrying the workaround at all at that
+    // point. Then again, AES and PMULL extensions are crucial for performance
+    // when available.)
     unsigned long hwcap2 = getauxval(AT_HWCAP2);
     if (hwcap2 == 0) {
-      hwcap2 = crypto_get_arm_hwcap2_from_cpuinfo(&cpuinfo);
-      g_needs_hwcap2_workaround = hwcap2 != 0;
+      char *cpuinfo_data = nullptr;
+      size_t cpuinfo_len = 0;
+      if (read_file(&cpuinfo_data, &cpuinfo_len, "/proc/cpuinfo")) {
+        hwcap2 = armcap::GetHWCAP2FromCpuinfo(
+            std::string_view(cpuinfo_data, cpuinfo_len));
+        g_needs_hwcap2_workaround = hwcap2 != 0;
+        OPENSSL_free(cpuinfo_data);
+      }
     }
 
     // HWCAP2_* values, without the "CRYPTO_" prefix, are exposed through
@@ -161,8 +161,6 @@ void bssl::OPENSSL_cpuid_setup() {
       OPENSSL_armcap_P |= ARMV8_SHA256;
     }
   }
-
-  OPENSSL_free(cpuinfo_data);
 }
 
 int CRYPTO_has_broken_NEON() { return 0; }
