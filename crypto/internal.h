@@ -61,9 +61,10 @@
 
 BSSL_NAMESPACE_BEGIN
 
-#if !defined(OPENSSL_NO_ASM) && !defined(OPENSSL_STATIC_ARMCAP) && \
-    (defined(OPENSSL_X86) || defined(OPENSSL_X86_64) ||            \
-     defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64))
+#if !defined(OPENSSL_NO_ASM) &&                         \
+    (defined(OPENSSL_X86) || defined(OPENSSL_X86_64) || \
+     (!defined(OPENSSL_STATIC_ARMCAP) &&                \
+      (defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64))))
 // x86, x86_64, and the ARMs need to record the result of a cpuid/getauxval call
 // for the asm to work correctly, unless compiled without asm code.
 #define NEED_CPUID
