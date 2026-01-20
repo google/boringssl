@@ -86,6 +86,7 @@ static int aes_init_key(EVP_CIPHER_CTX *ctx, const uint8_t *key,
       if (mode == EVP_CIPH_CBC_MODE) {
         dat->stream.cbc = aes_hw_cbc_encrypt;
       }
+#if defined(BSAES)
     } else if (bsaes_capable() && mode == EVP_CIPH_CBC_MODE) {
       assert(vpaes_capable());
       ret = vpaes_set_decrypt_key(key, ctx->key_len * 8, &dat->ks.ks);
@@ -95,6 +96,7 @@ static int aes_init_key(EVP_CIPHER_CTX *ctx, const uint8_t *key,
       // If |dat->stream.cbc| is provided, |dat->block| is never used.
       dat->block = nullptr;
       dat->stream.cbc = bsaes_cbc_encrypt;
+#endif
     } else if (vpaes_capable()) {
       ret = vpaes_set_decrypt_key(key, ctx->key_len * 8, &dat->ks.ks);
       dat->block = vpaes_decrypt;

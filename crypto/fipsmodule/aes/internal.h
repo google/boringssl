@@ -192,31 +192,6 @@ extern "C" void vpaes_decrypt_key_to_bsaes(AES_KEY *out_bsaes,
 void vpaes_ctr32_encrypt_blocks_with_bsaes(const uint8_t *in, uint8_t *out,
                                            size_t blocks, const AES_KEY *key,
                                            const uint8_t ivec[16]);
-#else
-inline int bsaes_capable() { return 0; }
-
-// On other platforms, bsaes_capable() will always return false and so the
-// following will never be called.
-inline void bsaes_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t length,
-                              const AES_KEY *key, uint8_t ivec[16], int enc) {
-  abort();
-}
-
-inline void bsaes_ctr32_encrypt_blocks(const uint8_t *in, uint8_t *out,
-                                       size_t len, const AES_KEY *key,
-                                       const uint8_t ivec[16]) {
-  abort();
-}
-
-inline void vpaes_encrypt_key_to_bsaes(AES_KEY *out_bsaes,
-                                       const AES_KEY *vpaes) {
-  abort();
-}
-
-inline void vpaes_decrypt_key_to_bsaes(AES_KEY *out_bsaes,
-                                       const AES_KEY *vpaes) {
-  abort();
-}
 #endif  // !BSAES
 
 
