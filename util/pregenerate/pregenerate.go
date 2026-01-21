@@ -75,13 +75,17 @@ func (w gotextdiffHandleWrapper) Write(p []byte) (n int, err error) {
 	return w.Writer.Write(p)
 }
 
-func runTask(t Task) error {
+func runTask(t *Task) error {
 	expected, err := t.Run()
 	if err != nil {
+		if errors.Is(err, TaskSkipped) {
+			fmt.Fprintf(os.Stderr, "task %q skipped - carrying on with previously saved data: %v\n", t, err)
+			return nil
+		}
 		return err
 	}
 
-	dst := t.Destination()
+	dst := t.Destination
 	dstPath := filepath.FromSlash(dst)
 	if *check {
 		actual, err := os.ReadFile(dstPath)
@@ -119,11 +123,11 @@ type taskError struct {
 	err error
 }
 
-func worker(taskChan <-chan Task, errorChan chan<- taskError, wg *sync.WaitGroup) {
+func worker(taskChan <-chan *Task, errorChan chan<- taskError, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for t := range taskChan {
 		if err := runTask(t); err != nil {
-			errorChan <- taskError{t.Destination(), err}
+			errorChan <- taskError{t.Destination, err}
 		}
 	}
 }
@@ -154,8 +158,8 @@ func run() error {
 		return fmt.Errorf("error decoding build config: %s", err)
 	}
 
-	var tasks []Task
-	var perlAsmTasks []WaitableTask
+	var tasks []*Task
+	var perlAsmTasks []*Task
 	var allAsmSrcs []string
 	targetsOut := make(map[string]build.Target)
 	for name, targetIn := range targetsIn {
@@ -166,15 +170,10 @@ func run() error {
 		targetsOut[name] = targetOut
 		tasks = append(tasks, targetTasks...)
 		for _, task := range targetTasks {
-			waitable, ok := task.(WaitableTask)
-			if !ok {
+			if !slices.Contains(targetAsmSrcs, task.Destination) {
 				continue
 			}
-			if !slices.Contains(targetAsmSrcs, task.Destination()) {
-				return errors.New("asm destination is not contained in target asm sources")
-			}
-			perlAsmTasks = append(perlAsmTasks, waitable)
-
+			perlAsmTasks = append(perlAsmTasks, task)
 		}
 		allAsmSrcs = append(allAsmSrcs, targetAsmSrcs...)
 	}
@@ -188,9 +187,8 @@ func run() error {
 
 	// Filter tasks by command-line argument.
 	if args := flag.Args(); len(args) != 0 {
-		var filtered []Task
 		for _, t := range tasks {
-			dst := t.Destination()
+			dst := t.Destination
 			matched := false
 			for _, arg := range args {
 				if strings.Contains(dst, arg) {
@@ -198,28 +196,16 @@ func run() error {
 					break
 				}
 			}
-			if matched {
-				filtered = append(filtered, t)
-			} else if wt, ok := t.(WaitableTask); ok {
-				// A filtered-out task can be assumed to have finished _successfully_.
-				// After all, usually one can assume CI has already run it
-				// and compared its output.
-				//
-				// In case the output file does not exist,
-				// the dependent task will sure notice and fail.
-				//
-				// This allows filtering out tasks one e.g. can't currently run
-				// while still running other tasks that depend on them.
-				wt.Close(nil)
+			if !matched {
+				t.Close(fmt.Errorf("%w: not included by filter", TaskSkipped))
 			}
 		}
-		tasks = filtered
 	}
 
 	if *list {
 		paths := make([]string, len(tasks))
 		for i, t := range tasks {
-			paths[i] = t.Destination()
+			paths[i] = t.Destination
 		}
 		slices.Sort(paths)
 		for _, p := range paths {
@@ -231,7 +217,7 @@ func run() error {
 	// Schedule tasks in parallel. Perlasm benefits from running in parallel. The
 	// others likely do not, but it is simpler to parallelize them all.
 	var wg sync.WaitGroup
-	taskChan := make(chan Task, *numWorkers)
+	taskChan := make(chan *Task, *numWorkers)
 	errorChan := make(chan taskError, *numWorkers)
 	for i := 0; i < *numWorkers; i++ {
 		wg.Add(1)

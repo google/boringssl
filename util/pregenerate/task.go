@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,109 +24,136 @@ import (
 	"path/filepath"
 )
 
-type Task interface {
-	// Destination returns the destination path for this task, using forward
+// TaskSkipped indicates the task has been skipped.
+var TaskSkipped = errors.New("task skipped")
+
+// Task is a task the pregenerate system can perform.
+type Task struct {
+	// Destination is the destination path for this task, using forward
 	// slashes and relative to the source directory. That is, use the "path"
 	// package, not "path/filepath".
-	Destination() string
+	Destination string
 
-	// Run computes the output for this task. It should be written to the
-	// destination path.
-	Run() ([]byte, error)
+	// Dependencies are the list of tasks this task depends on.
+	Dependencies []*Task
+
+	// Func is the function the task performs when executed. It only runs once all `Dependencies` have finished.
+	RunFunc func() ([]byte, error)
+
+	// finishedC gets closed when the task is done.
+	finishedC chan struct{}
+
+	// err contains the task's status when done.
+	err error
 }
 
-type WaitableTask interface {
-	Task
-
-	// Wait waits for the task to finish, and returns its status.
-	Wait() error
-
-	// Close closes this task. Waiting on it will return err.
-	Close(err error)
+// String returns a human readable name for a task; just using the destination path for now.
+func (t *Task) String() string {
+	return t.Destination
 }
 
-// WaitableTaskImpl is an implementation of a waitable task.
-type WaitableTaskImpl struct {
-	Task
-	FinishedC chan struct{}
-	Err       error
+// Prepare must be called on a task before it can be used.
+func (t *Task) Prepare() *Task {
+	if t.finishedC == nil {
+		t.finishedC = make(chan struct{})
+	}
+	return t
 }
 
-func WrapWaitable(t Task) WaitableTask {
-	return &WaitableTaskImpl{Task: t, FinishedC: make(chan struct{})}
-}
-
-// Run performs the task, taking care of infrastructure so it can be waited on.
-func (t *WaitableTaskImpl) Run() (out []byte, err error) {
+// runInternal performs the task's job, not accounting to only run once.
+func (t *Task) runInternal() (out []byte, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("panic caught: %v", p)
 		}
-		t.Close(err)
 	}()
-	return t.Task.Run()
+	for _, dep := range t.Dependencies {
+		err := dep.wait()
+		if err != nil {
+			if errors.Is(err, TaskSkipped) {
+				fmt.Fprintf(os.Stderr, "task %q dependency %q skipped - carrying on with previously saved data: %v\n", t, dep, err)
+				continue
+			}
+			return nil, fmt.Errorf("task %q dependency %q unfulfilled: %w", t, dep, err)
+		}
+	}
+	return t.RunFunc()
 }
 
-// Wait waits for the task to finish, and returns its status.
-func (t *WaitableTaskImpl) Wait() error {
-	<-t.FinishedC
-	return t.Err
+// Run runs the task, and closes it - unless the task has already been closed.
+//
+// Must only be called once, and not concurrently with any `Close()` calls.
+func (t *Task) Run() ([]byte, error) {
+	select {
+	case <-t.finishedC:
+		return nil, fmt.Errorf("task already closed: %w", t.err)
+	default:
+	}
+	out, err := t.runInternal()
+	t.Close(err)
+	return out, err
 }
 
-// Close closes the task.
-func (t *WaitableTaskImpl) Close(err error) {
-	t.Err = err
-	close(t.FinishedC)
+// wait waits for the task to finish, and returns its status.
+func (t *Task) wait() error {
+	<-t.finishedC
+	return t.err
 }
 
-type SimpleTask struct {
-	Dst     string
-	RunFunc func() ([]byte, error)
+// Close marks the task as done with the given status.
+func (t *Task) Close(err error) {
+	t.err = err
+	close(t.finishedC)
 }
-
-// Destination returns where this task will write to.
-func (t *SimpleTask) Destination() string { return t.Dst }
-
-// Run performs the task.
-func (t *SimpleTask) Run() ([]byte, error) { return t.RunFunc() }
 
 // NewSimpleTask creates a new task based on a lambda for what it does.
-func NewSimpleTask(dst string, runFunc func() ([]byte, error)) *SimpleTask {
-	return &SimpleTask{Dst: dst, RunFunc: runFunc}
+func NewSimpleTask(dst string, runFunc func() ([]byte, error), dependencies ...*Task) *Task {
+	return (&Task{
+		Destination:  dst,
+		Dependencies: dependencies,
+		RunFunc:      runFunc,
+	}).Prepare()
 }
 
-type PerlasmTask struct {
-	Src, Dst string
-	Args     []string
-}
+// NewPerlasmTask creates a new task that runs perlasm.
+func NewPerlasmTask(dst, src string, perlasmArgs []string) *Task {
+	return NewSimpleTask(dst, func() (data []byte, err error) {
+		if *perlPath == "" {
+			return nil, fmt.Errorf("%w: perl has been disabled by flag", TaskSkipped)
+		}
 
-func (t *PerlasmTask) Destination() string { return t.Dst }
-func (t *PerlasmTask) Run() ([]byte, error) {
-	base := path.Base(t.Dst)
-	out, err := os.CreateTemp("", "*."+base)
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(out.Name())
+		defer func() {
+			if err != nil {
+				err = fmt.Errorf("%w; note that this step can be turned off by passing -perl=", err)
+			}
+		}()
 
-	args := make([]string, 0, 2+len(t.Args))
-	args = append(args, filepath.FromSlash(t.Src))
-	args = append(args, t.Args...)
-	args = append(args, out.Name())
-	cmd := exec.Command(*perlPath, args...)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
+		base := path.Base(dst)
+		out, err := os.CreateTemp("", "*."+base)
+		if err != nil {
+			return nil, err
+		}
+		defer os.Remove(out.Name())
 
-	data, err := os.ReadFile(out.Name())
-	if err != nil {
-		return nil, err
-	}
+		args := make([]string, 0, 2+len(perlasmArgs))
+		args = append(args, filepath.FromSlash(src))
+		args = append(args, perlasmArgs...)
+		args = append(args, out.Name())
+		cmd := exec.Command(*perlPath, args...)
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
+		if err := cmd.Run(); err != nil {
+			return nil, err
+		}
 
-	// On Windows, perl emits CRLF line endings. Normalize this so that the tool
-	// can be run on Windows too.
-	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
-	return data, nil
+		data, err = os.ReadFile(out.Name())
+		if err != nil {
+			return nil, err
+		}
+
+		// On Windows, perl emits CRLF line endings. Normalize this so that the tool
+		// can be run on Windows too.
+		data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+		return data, nil
+	})
 }

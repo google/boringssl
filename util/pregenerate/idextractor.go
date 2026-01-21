@@ -46,49 +46,26 @@ var platformDependentRedefineExtnameSymbols = []string{
 // They will always be included in the prefixing headers.
 var platformDependentMacroSymbols = []string{}
 
-// An IDExtractorTask extracts C++ symbol names from header files.
-type IDExtractorTask struct {
-	Headers []string
-	Dst     string
-}
-
-// Destination is where the symbol list should be written to.
-func (t *IDExtractorTask) Destination() string {
-	return t.Dst
-}
-
 // isClangCL returns whether the program given is likely the `clang-cl` driver.
 func isClangCL(clang string) (bool, error) {
 	// We probably could be smarter here than just using the binary name.
 	return strings.TrimSuffix(strings.ToLower(filepath.Base(clang)), ".exe") == "clang-cl", nil
 }
 
-// debug runs a shell command and returns its output.
-func debug(cmd string, args ...string) string {
-	cmd, err := exec.LookPath(cmd)
-	if err != nil {
-		return err.Error()
+// BuildCRenamingMacros calls Clang to extract the AST of the headers, then processes them to extract the symbols.
+//
+// It returns an include for C.
+func BuildCRenamingIncludes(headers []string) (cInclude []byte, err error) {
+	cmd := *clangPath
+	if cmd == "" {
+		return nil, fmt.Errorf("%w: clang has been disabled by flag", TaskSkipped)
 	}
-	c := exec.Command(cmd, args...)
-	var buf bytes.Buffer
-	c.Stdout = &buf
-	c.Stderr = &buf
-	err = c.Run()
-	if err != nil {
-		return err.Error()
-	}
-	return buf.String()
-}
 
-// Run calls Clang to extract the AST of the headers, then processes them to extract the symbols.
-func (t *IDExtractorTask) Run() (out []byte, err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("%w; note that this step can be turned off by passing -clang=", err)
 		}
 	}()
-
-	cmd := *clangPath
 
 	isCL, err := isClangCL(cmd)
 	if err != nil {
@@ -128,7 +105,7 @@ func (t *IDExtractorTask) Run() (out []byte, err error) {
 	}
 
 	var stdin bytes.Buffer
-	for _, header := range t.Headers {
+	for _, header := range headers {
 		fmt.Fprintf(&stdin, "#include <%s>\n", strings.TrimPrefix(filepath.ToSlash(header), "include/"))
 	}
 
@@ -219,25 +196,25 @@ func (t *IDExtractorTask) Run() (out []byte, err error) {
 		return nil, err
 	}
 
-	var output bytes.Buffer
-	writeHeader(&output, "//")
-	output.WriteString("\n")
-	output.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME)\n")
-	output.WriteString("\n")
+	var cOutput bytes.Buffer
+	writeHeader(&cOutput, "//")
+	cOutput.WriteString("\n")
+	cOutput.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME)\n")
+	cOutput.WriteString("\n")
 	for _, sym := range slices.Sorted(maps.Keys(viaRedefineExtname)) {
-		fmt.Fprintf(&output, "#pragma redefine_extname %s BORINGSSL_SYMBOL(BORINGSSL_ADD_PREFIX(%s))\n", sym, sym)
+		fmt.Fprintf(&cOutput, "#pragma redefine_extname %s BORINGSSL_SYMBOL(BORINGSSL_ADD_PREFIX(%s))\n", sym, sym)
 	}
-	output.WriteString("\n")
-	output.WriteString("#else  // __PRAGMA_REDEFINE_EXTNAME\n")
-	output.WriteString("\n")
+	cOutput.WriteString("\n")
+	cOutput.WriteString("#else  // __PRAGMA_REDEFINE_EXTNAME\n")
+	cOutput.WriteString("\n")
 	for _, sym := range slices.Sorted(maps.Keys(viaRedefineExtname)) {
-		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
+		fmt.Fprintf(&cOutput, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
-	output.WriteString("\n")
-	output.WriteString("#endif  // __PRAGMA_REDEFINE_EXTNAME\n")
-	output.WriteString("\n")
+	cOutput.WriteString("\n")
+	cOutput.WriteString("#endif  // __PRAGMA_REDEFINE_EXTNAME\n")
+	cOutput.WriteString("\n")
 	for _, sym := range slices.Sorted(maps.Keys(viaMacro)) {
-		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
+		fmt.Fprintf(&cOutput, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
-	return output.Bytes(), nil
+	return cOutput.Bytes(), nil
 }
