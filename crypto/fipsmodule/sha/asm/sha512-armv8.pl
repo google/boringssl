@@ -343,14 +343,14 @@ sha256_block_data_order_hw:
 	stp		x29,x30,[sp,#-16]!
 	add		x29,sp,#0
 
-	ld1.32		{$ABCD.16b,$EFGH.16b},[$ctx]
+	ld1		{$ABCD.4s,$EFGH.4s},[$ctx]
 	adrp		$Ktbl,:pg_hi21:.LK256
 	add		$Ktbl,$Ktbl,:lo12:.LK256
 
 .Loop_hw:
 	ld1		{@MSG[0].16b-@MSG[3].16b},[$inp],#64
 	sub		$num,$num,#1
-	ld1.32		{$W0.4s},[$Ktbl],#16
+	ld1		{$W0.4s},[$Ktbl],#16
 	rev32		@MSG[0].16b,@MSG[0].16b
 	rev32		@MSG[1].16b,@MSG[1].16b
 	rev32		@MSG[2].16b,@MSG[2].16b
@@ -360,8 +360,8 @@ sha256_block_data_order_hw:
 ___
 for($i=0;$i<12;$i++) {
 $code.=<<___;
-	ld1.32		{$W1.4s},[$Ktbl],#16
-	add.i32		$W0.4s,$W0.4s,@MSG[0].16b
+	ld1		{$W1.4s},[$Ktbl],#16
+	add		$W0.4s,$W0.4s,@MSG[0].4s
 	sha256su0	@MSG[0].16b,@MSG[1].16b
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
 	sha256h		$ABCD.16b,$EFGH.16b,$W0.4s
@@ -371,36 +371,36 @@ ___
 	($W0,$W1)=($W1,$W0);	push(@MSG,shift(@MSG));
 }
 $code.=<<___;
-	ld1.32		{$W1.4s},[$Ktbl],#16
-	add.i32		$W0.4s,$W0.4s,@MSG[0].16b
+	ld1		{$W1.4s},[$Ktbl],#16
+	add		$W0.4s,$W0.4s,@MSG[0].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
 	sha256h		$ABCD.16b,$EFGH.16b,$W0.4s
 	sha256h2	$EFGH.16b,$abcd.16b,$W0.4s
 
-	ld1.32		{$W0.4s},[$Ktbl],#16
-	add.i32		$W1.4s,$W1.4s,@MSG[1].16b
+	ld1		{$W0.4s},[$Ktbl],#16
+	add		$W1.4s,$W1.4s,@MSG[1].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
 	sha256h		$ABCD.16b,$EFGH.16b,$W1.4s
 	sha256h2	$EFGH.16b,$abcd.16b,$W1.4s
 
-	ld1.32		{$W1.4s},[$Ktbl]
-	add.i32		$W0.4s,$W0.4s,@MSG[2].16b
+	ld1		{$W1.4s},[$Ktbl]
+	add		$W0.4s,$W0.4s,@MSG[2].4s
 	sub		$Ktbl,$Ktbl,#$rounds*$SZ-16	// rewind
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
 	sha256h		$ABCD.16b,$EFGH.16b,$W0.4s
 	sha256h2	$EFGH.16b,$abcd.16b,$W0.4s
 
-	add.i32		$W1.4s,$W1.4s,@MSG[3].16b
+	add		$W1.4s,$W1.4s,@MSG[3].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
 	sha256h		$ABCD.16b,$EFGH.16b,$W1.4s
 	sha256h2	$EFGH.16b,$abcd.16b,$W1.4s
 
-	add.i32		$ABCD.16b,$ABCD.16b,$ABCD_SAVE.16b
-	add.i32		$EFGH.16b,$EFGH.16b,$EFGH_SAVE.16b
+	add		$ABCD.4s,$ABCD.4s,$ABCD_SAVE.4s
+	add		$EFGH.4s,$EFGH.4s,$EFGH_SAVE.4s
 
 	cbnz		$num,.Loop_hw
 
-	st1.32		{$ABCD.16b,$EFGH.16b},[$ctx]
+	st1		{$ABCD.4s,$EFGH.4s},[$ctx]
 
 	ldr		x29,[sp],#16
 	ret
@@ -433,7 +433,7 @@ sha512_block_data_order_hw:
 	ld1		{@MSG[0].16b-@MSG[3].16b},[$inp],#64	// load input
 	ld1		{@MSG[4].16b-@MSG[7].16b},[$inp],#64
 
-	ld1.64		{@H[0].16b-@H[3].16b},[$ctx]		// load context
+	ld1		{@H[0].2d-@H[3].2d},[$ctx]		// load context
 	adrp		$Ktbl,:pg_hi21:.LK512
 	add		$Ktbl,$Ktbl,:lo12:.LK512
 
@@ -449,7 +449,7 @@ sha512_block_data_order_hw:
 
 .align	4
 .Loop_hw:
-	ld1.64		{$W0.2d},[$Ktbl],#16
+	ld1		{$W0.2d},[$Ktbl],#16
 	subs		$num,$num,#1
 	sub		x4,$inp,#128
 	orr		$AB.16b,@H[0].16b,@H[0].16b		// offload
@@ -460,17 +460,17 @@ sha512_block_data_order_hw:
 ___
 for($i=0;$i<32;$i++) {
 $code.=<<___;
-	add.i64		$W0.2d,$W0.2d,@MSG[0].16b
-	ld1.64		{$W1.2d},[$Ktbl],#16
-	ext		$W0.2d,$W0.2d,$W0.2d,#8
+	add		$W0.2d,$W0.2d,@MSG[0].2d
+	ld1		{$W1.2d},[$Ktbl],#16
+	ext		$W0.16b,$W0.16b,$W0.16b,#8
 	ext		$fg.16b,@H[2].16b,@H[3].16b,#8
 	ext		$de.16b,@H[1].16b,@H[2].16b,#8
-	add.i64		@H[3].16b,@H[3].16b,$W0.2d		// "T1 + H + K512[i]"
+	add		@H[3].2d,@H[3].2d,$W0.2d		// "T1 + H + K512[i]"
 	 sha512su0	@MSG[0].16b,@MSG[1].16b
 	 ext		$m9_10.16b,@MSG[4].16b,@MSG[5].16b,#8
 	sha512h		@H[3].16b,$fg.16b,$de.16b
 	 sha512su1	@MSG[0].16b,@MSG[7].16b,$m9_10.16b
-	add.i64		@H[4].16b,@H[1].16b,@H[3].16b		// "D + T1"
+	add		@H[4].2d,@H[1].2d,@H[3].2d		// "D + T1"
 	sha512h2	@H[3].16b,$H[1].16b,@H[0].16b
 ___
 	($W0,$W1)=($W1,$W0);	push(@MSG,shift(@MSG));
@@ -478,35 +478,35 @@ ___
 }
 for(;$i<40;$i++) {
 $code.=<<___	if ($i<39);
-	ld1.64		{$W1.2d},[$Ktbl],#16
+	ld1		{$W1.2d},[$Ktbl],#16
 ___
 $code.=<<___	if ($i==39);
 	sub		$Ktbl,$Ktbl,#$rounds*$SZ		// rewind
 ___
 $code.=<<___;
-	add.i64		$W0.2d,$W0.2d,@MSG[0].16b
+	add		$W0.2d,$W0.2d,@MSG[0].2d
 	 ld1		{@MSG[0].16b},[$inp],#16		// load next input
-	ext		$W0.2d,$W0.2d,$W0.2d,#8
+	ext		$W0.16b,$W0.16b,$W0.16b,#8
 	ext		$fg.16b,@H[2].16b,@H[3].16b,#8
 	ext		$de.16b,@H[1].16b,@H[2].16b,#8
-	add.i64		@H[3].16b,@H[3].16b,$W0.2d		// "T1 + H + K512[i]"
+	add		@H[3].2d,@H[3].2d,$W0.2d		// "T1 + H + K512[i]"
 	sha512h		@H[3].16b,$fg.16b,$de.16b
 	 rev64		@MSG[0].16b,@MSG[0].16b
-	add.i64		@H[4].16b,@H[1].16b,@H[3].16b		// "D + T1"
+	add		@H[4].2d,@H[1].2d,@H[3].2d		// "D + T1"
 	sha512h2	@H[3].16b,$H[1].16b,@H[0].16b
 ___
 	($W0,$W1)=($W1,$W0);	push(@MSG,shift(@MSG));
 	@H = (@H[3],@H[0],@H[4],@H[2],@H[1]);
 }
 $code.=<<___;
-	add.i64		@H[0].16b,@H[0].16b,$AB.16b		// accumulate
-	add.i64		@H[1].16b,@H[1].16b,$CD.16b
-	add.i64		@H[2].16b,@H[2].16b,$EF.16b
-	add.i64		@H[3].16b,@H[3].16b,$GH.16b
+	add		@H[0].2d,@H[0].2d,$AB.2d		// accumulate
+	add		@H[1].2d,@H[1].2d,$CD.2d
+	add		@H[2].2d,@H[2].2d,$EF.2d
+	add		@H[3].2d,@H[3].2d,$GH.2d
 
 	cbnz		$num,.Loop_hw
 
-	st1.64		{@H[0].16b-@H[3].16b},[$ctx]		// store context
+	st1		{@H[0].2d-@H[3].2d},[$ctx]		// store context
 
 	ldr		x29,[sp],#16
 	ret
@@ -559,14 +559,6 @@ foreach(split("\n",$code)) {
 
 	s/\b(sha512\w+)\s+([qv].*)/unsha512($1,$2)/ge	or
 	s/\b(sha256\w+)\s+([qv].*)/unsha256($1,$2)/ge;
-
-	s/\bq([0-9]+)\b/v$1.16b/g;		# old->new registers
-
-	s/\.[ui]?8(\s)/$1/;
-	s/\.\w?64\b//		and s/\.16b/\.2d/g	or
-	s/\.\w?32\b//		and s/\.16b/\.4s/g;
-	m/\bext\b/		and s/\.2d/\.16b/g	or
-	m/(ld|st)1[^\[]+\[0\]/	and s/\.4s/\.s/g;
 
 	print $_,"\n";
 }
