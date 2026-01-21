@@ -153,6 +153,7 @@ class OPENSSL_EXPORT MTCAnchor {
   // exists because the c'tor inputs could be invalid.
   bool IsValid() const;
 
+  Span<const uint8_t> log_id() const { return log_id_; }
   // TODO(nharper): Move this function to TrustAnchor.
   der::Input NormalizedSubject() const;
   // TODO(nharper): Remove this function in favor of TrustAnchor's version.
@@ -164,6 +165,7 @@ class OPENSSL_EXPORT MTCAnchor {
  private:
   void CreateSyntheticCert(Span<const uint8_t> log_id);
 
+  std::vector<uint8_t> log_id_;
   std::shared_ptr<const ParsedCertificate> synthetic_cert_;
   std::vector<TrustedSubtree> trusted_subtrees_;
 };

@@ -161,6 +161,7 @@ TEST_F(TrustStoreInMemoryTest, MTCAnchors) {
   std::shared_ptr<MTCAnchor> valid_anchor =
       std::make_shared<MTCAnchor>(kValidLogId, MakeSpan(valid_subtrees));
   EXPECT_TRUE(valid_anchor->IsValid());
+  EXPECT_EQ(valid_anchor->log_id(), kValidLogId);
   EXPECT_TRUE(in_memory.AddMTCTrustAnchor(valid_anchor));
 
   {

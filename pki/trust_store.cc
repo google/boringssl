@@ -189,7 +189,8 @@ std::optional<CertificateTrust> CertificateTrust::FromDebugString(
 
 MTCAnchor::MTCAnchor(bssl::Span<const uint8_t> log_id,
                      Span<const TrustedSubtree> trusted_subtrees)
-    : trusted_subtrees_(trusted_subtrees.begin(), trusted_subtrees.end()) {
+    : log_id_(log_id.begin(), log_id.end()),
+      trusted_subtrees_(trusted_subtrees.begin(), trusted_subtrees.end()) {
   CreateSyntheticCert(log_id);
 }
 
