@@ -327,6 +327,7 @@ if ($SZ==4) {
 my $Ktbl="x3";
 
 my ($ABCD,$EFGH,$abcd)=map("v$_",(0..2));
+my ($ABCD_q,$EFGH_q,$abcd_q)=map("q$_",(0..2));
 my @MSG=map("v$_",(4..7));
 my ($W0,$W1)=("v16","v17");
 my ($ABCD_SAVE,$EFGH_SAVE)=("v18","v19");
@@ -362,11 +363,11 @@ for($i=0;$i<12;$i++) {
 $code.=<<___;
 	ld1		{$W1.4s},[$Ktbl],#16
 	add		$W0.4s,$W0.4s,@MSG[0].4s
-	sha256su0	@MSG[0].16b,@MSG[1].16b
+	sha256su0	@MSG[0].4s,@MSG[1].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
-	sha256h		$ABCD.16b,$EFGH.16b,$W0.4s
-	sha256h2	$EFGH.16b,$abcd.16b,$W0.4s
-	sha256su1	@MSG[0].16b,@MSG[2].16b,@MSG[3].16b
+	sha256h		$ABCD_q,$EFGH_q,$W0.4s
+	sha256h2	$EFGH_q,$abcd_q,$W0.4s
+	sha256su1	@MSG[0].4s,@MSG[2].4s,@MSG[3].4s
 ___
 	($W0,$W1)=($W1,$W0);	push(@MSG,shift(@MSG));
 }
@@ -374,26 +375,26 @@ $code.=<<___;
 	ld1		{$W1.4s},[$Ktbl],#16
 	add		$W0.4s,$W0.4s,@MSG[0].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
-	sha256h		$ABCD.16b,$EFGH.16b,$W0.4s
-	sha256h2	$EFGH.16b,$abcd.16b,$W0.4s
+	sha256h		$ABCD_q,$EFGH_q,$W0.4s
+	sha256h2	$EFGH_q,$abcd_q,$W0.4s
 
 	ld1		{$W0.4s},[$Ktbl],#16
 	add		$W1.4s,$W1.4s,@MSG[1].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
-	sha256h		$ABCD.16b,$EFGH.16b,$W1.4s
-	sha256h2	$EFGH.16b,$abcd.16b,$W1.4s
+	sha256h		$ABCD_q,$EFGH_q,$W1.4s
+	sha256h2	$EFGH_q,$abcd_q,$W1.4s
 
 	ld1		{$W1.4s},[$Ktbl]
 	add		$W0.4s,$W0.4s,@MSG[2].4s
 	sub		$Ktbl,$Ktbl,#$rounds*$SZ-16	// rewind
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
-	sha256h		$ABCD.16b,$EFGH.16b,$W0.4s
-	sha256h2	$EFGH.16b,$abcd.16b,$W0.4s
+	sha256h		$ABCD_q,$EFGH_q,$W0.4s
+	sha256h2	$EFGH_q,$abcd_q,$W0.4s
 
 	add		$W1.4s,$W1.4s,@MSG[3].4s
 	orr		$abcd.16b,$ABCD.16b,$ABCD.16b
-	sha256h		$ABCD.16b,$EFGH.16b,$W1.4s
-	sha256h2	$EFGH.16b,$abcd.16b,$W1.4s
+	sha256h		$ABCD_q,$EFGH_q,$W1.4s
+	sha256h2	$EFGH_q,$abcd_q,$W1.4s
 
 	add		$ABCD.4s,$ABCD.4s,$ABCD_SAVE.4s
 	add		$EFGH.4s,$EFGH.4s,$EFGH_SAVE.4s
@@ -413,7 +414,9 @@ if ($SZ==8) {
 my $Ktbl="x3";
 
 my @H = map("v$_",(0..4));
+my @H_q = map(s/v/q/r,@H);
 my ($fg,$de,$m9_10)=map("v$_",(5..7));
+my $fg_q = $fg =~ s/v/q/r;
 my @MSG=map("v$_",(16..23));
 my ($W0,$W1)=("v24","v25");
 my ($AB,$CD,$EF,$GH)=map("v$_",(26..29));
@@ -466,15 +469,16 @@ $code.=<<___;
 	ext		$fg.16b,@H[2].16b,@H[3].16b,#8
 	ext		$de.16b,@H[1].16b,@H[2].16b,#8
 	add		@H[3].2d,@H[3].2d,$W0.2d		// "T1 + H + K512[i]"
-	 sha512su0	@MSG[0].16b,@MSG[1].16b
+	 sha512su0	@MSG[0].2d,@MSG[1].2d
 	 ext		$m9_10.16b,@MSG[4].16b,@MSG[5].16b,#8
-	sha512h		@H[3].16b,$fg.16b,$de.16b
-	 sha512su1	@MSG[0].16b,@MSG[7].16b,$m9_10.16b
+	sha512h		@H_q[3],$fg_q,$de.2d
+	 sha512su1	@MSG[0].2d,@MSG[7].2d,$m9_10.2d
 	add		@H[4].2d,@H[1].2d,@H[3].2d		// "D + T1"
-	sha512h2	@H[3].16b,$H[1].16b,@H[0].16b
+	sha512h2	@H_q[3],$H_q[1],@H[0].2d
 ___
 	($W0,$W1)=($W1,$W0);	push(@MSG,shift(@MSG));
 	@H = (@H[3],@H[0],@H[4],@H[2],@H[1]);
+	@H_q = map(s/v/q/r,@H);
 }
 for(;$i<40;$i++) {
 $code.=<<___	if ($i<39);
@@ -490,13 +494,14 @@ $code.=<<___;
 	ext		$fg.16b,@H[2].16b,@H[3].16b,#8
 	ext		$de.16b,@H[1].16b,@H[2].16b,#8
 	add		@H[3].2d,@H[3].2d,$W0.2d		// "T1 + H + K512[i]"
-	sha512h		@H[3].16b,$fg.16b,$de.16b
+	sha512h		@H_q[3],$fg_q,$de.2d
 	 rev64		@MSG[0].16b,@MSG[0].16b
 	add		@H[4].2d,@H[1].2d,@H[3].2d		// "D + T1"
-	sha512h2	@H[3].16b,$H[1].16b,@H[0].16b
+	sha512h2	@H_q[3],$H_q[1],@H[0].2d
 ___
 	($W0,$W1)=($W1,$W0);	push(@MSG,shift(@MSG));
 	@H = (@H[3],@H[0],@H[4],@H[2],@H[1]);
+	@H_q = map(s/v/q/r,@H);
 }
 $code.=<<___;
 	add		@H[0].2d,@H[0].2d,$AB.2d		// accumulate
