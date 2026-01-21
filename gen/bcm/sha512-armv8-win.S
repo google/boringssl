@@ -1106,17 +1106,17 @@ Loop_hw:
 	ld1	{v24.2d},[x3],#16
 	subs	x2,x2,#1
 	sub	x4,x1,#128
-	orr	v26.16b,v0.16b,v0.16b			// offload
+	orr	v26.16b,v0.16b,v0.16b		// offload
 	orr	v27.16b,v1.16b,v1.16b
 	orr	v28.16b,v2.16b,v2.16b
 	orr	v29.16b,v3.16b,v3.16b
-	csel	x1,x1,x4,ne			// conditional rewind
+	csel	x1,x1,x4,ne				// conditional rewind
 	add	v24.2d,v24.2d,v16.2d
 	ld1	{v25.2d},[x3],#16
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08230	//sha512su0 v16.16b,v17.16b
 	ext	v7.16b,v20.16b,v21.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1128,7 +1128,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08251	//sha512su0 v17.16b,v18.16b
 	ext	v7.16b,v21.16b,v22.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1140,7 +1140,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08272	//sha512su0 v18.16b,v19.16b
 	ext	v7.16b,v22.16b,v23.16b,#8
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
@@ -1152,7 +1152,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08293	//sha512su0 v19.16b,v20.16b
 	ext	v7.16b,v23.16b,v16.16b,#8
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
@@ -1164,7 +1164,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082b4	//sha512su0 v20.16b,v21.16b
 	ext	v7.16b,v16.16b,v17.16b,#8
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
@@ -1176,7 +1176,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec082d5	//sha512su0 v21.16b,v22.16b
 	ext	v7.16b,v17.16b,v18.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1188,7 +1188,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082f6	//sha512su0 v22.16b,v23.16b
 	ext	v7.16b,v18.16b,v19.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1200,7 +1200,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08217	//sha512su0 v23.16b,v16.16b
 	ext	v7.16b,v19.16b,v20.16b,#8
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
@@ -1212,7 +1212,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08230	//sha512su0 v16.16b,v17.16b
 	ext	v7.16b,v20.16b,v21.16b,#8
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
@@ -1224,7 +1224,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08251	//sha512su0 v17.16b,v18.16b
 	ext	v7.16b,v21.16b,v22.16b,#8
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
@@ -1236,7 +1236,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08272	//sha512su0 v18.16b,v19.16b
 	ext	v7.16b,v22.16b,v23.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1248,7 +1248,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08293	//sha512su0 v19.16b,v20.16b
 	ext	v7.16b,v23.16b,v16.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1260,7 +1260,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082b4	//sha512su0 v20.16b,v21.16b
 	ext	v7.16b,v16.16b,v17.16b,#8
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
@@ -1272,7 +1272,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec082d5	//sha512su0 v21.16b,v22.16b
 	ext	v7.16b,v17.16b,v18.16b,#8
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
@@ -1284,7 +1284,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082f6	//sha512su0 v22.16b,v23.16b
 	ext	v7.16b,v18.16b,v19.16b,#8
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
@@ -1296,7 +1296,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08217	//sha512su0 v23.16b,v16.16b
 	ext	v7.16b,v19.16b,v20.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1308,7 +1308,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08230	//sha512su0 v16.16b,v17.16b
 	ext	v7.16b,v20.16b,v21.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1320,7 +1320,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08251	//sha512su0 v17.16b,v18.16b
 	ext	v7.16b,v21.16b,v22.16b,#8
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
@@ -1332,7 +1332,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08272	//sha512su0 v18.16b,v19.16b
 	ext	v7.16b,v22.16b,v23.16b,#8
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
@@ -1344,7 +1344,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08293	//sha512su0 v19.16b,v20.16b
 	ext	v7.16b,v23.16b,v16.16b,#8
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
@@ -1356,7 +1356,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082b4	//sha512su0 v20.16b,v21.16b
 	ext	v7.16b,v16.16b,v17.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1368,7 +1368,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec082d5	//sha512su0 v21.16b,v22.16b
 	ext	v7.16b,v17.16b,v18.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1380,7 +1380,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082f6	//sha512su0 v22.16b,v23.16b
 	ext	v7.16b,v18.16b,v19.16b,#8
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
@@ -1392,7 +1392,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08217	//sha512su0 v23.16b,v16.16b
 	ext	v7.16b,v19.16b,v20.16b,#8
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
@@ -1404,7 +1404,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08230	//sha512su0 v16.16b,v17.16b
 	ext	v7.16b,v20.16b,v21.16b,#8
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
@@ -1416,7 +1416,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08251	//sha512su0 v17.16b,v18.16b
 	ext	v7.16b,v21.16b,v22.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1428,7 +1428,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec08272	//sha512su0 v18.16b,v19.16b
 	ext	v7.16b,v22.16b,v23.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1440,7 +1440,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08293	//sha512su0 v19.16b,v20.16b
 	ext	v7.16b,v23.16b,v16.16b,#8
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
@@ -1452,7 +1452,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082b4	//sha512su0 v20.16b,v21.16b
 	ext	v7.16b,v16.16b,v17.16b,#8
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
@@ -1464,7 +1464,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec082d5	//sha512su0 v21.16b,v22.16b
 	ext	v7.16b,v17.16b,v18.16b,#8
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
@@ -1476,7 +1476,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xcec082f6	//sha512su0 v22.16b,v23.16b
 	ext	v7.16b,v18.16b,v19.16b,#8
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
@@ -1488,7 +1488,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xcec08217	//sha512su0 v23.16b,v16.16b
 	ext	v7.16b,v19.16b,v20.16b,#8
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
@@ -1501,7 +1501,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
 	rev64	v16.16b,v16.16b
 	add	v0.2d,v3.2d,v4.2d		// "D + T1"
@@ -1512,7 +1512,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
 	rev64	v17.16b,v17.16b
 	add	v3.2d,v2.2d,v1.2d		// "D + T1"
@@ -1523,7 +1523,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
 	rev64	v18.16b,v18.16b
 	add	v2.2d,v4.2d,v0.2d		// "D + T1"
@@ -1534,7 +1534,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v2.16b,v3.16b,#8
 	ext	v6.16b,v1.16b,v2.16b,#8
-	add	v3.2d,v3.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v3.2d,v3.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xce6680a3	//sha512h v3.16b,v5.16b,v6.16b
 	rev64	v19.16b,v19.16b
 	add	v4.2d,v1.2d,v3.2d		// "D + T1"
@@ -1545,7 +1545,7 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v4.16b,v2.16b,#8
 	ext	v6.16b,v0.16b,v4.16b,#8
-	add	v2.2d,v2.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v2.2d,v2.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xce6680a2	//sha512h v2.16b,v5.16b,v6.16b
 	rev64	v20.16b,v20.16b
 	add	v1.2d,v0.2d,v2.2d		// "D + T1"
@@ -1556,7 +1556,7 @@ Loop_hw:
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v1.16b,v4.16b,#8
 	ext	v6.16b,v3.16b,v1.16b,#8
-	add	v4.2d,v4.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v4.2d,v4.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xce6680a4	//sha512h v4.16b,v5.16b,v6.16b
 	rev64	v21.16b,v21.16b
 	add	v0.2d,v3.2d,v4.2d		// "D + T1"
@@ -1567,23 +1567,23 @@ Loop_hw:
 	ext	v24.16b,v24.16b,v24.16b,#8
 	ext	v5.16b,v0.16b,v1.16b,#8
 	ext	v6.16b,v2.16b,v0.16b,#8
-	add	v1.2d,v1.2d,v24.2d			// "T1 + H + K512[i]"
+	add	v1.2d,v1.2d,v24.2d		// "T1 + H + K512[i]"
 .long	0xce6680a1	//sha512h v1.16b,v5.16b,v6.16b
 	rev64	v22.16b,v22.16b
 	add	v3.2d,v2.2d,v1.2d		// "D + T1"
 .long	0xce648441	//sha512h2 v1.16b,v2.16b,v4.16b
-	sub	x3,x3,#80*8	// rewind
+	sub	x3,x3,#80*8		// rewind
 	add	v25.2d,v25.2d,v23.2d
 	ld1	{v23.16b},[x1],#16		// load next input
 	ext	v25.16b,v25.16b,v25.16b,#8
 	ext	v5.16b,v3.16b,v0.16b,#8
 	ext	v6.16b,v4.16b,v3.16b,#8
-	add	v0.2d,v0.2d,v25.2d			// "T1 + H + K512[i]"
+	add	v0.2d,v0.2d,v25.2d		// "T1 + H + K512[i]"
 .long	0xce6680a0	//sha512h v0.16b,v5.16b,v6.16b
 	rev64	v23.16b,v23.16b
 	add	v2.2d,v4.2d,v0.2d		// "D + T1"
 .long	0xce618480	//sha512h2 v0.16b,v4.16b,v1.16b
-	add	v0.2d,v0.2d,v26.2d			// accumulate
+	add	v0.2d,v0.2d,v26.2d		// accumulate
 	add	v1.2d,v1.2d,v27.2d
 	add	v2.2d,v2.2d,v28.2d
 	add	v3.2d,v3.2d,v29.2d
