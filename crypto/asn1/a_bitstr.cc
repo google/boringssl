@@ -14,6 +14,7 @@
 
 #include <openssl/asn1.h>
 
+#include <assert.h>
 #include <limits.h>
 #include <string.h>
 
@@ -27,6 +28,14 @@
 
 
 using namespace bssl;
+
+static void set_unused_bits(ASN1_BIT_STRING *str, uint8_t unused_bits) {
+  assert(unused_bits < 8);
+  assert(unused_bits == 0 || str->length > 0);
+  // |ASN1_STRING_FLAG_BITS_LEFT| and the bottom 3 bits encode |padding|.
+  str->flags &= ~0x07;
+  str->flags |= ASN1_STRING_FLAG_BITS_LEFT | unused_bits;
+}
 
 int ASN1_BIT_STRING_set(ASN1_BIT_STRING *x, const unsigned char *d,
                         ossl_ssize_t len) {
@@ -42,8 +51,7 @@ int bssl::asn1_bit_string_length(const ASN1_BIT_STRING *str,
     return len;
   }
 
-  // TODO(https://crbug.com/boringssl/447): If we move this logic to
-  // |ASN1_BIT_STRING_set_bit|, can we remove this representation?
+  // TODO(https://crbug.com/42290311): Remove this representation.
   while (len > 0 && str->data[len - 1] == 0) {
     len--;
   }
@@ -143,9 +151,7 @@ static int asn1_parse_bit_string_contents(Span<const uint8_t> in,
   }
 
   out->type = V_ASN1_BIT_STRING;
-  // |ASN1_STRING_FLAG_BITS_LEFT| and the bottom 3 bits encode |padding|.
-  out->flags &= ~0x07;
-  out->flags |= ASN1_STRING_FLAG_BITS_LEFT | padding;
+  set_unused_bits(out, padding);
   return 1;
 }
 
@@ -207,6 +213,23 @@ int bssl::asn1_parse_bit_string_with_bad_length(CBS *cbs,
   return asn1_parse_bit_string_contents(child, out);
 }
 
+static void trim_trailing_zeros(ASN1_BIT_STRING *a) {
+  while (a->length > 0 && a->data[a->length - 1] == 0) {
+    a->length--;
+  }
+  uint8_t padding_bits = 0;
+  if (a->length > 0) {
+    uint8_t last = a->data[a->length - 1];
+    assert(last != 0);
+    for (; padding_bits < 7; padding_bits++) {
+      if (last & (1 << padding_bits)) {
+        break;
+      }
+    }
+  }
+  set_unused_bits(a, padding_bits);
+}
+
 // These next 2 functions from Goetz Babin-Ebell <babinebell@trustcenter.de>
 int ASN1_BIT_STRING_set_bit(ASN1_BIT_STRING *a, int n, int value) {
   int w, v, iv;
@@ -223,10 +246,9 @@ int ASN1_BIT_STRING_set_bit(ASN1_BIT_STRING *a, int n, int value) {
     return 0;
   }
 
-  a->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);  // clear, set on write
-
   if ((a->length < (w + 1)) || (a->data == nullptr)) {
     if (!value) {
+      trim_trailing_zeros(a);
       return 1;  // Don't need to set
     }
     if (a->data == nullptr) {
@@ -243,10 +265,8 @@ int ASN1_BIT_STRING_set_bit(ASN1_BIT_STRING *a, int n, int value) {
     a->data = c;
     a->length = w + 1;
   }
-  a->data[w] = ((a->data[w]) & iv) | v;
-  while ((a->length > 0) && (a->data[a->length - 1] == 0)) {
-    a->length--;
-  }
+  a->data[w] = (a->data[w] & iv) | v;
+  trim_trailing_zeros(a);
   return 1;
 }
 
