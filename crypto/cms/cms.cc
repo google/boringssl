@@ -20,6 +20,7 @@
 #include <openssl/mem.h>
 #include <openssl/x509.h>
 
+#include "../mem_internal.h"
 #include "../pkcs7/internal.h"
 
 
@@ -53,8 +54,7 @@ CMS_ContentInfo *CMS_sign(X509 *signcert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
     return nullptr;
   }
 
-  UniquePtr<CMS_ContentInfo> cms(
-      static_cast<CMS_ContentInfo *>(OPENSSL_zalloc(sizeof(CMS_ContentInfo))));
+  UniquePtr<CMS_ContentInfo> cms(NewZeroed<CMS_ContentInfo>());
   if (cms == nullptr) {
     return nullptr;
   }

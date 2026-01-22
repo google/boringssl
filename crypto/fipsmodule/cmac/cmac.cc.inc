@@ -23,6 +23,7 @@
 #include <openssl/mem.h>
 
 #include "../../internal.h"
+#include "../../mem_internal.h"
 #include "../service_indicator/internal.h"
 
 
@@ -87,7 +88,7 @@ int AES_CMAC(uint8_t out[16], const uint8_t *key, size_t key_len,
 }
 
 CMAC_CTX *CMAC_CTX_new() {
-  CMAC_CTX *ctx = reinterpret_cast<CMAC_CTX *>(OPENSSL_malloc(sizeof(*ctx)));
+  CMAC_CTX *ctx = New<CMAC_CTX>();
   if (ctx != nullptr) {
     CMAC_CTX_init(ctx);
   }

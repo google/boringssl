@@ -21,6 +21,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -48,8 +49,7 @@ struct bio_bio_st {
 }  // namespace
 
 static int bio_new(BIO *bio) {
-  struct bio_bio_st *b =
-      reinterpret_cast<bio_bio_st *>(OPENSSL_zalloc(sizeof *b));
+  struct bio_bio_st *b = NewZeroed<struct bio_bio_st>();
   if (b == nullptr) {
     return 0;
   }

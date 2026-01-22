@@ -21,6 +21,7 @@
 #include <openssl/x509.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -96,7 +97,7 @@ static int dir_ctrl(X509_LOOKUP *ctx, int cmd, const char *argp, long argl,
 static int new_dir(X509_LOOKUP *lu) {
   BY_DIR *a;
 
-  if ((a = (BY_DIR *)OPENSSL_malloc(sizeof(BY_DIR))) == nullptr) {
+  if ((a = New<BY_DIR>()) == nullptr) {
     return 0;
   }
   a->dirs = nullptr;
@@ -175,8 +176,7 @@ static int add_cert_dir(BY_DIR *ctx, const char *dir, int type) {
           return 0;
         }
       }
-      ent = reinterpret_cast<BY_DIR_ENTRY *>(
-          OPENSSL_malloc(sizeof(BY_DIR_ENTRY)));
+      ent = New<BY_DIR_ENTRY>();
       if (!ent) {
         return 0;
       }
@@ -309,8 +309,7 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, const X509_NAME *name,
           }
         }
         if (!hent) {
-          hent = reinterpret_cast<BY_DIR_HASH *>(
-              OPENSSL_malloc(sizeof(BY_DIR_HASH)));
+          hent = New<BY_DIR_HASH>();
           if (hent == nullptr) {
             CRYPTO_MUTEX_unlock_write(&ent->lock);
             ok = 0;

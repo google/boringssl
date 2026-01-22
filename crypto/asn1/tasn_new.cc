@@ -22,6 +22,7 @@
 #include <openssl/obj.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -239,8 +240,7 @@ static int ASN1_primitive_new(ASN1_VALUE **pval, const ASN1_ITEM *it) {
       return 1;
 
     case V_ASN1_ANY: {
-      ASN1_TYPE *typ =
-          reinterpret_cast<ASN1_TYPE *>(OPENSSL_malloc(sizeof(ASN1_TYPE)));
+      ASN1_TYPE *typ = New<ASN1_TYPE>();
       if (!typ) {
         return 0;
       }

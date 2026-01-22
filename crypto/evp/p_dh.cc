@@ -22,6 +22,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -169,8 +170,7 @@ typedef struct dh_pkey_ctx_st {
 }  // namespace
 
 static int pkey_dh_init(EvpPkeyCtx *ctx) {
-  DH_PKEY_CTX *dctx =
-      reinterpret_cast<DH_PKEY_CTX *>(OPENSSL_zalloc(sizeof(DH_PKEY_CTX)));
+  DH_PKEY_CTX *dctx = NewZeroed<DH_PKEY_CTX>();
   if (dctx == nullptr) {
     return 0;
   }

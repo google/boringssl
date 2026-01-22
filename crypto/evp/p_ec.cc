@@ -31,6 +31,7 @@
 #include "../ec/internal.h"
 #include "../fipsmodule/ec/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -381,8 +382,7 @@ typedef struct {
 } EC_PKEY_CTX;
 
 static int pkey_ec_init(EvpPkeyCtx *ctx) {
-  EC_PKEY_CTX *dctx =
-      reinterpret_cast<EC_PKEY_CTX *>(OPENSSL_zalloc(sizeof(EC_PKEY_CTX)));
+  EC_PKEY_CTX *dctx = NewZeroed<EC_PKEY_CTX>();
   if (!dctx) {
     return 0;
   }

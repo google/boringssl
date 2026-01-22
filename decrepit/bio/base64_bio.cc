@@ -23,8 +23,9 @@
 #include <openssl/evp.h>
 #include <openssl/mem.h>
 
-#include "../../crypto/internal.h"
 #include "../../crypto/bio/internal.h"
+#include "../../crypto/internal.h"
+#include "../../crypto/mem_internal.h"
 
 
 #define B64_BLOCK_SIZE 1024
@@ -50,8 +51,7 @@ typedef struct b64_struct {
 } BIO_B64_CTX;
 
 static int b64_new(BIO *bio) {
-  BIO_B64_CTX *ctx =
-      reinterpret_cast<BIO_B64_CTX *>(OPENSSL_zalloc(sizeof(*ctx)));
+  BIO_B64_CTX *ctx = NewZeroed<BIO_B64_CTX>();
   if (ctx == nullptr) {
     return 0;
   }

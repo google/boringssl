@@ -24,6 +24,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -69,7 +70,7 @@ CONF *NCONF_new(void *method) {
     return nullptr;
   }
 
-  CONF *conf = reinterpret_cast<CONF *>(OPENSSL_malloc(sizeof(CONF)));
+  CONF *conf = New<CONF>();
   if (conf == nullptr) {
     return nullptr;
   }
@@ -84,9 +85,7 @@ CONF *NCONF_new(void *method) {
   return conf;
 }
 
-CONF_VALUE *bssl::CONF_VALUE_new() {
-  return reinterpret_cast<CONF_VALUE *>(OPENSSL_zalloc(sizeof(CONF_VALUE)));
-}
+CONF_VALUE *bssl::CONF_VALUE_new() { return NewZeroed<CONF_VALUE>(); }
 
 static void value_free(CONF_VALUE *value) {
   if (value == nullptr) {
@@ -126,8 +125,7 @@ void NCONF_free(CONF *conf) {
 }
 
 static CONF_SECTION *NCONF_new_section(const CONF *conf, const char *section) {
-  CONF_SECTION *s =
-      reinterpret_cast<CONF_SECTION *>(OPENSSL_malloc(sizeof(CONF_SECTION)));
+  CONF_SECTION *s = New<CONF_SECTION>();
   if (!s) {
     return nullptr;
   }

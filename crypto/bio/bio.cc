@@ -24,6 +24,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -33,7 +34,7 @@ static CRYPTO_EX_DATA_CLASS g_ex_data_class =
     CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA;
 
 BIO *BIO_new(const BIO_METHOD *method) {
-  BIO *ret = reinterpret_cast<BIO *>(OPENSSL_zalloc(sizeof(BIO)));
+  BIO *ret = NewZeroed<BIO>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -588,8 +589,7 @@ int BIO_get_new_index() {
 }
 
 BIO_METHOD *BIO_meth_new(int type, const char *name) {
-  BIO_METHOD *method =
-      reinterpret_cast<BIO_METHOD *>(OPENSSL_zalloc(sizeof(BIO_METHOD)));
+  BIO_METHOD *method = NewZeroed<BIO_METHOD>();
   if (method == nullptr) {
     return nullptr;
   }

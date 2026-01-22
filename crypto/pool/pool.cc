@@ -23,6 +23,7 @@
 #include <openssl/siphash.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -46,8 +47,7 @@ static int CRYPTO_BUFFER_cmp(const CRYPTO_BUFFER *a, const CRYPTO_BUFFER *b) {
 }
 
 CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_new() {
-  CRYPTO_BUFFER_POOL *pool = reinterpret_cast<CRYPTO_BUFFER_POOL *>(
-      OPENSSL_zalloc(sizeof(CRYPTO_BUFFER_POOL)));
+  CRYPTO_BUFFER_POOL *pool = NewZeroed<CRYPTO_BUFFER_POOL>();
   if (pool == nullptr) {
     return nullptr;
   }
@@ -114,8 +114,7 @@ static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
     }
   }
 
-  CryptoBuffer *const buf =
-      reinterpret_cast<CryptoBuffer *>(OPENSSL_zalloc(sizeof(CryptoBuffer)));
+  CryptoBuffer *const buf = NewZeroed<CryptoBuffer>();
   if (buf == nullptr) {
     return nullptr;
   }
@@ -176,8 +175,7 @@ CRYPTO_BUFFER *CRYPTO_BUFFER_new(const uint8_t *data, size_t len,
 }
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_alloc(uint8_t **out_data, size_t len) {
-  CryptoBuffer *const buf =
-      reinterpret_cast<CryptoBuffer *>(OPENSSL_zalloc(sizeof(CryptoBuffer)));
+  CryptoBuffer *const buf = NewZeroed<CryptoBuffer>();
   if (buf == nullptr) {
     return nullptr;
   }

@@ -22,6 +22,7 @@
 #include <openssl/mem.h>
 #include <openssl/sha2.h>
 
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -123,8 +124,7 @@ void bssl::TRUST_TOKEN_PRETOKEN_free(TRUST_TOKEN_PRETOKEN *pretoken) {
 }
 
 TRUST_TOKEN *TRUST_TOKEN_new(const uint8_t *data, size_t len) {
-  TRUST_TOKEN *ret =
-      reinterpret_cast<TRUST_TOKEN *>(OPENSSL_zalloc(sizeof(TRUST_TOKEN)));
+  TRUST_TOKEN *ret = NewZeroed<TRUST_TOKEN>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -210,8 +210,7 @@ TRUST_TOKEN_CLIENT *TRUST_TOKEN_CLIENT_new(const TRUST_TOKEN_METHOD *method,
     return nullptr;
   }
 
-  TRUST_TOKEN_CLIENT *ret = reinterpret_cast<TRUST_TOKEN_CLIENT *>(
-      OPENSSL_zalloc(sizeof(TRUST_TOKEN_CLIENT)));
+  TRUST_TOKEN_CLIENT *ret = NewZeroed<TRUST_TOKEN_CLIENT>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -475,8 +474,7 @@ TRUST_TOKEN_ISSUER *TRUST_TOKEN_ISSUER_new(const TRUST_TOKEN_METHOD *method,
     return nullptr;
   }
 
-  TRUST_TOKEN_ISSUER *ret = reinterpret_cast<TRUST_TOKEN_ISSUER *>(
-      OPENSSL_zalloc(sizeof(TRUST_TOKEN_ISSUER)));
+  TRUST_TOKEN_ISSUER *ret = NewZeroed<TRUST_TOKEN_ISSUER>();
   if (ret == nullptr) {
     return nullptr;
   }

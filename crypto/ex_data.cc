@@ -24,6 +24,7 @@
 #include <openssl/mem.h>
 
 #include "internal.h"
+#include "mem_internal.h"
 
 
 BSSL_NAMESPACE_BEGIN
@@ -39,8 +40,7 @@ struct crypto_ex_data_func_st {
 
 int CRYPTO_get_ex_new_index_ex(CRYPTO_EX_DATA_CLASS *ex_data_class, long argl,
                                void *argp, CRYPTO_EX_free *free_func) {
-  CRYPTO_EX_DATA_FUNCS *funcs = reinterpret_cast<CRYPTO_EX_DATA_FUNCS *>(
-      OPENSSL_malloc(sizeof(CRYPTO_EX_DATA_FUNCS)));
+  CRYPTO_EX_DATA_FUNCS *funcs = New<CRYPTO_EX_DATA_FUNCS>();
   if (funcs == nullptr) {
     return -1;
   }

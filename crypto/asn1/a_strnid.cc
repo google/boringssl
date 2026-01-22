@@ -26,6 +26,7 @@
 
 #include "../internal.h"
 #include "../lhash/internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -182,8 +183,7 @@ int ASN1_STRING_TABLE_add(int nid, long minsize, long maxsize,
     }
   }
 
-  tbl = reinterpret_cast<ASN1_STRING_TABLE *>(
-      OPENSSL_malloc(sizeof(ASN1_STRING_TABLE)));
+  tbl = New<ASN1_STRING_TABLE>();
   if (tbl == nullptr) {
     goto err;
   }

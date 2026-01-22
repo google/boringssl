@@ -159,8 +159,7 @@ int X509V3_EXT_add_alias(int nid_to, int nid_from) {
     OPENSSL_PUT_ERROR(X509V3, X509V3_R_EXTENSION_NOT_FOUND);
     return 0;
   }
-  if (!(tmpext =
-            (X509V3_EXT_METHOD *)OPENSSL_malloc(sizeof(X509V3_EXT_METHOD)))) {
+  if (!(tmpext = New<X509V3_EXT_METHOD>())) {
     return 0;
   }
   *tmpext = *ext;

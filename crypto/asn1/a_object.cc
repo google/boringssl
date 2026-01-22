@@ -24,6 +24,7 @@
 
 #include "../bytestring/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -139,9 +140,7 @@ ASN1_OBJECT *bssl::asn1_parse_object(CBS *cbs, CBS_ASN1_TAG tag) {
 }
 
 ASN1_OBJECT *bssl::ASN1_OBJECT_new() {
-  ASN1_OBJECT *ret;
-
-  ret = (ASN1_OBJECT *)OPENSSL_malloc(sizeof(ASN1_OBJECT));
+  ASN1_OBJECT *ret = New<ASN1_OBJECT>();
   if (ret == nullptr) {
     return nullptr;
   }

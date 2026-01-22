@@ -19,6 +19,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -62,7 +63,7 @@ struct lhash_st {
 };
 
 _LHASH *OPENSSL_lh_new(lhash_hash_func hash, lhash_cmp_func comp) {
-  _LHASH *ret = reinterpret_cast<_LHASH *>(OPENSSL_zalloc(sizeof(_LHASH)));
+  _LHASH *ret = NewZeroed<_LHASH>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -241,7 +242,7 @@ int OPENSSL_lh_insert(_LHASH *lh, void **old_data, void *data,
   }
 
   // An element equal to |data| doesn't exist in the hash table yet.
-  item = reinterpret_cast<LHASH_ITEM *>(OPENSSL_malloc(sizeof(LHASH_ITEM)));
+  item = New<LHASH_ITEM>();
   if (item == nullptr) {
     return 0;
   }

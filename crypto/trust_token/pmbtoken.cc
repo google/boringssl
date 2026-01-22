@@ -26,6 +26,7 @@
 #include "../ec/internal.h"
 #include "../fipsmodule/bn/internal.h"
 #include "../fipsmodule/ec/internal.h"
+#include "../mem_internal.h"
 
 #include "internal.h"
 
@@ -337,8 +338,7 @@ static STACK_OF(TRUST_TOKEN_PRETOKEN) *pmbtoken_blind(
 
   for (size_t i = 0; i < count; i++) {
     // Insert |pretoken| into |pretokens| early to simplify error-handling.
-    TRUST_TOKEN_PRETOKEN *pretoken = reinterpret_cast<TRUST_TOKEN_PRETOKEN *>(
-        OPENSSL_malloc(sizeof(TRUST_TOKEN_PRETOKEN)));
+    TRUST_TOKEN_PRETOKEN *pretoken = New<TRUST_TOKEN_PRETOKEN>();
     if (pretoken == nullptr ||
         !sk_TRUST_TOKEN_PRETOKEN_push(pretokens, pretoken)) {
       TRUST_TOKEN_PRETOKEN_free(pretoken);

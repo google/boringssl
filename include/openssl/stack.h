@@ -629,6 +629,20 @@ PushToStack(Stack *sk,
   return true;
 }
 
+// Define begin() and end() for stack types so C++ range for loops work.
+// This pair of functions is for DEFINE_NAMESPACED_STACK_OF stacks, unlike
+// the other pair, which is for DEFINE_STACK_OF ones.
+template <typename Stack>
+inline bssl::internal::StackIterator<Stack> begin(const Stack *sk) {
+  return bssl::internal::StackIterator<Stack>(sk, 0);
+}
+
+template <typename Stack>
+inline bssl::internal::StackIterator<Stack> end(const Stack *sk) {
+  return bssl::internal::StackIterator<Stack>(
+      sk, OPENSSL_sk_num(reinterpret_cast<const OPENSSL_STACK *>(sk)));
+}
+
 BSSL_NAMESPACE_END
 
 // Define begin() and end() for stack types so C++ range for loops work.

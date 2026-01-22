@@ -26,6 +26,7 @@
 
 #include "../fipsmodule/bn/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "./internal.h"
 
 
@@ -280,8 +281,7 @@ static const uint8_t kSpakeMSmallPrecomp[15 * 2 * 32] = {
 SPAKE2_CTX *SPAKE2_CTX_new(enum spake2_role_t my_role, const uint8_t *my_name,
                            size_t my_name_len, const uint8_t *their_name,
                            size_t their_name_len) {
-  SPAKE2_CTX *ctx =
-      reinterpret_cast<SPAKE2_CTX *>(OPENSSL_zalloc(sizeof(SPAKE2_CTX)));
+  SPAKE2_CTX *ctx = NewZeroed<SPAKE2_CTX>();
   if (ctx == nullptr) {
     return nullptr;
   }

@@ -45,8 +45,7 @@ void EVP_AEAD_CTX_zero(EVP_AEAD_CTX *ctx) {
 
 EVP_AEAD_CTX *EVP_AEAD_CTX_new(const EVP_AEAD *aead, const uint8_t *key,
                                size_t key_len, size_t tag_len) {
-  EVP_AEAD_CTX *ctx =
-      reinterpret_cast<EVP_AEAD_CTX *>(OPENSSL_malloc(sizeof(EVP_AEAD_CTX)));
+  EVP_AEAD_CTX *ctx = New<EVP_AEAD_CTX>();
   if (!ctx) {
     return nullptr;
   }

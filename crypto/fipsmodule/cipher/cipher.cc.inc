@@ -24,6 +24,7 @@
 #include <openssl/span.h>
 
 #include "../../internal.h"
+#include "../../mem_internal.h"
 #include "../service_indicator/internal.h"
 #include "internal.h"
 
@@ -35,8 +36,7 @@ void EVP_CIPHER_CTX_init(EVP_CIPHER_CTX *ctx) {
 }
 
 EVP_CIPHER_CTX *EVP_CIPHER_CTX_new() {
-  EVP_CIPHER_CTX *ctx = reinterpret_cast<EVP_CIPHER_CTX *>(
-      OPENSSL_malloc(sizeof(EVP_CIPHER_CTX)));
+  EVP_CIPHER_CTX *ctx = New<EVP_CIPHER_CTX>();
   if (ctx) {
     EVP_CIPHER_CTX_init(ctx);
   }

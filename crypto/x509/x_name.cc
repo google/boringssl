@@ -141,9 +141,7 @@ void bssl::x509_name_cleanup(X509_NAME *name) {
   x509_name_cache_free(impl->cache.exchange(nullptr));
 }
 
-X509_NAME *X509_NAME_new() {
-  return static_cast<X509Name *>(OPENSSL_zalloc(sizeof(X509Name)));
-}
+X509_NAME *X509_NAME_new() { return NewZeroed<X509Name>(); }
 
 void X509_NAME_free(X509_NAME *name) {
   if (name != nullptr) {
@@ -230,8 +228,7 @@ const X509_NAME_CACHE *bssl::x509_name_get_cache(const X509_NAME *name) {
     return cache;
   }
 
-  X509_NAME_CACHE *new_cache =
-      static_cast<X509_NAME_CACHE *>(OPENSSL_zalloc(sizeof(X509_NAME_CACHE)));
+  X509_NAME_CACHE *new_cache = NewZeroed<X509_NAME_CACHE>();
   // Cache the DER encoding, including the outer TLV.
   ScopedCBB cbb;
   CBB seq;

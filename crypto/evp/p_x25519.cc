@@ -20,6 +20,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -46,8 +47,7 @@ static int x25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
     return 0;
   }
 
-  X25519_KEY *key =
-      reinterpret_cast<X25519_KEY *>(OPENSSL_malloc(sizeof(X25519_KEY)));
+  X25519_KEY *key = New<X25519_KEY>();
   if (key == nullptr) {
     return 0;
   }
@@ -66,8 +66,7 @@ static int x25519_set_pub_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
     return 0;
   }
 
-  X25519_KEY *key =
-      reinterpret_cast<X25519_KEY *>(OPENSSL_malloc(sizeof(X25519_KEY)));
+  X25519_KEY *key = New<X25519_KEY>();
   if (key == nullptr) {
     return 0;
   }
@@ -276,8 +275,7 @@ const EVP_PKEY_ALG *EVP_pkey_x25519() {
 static int pkey_x25519_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
 static int pkey_x25519_keygen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
-  X25519_KEY *key =
-      reinterpret_cast<X25519_KEY *>(OPENSSL_malloc(sizeof(X25519_KEY)));
+  X25519_KEY *key = New<X25519_KEY>();
   if (key == nullptr) {
     return 0;
   }

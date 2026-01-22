@@ -39,7 +39,7 @@ BSSL_NAMESPACE_END
 struct crypto_buffer_pool_st {
   LHASH_OF(CRYPTO_BUFFER) *bufs;
   bssl::CRYPTO_MUTEX lock;
-  const uint64_t hash_key[2];
+  uint64_t hash_key[2];
 };
 
 #endif  // OPENSSL_HEADER_CRYPTO_POOL_INTERNAL_H

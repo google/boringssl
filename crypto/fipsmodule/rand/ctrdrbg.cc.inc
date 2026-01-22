@@ -19,6 +19,7 @@
 #include <openssl/mem.h>
 #include <algorithm>
 
+#include "../../mem_internal.h"
 #include "../aes/internal.h"
 #include "../service_indicator/internal.h"
 #include "internal.h"
@@ -149,8 +150,7 @@ static int block_cipher_df(uint8_t *out, size_t out_len, const uint8_t *input,
 CTR_DRBG_STATE *CTR_DRBG_new(const uint8_t entropy[CTR_DRBG_ENTROPY_LEN],
                              const uint8_t *personalization,
                              size_t personalization_len) {
-  CTR_DRBG_STATE *drbg = reinterpret_cast<CTR_DRBG_STATE *>(
-      OPENSSL_malloc(sizeof(CTR_DRBG_STATE)));
+  CTR_DRBG_STATE *drbg = New<CTR_DRBG_STATE>();
   if (drbg == nullptr ||
       !CTR_DRBG_init(drbg, /*df=*/false, entropy, CTR_DRBG_ENTROPY_LEN,
                      /*nonce=*/nullptr, personalization, personalization_len)) {
@@ -165,8 +165,7 @@ CTR_DRBG_STATE *CTR_DRBG_new_df(const uint8_t *entropy, size_t entropy_len,
                                 const uint8_t nonce[CTR_DRBG_NONCE_LEN],
                                 const uint8_t *personalization,
                                 size_t personalization_len) {
-  CTR_DRBG_STATE *drbg = reinterpret_cast<CTR_DRBG_STATE *>(
-      OPENSSL_malloc(sizeof(CTR_DRBG_STATE)));
+  CTR_DRBG_STATE *drbg = New<CTR_DRBG_STATE>();
   if (drbg == nullptr ||
       !CTR_DRBG_init(drbg, /*df=*/true, entropy, entropy_len, nonce,
                      personalization, personalization_len)) {

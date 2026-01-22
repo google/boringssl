@@ -25,6 +25,7 @@
 #include <openssl/x509.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -1486,10 +1487,7 @@ int X509_STORE_CTX_set_trust(X509_STORE_CTX *ctx, int trust) {
   return 1;
 }
 
-X509_STORE_CTX *X509_STORE_CTX_new() {
-  return reinterpret_cast<X509_STORE_CTX *>(
-      OPENSSL_zalloc(sizeof(X509_STORE_CTX)));
-}
+X509_STORE_CTX *X509_STORE_CTX_new() { return NewZeroed<X509_STORE_CTX>(); }
 
 void X509_STORE_CTX_free(X509_STORE_CTX *ctx) {
   if (ctx == nullptr) {

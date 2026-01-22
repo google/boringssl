@@ -20,6 +20,7 @@
 
 #include "../../evp/internal.h"
 #include "../../internal.h"
+#include "../../mem_internal.h"
 #include "internal.h"
 
 
@@ -52,8 +53,7 @@ static struct fips_service_indicator_state *service_indicator_get() {
           OPENSSL_THREAD_LOCAL_FIPS_SERVICE_INDICATOR_STATE));
 
   if (indicator == nullptr) {
-    indicator = reinterpret_cast<fips_service_indicator_state *>(
-        OPENSSL_malloc(sizeof(struct fips_service_indicator_state)));
+    indicator = New<struct fips_service_indicator_state>();
     if (indicator == nullptr) {
       return nullptr;
     }

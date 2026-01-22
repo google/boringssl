@@ -89,6 +89,14 @@ var skipWeakSymbols = []*regexp.Regexp{
 	// TODO(crbug.com/42220000): Temporary symbols, to be eliminated.
 	regexp.MustCompile(`.*CMS_ContentInfo_st.*`),
 	regexp.MustCompile(`.*CMS_SignerInfo_st.*`),
+	regexp.MustCompile(`.*bio_st.*`),
+	regexp.MustCompile(`.*dh_st.*`),
+	regexp.MustCompile(`.*dsa_st.*`),
+	regexp.MustCompile(`.*ec_group_st.*`),
+	regexp.MustCompile(`.*ec_key_st.*`),
+	regexp.MustCompile(`.*evp_pkey_st.*`),
+	regexp.MustCompile(`.*rsa_st.*`),
+	regexp.MustCompile(`.*x509_store_st.*`),
 }
 
 const (

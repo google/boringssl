@@ -34,6 +34,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -256,8 +257,7 @@ end:
 }
 
 static BIO_CONNECT *BIO_CONNECT_new() {
-  BIO_CONNECT *ret =
-      reinterpret_cast<BIO_CONNECT *>(OPENSSL_zalloc(sizeof(BIO_CONNECT)));
+  BIO_CONNECT *ret = NewZeroed<BIO_CONNECT>();
   if (ret == nullptr) {
     return nullptr;
   }

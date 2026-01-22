@@ -21,6 +21,7 @@
 #include <openssl/mem.h>
 
 #include "../../internal.h"
+#include "../../mem_internal.h"
 #include "internal.h"
 
 
@@ -44,8 +45,7 @@ void EVP_MD_CTX_init(EVP_MD_CTX *ctx) {
 }
 
 EVP_MD_CTX *EVP_MD_CTX_new() {
-  EVP_MD_CTX *ctx =
-      reinterpret_cast<EVP_MD_CTX *>(OPENSSL_malloc(sizeof(EVP_MD_CTX)));
+  EVP_MD_CTX *ctx = New<EVP_MD_CTX>();
 
   if (ctx) {
     EVP_MD_CTX_init(ctx);

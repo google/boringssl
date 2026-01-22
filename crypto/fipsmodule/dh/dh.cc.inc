@@ -24,6 +24,7 @@
 #include <openssl/mem.h>
 
 #include "../../internal.h"
+#include "../../mem_internal.h"
 #include "../bn/internal.h"
 #include "../service_indicator/internal.h"
 #include "internal.h"
@@ -32,7 +33,7 @@
 using namespace bssl;
 
 DH *DH_new() {
-  DH *dh = reinterpret_cast<DH *>(OPENSSL_zalloc(sizeof(DH)));
+  DH *dh = NewZeroed<DH>();
   if (dh == nullptr) {
     return nullptr;
   }

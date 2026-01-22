@@ -29,6 +29,7 @@
 #include "../fipsmodule/bn/internal.h"
 #include "../fipsmodule/dh/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -48,7 +49,7 @@ static int dsa_sign_setup(const DSA *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
 static CRYPTO_EX_DATA_CLASS g_ex_data_class = CRYPTO_EX_DATA_CLASS_INIT;
 
 DSA *DSA_new() {
-  DSA *dsa = reinterpret_cast<DSA *>(OPENSSL_zalloc(sizeof(DSA)));
+  DSA *dsa = NewZeroed<DSA>();
   if (dsa == nullptr) {
     return nullptr;
   }
@@ -479,9 +480,7 @@ err:
   return ok;
 }
 
-DSA_SIG *DSA_SIG_new() {
-  return reinterpret_cast<DSA_SIG *>(OPENSSL_zalloc(sizeof(DSA_SIG)));
-}
+DSA_SIG *DSA_SIG_new() { return NewZeroed<DSA_SIG>(); }
 
 void DSA_SIG_free(DSA_SIG *sig) {
   if (!sig) {

@@ -20,6 +20,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 using namespace bssl;
@@ -50,8 +51,7 @@ static int ed25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
     return 0;
   }
 
-  ED25519_KEY *key =
-      reinterpret_cast<ED25519_KEY *>(OPENSSL_malloc(sizeof(ED25519_KEY)));
+  ED25519_KEY *key = New<ED25519_KEY>();
   if (key == nullptr) {
     return 0;
   }
@@ -71,8 +71,7 @@ static int ed25519_set_pub_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
     return 0;
   }
 
-  ED25519_KEY *key =
-      reinterpret_cast<ED25519_KEY *>(OPENSSL_malloc(sizeof(ED25519_KEY)));
+  ED25519_KEY *key = New<ED25519_KEY>();
   if (key == nullptr) {
     return 0;
   }
@@ -259,8 +258,7 @@ const EVP_PKEY_ASN1_METHOD ed25519_asn1_meth = {
 static int pkey_ed25519_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
 static int pkey_ed25519_keygen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
-  ED25519_KEY *key =
-      reinterpret_cast<ED25519_KEY *>(OPENSSL_malloc(sizeof(ED25519_KEY)));
+  ED25519_KEY *key = New<ED25519_KEY>();
   if (key == nullptr) {
     return 0;
   }

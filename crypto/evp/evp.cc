@@ -22,6 +22,7 @@
 #include <openssl/nid.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -37,8 +38,7 @@ OPENSSL_DECLARE_ERROR_REASON(EVP, NOT_XOF_OR_INVALID_LENGTH)
 OPENSSL_DECLARE_ERROR_REASON(EVP, EMPTY_PSK)
 
 EVP_PKEY *EVP_PKEY_new() {
-  EVP_PKEY *ret =
-      reinterpret_cast<EVP_PKEY *>(OPENSSL_zalloc(sizeof(EVP_PKEY)));
+  EVP_PKEY *ret = NewZeroed<EVP_PKEY>();
   if (ret == nullptr) {
     return nullptr;
   }

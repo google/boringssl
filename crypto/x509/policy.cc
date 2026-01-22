@@ -21,6 +21,7 @@
 #include <openssl/stack.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -105,8 +106,7 @@ static void x509_policy_node_free(X509_POLICY_NODE *node) {
 
 static X509_POLICY_NODE *x509_policy_node_new(const ASN1_OBJECT *policy) {
   assert(!is_any_policy(policy));
-  X509_POLICY_NODE *node = reinterpret_cast<X509_POLICY_NODE *>(
-      OPENSSL_zalloc(sizeof(X509_POLICY_NODE)));
+  X509_POLICY_NODE *node = NewZeroed<X509_POLICY_NODE>();
   if (node == nullptr) {
     return nullptr;
   }
@@ -132,8 +132,7 @@ static void x509_policy_level_free(X509_POLICY_LEVEL *level) {
 }
 
 static X509_POLICY_LEVEL *x509_policy_level_new() {
-  X509_POLICY_LEVEL *level = reinterpret_cast<X509_POLICY_LEVEL *>(
-      OPENSSL_zalloc(sizeof(X509_POLICY_LEVEL)));
+  X509_POLICY_LEVEL *level = NewZeroed<X509_POLICY_LEVEL>();
   if (level == nullptr) {
     return nullptr;
   }

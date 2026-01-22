@@ -45,11 +45,10 @@ static constexpr CBS_ASN1_TAG kExtensionsTag =
     CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 3;
 
 X509 *X509_new() {
-  UniquePtr<X509Impl> ret(New<X509Impl>());
+  UniquePtr<X509Impl> ret(NewZeroed<X509Impl>());
   if (ret == nullptr) {
     return nullptr;
   }
-  OPENSSL_memset(ret.get(), 0, sizeof(*ret));
 
   ret->references = 1;
   ret->ex_pathlen = -1;

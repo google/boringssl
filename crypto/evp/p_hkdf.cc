@@ -21,6 +21,7 @@
 #include <openssl/mem.h>
 
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -37,8 +38,7 @@ typedef struct {
 } HKDF_PKEY_CTX;
 
 static int pkey_hkdf_init(EvpPkeyCtx *ctx) {
-  HKDF_PKEY_CTX *hctx =
-      reinterpret_cast<HKDF_PKEY_CTX *>(OPENSSL_zalloc(sizeof(HKDF_PKEY_CTX)));
+  HKDF_PKEY_CTX *hctx = NewZeroed<HKDF_PKEY_CTX>();
   if (hctx == nullptr) {
     return 0;
   }
