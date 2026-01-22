@@ -45,27 +45,8 @@ int ASN1_BIT_STRING_set(ASN1_BIT_STRING *x, const unsigned char *d,
 int bssl::asn1_bit_string_length(const ASN1_BIT_STRING *str,
                                  uint8_t *out_padding_bits) {
   int len = str->length;
-  if (str->flags & ASN1_STRING_FLAG_BITS_LEFT) {
-    // If the string is already empty, it cannot have padding bits.
-    *out_padding_bits = len == 0 ? 0 : str->flags & 0x07;
-    return len;
-  }
-
-  // TODO(https://crbug.com/42290311): Remove this representation.
-  while (len > 0 && str->data[len - 1] == 0) {
-    len--;
-  }
-  uint8_t padding_bits = 0;
-  if (len > 0) {
-    uint8_t last = str->data[len - 1];
-    assert(last != 0);
-    for (; padding_bits < 7; padding_bits++) {
-      if (last & (1 << padding_bits)) {
-        break;
-      }
-    }
-  }
-  *out_padding_bits = padding_bits;
+  // If the string is already empty, it cannot have padding bits.
+  *out_padding_bits = len == 0 ? 0 : str->flags & 0x07;
   return len;
 }
 

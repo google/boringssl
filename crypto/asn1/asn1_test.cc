@@ -940,12 +940,26 @@ TEST(ASN1Test, SetBit) {
   EXPECT_EQ(0, ASN1_BIT_STRING_get_bit(val.get(), 63));
   EXPECT_EQ(0, ASN1_BIT_STRING_get_bit(val.get(), 64));
 
-  // By default, a BIT STRING implicitly truncates trailing zeros.
+  // A BIT STRING may be manually set with trailing zeros.
   val.reset(ASN1_BIT_STRING_new());
   ASSERT_TRUE(val);
-  static const uint8_t kZeros[64] = {0};
+  static const uint8_t kZeros[5] = {0};
   ASSERT_TRUE(ASN1_STRING_set(val.get(), kZeros, sizeof(kZeros)));
-  TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitStringEmpty);
+  static const uint8_t kBitStringZeros[] = {0x03, 0x06, 0x00, 0x00,
+                                            0x00, 0x00, 0x00, 0x00};
+  TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitStringZeros);
+}
+
+TEST(ASN1Test, SetBitString) {
+  // Creating an ASN1_BIT_STRING and then filling in a byte string should assign
+  // the byte string, not a silently truncated version.
+  UniquePtr<ASN1_BIT_STRING> val(ASN1_BIT_STRING_new());
+  ASSERT_TRUE(val);
+  const uint8_t kBytesf000[] = {0xf0, 0x00};
+  ASSERT_TRUE(
+      ASN1_STRING_set(val.get(), kBytesf000, sizeof(kBytesf000)));
+  static const uint8_t kBitStringf000[] = {0x03, 0x03, 0x00, 0xf0, 0x00};
+  TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitStringf000);
 }
 
 TEST(ASN1Test, StringToUTF8) {
@@ -2325,9 +2339,6 @@ TEST(ASN1Test, StringCmp) {
   const Input kInputs[] = {
       {V_ASN1_BIT_STRING, {}, ASN1_STRING_FLAG_BITS_LEFT | 0, false},
       {V_ASN1_BIT_STRING, {}, 0, true},
-      // When |ASN1_STRING_FLAG_BITS_LEFT| is unset, BIT STRINGs implicitly
-      // drop trailing zeros.
-      {V_ASN1_BIT_STRING, {0x00, 0x00, 0x00, 0x00}, 0, true},
 
       {V_ASN1_OCTET_STRING, {}, 0, false},
       {V_ASN1_UTF8STRING, {}, 0, false},
@@ -2345,8 +2356,6 @@ TEST(ASN1Test, StringCmp) {
       {V_ASN1_BIT_STRING, {0xe0}, ASN1_STRING_FLAG_BITS_LEFT | 5, false},
       // 4-bit inputs.
       {V_ASN1_BIT_STRING, {0xf0}, ASN1_STRING_FLAG_BITS_LEFT | 4, false},
-      {V_ASN1_BIT_STRING, {0xf0}, 0, true},        // 4 trailing zeros dropped.
-      {V_ASN1_BIT_STRING, {0xf0, 0x00}, 0, true},  // 12 trailing zeros dropped.
       // 5-bit inputs.
       {V_ASN1_BIT_STRING, {0x00}, ASN1_STRING_FLAG_BITS_LEFT | 3, false},
       {V_ASN1_BIT_STRING, {0xf0}, ASN1_STRING_FLAG_BITS_LEFT | 3, false},
