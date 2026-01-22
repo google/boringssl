@@ -99,6 +99,7 @@ The other commands are as follows. (Note that you only need to implement the com
 | KDF-counter          | Number output bytes, PRF name, counter location string, key (or empty), number of counter bits | key, counter, derived key |
 | KDF-feedback | Number output bytes, PRF name, counter location string, key (or empty), number of counter bits | key, counter, derived key |
 | RSA/keyGen           | Modulus bit-size | e, p, q, n, d |
+| RSA/keyGen/crt       | Modulus bit-size | e, p, q, n, d, dmp1, dmq1, iqmp |
 | RSA/sigGen/&lt;HASH&gt;/pkcs1v1.5 | Modulus bit-size, message | n, e, signature |
 | RSA/sigGen/&lt;HASH&gt;/pss       | Modulus bit-size, message | n, e, signature |
 | RSA/sigVer/&lt;HASH&gt;/pkcs1v1.5 | n, e, message, signature | Single-byte validity flag |
