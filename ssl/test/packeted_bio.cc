@@ -43,6 +43,7 @@ constexpr uint8_t kOpcodeTimeout = 'T';
 constexpr uint8_t kOpcodeTimeoutAck = 't';
 constexpr uint8_t kOpcodeMTU = 'M';
 constexpr uint8_t kOpcodeExpectNextTimeout = 'E';
+constexpr uint8_t kOpcodeUpdateTimeout = 'U';
 
 struct PacketedBio {
   PacketedBio(timeval *clock_arg, SSL *ssl_arg)
@@ -215,6 +216,26 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
         return true;
       };
 
+      BIO_set_retry_read(bio);
+      return -1;
+    }
+
+    case kOpcodeUpdateTimeout: {
+      uint8_t buf[sizeof(uint32_t)];
+      ret = ReadAll(next, buf);
+      if (ret <= 0) {
+        BIO_copy_next_retry(bio);
+        return ret;
+      }
+      uint32_t duration_ms = CRYPTO_load_u32_be(buf);
+      data->interrupt = [=] {
+        DTLSv1_set_initial_timeout_duration(data->ssl, duration_ms);
+        // A real caller is expected to immediately check the new timeout and
+        // call |DTLSv1_handle_timeout| if the timeout is now expired. We do not
+        // this automatically, so that the test can send ExpectNextTimeout(0)
+        // first.
+        return true;
+      };
       BIO_set_retry_read(bio);
       return -1;
     }

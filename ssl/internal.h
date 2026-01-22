@@ -3023,21 +3023,15 @@ struct DTLSTimer {
   // stopped.
   bool IsSet() const;
 
+  void UpdateDuration(uint64_t microseconds) { duration_ = microseconds; }
+
   // MicrosecondsRemaining returns the time remaining, in microseconds, at
   // |now|, or |kNever| if the timer is unset.
   uint64_t MicrosecondsRemaining(OPENSSL_timeval now) const;
 
  private:
-  // expire_time_ is the time when the timer expires, or zero if the timer is
-  // unset.
-  //
-  // TODO(crbug.com/366284846): This is an extremely inconvenient time
-  // representation. Switch libssl to something like a 64-bit count of
-  // microseconds. While it's decidedly past 1970 now, zero is a less obviously
-  // sound distinguished value for the monotonic clock, so maybe we should use a
-  // different distinguished time, like |INT64_MAX| in the microseconds
-  // representation.
-  OPENSSL_timeval expire_time_ = {0, 0};
+  uint64_t start_time_;
+  uint64_t duration_ = kNever;  // If set to kNever then this timer is unset.
 };
 
 // DTLS_MAX_EXTRA_WRITE_EPOCHS is the maximum number of additional write epochs

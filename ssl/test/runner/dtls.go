@@ -926,15 +926,25 @@ func (c *DTLSController) InEpoch() uint16 {
 	return c.conn.in.epoch.epoch
 }
 
+// flush flushes the current outgoing packet. Packets are buffered so tests can
+// exercise cases when one flight is packed with the next flight, but any
+// non-write DTLSController methods must implicitly flush so they are testing
+// against a shim in the expected state.
+func (c *DTLSController) flush() error {
+	if c.err != nil {
+		return c.err
+	}
+	if err := c.conn.dtlsFlushPacket(); err != nil {
+		c.err = err
+		return err
+	}
+	return nil
+}
+
 // AdvanceClock advances the shim's clock by duration. It is a test failure if
 // the shim sends anything before picking up the command.
 func (c *DTLSController) AdvanceClock(duration time.Duration) {
-	if c.err != nil {
-		return
-	}
-
-	c.err = c.conn.dtlsFlushPacket()
-	if c.err != nil {
+	if c.flush() != nil {
 		return
 	}
 
@@ -953,7 +963,7 @@ func (c *DTLSController) AdvanceClock(duration time.Duration) {
 
 // SetMTU updates the shim's MTU to mtu.
 func (c *DTLSController) SetMTU(mtu int) {
-	if c.err != nil {
+	if c.flush() != nil {
 		return
 	}
 
@@ -964,6 +974,19 @@ func (c *DTLSController) SetMTU(mtu int) {
 
 	c.conn.maxPacketLen = mtu
 	c.err = adaptor.SetPeerMTU(mtu)
+}
+
+// SetTimeout updates the shim's timeout to mtu.
+func (c *DTLSController) SetTimeout(d time.Duration) {
+	if c.flush() != nil {
+		return
+	}
+	adaptor := c.conn.config.Bugs.PacketAdaptor
+	if adaptor == nil {
+		panic("tls: no PacketAdapter set")
+	}
+
+	c.err = adaptor.SetPeerTimeout(d)
 }
 
 // WriteFlight writes msgs to the shim, using the default fragmenting logic.
@@ -1335,12 +1358,7 @@ func (c *DTLSController) WriteAppData(epoch uint16, data []byte) {
 // data record. This may be used to test that post-handshake retransmits may
 // interleave with application data.
 func (c *DTLSController) ReadAppData(epoch uint16, expected []byte) {
-	if c.err != nil {
-		return
-	}
-
-	if err := c.conn.dtlsFlushPacket(); err != nil {
-		c.err = err
+	if c.flush() != nil {
 		return
 	}
 
@@ -1361,11 +1379,7 @@ func (c *DTLSController) ReadAppData(epoch uint16, expected []byte) {
 
 // ExpectNextTimeout indicates the shim's next timeout should be d from now.
 func (c *DTLSController) ExpectNextTimeout(d time.Duration) {
-	if c.err != nil {
-		return
-	}
-	if err := c.conn.dtlsFlushPacket(); err != nil {
-		c.err = err
+	if c.flush() != nil {
 		return
 	}
 	c.err = c.conn.config.Bugs.PacketAdaptor.ExpectNextTimeout(d)
@@ -1373,11 +1387,7 @@ func (c *DTLSController) ExpectNextTimeout(d time.Duration) {
 
 // ExpectNoNext indicates the shim should not have a next timeout.
 func (c *DTLSController) ExpectNoNextTimeout() {
-	if c.err != nil {
-		return
-	}
-	if err := c.conn.dtlsFlushPacket(); err != nil {
-		c.err = err
+	if c.flush() != nil {
 		return
 	}
 	c.err = c.conn.config.Bugs.PacketAdaptor.ExpectNoNextTimeout()
