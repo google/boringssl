@@ -93,6 +93,7 @@ impl PublicKey {
         let alg = unsafe { bssl_sys::EVP_pkey_rsa() };
         let mut pkey =
             scoped::EvpPkey::from_der_subject_public_key_info(spki, core::slice::from_ref(&alg))?;
+        // Safety: we exclusively own pkey here
         let rsa = unsafe { bssl_sys::EVP_PKEY_get1_RSA(pkey.as_ffi_ptr()) };
         if !rsa.is_null() {
             // Safety: `EVP_PKEY_get1_RSA` adds a reference so we are not
@@ -107,7 +108,9 @@ impl PublicKey {
     /// in, for example, X.509 certificates.
     pub fn to_der_subject_public_key_info(&self) -> Buffer {
         let mut pkey = scoped::EvpPkey::new();
-        // Safety: this takes a reference to `self.0` and so doesn't steal ownership.
+        // Safety:
+        // - This takes a reference to `self.0` and so doesn't steal ownership.
+        // - The pkey is still exclusively owned.
         assert_eq!(1, unsafe {
             bssl_sys::EVP_PKEY_set1_RSA(pkey.as_ffi_ptr(), self.0)
         });
@@ -232,13 +235,16 @@ impl PrivateKey {
     pub fn from_der_private_key_info(der: &[u8]) -> Option<Self> {
         // Safety: `EVP_pkey_rsa` is always safe to call.
         let alg = unsafe { bssl_sys::EVP_pkey_rsa() };
-        let mut pkey =
-            scoped::EvpPkey::from_der_private_key_info(der, core::slice::from_ref(&alg))?;
-        // Safety: `pkey` is valid and was created just above.
+        let pkey = scoped::EvpPkey::from_der_private_key_info(der, core::slice::from_ref(&alg))?;
+        // Safety: `pkey` is valid and exclusively owned.
+        unsafe { Self::from_evp_pkey(pkey) }
+    }
+
+    // Safety: the EVP_PKEY must not be aliased through the `as_ffi_ptr`
+    pub(crate) unsafe fn from_evp_pkey(mut pkey: scoped::EvpPkey) -> Option<Self> {
         let rsa = unsafe { bssl_sys::EVP_PKEY_get1_RSA(pkey.as_ffi_ptr()) };
         // We only passed one allowed algorithm, an RSA algorithm.
-        assert!(!rsa.is_null());
-        Some(Self(rsa))
+        (!rsa.is_null()).then_some(Self(rsa))
     }
 
     /// Serialize to a DER-encrypted PrivateKeyInfo struct (from RFC 5208). This is often called "PKCS#8 format".

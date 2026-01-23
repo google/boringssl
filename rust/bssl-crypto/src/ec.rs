@@ -71,7 +71,7 @@ impl Curve for P384 {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[doc(hidden)]
 pub enum Group {
     P256,
@@ -420,18 +420,34 @@ impl Key {
     /// Parses a PrivateKeyInfo structure (from RFC 5208).
     pub fn from_der_private_key_info(group: Group, der: &[u8]) -> Option<Self> {
         let alg = group.as_evp_pkey_alg();
-        let mut pkey =
-            scoped::EvpPkey::from_der_private_key_info(der, core::slice::from_ref(&alg))?;
-        let ec_key = unsafe { bssl_sys::EVP_PKEY_get1_EC_KEY(pkey.as_ffi_ptr()) };
-        // We only passed in one allowed algorithm, an EC algorithm.
-        assert!(!ec_key.is_null());
-        // Safety: `ec_key` is now owned by this function.
-        let parsed_group = unsafe { bssl_sys::EC_KEY_get0_group(ec_key) };
+        let pkey = scoped::EvpPkey::from_der_private_key_info(der, core::slice::from_ref(&alg))?;
+        // Safety: the pkey is not aliased
+        let ec_key = Self::from_evp_pkey(pkey)?;
         // We only passed in one allowed algorithm, this EC group.
-        assert!(parsed_group == group.as_ffi_ptr());
-        // Safety: `EVP_PKEY_get1_EC_KEY` returned ownership, which we can move
-        // into the returned object.
+        (ec_key.get_group()? == group).then_some(ec_key)
+    }
+
+    // Safety: the pkey must not be aliased via `as_ffi_ptr`
+    pub(crate) fn from_evp_pkey(mut pkey: scoped::EvpPkey) -> Option<Self> {
+        let ec_key = unsafe { bssl_sys::EVP_PKEY_get1_EC_KEY(pkey.as_ffi_ptr()) };
+        if ec_key.is_null() {
+            return None;
+        }
+        // Safety: `EVP_PKEY_get1_EC_KEY` returned owned key, which we can move
+        // into the returned object and whose lifetime is independent of the EVP pkey.
         Some(Self(ec_key))
+    }
+
+    pub(crate) fn get_group(&self) -> Option<Group> {
+        // Safety: we own the `EC_KEY`
+        let id = unsafe { bssl_sys::EC_KEY_get0_group(self.0) };
+        if id == Group::P256.as_ffi_ptr() {
+            Some(Group::P256)
+        } else if id == Group::P384.as_ffi_ptr() {
+            Some(Group::P384)
+        } else {
+            None
+        }
     }
 
     /// Serializes this private key as a PrivateKeyInfo structure from RFC 5208.

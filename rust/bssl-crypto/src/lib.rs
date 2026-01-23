@@ -54,6 +54,7 @@ pub mod hpke;
 pub mod mldsa;
 #[cfg(feature = "mlalgs")]
 pub mod mlkem;
+pub mod pkcs8;
 pub mod rsa;
 pub mod slhdsa;
 pub mod tls12_prf;

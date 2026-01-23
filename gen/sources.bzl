@@ -2840,6 +2840,7 @@ rust_bssl_crypto_sources = [
     "rust/bssl-crypto/src/mem.rs",
     "rust/bssl-crypto/src/mldsa.rs",
     "rust/bssl-crypto/src/mlkem.rs",
+    "rust/bssl-crypto/src/pkcs8.rs",
     "rust/bssl-crypto/src/rand.rs",
     "rust/bssl-crypto/src/rsa.rs",
     "rust/bssl-crypto/src/scoped.rs",
