@@ -59,8 +59,8 @@ static int b64_new(BIO *bio) {
   ctx->cont = 1;
   ctx->start = 1;
 
-  bio->init = 1;
-  bio->ptr = (char *)ctx;
+  BIO_set_init(bio, 1);
+  BIO_set_data(bio, (char *)ctx);
   return 1;
 }
 
@@ -68,11 +68,11 @@ static int b64_free(BIO *bio) {
   if (bio == nullptr) {
     return 0;
   }
-  BIO_B64_CTX *ctx = (BIO_B64_CTX *)bio->ptr;
+  BIO_B64_CTX *ctx = (BIO_B64_CTX *)BIO_get_data(bio);
   Delete(ctx);
-  bio->ptr = nullptr;
-  bio->init = 0;
-  bio->flags = 0;
+  BIO_set_data(bio, nullptr);
+  BIO_set_init(bio, 0);
+  FromOpaque(bio)->flags = 0;
   return 1;
 }
 
@@ -84,9 +84,9 @@ static int b64_read(BIO *b, char *out, int outl) {
   if (out == nullptr) {
     return 0;
   }
-  ctx = (BIO_B64_CTX *)b->ptr;
+  ctx = (BIO_B64_CTX *)BIO_get_data(b);
 
-  if (ctx == nullptr || b->next_bio == nullptr) {
+  if (ctx == nullptr || BIO_next(b) == nullptr) {
     return 0;
   }
 
@@ -128,14 +128,14 @@ static int b64_read(BIO *b, char *out, int outl) {
       break;
     }
 
-    i = BIO_read(b->next_bio, &(ctx->tmp[ctx->tmp_len]),
+    i = BIO_read(BIO_next(b), &(ctx->tmp[ctx->tmp_len]),
                  B64_BLOCK_SIZE - ctx->tmp_len);
 
     if (i <= 0) {
       ret_code = i;
 
       // Should we continue next time we are called?
-      if (!BIO_should_retry(b->next_bio)) {
+      if (!BIO_should_retry(BIO_next(b))) {
         ctx->cont = i;
         // If buffer empty break
         if (ctx->tmp_len == 0) {
@@ -280,7 +280,7 @@ static int b64_write(BIO *b, const char *in, int inl) {
   int ret = 0, n, i;
   BIO_B64_CTX *ctx;
 
-  ctx = (BIO_B64_CTX *)b->ptr;
+  ctx = (BIO_B64_CTX *)BIO_get_data(b);
   BIO_clear_retry_flags(b);
 
   if (ctx->encode != B64_ENCODE) {
@@ -297,7 +297,7 @@ static int b64_write(BIO *b, const char *in, int inl) {
 
   n = ctx->buf_len - ctx->buf_off;
   while (n > 0) {
-    i = BIO_write(b->next_bio, &(ctx->buf[ctx->buf_off]), n);
+    i = BIO_write(BIO_next(b), &(ctx->buf[ctx->buf_off]), n);
     if (i <= 0) {
       BIO_copy_next_retry(b);
       return i;
@@ -370,7 +370,7 @@ static int b64_write(BIO *b, const char *in, int inl) {
     n = ctx->buf_len;
 
     while (n > 0) {
-      i = BIO_write(b->next_bio, &(ctx->buf[ctx->buf_off]), n);
+      i = BIO_write(BIO_next(b), &(ctx->buf[ctx->buf_off]), n);
       if (i <= 0) {
         BIO_copy_next_retry(b);
         return ret == 0 ? i : ret;
@@ -392,21 +392,21 @@ static long b64_ctrl(BIO *b, int cmd, long num, void *ptr) {
   long ret = 1;
   int i;
 
-  ctx = (BIO_B64_CTX *)b->ptr;
+  ctx = (BIO_B64_CTX *)BIO_get_data(b);
 
   switch (cmd) {
     case BIO_CTRL_RESET:
       ctx->cont = 1;
       ctx->start = 1;
       ctx->encode = B64_NONE;
-      ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+      ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       break;
 
     case BIO_CTRL_EOF:  // More to read
       if (ctx->cont <= 0) {
         ret = 1;
       } else {
-        ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+        ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       }
       break;
 
@@ -417,7 +417,7 @@ static long b64_ctrl(BIO *b, int cmd, long num, void *ptr) {
           (ctx->base64.data_used != 0)) {
         ret = 1;
       } else if (ret <= 0) {
-        ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+        ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       }
       break;
 
@@ -425,7 +425,7 @@ static long b64_ctrl(BIO *b, int cmd, long num, void *ptr) {
       assert(ctx->buf_len >= ctx->buf_off);
       ret = ctx->buf_len - ctx->buf_off;
       if (ret <= 0) {
-        ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+        ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       }
       break;
 
@@ -453,12 +453,12 @@ static long b64_ctrl(BIO *b, int cmd, long num, void *ptr) {
         goto again;
       }
       // Finally flush the underlying BIO
-      ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+      ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       break;
 
     case BIO_C_DO_STATE_MACHINE:
       BIO_clear_retry_flags(b);
-      ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+      ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       BIO_copy_next_retry(b);
       break;
 
@@ -466,17 +466,17 @@ static long b64_ctrl(BIO *b, int cmd, long num, void *ptr) {
     case BIO_CTRL_GET:
     case BIO_CTRL_SET:
     default:
-      ret = BIO_ctrl(b->next_bio, cmd, num, ptr);
+      ret = BIO_ctrl(BIO_next(b), cmd, num, ptr);
       break;
   }
   return ret;
 }
 
 static long b64_callback_ctrl(BIO *b, int cmd, BIO_info_cb *fp) {
-  if (b->next_bio == nullptr) {
+  if (BIO_next(b) == nullptr) {
     return 0;
   }
-  return BIO_callback_ctrl(b->next_bio, cmd, fp);
+  return BIO_callback_ctrl(BIO_next(b), cmd, fp);
 }
 
 static const BIO_METHOD b64_method = {

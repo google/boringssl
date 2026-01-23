@@ -36,6 +36,8 @@ typedef int socklen_t;
 #endif  // !OPENSSL_NO_SOCK
 
 
+DECLARE_OPAQUE_STRUCT(bio_st, Bio)
+
 struct bio_method_st {
   int type;
   const char *name;
@@ -48,7 +50,10 @@ struct bio_method_st {
   long (*callback_ctrl)(BIO *, int, BIO_info_cb *);
 };
 
-struct bio_st {
+BSSL_NAMESPACE_BEGIN
+
+class Bio : public bio_st {
+ public:
   const BIO_METHOD *method;
   CRYPTO_EX_DATA ex_data;
 
@@ -71,11 +76,9 @@ struct bio_st {
   void *ptr;
   // next_bio points to the next |BIO| in a chain. This |BIO| owns a reference
   // to |next_bio|.
-  BIO *next_bio;  // used by filter BIOs
+  Bio *next_bio;  // used by filter BIOs
   uint64_t num_read, num_write;
 };
-
-BSSL_NAMESPACE_BEGIN
 
 #if !defined(OPENSSL_NO_SOCK)
 
