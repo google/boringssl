@@ -715,6 +715,16 @@ static bool CheckHandshakeProperties(SSL *ssl, bool is_resume,
     return false;
   }
 
+  if (const auto &expected = config->expect_client_certificate_type;
+      expected.has_value()) {
+    const uint8_t negotiated = SSL_get_negotiated_client_cert_type(ssl);
+    if (*expected != negotiated) {
+      fprintf(stderr, "Negotiated client_certificate_type %d, but wanted %d.\n",
+              negotiated, *expected);
+      return false;
+    }
+  }
+
   // Check all the selected parameters are covered by the string APIs.
   if (!CheckListContains("version", SSL_get_all_version_names,
                          SSL_get_version(ssl)) ||

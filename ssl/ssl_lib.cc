@@ -3622,3 +3622,7 @@ int SSL_set1_accepted_peer_cert_types(SSL *ssl, const uint8_t *values,
   return set1_cert_types(&ssl->config->accepted_peer_cert_types,
                          Span(values, num_values));
 }
+
+int SSL_get_negotiated_client_cert_type(const SSL *ssl) {
+  return ssl->s3->client_cert_type.value_or(kDefaultCertType);
+}

@@ -205,6 +205,7 @@ const (
 	extensionUseSRTP                    uint16 = 14
 	extensionALPN                       uint16 = 16
 	extensionSignedCertificateTimestamp uint16 = 18
+	extensionClientCertificateType      uint16 = 19
 	extensionServerCertificateType      uint16 = 20
 	extensionPadding                    uint16 = 21
 	extensionExtendedMasterSecret       uint16 = 23
@@ -2246,10 +2247,20 @@ type ProtocolBugs struct {
 	// flag set.
 	ExpectResumptionAcrossNames *bool
 
+	// ExpectClientCertificateTypes, if not nil, causes the server or client to
+	// expect the client_certificate_type extension sent by the peer to contain
+	// exactly the given values.
+	ExpectClientCertificateTypes []CertificateType
+
 	// ExpectServerCertificateTypes, if not nil, causes the server to
 	// expect the server_certificate_type extension sent by the peer to contain
 	// exactly the given values.
 	ExpectServerCertificateTypes []CertificateType
+
+	// SendClientCertificateTypes, if not nil, causes the server or client to
+	// send a client_certificate_type extension containing the given values.
+	// For a server, this may not contain more than 1 value.
+	SendClientCertificateTypes []CertificateType
 }
 
 func (c *Config) serverInit() {

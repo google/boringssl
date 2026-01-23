@@ -633,6 +633,15 @@ static enum ssl_hs_wait_t do_select_session(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
+  if (using_certificate(hs)) {
+    // Determine whether to request a client certificate.
+    hs->cert_request = !!(hs->config->verify_mode & SSL_VERIFY_PEER);
+  }
+  if (!ssl_negotiate_client_certificate_type(hs, &alert, &client_hello)) {
+    ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
+    return ssl_hs_error;
+  }
+
   // Record connection properties in the new session.
   hs->new_session->cipher = hs->new_cipher;
 
@@ -1043,11 +1052,6 @@ static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
       !ssl_add_serverhello_tlsext(hs, &body) ||
       !ssl_add_message_cbb(ssl, cbb.get())) {
     return ssl_hs_error;
-  }
-
-  if (using_certificate(hs)) {
-    // Determine whether to request a client certificate.
-    hs->cert_request = !!(hs->config->verify_mode & SSL_VERIFY_PEER);
   }
 
   // Send a CertificateRequest, if necessary.

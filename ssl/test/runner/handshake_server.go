@@ -441,6 +441,12 @@ func (hs *serverHandshakeState) readClientHello() error {
 		}
 	}
 
+	if expected := c.config.Bugs.ExpectClientCertificateTypes; expected != nil {
+		if !slices.Equal(expected, hs.clientHello.clientCertificateTypes) {
+			return fmt.Errorf("tls: client offered client certificate types %v, but expected %v", hs.clientHello.clientCertificateTypes, expected)
+		}
+	}
+
 	if expected := c.config.Bugs.ExpectServerCertificateTypes; expected != nil {
 		if !slices.Equal(expected, hs.clientHello.serverCertificateTypes) {
 			return fmt.Errorf("tls: client offered server certificate types %v, but expected %v", hs.clientHello.serverCertificateTypes, expected)
@@ -1779,6 +1785,17 @@ func (hs *serverHandshakeState) processClientExtensions(serverExtensions *server
 				echConfigs[i] = echConfig.ECHConfig.Raw
 			}
 			serverExtensions.echRetryConfigs = CreateECHConfigList(echConfigs...)
+		}
+	}
+
+	if sendClientCertType := c.config.Bugs.SendClientCertificateTypes; sendClientCertType != nil {
+		if len(sendClientCertType) > 1 {
+			panic("tls: client_certificate_type must not contain more than 1 value.")
+		}
+		if len(sendClientCertType) == 0 {
+			serverExtensions.clientCertificateType = nil
+		} else {
+			serverExtensions.clientCertificateType = ptrTo(sendClientCertType[0])
 		}
 	}
 

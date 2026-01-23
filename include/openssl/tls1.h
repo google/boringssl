@@ -65,6 +65,7 @@ extern "C" {
 #define TLSEXT_TYPE_application_layer_protocol_negotiation 16
 
 // ExtensionType values from RFC 7250
+#define TLSEXT_TYPE_client_cert_type 19
 #define TLSEXT_TYPE_server_cert_type 20
 
 // ExtensionType value from RFC 7685

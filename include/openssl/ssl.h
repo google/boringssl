@@ -3911,6 +3911,11 @@ OPENSSL_EXPORT int SSL_set1_accepted_peer_cert_types(SSL *ssl,
                                                      const uint8_t *values,
                                                      size_t num_values);
 
+// SSL_get_negotiated_client_cert_type returns the connection's negotiated value
+// of client_certificate_type. If no type has been negotiated explicitly, it
+// returns |TLSEXT_cert_type_x509| by default.
+OPENSSL_EXPORT int SSL_get_negotiated_client_cert_type(const SSL *ssl);
+
 
 // Password Authenticated Key Exchange (PAKE).
 //
@@ -6858,6 +6863,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_INVALID_PSK_FOR_CONNECTION 331
 #define SSL_R_NO_SUPPORTED_PSK_MODE 332
 #define SSL_R_INVALID_CERT_TYPES_LIST 333
+#define SSL_R_UNSUPPORTED_CERTIFICATE 334
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

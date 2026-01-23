@@ -629,6 +629,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         BoolFlag("-no-server-name-ack", &TestConfig::no_server_name_ack),
         IntVectorFlag("-accepted-peer-cert-types",
                       &TestConfig::accepted_peer_cert_types),
+        OptionalIntFlag("-expect-client-certificate-type",
+                        &TestConfig::expect_client_certificate_type),
     };
     std::sort(ret.begin(), ret.end(), FlagNameComparator{});
     return ret;

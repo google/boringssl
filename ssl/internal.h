@@ -1571,7 +1571,7 @@ bool ssl_check_tls13_credential_ignoring_issuer(SSL_HANDSHAKE *hs,
                                                 uint16_t *out_sigalg);
 
 
-// Server certificate type.
+// Client certificate type & Server certificate type.
 
 inline constexpr uint8_t kCertTypes[] = {
     TLSEXT_cert_type_x509,
@@ -1579,6 +1579,15 @@ inline constexpr uint8_t kCertTypes[] = {
 };
 inline constexpr size_t kNumCertTypes = std::size(kCertTypes);
 inline constexpr uint8_t kDefaultCertType = TLSEXT_cert_type_x509;
+
+// ssl_negotiate_client_certificate_type negotiates the client_certificate_type
+// extension, if applicable. It sets `hs->ssl->s3->client_cert_type` iff a value
+// was successfully negotiated. If a certificate request will be sent to the
+// client, a value must be negotiated. It returns true if successful, or returns
+// false and sets `*out_alert` to an alert on error.
+bool ssl_negotiate_client_certificate_type(
+    const SSL_HANDSHAKE *hs, uint8_t *out_alert,
+    const SSL_CLIENT_HELLO *client_hello);
 
 
 // Handshake functions.
@@ -2933,6 +2942,11 @@ struct SSL3_STATE {
   // srtp_profile is the selected SRTP protection profile for
   // DTLS-SRTP.
   const SRTP_PROTECTION_PROFILE *srtp_profile = nullptr;
+
+  // client_cert_type, if non-nullopt, is the negotiated client cert type for
+  // the connection. If this is nullopt, the peer did not send the
+  // client_certificate_type extension, or no suitable value was negotiated.
+  std::optional<uint8_t> client_cert_type;
 };
 
 // lengths of messages

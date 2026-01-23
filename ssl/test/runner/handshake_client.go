@@ -542,6 +542,7 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 		emptyExtensions:           c.config.Bugs.EmptyExtensions,
 		delegatedCredential:       c.config.DelegatedCredentialAlgorithms,
 		trustAnchors:              c.config.RequestTrustAnchors,
+		clientCertificateTypes:    c.config.Bugs.SendClientCertificateTypes,
 	}
 
 	// Translate the bugs that modify ClientHello extension order into a
@@ -2160,6 +2161,19 @@ func (hs *clientHandshakeState) processServerExtensions(serverExtensions *server
 		c.hasApplicationSettingsOld = hs.session.hasApplicationSettingsOld
 		c.localApplicationSettingsOld = hs.session.localApplicationSettingsOld
 		c.peerApplicationSettingsOld = hs.session.peerApplicationSettingsOld
+	}
+
+	if expected := c.config.Bugs.ExpectClientCertificateTypes; expected != nil {
+		if len(expected) > 1 {
+			panic("Expected client_certificate_type must not contain more than 1 value.")
+		}
+		var found []CertificateType
+		if serverExtensions.clientCertificateType != nil {
+			found = []CertificateType{*serverExtensions.clientCertificateType}
+		}
+		if !slices.Equal(found, expected) {
+			return fmt.Errorf("tls: server sent client certificate type %v, but expected %v", found, expected)
+		}
 	}
 
 	return nil
