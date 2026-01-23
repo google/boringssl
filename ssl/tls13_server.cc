@@ -257,18 +257,29 @@ static bool add_new_session_tickets(SSL_HANDSHAKE *hs, bool *out_sent_tickets) {
   return true;
 }
 
-bool ssl_check_tls13_credential_ignoring_issuer(SSL_HANDSHAKE *hs,
-                                                const SSL_CREDENTIAL *cred,
-                                                uint16_t *out_sigalg) {
+bool ssl_check_tls13_credential_ignoring_issuer(
+    SSL_HANDSHAKE *hs, Span<const uint8_t> allowed_cert_types,
+    const SSL_CREDENTIAL *cred, uint16_t *out_sigalg) {
+  assert(!allowed_cert_types.empty());
+  const auto is_cert_type_allowed = [&](uint8_t cert_type) {
+    return std::find(allowed_cert_types.begin(), allowed_cert_types.end(),
+                     cert_type) != allowed_cert_types.end();
+  };
   switch (cred->type) {
-    case SSLCredentialType::kX509:
-      break;
     case SSLCredentialType::kDelegated:
       // Check that the peer supports the signature over the delegated
       // credential.
       if (std::find(hs->peer_sigalgs.begin(), hs->peer_sigalgs.end(),
                     cred->dc_algorithm) == hs->peer_sigalgs.end()) {
         OPENSSL_PUT_ERROR(SSL, SSL_R_NO_COMMON_SIGNATURE_ALGORITHMS);
+        return false;
+      }
+      [[fallthrough]];
+    case SSLCredentialType::kX509:
+    case SSLCredentialType::kRawPublicKey:
+      if (!is_cert_type_allowed(
+              *ssl_credential_type_to_cert_type(cred->type))) {
+        OPENSSL_PUT_ERROR(SSL, SSL_R_UNKNOWN_CERTIFICATE_TYPE);
         return false;
       }
       break;
@@ -284,9 +295,11 @@ bool ssl_check_tls13_credential_ignoring_issuer(SSL_HANDSHAKE *hs,
 }
 
 static bool check_signature_credential(SSL_HANDSHAKE *hs,
+                                       Span<const uint8_t> allowed_cert_types,
                                        const SSL_CREDENTIAL *cred,
                                        uint16_t *out_sigalg) {
-  return ssl_check_tls13_credential_ignoring_issuer(hs, cred, out_sigalg) &&
+  return ssl_check_tls13_credential_ignoring_issuer(hs, allowed_cert_types,
+                                                    cred, out_sigalg) &&
          // Use this credential if it either matches a requested issuer,
          // or does not require issuer matching.
          ssl_credential_matches_requested_issuers(hs, cred);
@@ -393,6 +406,12 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
     return ssl_hs_error;
   }
+  std::optional<Span<const uint8_t>> allowed_cert_types =
+      ssl_get_allowed_server_cert_types(hs, &client_hello, &alert);
+  if (!allowed_cert_types.has_value()) {
+    ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
+    return ssl_hs_error;
+  }
   for (SSL_CREDENTIAL *cred : creds) {
     ERR_clear_error();
     if (cred->type == SSLCredentialType::kSPAKE2PlusV1Server) {
@@ -427,7 +446,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
       }
     } else {
       uint16_t sigalg;
-      if (check_signature_credential(hs, cred, &sigalg)) {
+      if (check_signature_credential(hs, *allowed_cert_types, cred, &sigalg)) {
         hs->credential = UpRef(cred);
         hs->signature_algorithm = sigalg;
         break;
@@ -440,6 +459,8 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);
     return ssl_hs_error;
   }
+  ssl->s3->server_cert_type =
+      ssl_credential_type_to_cert_type(hs->credential->type);
 
   // HTTP/2 negotiation depends on the cipher suite, so ALPN negotiation was
   // deferred. Complete it now.

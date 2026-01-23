@@ -11,7 +11,6 @@ import (
 	"crypto/ed25519"
 	"crypto/mlkem"
 	"crypto/rsa"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -168,7 +167,7 @@ func nonZeroRandomBytes(s []byte, rand io.Reader) {
 	}
 }
 
-func (ka *rsaKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, cert *x509.Certificate) ([]byte, *clientKeyExchangeMsg, error) {
+func (ka *rsaKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, serverPublicKey crypto.PublicKey) ([]byte, *clientKeyExchangeMsg, error) {
 	bad := config.Bugs.BadRSAClientKeyExchange
 	preMasterSecret := make([]byte, 48)
 	vers := clientHello.vers
@@ -193,7 +192,7 @@ func (ka *rsaKeyAgreement) generateClientKeyExchange(config *Config, clientHello
 	}
 
 	// Pad for PKCS#1 v1.5.
-	padded := make([]byte, rsaSize(cert.PublicKey.(*rsa.PublicKey)))
+	padded := make([]byte, rsaSize(serverPublicKey.(*rsa.PublicKey)))
 	padded[1] = 2
 	nonZeroRandomBytes(padded[2:len(padded)-len(sentPreMasterSecret)-1], config.rand())
 	copy(padded[len(padded)-len(sentPreMasterSecret):], sentPreMasterSecret)
@@ -210,7 +209,7 @@ func (ka *rsaKeyAgreement) generateClientKeyExchange(config *Config, clientHello
 		}
 	}
 
-	encrypted, err := rsaRawEncrypt(cert.PublicKey.(*rsa.PublicKey), padded)
+	encrypted, err := rsaRawEncrypt(serverPublicKey.(*rsa.PublicKey), padded)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -806,7 +805,7 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 	return ka.auth.verifyParameters(config, clientHello, serverHello, key, serverECDHParams, sig)
 }
 
-func (ka *ecdheKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, cert *x509.Certificate) ([]byte, *clientKeyExchangeMsg, error) {
+func (ka *ecdheKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, serverPublicKey crypto.PublicKey) ([]byte, *clientKeyExchangeMsg, error) {
 	if ka.kem == nil {
 		return nil, nil, errors.New("missing ServerKeyExchange message")
 	}
@@ -858,7 +857,7 @@ func (ka *nilKeyAgreement) processServerKeyExchange(config *Config, clientHello 
 	return nil
 }
 
-func (ka *nilKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, cert *x509.Certificate) ([]byte, *clientKeyExchangeMsg, error) {
+func (ka *nilKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, serverPublicKey crypto.PublicKey) ([]byte, *clientKeyExchangeMsg, error) {
 	// Although in plain PSK, otherSecret is all zeros, the base key
 	// agreement does not access to the length of the pre-shared
 	// key. pskKeyAgreement instead interprets nil to mean to use all zeros
@@ -965,7 +964,7 @@ func (ka *pskKeyAgreement) processServerKeyExchange(config *Config, clientHello 
 	return ka.base.processServerKeyExchange(config, clientHello, serverHello, key, newSkx)
 }
 
-func (ka *pskKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, cert *x509.Certificate) ([]byte, *clientKeyExchangeMsg, error) {
+func (ka *pskKeyAgreement) generateClientKeyExchange(config *Config, clientHello *clientHelloMsg, serverPublicKey crypto.PublicKey) ([]byte, *clientKeyExchangeMsg, error) {
 	// The server only sends an identity hint but, for purposes of
 	// test code, the server always sends the hint and it is
 	// required to match.
@@ -980,7 +979,7 @@ func (ka *pskKeyAgreement) generateClientKeyExchange(config *Config, clientHello
 	copy(bytes[2:], []byte(config.PreSharedKeyIdentity))
 
 	// Append the base key exchange's ClientKeyExchange.
-	otherSecret, baseCkx, err := ka.base.generateClientKeyExchange(config, clientHello, cert)
+	otherSecret, baseCkx, err := ka.base.generateClientKeyExchange(config, clientHello, serverPublicKey)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -412,6 +412,7 @@ type ConnectionState struct {
 	PeerApplicationSettingsOld []byte                // the old application settings received from the peer
 	ECHAccepted                bool                  // whether ECH was accepted on this connection
 	SelectedPSK                *Credential           // the selected PSK, if any
+	PeerRawPublicKey           []byte                // the SubjectPublicKeyInfo bytes of a RPK received from the peer
 }
 
 // ClientAuthType declares the policy the server will follow for
@@ -2252,7 +2253,7 @@ type ProtocolBugs struct {
 	// exactly the given values.
 	ExpectClientCertificateTypes []CertificateType
 
-	// ExpectServerCertificateTypes, if not nil, causes the server to
+	// ExpectServerCertificateTypes, if not nil, causes the server or client to
 	// expect the server_certificate_type extension sent by the peer to contain
 	// exactly the given values.
 	ExpectServerCertificateTypes []CertificateType
@@ -2261,6 +2262,11 @@ type ProtocolBugs struct {
 	// send a client_certificate_type extension containing the given values.
 	// For a server, this may not contain more than 1 value.
 	SendClientCertificateTypes []CertificateType
+
+	// SendServerCertificateTypes, if not nil, causes the server or client to
+	// send a server_certificate_type extension containing the given values.
+	// For a server, this may not contain more than 1 value.
+	SendServerCertificateTypes []CertificateType
 }
 
 func (c *Config) serverInit() {

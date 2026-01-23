@@ -543,6 +543,7 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 		delegatedCredential:       c.config.DelegatedCredentialAlgorithms,
 		trustAnchors:              c.config.RequestTrustAnchors,
 		clientCertificateTypes:    c.config.Bugs.SendClientCertificateTypes,
+		serverCertificateTypes:    c.config.Bugs.SendServerCertificateTypes,
 	}
 
 	// Translate the bugs that modify ClientHello extension order into a
@@ -1696,7 +1697,6 @@ func (hs *clientHandshakeState) applyHelloRetryRequest(helloRetryRequest *helloR
 func (hs *clientHandshakeState) doFullHandshake() error {
 	c := hs.c
 
-	var leaf *x509.Certificate
 	if hs.suite.flags&suitePSK == 0 {
 		certMsg, err := readHandshakeType[certificateMsg](c)
 		if err != nil {
@@ -1707,7 +1707,6 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		if err := hs.verifyCertificates(certMsg); err != nil {
 			return err
 		}
-		leaf = c.peerCertificates[0]
 	}
 
 	if hs.serverHello.extensions.ocspStapling {
@@ -1790,7 +1789,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		c.writeRecord(recordTypeHandshake, certMsg.marshal())
 	}
 
-	preMasterSecret, ckx, err := keyAgreement.generateClientKeyExchange(c.config, hs.hello, leaf)
+	preMasterSecret, ckx, err := keyAgreement.generateClientKeyExchange(c.config, hs.hello, hs.peerPublicKey)
 	if err != nil {
 		c.sendAlert(alertInternalError)
 		return err
@@ -1878,61 +1877,89 @@ func (hs *clientHandshakeState) verifyCertificates(certMsg *certificateMsg) erro
 		return errors.New("tls: no certificates sent")
 	}
 
+	// Parse the subjectPublicKeyInfo struct for RawPublicKey cert type.
+	var peerPublicKey crypto.PublicKey
+	if certMsg.certificateType == certTypeRawPublicKey {
+		rpkData := certMsg.certificates[0].data
+		c.peerRawPublicKey = rpkData
+		var err error
+		peerPublicKey, err = x509.ParsePKIXPublicKey(rpkData)
+		if err != nil {
+			c.sendAlert(alertBadCertificate)
+			return errors.New("tls: failed to parse public key from raw public key: " + err.Error())
+		}
+
+		if len(certMsg.certificates) > 1 {
+			c.sendAlert(alertIllegalParameter)
+			return errors.New("tls: server sent too many certificates for RawPublicKey cert type")
+		}
+
+		if len(certMsg.certificates[0].ocspResponse) != 0 ||
+			len(certMsg.certificates[0].sctList) != 0 ||
+			certMsg.certificates[0].delegatedCredential != nil {
+			c.sendAlert(alertBadCertificate)
+			return errors.New("tls: server sent unexpected extension with raw public key")
+		}
+	}
+
+	// Parse and verify X.509 certificates.
 	var dc *delegatedCredential
 	certs := make([]*x509.Certificate, len(certMsg.certificates))
-	for i, certEntry := range certMsg.certificates {
-		cert, err := x509.ParseCertificate(certEntry.data)
-		if err != nil {
-			c.sendAlert(alertBadCertificate)
-			return errors.New("tls: failed to parse certificate from server: " + err.Error())
-		}
-		certs[i] = cert
+	if certMsg.certificateType == certTypeX509 {
+		for i, certEntry := range certMsg.certificates {
+			cert, err := x509.ParseCertificate(certEntry.data)
+			if err != nil {
+				c.sendAlert(alertBadCertificate)
+				return errors.New("tls: failed to parse certificate from server: " + err.Error())
+			}
+			certs[i] = cert
 
-		if certEntry.delegatedCredential != nil {
-			if i != 0 {
-				c.sendAlert(alertIllegalParameter)
-				return errors.New("tls: non-leaf certificate has a delegated credential")
+			if certEntry.delegatedCredential != nil {
+				if i != 0 {
+					c.sendAlert(alertIllegalParameter)
+					return errors.New("tls: non-leaf certificate has a delegated credential")
+				}
+				if len(c.config.DelegatedCredentialAlgorithms) == 0 {
+					c.sendAlert(alertIllegalParameter)
+					return errors.New("tls: server sent delegated credential without it being requested")
+				}
+				dc = certEntry.delegatedCredential
 			}
-			if len(c.config.DelegatedCredentialAlgorithms) == 0 {
-				c.sendAlert(alertIllegalParameter)
-				return errors.New("tls: server sent delegated credential without it being requested")
-			}
-			dc = certEntry.delegatedCredential
 		}
+
+		if !c.config.InsecureSkipVerify {
+			opts := x509.VerifyOptions{
+				Roots:         c.config.RootCAs,
+				CurrentTime:   c.config.time(),
+				DNSName:       c.config.ServerName,
+				Intermediates: x509.NewCertPool(),
+			}
+
+			for i, cert := range certs {
+				if i == 0 {
+					continue
+				}
+				opts.Intermediates.AddCert(cert)
+			}
+			var err error
+			c.verifiedChains, err = certs[0].Verify(opts)
+			if err != nil {
+				c.sendAlert(alertBadCertificate)
+				return err
+			}
+		}
+
+		peerPublicKey = certs[0].PublicKey
+		c.peerCertificates = certs
 	}
 
-	if !c.config.InsecureSkipVerify {
-		opts := x509.VerifyOptions{
-			Roots:         c.config.RootCAs,
-			CurrentTime:   c.config.time(),
-			DNSName:       c.config.ServerName,
-			Intermediates: x509.NewCertPool(),
-		}
-
-		for i, cert := range certs {
-			if i == 0 {
-				continue
-			}
-			opts.Intermediates.AddCert(cert)
-		}
-		var err error
-		c.verifiedChains, err = certs[0].Verify(opts)
-		if err != nil {
-			c.sendAlert(alertBadCertificate)
-			return err
-		}
-	}
-
-	leafPublicKey := certs[0].PublicKey
-	switch leafPublicKey.(type) {
+	switch peerPublicKey.(type) {
 	case *rsa.PublicKey, *ecdsa.PublicKey, ed25519.PublicKey:
 		break
 	default:
 		c.sendAlert(alertUnsupportedCertificate)
-		return fmt.Errorf("tls: server's certificate contains an unsupported type of public key: %T", leafPublicKey)
+		return fmt.Errorf("tls: server's certificate contains an unsupported type of public key: %T", peerPublicKey)
 	}
-
-	c.peerCertificates = certs
 
 	if dc != nil {
 		// Note that this doesn't check a) the delegated credential temporal
@@ -1944,13 +1971,13 @@ func (hs *clientHandshakeState) verifyCertificates(certMsg *certificateMsg) erro
 		}
 
 		signedMsg := delegatedCredentialSignedMessage(dc.signedBytes, dc.algorithm, certs[0].Raw)
-		if err := verifyMessage(c.isClient, c.vers, leafPublicKey, c.config, dc.algorithm, signedMsg, dc.signature); err != nil {
+		if err := verifyMessage(c.isClient, c.vers, peerPublicKey, c.config, dc.algorithm, signedMsg, dc.signature); err != nil {
 			c.sendAlert(alertBadCertificate)
 			return errors.New("tls: failed to verify delegated credential: " + err.Error())
 		}
 		c.peerDelegatedCredential = dc.raw
 	} else {
-		hs.peerPublicKey = leafPublicKey
+		hs.peerPublicKey = peerPublicKey
 	}
 
 	return nil
@@ -2175,6 +2202,20 @@ func (hs *clientHandshakeState) processServerExtensions(serverExtensions *server
 			return fmt.Errorf("tls: server sent client certificate type %v, but expected %v", found, expected)
 		}
 	}
+	if expected := c.config.Bugs.ExpectServerCertificateTypes; expected != nil {
+		if len(expected) > 1 {
+			panic("Expected server_certificate_type must not contain more than 1 value.")
+		}
+		var found []CertificateType
+		if serverExtensions.serverCertificateType != nil {
+			found = []CertificateType{*serverExtensions.serverCertificateType}
+		}
+		if !slices.Equal(found, expected) {
+			return fmt.Errorf("tls: server sent server certificate type %v, but expected %v", found, expected)
+		}
+	}
+	c.clientCertificateType = serverExtensions.clientCertificateType
+	c.serverCertificateType = serverExtensions.serverCertificateType
 
 	return nil
 }

@@ -118,15 +118,6 @@ func createDelegatedCredential(parent *Credential, config delegatedCredentialCon
 }
 
 func addDelegatedCredentialTests() {
-	p256DC := createDelegatedCredential(&rsaCertificate, delegatedCredentialConfig{
-		dcAlgo: signatureECDSAWithP256AndSHA256,
-		algo:   signatureRSAPSSWithSHA256,
-	})
-	p256DCFromECDSA := createDelegatedCredential(&ecdsaP256Certificate, delegatedCredentialConfig{
-		dcAlgo: signatureECDSAWithP256AndSHA256,
-		algo:   signatureECDSAWithP256AndSHA256,
-	})
-
 	testCases = append(testCases, testCase{
 		testType: serverTest,
 		name:     "DelegatedCredentials-NoClientSupport",

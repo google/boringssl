@@ -16,6 +16,7 @@ package runner
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 )
 
@@ -32,9 +33,9 @@ var (
 )
 
 func addServerCertTypeTests() {
-	// Tests sending list of accepted server cert types in the ClientHello.
-	// TODO(crbug.com/467663225): Test server response and rest of the handshake.
 	for _, ver := range allVersions(tls) {
+		// Tests sending list of accepted server cert types in the ClientHello.
+		// TODO(crbug.com/467663225): Test server response and rest of the handshake.
 		for _, test := range []struct {
 			name                         string
 			serverCertTypesAccepted      []CertificateType
@@ -75,6 +76,180 @@ func addServerCertTypeTests() {
 				flags: flagCertTypes("-accepted-peer-cert-types", test.serverCertTypesAccepted),
 			})
 		}
+		// Tests that server can receive a server_certificate_type extension from
+		// the client and select and send its most-preferred shared cert type based
+		// on configured server credentials, and test that server sends credential
+		// matching the selected cert type if appropriate.
+		for _, test := range []struct {
+			name                         string
+			serverCertTypesRequested     []CertificateType
+			serverCredentialsConfigured  []*Credential
+			expectedServerHelloExtension []CertificateType
+			expectedNegotiated           CertificateType
+			expectedCredentialIndex      int
+		}{
+			{
+				name:                         "RPKRequested-RPKAvailable",
+				serverCertTypesRequested:     certTypesListRPKOnly,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				// The first matching credential is picked, in the absence of other
+				// criteria. (See also: Server-RawPublicKey-* tests in
+				// certificate_selection_tests.go.)
+				name:                         "RPKRequested-MultipleRPKsAvailable",
+				serverCertTypesRequested:     certTypesListRPKOnly,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &rpkRsa},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "RPKX509Requested-RPKAvailable",
+				serverCertTypesRequested:     certTypesListRPKX509,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "X509RPKRequested-RPKAvailable",
+				serverCertTypesRequested:     certTypesListX509RPK,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "RPKRequested-RPKX509Available",
+				serverCertTypesRequested:     certTypesListRPKOnly,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "RPKX509Requested-RPKX509Available",
+				serverCertTypesRequested:     certTypesListRPKX509,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "X509RPKRequested-RPKX509Available",
+				serverCertTypesRequested:     certTypesListX509RPK,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "RPKRequested-X509RPKAvailable",
+				serverCertTypesRequested:     certTypesListRPKOnly,
+				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      1,
+			},
+			{
+				name:                         "RPKX509Requested-X509RPKAvailable",
+				serverCertTypesRequested:     certTypesListRPKX509,
+				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "X509RPKRequested-X509RPKAvailable",
+				serverCertTypesRequested:     certTypesListX509RPK,
+				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      0,
+			},
+			{
+				// The server should ignore any values from the client that are unknown,
+				// and use the remaining values in the list.
+				name:                         "RPKUnknownRequested-X509RPKAvailable",
+				serverCertTypesRequested:     certTypesListRPKUnknown,
+				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedServerHelloExtension: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      1,
+			},
+			{
+				// If the only known value in the list received from the client is the
+				// default X.509, it's still valid if it wasn't the only value.
+				name:                         "UnknownX509Requested-X509RPKAvailable",
+				serverCertTypesRequested:     certTypesListUnknownX509,
+				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedServerHelloExtension: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      1,
+			},
+		} {
+			var expectedServerCredential *Credential
+			if test.expectedCredentialIndex != -1 {
+				expectedServerCredential = test.serverCredentialsConfigured[test.expectedCredentialIndex]
+			}
+			serverTestCase := testCase{
+				testType: serverTest,
+				name:     fmt.Sprintf("ServerCertificateType-Server-%s-%s", test.name, ver.name),
+				config: Config{
+					MinVersion: ver.version,
+					MaxVersion: ver.version,
+					Bugs: ProtocolBugs{
+						SendServerCertificateTypes:   test.serverCertTypesRequested,
+						ExpectServerCertificateTypes: test.expectedServerHelloExtension,
+					},
+				},
+				flags: []string{
+					"-expect-server-certificate-type", strconv.Itoa(int(test.expectedNegotiated)),
+					"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex),
+				},
+				expectations: connectionExpectations{
+					peerCertificate: expectedServerCredential,
+				},
+				shimCredentials: test.serverCredentialsConfigured,
+			}
+			// Test that the server can defer configuring credentials to the cert
+			// callback.
+			certCallbackTestCase := serverTestCase
+			certCallbackTestCase.flags = append(slices.Clip(certCallbackTestCase.flags),
+				"-async")
+			certCallbackTestCase.name += "-CertCallback"
+			// Test that the server can defer configuring credentials to the early
+			// callback.
+			earlyCallbackTestCase := serverTestCase
+			earlyCallbackTestCase.flags = append(slices.Clip(earlyCallbackTestCase.flags),
+				"-async", "-use-early-callback")
+			earlyCallbackTestCase.name += "-EarlyCallback"
+
+			testCases = append(testCases,
+				serverTestCase,
+				certCallbackTestCase,
+				earlyCallbackTestCase,
+			)
+		}
+		// The server should reject a client's list that contains only the default
+		// X.509, which is a syntax error.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			name:     fmt.Sprintf("ServerCertificateType-Server-RejectsDefaultOnly-%s", ver.name),
+			config: Config{
+				MinVersion: ver.version,
+				MaxVersion: ver.version,
+				Bugs: ProtocolBugs{
+					SendServerCertificateTypes: certTypesListX509Only,
+				},
+			},
+			shouldFail:    true,
+			expectedError: ":DECODE_ERROR:",
+		})
 	}
 }
 

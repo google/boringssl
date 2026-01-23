@@ -282,7 +282,24 @@ func initCertificates() {
 }
 
 var (
+	p256DC          *Credential
+	p256DCFromECDSA *Credential
+)
+
+func initDelegatedCredentials() {
+	p256DC = createDelegatedCredential(&rsaCertificate, delegatedCredentialConfig{
+		dcAlgo: signatureECDSAWithP256AndSHA256,
+		algo:   signatureRSAPSSWithSHA256,
+	})
+	p256DCFromECDSA = createDelegatedCredential(&ecdsaP256Certificate, delegatedCredentialConfig{
+		dcAlgo: signatureECDSAWithP256AndSHA256,
+		algo:   signatureECDSAWithP256AndSHA256,
+	})
+}
+
+var (
 	rpkEcdsaP256 Credential
+	rpkEcdsaP384 Credential
 	rpkRsa       Credential
 )
 
@@ -292,6 +309,7 @@ func initRawPublicKeyCredentials() {
 		out *Credential
 	}{
 		{&ecdsaP256Key, &rpkEcdsaP256},
+		{&ecdsaP384Key, &rpkEcdsaP384},
 		{&rsa2048Key, &rpkRsa},
 	} {
 		*def.out = Credential{
@@ -943,6 +961,30 @@ func doExchange(test *testCase, config *Config, conn net.Conn, isResume bool, tr
 			}
 		} else if connState.PeerDelegatedCredential != nil {
 			return fmt.Errorf("peer unexpectedly used delegated credentials")
+		}
+		if expected.Type == CredentialTypeRawPublicKey {
+			if len(connState.PeerRawPublicKey) == 0 {
+				return fmt.Errorf("peer unexpectedly did not send a raw public key")
+			}
+			var expectedPublic crypto.PublicKey
+			switch expected.PrivateKey.(type) {
+			case *rsa.PrivateKey:
+				expectedPublic = expected.PrivateKey.(*rsa.PrivateKey).Public()
+			case *ecdsa.PrivateKey:
+				expectedPublic = expected.PrivateKey.(*ecdsa.PrivateKey).Public()
+			default:
+				panic("expected credential has unsupported key type")
+			}
+			expectedSpki, err := x509.MarshalPKIXPublicKey(expectedPublic)
+			if err != nil {
+				panic(fmt.Sprintf("error serializing public key of expected credential: %s", err))
+			}
+			if !slices.Equal(expectedSpki, connState.PeerRawPublicKey) {
+				return fmt.Errorf("peer raw public key did not match expected credential")
+			}
+		}
+		if expected.Type != CredentialTypeRawPublicKey && len(connState.PeerRawPublicKey) > 0 {
+			return fmt.Errorf("peer unexpectedly sent a raw public key")
 		}
 	}
 
@@ -2240,6 +2282,7 @@ func main() {
 	}
 	initKeys()
 	initCertificates()
+	initDelegatedCredentials()
 	initRawPublicKeyCredentials()
 
 	if *shimConfigFile != "" {

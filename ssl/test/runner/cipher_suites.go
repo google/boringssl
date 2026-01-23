@@ -14,7 +14,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"crypto/x509"
 	"hash"
 	"slices"
 
@@ -37,7 +36,7 @@ type keyAgreement interface {
 	// This method may not be called if the server doesn't send a
 	// ServerKeyExchange message.
 	processServerKeyExchange(*Config, *clientHelloMsg, *serverHelloMsg, crypto.PublicKey, *serverKeyExchangeMsg) error
-	generateClientKeyExchange(*Config, *clientHelloMsg, *x509.Certificate) ([]byte, *clientKeyExchangeMsg, error)
+	generateClientKeyExchange(*Config, *clientHelloMsg, crypto.PublicKey) ([]byte, *clientKeyExchangeMsg, error)
 
 	// peerSignatureAlgorithm returns the signature algorithm used by the
 	// peer, or zero if not applicable.

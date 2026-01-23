@@ -21,6 +21,7 @@
 
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/hkdf.h>
 #include <openssl/mem.h>
 #include <openssl/stack.h>
@@ -429,22 +430,32 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
   if (  // The request context is always empty in the handshake.
       !CBB_add_u8(body, 0) ||
       !CBB_add_u24_length_prefixed(body, &certificate_list)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
 
-  if (hs->credential == nullptr) {
+  if (cred == nullptr) {
     return ssl_add_message_cbb(ssl, cbb.get());
   }
 
-  assert(hs->credential->UsesX509());
-  CRYPTO_BUFFER *leaf_buf = sk_CRYPTO_BUFFER_value(cred->chain.get(), 0);
   CBB leaf, extensions;
-  if (!CBB_add_u24_length_prefixed(&certificate_list, &leaf) ||
-      !CBB_add_bytes(&leaf, CRYPTO_BUFFER_data(leaf_buf),
-                     CRYPTO_BUFFER_len(leaf_buf)) ||
-      !CBB_add_u16_length_prefixed(&certificate_list, &extensions)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+  if (!CBB_add_u24_length_prefixed(&certificate_list, &leaf)) {
+    return false;
+  }
+  if (cred->type == SSLCredentialType::kRawPublicKey) {
+    // Write the CertificateEntry format for a RawPublicKey (RFC 8446, section
+    // 4.4.2).
+    if (!EVP_marshal_public_key(&leaf, cred->pubkey.get())) {
+      return false;
+    }
+  } else {
+    assert(cred->UsesX509());
+    CRYPTO_BUFFER *leaf_buf = sk_CRYPTO_BUFFER_value(cred->chain.get(), 0);
+    if (!CBB_add_bytes(&leaf, CRYPTO_BUFFER_data(leaf_buf),
+                       CRYPTO_BUFFER_len(leaf_buf))) {
+      return false;
+    }
+  }
+  if (!CBB_add_u16_length_prefixed(&certificate_list, &extensions)) {
     return false;
   }
 
@@ -457,7 +468,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
             CRYPTO_BUFFER_data(cred->signed_cert_timestamp_list.get()),
             CRYPTO_BUFFER_len(cred->signed_cert_timestamp_list.get())) ||
         !CBB_flush(&extensions)) {
-      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
       return false;
     }
   }
@@ -472,7 +482,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
                        CRYPTO_BUFFER_data(cred->ocsp_response.get()),
                        CRYPTO_BUFFER_len(cred->ocsp_response.get())) ||
         !CBB_flush(&extensions)) {
-      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
       return false;
     }
   }
@@ -484,7 +493,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
         !CBB_add_bytes(&child, CRYPTO_BUFFER_data(cred->dc.get()),
                        CRYPTO_BUFFER_len(cred->dc.get())) ||
         !CBB_flush(&extensions)) {
-      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
       return false;
     }
   }
@@ -506,7 +514,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
         !CBB_add_bytes(&child, CRYPTO_BUFFER_data(cert_buf),
                        CRYPTO_BUFFER_len(cert_buf)) ||
         !CBB_add_u16(&certificate_list, 0 /* no extensions */)) {
-      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
       return false;
     }
   }
@@ -517,7 +524,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
 
   Array<uint8_t> msg;
   if (!CBBFinishArray(cbb.get(), &msg)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
 
@@ -542,7 +548,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
       msg.size() > (1u << 24) - 1 ||  //
       !CBB_add_u24(body, static_cast<uint32_t>(msg.size())) ||
       !CBB_add_u24_length_prefixed(body, &compressed)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
 
@@ -553,7 +558,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
       !hints->cert_compression_output.empty()) {
     if (!CBB_add_bytes(&compressed, hints->cert_compression_output.data(),
                        hints->cert_compression_output.size())) {
-      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
       return false;
     }
   } else {
@@ -571,7 +575,6 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
   }
 
   if (!ssl_add_message_cbb(ssl, cbb.get())) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
 

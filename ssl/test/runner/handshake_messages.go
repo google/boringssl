@@ -1662,6 +1662,7 @@ type serverExtensions struct {
 	echRetryConfigs           []byte
 	trustAnchors              [][]byte
 	clientCertificateType     *CertificateType
+	serverCertificateType     *CertificateType
 }
 
 func (m *serverExtensions) marshal(extensions *cryptobyte.Builder) {
@@ -1811,6 +1812,11 @@ func (m *serverExtensions) marshal(extensions *cryptobyte.Builder) {
 		extensions.AddUint16(1) // Length
 		extensions.AddUint8(uint8(*m.clientCertificateType))
 	}
+	if m.serverCertificateType != nil {
+		extensions.AddUint16(extensionServerCertificateType)
+		extensions.AddUint16(1) // Length
+		extensions.AddUint8(uint8(*m.serverCertificateType))
+	}
 }
 
 func (m *serverExtensions) unmarshal(data cryptobyte.String, version version) bool {
@@ -1956,6 +1962,12 @@ func (m *serverExtensions) unmarshal(data cryptobyte.String, version version) bo
 				return false
 			}
 			m.clientCertificateType = ptrTo(CertificateType(certType))
+		case extensionServerCertificateType:
+			var certType uint8
+			if !body.ReadUint8(&certType) || len(body) != 0 {
+				return false
+			}
+			m.serverCertificateType = ptrTo(CertificateType(certType))
 		default:
 			// Unknown extensions are illegal from the server.
 			return false
@@ -2210,6 +2222,11 @@ type certificateMsg struct {
 	matchedTrustAnchor              bool
 	sendTrustAnchorWrongCertificate bool
 	sendNonEmptyTrustAnchorMatch    bool
+	// certificateType indicates the type of the certificate. If it is
+	// `certTypeRawPublicKey`, then the Raw Public Key data, if any, is stored in
+	// `certificates[0].data` and `certificates` will contain exactly 1 entry.
+	// (Or else `certificates` will be empty.)
+	certificateType CertificateType
 }
 
 func (m *certificateMsg) marshal() (x []byte) {
@@ -2219,6 +2236,7 @@ func (m *certificateMsg) marshal() (x []byte) {
 
 	certMsg := cryptobyte.NewBuilder(nil)
 	certMsg.AddUint8(typeCertificate)
+	// TODO(crbug.com/467663225): Serialize RawPublicKey Certificates.
 	certMsg.AddUint24LengthPrefixed(func(certificate *cryptobyte.Builder) {
 		if m.hasRequestContext {
 			addUint8LengthPrefixedBytes(certificate, m.requestContext)
@@ -2271,6 +2289,21 @@ func (m *certificateMsg) marshal() (x []byte) {
 func (m *certificateMsg) unmarshal(data []byte) bool {
 	m.raw = data
 	reader := cryptobyte.String(data[4:])
+
+	// A TLS 1.2 RawPublicKey changes the syntax of the Certificate message. See
+	// RFC 7250, Section 3.
+	if m.certificateType == certTypeRawPublicKey && !m.hasRequestContext {
+		var cert certificateEntry
+		if !readUint24LengthPrefixedBytes(&reader, &cert.data) || len(reader) != 0 {
+			return false
+		}
+		// The RPK may have length 0, e.g. if the sender of the Certificate message
+		// wishes to decline to send a credential.
+		if len(cert.data) > 0 {
+			m.certificates = append(m.certificates, cert)
+		}
+		return true
+	}
 
 	if m.hasRequestContext && !readUint8LengthPrefixedBytes(&reader, &m.requestContext) {
 		return false

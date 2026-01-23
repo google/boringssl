@@ -224,6 +224,7 @@ struct TLS12ServerParams {
 
 static TLS12ServerParams choose_params(SSL_HANDSHAKE *hs,
                                        const SSL_CREDENTIAL *cred,
+                                       Span<const uint8_t> allowed_cert_types,
                                        const STACK_OF(SSL_CIPHER) *client_pref,
                                        bool has_ecdhe_group) {
   // Determine the usable cipher suites.
@@ -235,8 +236,16 @@ static TLS12ServerParams choose_params(SSL_HANDSHAKE *hs,
     mask_k |= SSL_kPSK;
     mask_a |= SSL_aPSK;
   }
+  assert(!allowed_cert_types.empty());
   uint16_t sigalg = 0;
-  if (cred != nullptr && cred->type == SSLCredentialType::kX509) {
+  if (cred != nullptr && (cred->type == SSLCredentialType::kX509 ||
+                          cred->type == SSLCredentialType::kRawPublicKey)) {
+    if (std::find(allowed_cert_types.begin(), allowed_cert_types.end(),
+                  *ssl_credential_type_to_cert_type(cred->type)) ==
+        allowed_cert_types.end()) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_UNKNOWN_CERTIFICATE_TYPE);
+      return TLS12ServerParams();
+    }
     bool sign_ok = tls1_choose_signature_algorithm(hs, cred, &sigalg);
     ERR_clear_error();
 
@@ -739,18 +748,28 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   if (!ssl_get_full_credential_list(hs, &creds)) {
     return ssl_hs_error;
   }
+  uint8_t alert = SSL_AD_DECODE_ERROR;
+  std::optional<Span<const uint8_t>> allowed_cert_types =
+      ssl_get_allowed_server_cert_types(hs, &client_hello, &alert);
+  if (!allowed_cert_types.has_value()) {
+    ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
+    return ssl_hs_error;
+  }
   TLS12ServerParams params;
   if (creds.empty()) {
     // The caller may have configured no credentials, but set a PSK callback.
-    params =
-        choose_params(hs, /*cred=*/nullptr, client_pref.get(), has_ecdhe_group);
+    params = choose_params(hs, /*cred=*/nullptr, *allowed_cert_types,
+                           client_pref.get(), has_ecdhe_group);
   } else {
     // Select the first credential which works.
     for (SSL_CREDENTIAL *cred : creds) {
       ERR_clear_error();
-      params = choose_params(hs, cred, client_pref.get(), has_ecdhe_group);
+      params = choose_params(hs, cred, *allowed_cert_types, client_pref.get(),
+                             has_ecdhe_group);
       if (params.ok()) {
         hs->credential = UpRef(cred);
+        hs->ssl->s3->server_cert_type =
+            ssl_credential_type_to_cert_type(hs->credential->type);
         break;
       }
     }
@@ -844,7 +863,6 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
     }
   }
 
-  uint8_t alert = SSL_AD_DECODE_ERROR;
   if (!ssl_negotiate_client_certificate_type(hs, &alert, &client_hello)) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
     return ssl_hs_error;

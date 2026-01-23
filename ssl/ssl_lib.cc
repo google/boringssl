@@ -3675,8 +3675,8 @@ static bool is_valid_cert_types_list(Span<const uint8_t> list) {
   }
   for (size_t i = 0u; i < list.size(); ++i) {
     // Check that each value is a recognized cert type.
-    if (std::find(std::begin(kCertTypes), std::end(kCertTypes), list[i]) ==
-        std::end(kCertTypes)) {
+    if (std::find(std::begin(kAllCertTypes), std::end(kAllCertTypes),
+                  list[i]) == std::end(kAllCertTypes)) {
       return false;
     }
     // Reject duplicates.
@@ -3732,4 +3732,8 @@ int SSL_set1_available_client_cert_types(SSL *ssl, const uint8_t *values,
 
 int SSL_get_negotiated_client_cert_type(const SSL *ssl) {
   return ssl->s3->client_cert_type.value_or(kDefaultCertType);
+}
+
+int SSL_get_negotiated_server_cert_type(const SSL *ssl) {
+  return ssl->s3->server_cert_type.value_or(kDefaultCertType);
 }

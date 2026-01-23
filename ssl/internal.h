@@ -1565,20 +1565,22 @@ bool ssl_credential_matches_requested_issuers(SSL_HANDSHAKE *hs,
 
 // ssl_check_tls13_credential_ignoring_issuer returns true if |cred| is usable
 // as the certificate in a TLS 1.3 handshake, ignoring the issuer check.
+// |allowed_cert_types| is a nonempty set of cert types (|TLSEXT_cert_type_*|
+// values) that are usable; |cred| must match one of these types.
 // |out_sigalg| will be set to a matching signature algorithm if true is
 // returned.
-bool ssl_check_tls13_credential_ignoring_issuer(SSL_HANDSHAKE *hs,
-                                                const SSL_CREDENTIAL *cred,
-                                                uint16_t *out_sigalg);
+bool ssl_check_tls13_credential_ignoring_issuer(
+    SSL_HANDSHAKE *hs, Span<const uint8_t> allowed_cert_types,
+    const SSL_CREDENTIAL *cred, uint16_t *out_sigalg);
 
 
 // Client certificate type & Server certificate type.
 
-inline constexpr uint8_t kCertTypes[] = {
+inline constexpr uint8_t kAllCertTypes[] = {
     TLSEXT_cert_type_x509,
     TLSEXT_cert_type_rpk,
 };
-inline constexpr size_t kNumCertTypes = std::size(kCertTypes);
+inline constexpr size_t kNumCertTypes = std::size(kAllCertTypes);
 inline constexpr uint8_t kDefaultCertType = TLSEXT_cert_type_x509;
 
 // ssl_credential_type_to_cert_type returns the certificate type value
@@ -1600,6 +1602,16 @@ void ssl_setup_client_certificate_type(SSL_HANDSHAKE *hs);
 bool ssl_negotiate_client_certificate_type(
     const SSL_HANDSHAKE *hs, uint8_t *out_alert,
     const SSL_CLIENT_HELLO *client_hello);
+
+// ssl_get_allowed_server_cert_types, for a server, returns the cert types that
+// may be used based on the server_certificate_type extension in the
+// ClientHello. It returns a nonempty list of allowable certificate types. By
+// default, if the client did not send the extension, X.509 certificates are
+// allowed. The returned cert types may include unrecognized values. Returns
+// nullopt and sets `out_alert` on failure.
+std::optional<Span<const uint8_t>> ssl_get_allowed_server_cert_types(
+    const SSL_HANDSHAKE *hs, const SSL_CLIENT_HELLO *client_hello,
+    uint8_t *out_alert);
 
 
 // Handshake functions.
@@ -2964,6 +2976,11 @@ struct SSL3_STATE {
   // the connection. If this is nullopt, the peer did not send the
   // client_certificate_type extension, or no suitable value was negotiated.
   std::optional<uint8_t> client_cert_type;
+
+  // server_cert_type, if non-nullopt, is the negotiated server cert type for
+  // the connection. If this is nullopt, the peer did not send the
+  // server_certificate_type extension, or no suitable value was negotiated.
+  std::optional<uint8_t> server_cert_type;
 };
 
 // lengths of messages

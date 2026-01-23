@@ -21,6 +21,7 @@
 #include <utility>
 
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/rand.h>
 
 #include "../crypto/internal.h"
@@ -471,6 +472,14 @@ bool ssl_send_tls12_certificate(SSL_HANDSHAKE *hs) {
   }
 
   if (hs->credential != nullptr) {
+    // Write the Certificate format for a RawPublicKey (RFC 7250).
+    if (hs->credential->type == SSLCredentialType::kRawPublicKey) {
+      if (!EVP_marshal_public_key(&certs, hs->credential->pubkey.get())) {
+        return false;
+      }
+      return ssl_add_message_cbb(hs->ssl, cbb.get());
+    }
+
     assert(hs->credential->type == SSLCredentialType::kX509);
     STACK_OF(CRYPTO_BUFFER) *chain = hs->credential->chain.get();
     for (size_t i = 0; i < sk_CRYPTO_BUFFER_num(chain); i++) {

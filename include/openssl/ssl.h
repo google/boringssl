@@ -3977,6 +3977,11 @@ OPENSSL_EXPORT int SSL_set1_available_client_cert_types(SSL *ssl,
 // returns |TLSEXT_cert_type_x509| by default.
 OPENSSL_EXPORT int SSL_get_negotiated_client_cert_type(const SSL *ssl);
 
+// SSL_get_negotiated_server_cert_type returns the connection's negotiated value
+// of server_certificate_type. If no type has been negotiated explicitly, it
+// returns |TLSEXT_cert_type_x509| by default.
+OPENSSL_EXPORT int SSL_get_negotiated_server_cert_type(const SSL *ssl);
+
 
 // Password Authenticated Key Exchange (PAKE).
 //

@@ -2889,8 +2889,8 @@ static bool ext_trust_anchors_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
   for (const auto &cred : hs->config->cert->credentials) {
     if (!cred->trust_anchor_id.empty()) {
       uint16_t unused_sigalg;
-      if (!ssl_check_tls13_credential_ignoring_issuer(hs, cred.get(),
-                                                      &unused_sigalg)) {
+      if (!ssl_check_tls13_credential_ignoring_issuer(
+              hs, kAllCertTypes, cred.get(), &unused_sigalg)) {
         ERR_clear_error();
         continue;
       }
@@ -3841,6 +3841,24 @@ static bool ext_client_cert_type_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
   return true;
 }
 
+std::optional<Span<const uint8_t>> ssl_get_allowed_server_cert_types(
+    const SSL_HANDSHAKE *hs, const SSL_CLIENT_HELLO *client_hello,
+    uint8_t *out_alert) {
+  std::optional<Span<const uint8_t>> clienthello_server_cert_types;
+  CBS server_cert_types_ext;
+  if (ssl_client_hello_get_extension(client_hello, &server_cert_types_ext,
+                                     TLSEXT_TYPE_server_cert_type)) {
+    clienthello_server_cert_types =
+        parse_clienthello_cert_types_list(out_alert, &server_cert_types_ext);
+    if (!clienthello_server_cert_types.has_value()) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_PARSING_EXTENSION);
+      return std::nullopt;
+    }
+  }
+  // Allow X.509 certificates by default.
+  return clienthello_server_cert_types.value_or(Span(&kDefaultCertType, 1u));
+}
+
 static bool ext_server_cert_type_add_clienthello(const SSL_HANDSHAKE *hs,
                                                  CBB *out,
                                                  CBB *out_compressible,
@@ -3871,15 +3889,18 @@ static bool ext_server_cert_type_parse_serverhello(SSL_HANDSHAKE *hs,
   return true;
 }
 
-static bool ext_server_cert_type_parse_clienthello(SSL_HANDSHAKE *hs,
-                                                   uint8_t *out_alert,
-                                                   CBS *contents) {
-  // TODO(crbug.com/467663225): Implement this.
-  return true;
-}
-
 static bool ext_server_cert_type_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
-  // TODO(crbug.com/467663225): Implement this.
+  // Only send the extension if a value was negotiated.
+  if (!hs->ssl->s3->server_cert_type.has_value()) {
+    return true;
+  }
+  CBB contents;
+  if (!CBB_add_u16(out, TLSEXT_TYPE_server_cert_type) ||
+      !CBB_add_u16_length_prefixed(out, &contents) ||
+      !CBB_add_u8(&contents, *hs->ssl->s3->server_cert_type) ||  //
+      !CBB_flush(out)) {
+    return false;
+  }
   return true;
 }
 
@@ -4100,7 +4121,9 @@ static const struct tls_extension kExtensions[] = {
         TLSEXT_TYPE_server_cert_type,
         ext_server_cert_type_add_clienthello,
         ext_server_cert_type_parse_serverhello,
-        ext_server_cert_type_parse_clienthello,
+        // The server_certificate_type list from the client is parsed later,
+        // during credential selection.
+        ignore_parse_clienthello,
         ext_server_cert_type_add_serverhello,
     },
 };
