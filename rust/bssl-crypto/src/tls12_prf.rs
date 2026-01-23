@@ -22,7 +22,7 @@ use core::marker::PhantomData;
 
 use bssl_sys::CRYPTO_tls1_prf;
 
-use crate::{digest, sealed, ForeignTypeRef};
+use crate::{digest, sealed, FfiMutSlice, ForeignTypeRef};
 
 /// The special pseudo-random function used by TLS 1.2
 pub struct Tls12Prf<A>(PhantomData<fn() -> A>);
@@ -30,10 +30,6 @@ pub struct Tls12Prf<A>(PhantomData<fn() -> A>);
 impl<A: digest::Algorithm> Tls12Prf<A> {
     /// Generate a new secret using the definition in [RFC 5246] Section 5.
     ///
-    /// # Error
-    /// This function returns an error if the length of the output buffer
-    /// does not exactly match the output length of the underlying hashing
-    /// function `A`.
     /// [RFC 5246]: https://datatracker.ietf.org/doc/html/rfc5246#section-5
     // TODO(@xfding) switch to const generics when associated const
     // is stable at generic location.
@@ -44,9 +40,6 @@ impl<A: digest::Algorithm> Tls12Prf<A> {
         seed2: Option<&[u8]>,
         output: &mut [u8],
     ) -> Result<(), ()> {
-        if output.len() != A::OUTPUT_LEN {
-            return Err(());
-        }
         let (seed2, seed2_len) = if let Some(seed) = seed2 {
             (seed.as_ptr(), seed.len())
         } else {
@@ -59,7 +52,7 @@ impl<A: digest::Algorithm> Tls12Prf<A> {
             // - All buffer lengths are verified.
             CRYPTO_tls1_prf(
                 A::get_md(sealed::SealedType).as_ptr(),
-                output.as_mut_ptr(),
+                output.as_mut_ffi_ptr(),
                 output.len(),
                 secret.as_ptr(),
                 secret.len(),
