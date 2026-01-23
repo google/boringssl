@@ -201,6 +201,16 @@ static bool dsa_pub_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
   return BN_cmp(DSA_get0_pub_key(b_dsa), DSA_get0_pub_key(a_dsa)) == 0;
 }
 
+static bool dsa_pub_present(const EVP_PKEY *pk) {
+  const DSA *pk_dsa = reinterpret_cast<const DSA *>(pk->pkey);
+  return DSA_get0_pub_key(pk_dsa) != nullptr;
+}
+
+static bool dsa_priv_present(const EVP_PKEY *pk) {
+  const DSA *pk_dsa = reinterpret_cast<const DSA *>(pk->pkey);
+  return DSA_get0_priv_key(pk_dsa) != nullptr;
+}
+
 static void int_dsa_free(EVP_PKEY *pkey) {
   DSA_free(reinterpret_cast<DSA *>(pkey->pkey));
   pkey->pkey = nullptr;
@@ -217,9 +227,11 @@ const EVP_PKEY_ASN1_METHOD dsa_asn1_meth = {
     dsa_pub_decode,
     dsa_pub_encode,
     dsa_pub_equal,
+    dsa_pub_present,
 
     dsa_priv_decode,
     dsa_priv_encode,
+    dsa_priv_present,
 
     /*set_priv_raw=*/nullptr,
     /*set_priv_seed=*/nullptr,

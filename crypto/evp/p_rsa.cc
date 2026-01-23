@@ -98,6 +98,14 @@ static bool rsa_pub_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
          BN_cmp(RSA_get0_e(b_rsa), RSA_get0_e(a_rsa)) == 0;
 }
 
+static bool rsa_pub_present(const EVP_PKEY *pk) {
+  const RSA *pk_rsa = reinterpret_cast<const RSA *>(pk->pkey);
+  // An RSA public key should always have n and e. It's possible for a (private)
+  // key to have n and d, but not e, so we must explicitly check for the
+  // presence of e.
+  return RSA_get0_n(pk_rsa) != nullptr && RSA_get0_e(pk_rsa) != nullptr;
+}
+
 static int rsa_priv_encode(CBB *out, const EVP_PKEY *key) {
   const RSA *rsa = reinterpret_cast<const RSA *>(key->pkey);
   CBB pkcs8, algorithm, null, private_key;
@@ -136,6 +144,11 @@ static bssl::evp_decode_result_t rsa_priv_decode(const EVP_PKEY_ALG *alg,
 
   EVP_PKEY_assign_RSA(out, rsa.release());
   return evp_decode_ok;
+}
+
+static bool rsa_priv_present(const EVP_PKEY *pk) {
+  const RSA *pk_rsa = reinterpret_cast<const RSA *>(pk->pkey);
+  return RSA_get0_n(pk_rsa) != nullptr && RSA_get0_d(pk_rsa) != nullptr;
 }
 
 static bssl::evp_decode_result_t rsa_decode_pss_params(
@@ -262,9 +275,11 @@ const EVP_PKEY_ASN1_METHOD rsa_asn1_meth = {
     rsa_pub_decode,
     rsa_pub_encode,
     rsa_pub_equal,
+    rsa_pub_present,
 
     rsa_priv_decode,
     rsa_priv_encode,
+    rsa_priv_present,
 
     /*set_priv_raw=*/nullptr,
     /*set_priv_seed=*/nullptr,
@@ -298,9 +313,11 @@ const EVP_PKEY_ASN1_METHOD rsa_pss_asn1_meth = {
     rsa_pub_decode_pss,
     rsa_pub_encode_pss,
     rsa_pub_equal,
+    rsa_pub_present,
 
     rsa_priv_decode_pss,
     rsa_priv_encode_pss,
+    rsa_priv_present,
 
     /*set_priv_raw=*/nullptr,
     /*set_priv_seed=*/nullptr,

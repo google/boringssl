@@ -363,6 +363,12 @@ bool ImportKey(FileTest *t, KeyMap *key_map, KeyRole key_role) {
 
     EXPECT_EQ(alg_info.pkey_id, EVP_PKEY_id(pkey.get()));
 
+    // In almost all cases, a non-empty key must have a public key. The only
+    // exception is a private RSA key with (n, d) params only, which is tested
+    // not here but elsewhere.
+    EXPECT_EQ(EVP_PKEY_has_public(pkey.get()), 1);
+    EXPECT_EQ(EVP_PKEY_has_private(pkey.get()), key_role == KeyRole::kPrivate);
+
     if (t->HasAttribute("Bits")) {
       EXPECT_EQ(EVP_PKEY_bits(pkey.get()),
                 atoi(t->GetAttributeOrDie("Bits").c_str()));

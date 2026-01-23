@@ -252,6 +252,16 @@ static int eckey_opaque(const EVP_PKEY *pkey) {
   return EC_KEY_is_opaque(ec_key);
 }
 
+static bool eckey_pub_present(const EVP_PKEY *pkey) {
+  const EC_KEY *ec_key = reinterpret_cast<const EC_KEY *>(pkey->pkey);
+  return EC_KEY_get0_public_key(ec_key) != nullptr;
+}
+
+static bool eckey_priv_present(const EVP_PKEY *pkey) {
+  const EC_KEY *ec_key = reinterpret_cast<const EC_KEY *>(pkey->pkey);
+  return EC_KEY_get0_private_key(ec_key) != nullptr;
+}
+
 const EVP_PKEY_ASN1_METHOD ec_asn1_meth = {
     EVP_PKEY_EC,
     // 1.2.840.10045.2.1
@@ -263,9 +273,11 @@ const EVP_PKEY_ASN1_METHOD ec_asn1_meth = {
     eckey_pub_decode,
     eckey_pub_encode,
     eckey_pub_equal,
+    eckey_pub_present,
 
     eckey_priv_decode,
     eckey_priv_encode,
+    eckey_priv_present,
 
     /*set_priv_raw=*/nullptr,
     /*set_priv_seed=*/nullptr,

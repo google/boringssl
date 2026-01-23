@@ -270,6 +270,8 @@ struct MLDSAImplementation {
     return Traits::PublicKeysEqual(a_pub, b_pub);
   }
 
+  static bool HasPublic(const EVP_PKEY *pk) { return true; }
+
   static evp_decode_result_t DecodePrivate(const EVP_PKEY_ALG *alg,
                                            EVP_PKEY *out, CBS *params,
                                            CBS *key) {
@@ -332,6 +334,10 @@ struct MLDSAImplementation {
       return 0;
     }
     return 1;
+  }
+
+  static bool HasPrivate(const EVP_PKEY *pk) {
+    return GetKeyData(pk)->AsPrivateKeyData() != nullptr;
   }
 
   static int PkeySize(const EVP_PKEY *pkey) { return Traits::kSignatureBytes; }
@@ -407,8 +413,10 @@ struct MLDSAImplementation {
         &DecodePublic,
         &EncodePublic,
         &EqualPublic,
+        &HasPublic,
         &DecodePrivate,
         &EncodePrivate,
+        &HasPrivate,
         // While exporting the seed as the "raw" private key would be natural,
         // OpenSSL connected these APIs to the "raw private key", so we export
         // the seed separately.

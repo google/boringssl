@@ -94,6 +94,14 @@ OPENSSL_EXPORT int EVP_PKEY_size(const EVP_PKEY *pkey);
 // length of the group order.
 OPENSSL_EXPORT int EVP_PKEY_bits(const EVP_PKEY *pkey);
 
+// EVP_PKEY_has_public returns one if |pkey| has a public key, or zero
+// otherwise.
+OPENSSL_EXPORT int EVP_PKEY_has_public(const EVP_PKEY *pkey);
+
+// EVP_PKEY_has_private returns one if |pkey| has a private key, or zero
+// otherwise.
+OPENSSL_EXPORT int EVP_PKEY_has_private(const EVP_PKEY *pkey);
+
 // The following constants are returned by |EVP_PKEY_id| and specify the type of
 // key.
 #define EVP_PKEY_NONE NID_undef

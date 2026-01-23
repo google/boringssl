@@ -27,6 +27,7 @@
 #include <openssl/crypto.h>
 #include <openssl/digest.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/nid.h>
 #include <openssl/pem.h>
 
@@ -461,6 +462,14 @@ TEST_P(RSAEncryptTest, TestKey) {
   ASSERT_TRUE(no_e);
   EXPECT_FALSE(RSA_get0_e(no_e.get()));
   EXPECT_TRUE(RSA_get0_d(no_e.get()));
+
+  // An RSA key with no e is the only type of key that has a private key but no
+  // public key.
+  UniquePtr<EVP_PKEY> no_e_pkey(EVP_PKEY_new());
+  ASSERT_TRUE(no_e_pkey);
+  ASSERT_TRUE(EVP_PKEY_set1_RSA(no_e_pkey.get(), no_e.get()));
+  EXPECT_FALSE(EVP_PKEY_has_public(no_e_pkey.get()));
+  EXPECT_TRUE(EVP_PKEY_has_private(no_e_pkey.get()));
 
   UniquePtr<RSA> pub(
       RSA_new_public_key(RSA_get0_n(parsed.get()), RSA_get0_e(parsed.get())));

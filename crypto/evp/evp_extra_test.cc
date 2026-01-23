@@ -462,6 +462,7 @@ static void TestValidPrivateKey(Span<const uint8_t> input, int expected_id) {
   const uint8_t *p = input.data();
   UniquePtr<EVP_PKEY> pkey(d2i_AutoPrivateKey(nullptr, &p, input.size()));
   ASSERT_TRUE(pkey);
+  EXPECT_EQ(EVP_PKEY_has_private(pkey.get()), 1);
   EXPECT_EQ(input.data() + input.size(), p);
   EXPECT_EQ(expected_id, EVP_PKEY_id(pkey.get()));
 }
@@ -489,6 +490,7 @@ static UniquePtr<EVP_PKEY> ParsePrivateKey(int type, Span<const uint8_t> in) {
   }
 
   EXPECT_EQ(in.data() + in.size(), ptr);
+  EXPECT_EQ(EVP_PKEY_has_private(pkey.get()), 1);
   return pkey;
 }
 
@@ -637,6 +639,8 @@ TEST(EVPExtraTest, BadECKey) {
 TEST(EVPExtraTest, MarshalEmptyPublicKey) {
   UniquePtr<EVP_PKEY> empty(EVP_PKEY_new());
   ASSERT_TRUE(empty);
+  EXPECT_EQ(EVP_PKEY_has_public(empty.get()), 0);
+  EXPECT_EQ(EVP_PKEY_has_private(empty.get()), 0);
 
   ScopedCBB cbb;
   EXPECT_FALSE(EVP_marshal_public_key(cbb.get(), empty.get()))
@@ -697,6 +701,7 @@ TEST(EVPExtraTest, Ed25519) {
   UniquePtr<EVP_PKEY> pubkey(EVP_PKEY_from_raw_public_key(
       EVP_pkey_ed25519(), kPublicKey, sizeof(kPublicKey)));
   ASSERT_TRUE(pubkey);
+  EXPECT_EQ(EVP_PKEY_has_public(pubkey.get()), 1);
   EXPECT_EQ(EVP_PKEY_ED25519, EVP_PKEY_id(pubkey.get()));
 
   // The public key must be extractable.
@@ -719,6 +724,7 @@ TEST(EVPExtraTest, Ed25519) {
   ERR_clear_error();
 
   // There is no private key.
+  EXPECT_EQ(EVP_PKEY_has_private(pubkey.get()), 0);
   EXPECT_FALSE(EVP_PKEY_get_raw_private_key(pubkey.get(), nullptr, &len));
   EXPECT_TRUE(
       ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_NOT_A_PRIVATE_KEY));
@@ -827,6 +833,8 @@ static void ExpectECGroupOnly(const EVP_PKEY *pkey, int nid) {
   ASSERT_TRUE(group);
   EXPECT_EQ(nid, EC_GROUP_get_curve_name(group));
   EXPECT_EQ(nid, EVP_PKEY_get_ec_curve_nid(pkey));
+  EXPECT_EQ(EVP_PKEY_has_public(pkey), 0);
+  EXPECT_EQ(EVP_PKEY_has_private(pkey), 0);
   EXPECT_FALSE(EC_KEY_get0_public_key(ec));
   EXPECT_FALSE(EC_KEY_get0_private_key(ec));
 }
@@ -838,6 +846,8 @@ static void ExpectECGroupAndKey(const EVP_PKEY *pkey, int nid) {
   ASSERT_TRUE(group);
   EXPECT_EQ(nid, EC_GROUP_get_curve_name(group));
   EXPECT_EQ(nid, EVP_PKEY_get_ec_curve_nid(pkey));
+  EXPECT_EQ(EVP_PKEY_has_public(pkey), 1);
+  EXPECT_EQ(EVP_PKEY_has_private(pkey), 1);
   EXPECT_TRUE(EC_KEY_get0_public_key(ec));
   EXPECT_TRUE(EC_KEY_get0_private_key(ec));
 }

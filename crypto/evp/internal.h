@@ -74,6 +74,10 @@ struct evp_pkey_asn1_method_st {
 
   bool (*pub_equal)(const EVP_PKEY *a, const EVP_PKEY *b);
 
+  // pub_present returns true iff the |pk| has a public key. (If so, validity
+  // is not guaranteed and should be checked separately.)
+  bool (*pub_present)(const EVP_PKEY *pk);
+
   // priv_decode decodes |params| and |key| as a PrivateKeyInfo and writes the
   // result into |out|.  It returns |evp_decode_ok| on success, and
   // |evp_decode_error| on error, and |evp_decode_unsupported| if the key type
@@ -89,6 +93,10 @@ struct evp_pkey_asn1_method_st {
   // priv_encode encodes |key| as a PrivateKeyInfo and appends the result to
   // |out|. It returns one on success and zero on error.
   int (*priv_encode)(CBB *out, const EVP_PKEY *key);
+
+  // priv_present returns true iff the |pk| has a private key. (If so, validity
+  // is not guaranteed and should be checked separately.)
+  bool (*priv_present)(const EVP_PKEY *pk);
 
   int (*set_priv_raw)(EVP_PKEY *pkey, const uint8_t *in, size_t len);
   int (*set_priv_seed)(EVP_PKEY *pkey, const uint8_t *in, size_t len);

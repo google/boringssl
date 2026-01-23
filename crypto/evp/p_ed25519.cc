@@ -215,6 +215,13 @@ static int ed25519_priv_encode(CBB *out, const EVP_PKEY *pkey) {
   return 1;
 }
 
+static bool ed25519_pub_present(const EVP_PKEY *) { return true; }
+
+static bool ed25519_priv_present(const EVP_PKEY *pkey) {
+  const ED25519_KEY *key = reinterpret_cast<const ED25519_KEY *>(pkey->pkey);
+  return key->has_private;
+}
+
 static int ed25519_size(const EVP_PKEY *pkey) { return 64; }
 
 static int ed25519_bits(const EVP_PKEY *pkey) { return 253; }
@@ -227,8 +234,10 @@ const EVP_PKEY_ASN1_METHOD ed25519_asn1_meth = {
     ed25519_pub_decode,
     ed25519_pub_encode,
     ed25519_pub_equal,
+    ed25519_pub_present,
     ed25519_priv_decode,
     ed25519_priv_encode,
+    ed25519_priv_present,
     ed25519_set_priv_raw,
     /*set_priv_seed=*/nullptr,
     ed25519_set_pub_raw,

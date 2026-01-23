@@ -91,6 +91,16 @@ static bool dh_pub_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
   return BN_cmp(DH_get0_pub_key(a_dh), DH_get0_pub_key(b_dh)) == 0;
 }
 
+static bool dh_has_pub(const EVP_PKEY *pk) {
+  const DH *pk_dh = reinterpret_cast<const DH *>(pk->pkey);
+  return DH_get0_pub_key(pk_dh) != nullptr;
+}
+
+static bool dh_has_priv(const EVP_PKEY *pk) {
+  const DH *pk_dh = reinterpret_cast<const DH *>(pk->pkey);
+  return DH_get0_priv_key(pk_dh) != nullptr;
+}
+
 static const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
     /*pkey_id=*/EVP_PKEY_DH,
     /*oid=*/{0},
@@ -99,8 +109,10 @@ static const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
     /*pub_decode=*/nullptr,
     /*pub_encode=*/nullptr,
     /*pub_equal=*/dh_pub_equal,
+    /*pub_present=*/dh_has_pub,
     /*priv_decode=*/nullptr,
     /*priv_encode=*/nullptr,
+    /*priv_present=*/dh_has_priv,
     /*set_priv_raw=*/nullptr,
     /*set_priv_seed=*/nullptr,
     /*set_pub_raw=*/nullptr,

@@ -370,3 +370,19 @@ int EVP_PKEY_base_id(const EVP_PKEY *pkey) {
   // of DSA. We do not support these, so the base ID is simply the ID.
   return EVP_PKEY_id(pkey);
 }
+
+int EVP_PKEY_has_public(const EVP_PKEY *pkey) {
+  if (pkey == nullptr || pkey->ameth == nullptr ||
+      pkey->ameth->pub_present == nullptr) {
+    return 0;
+  }
+  return pkey->ameth->pub_present(pkey);
+}
+
+int EVP_PKEY_has_private(const EVP_PKEY *pkey) {
+  if (pkey == nullptr || pkey->ameth == nullptr ||
+      pkey->ameth->priv_present == nullptr) {
+    return 0;
+  }
+  return pkey->ameth->priv_present(pkey);
+}
