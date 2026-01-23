@@ -5674,6 +5674,45 @@ TEST(SSLTest, CredentialChains) {
                            {leaf.get(), ca.get()}));
 }
 
+TEST(SSLTest, RawPublicKeyCredential) {
+  bssl::UniquePtr<EVP_PKEY> test_key = GetTestKey();
+  ASSERT_TRUE(test_key);
+  ASSERT_TRUE(EVP_PKEY_has_public(test_key.get()));
+  ASSERT_TRUE(EVP_PKEY_has_private(test_key.get()));
+
+  bssl::UniquePtr<SSL_CREDENTIAL> cred(
+      SSL_CREDENTIAL_new_raw_public_key(test_key.get()));
+  ASSERT_TRUE(cred);
+  EXPECT_TRUE(SSL_CREDENTIAL_is_complete(cred.get()));
+
+  // Make another key containing the public key only.
+  UniquePtr<EVP_PKEY> public_key(EVP_PKEY_copy_public(test_key.get()));
+  ASSERT_TRUE(public_key);
+  ASSERT_TRUE(EVP_PKEY_has_public(public_key.get()));
+  ASSERT_FALSE(EVP_PKEY_has_private(public_key.get()));
+
+  static const SSL_PRIVATE_KEY_METHOD kCustomMethod = {
+      [](SSL *ssl, uint8_t *out, size_t *out_len, size_t max_out,
+         uint16_t signature_algorithm, const uint8_t *in,
+         size_t in_len) { return ssl_private_key_success; },
+      [](SSL *ssl, uint8_t *out, size_t *out_len, size_t max_out,
+         const uint8_t *in, size_t in_len) { return ssl_private_key_success; },
+      [](SSL *ssl, uint8_t *out, size_t *out_len, size_t max_oun) {
+        return ssl_private_key_success;
+      },
+  };
+
+  cred.reset(SSL_CREDENTIAL_new_raw_public_key_custom(public_key.get(),
+                                                      &kCustomMethod));
+  ASSERT_TRUE(cred);
+  EXPECT_TRUE(SSL_CREDENTIAL_is_complete(cred.get()));
+
+  // This creation fails due to lack of a private key.
+  cred.reset(SSL_CREDENTIAL_new_raw_public_key(public_key.get()));
+  ASSERT_FALSE(cred);
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL, SSL_R_MISSING_KEY));
+}
+
 TEST(SSLTest, CredentialCertProperties) {
   // A CertificatePropertyList containing a trust_anchors property, and an
   // unknown property 0xbb with 0 bytes of data.
@@ -9392,6 +9431,42 @@ TEST(SSLTest, AcceptedPeerCertTypesConfig) {
        })) {
     EXPECT_EQ(0, SSL_CTX_set1_accepted_peer_cert_types(ctx.get(), list.data(),
                                                        list.size()));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                            SSL_R_INVALID_CERT_TYPES_LIST));
+  }
+}
+
+TEST(SSLTest, AvailableClientCertTypesConfig) {
+  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(ctx);
+
+  // Valid configurations.
+  for (const auto &list : std::vector<std::vector<uint8_t>>({
+           // Listing only the default type is considered valid here; we just
+           // won't send a ClientHello extension for this list.
+           {TLSEXT_cert_type_x509},
+           {TLSEXT_cert_type_rpk},
+           {TLSEXT_cert_type_x509, TLSEXT_cert_type_rpk},
+           {TLSEXT_cert_type_rpk, TLSEXT_cert_type_x509},
+       })) {
+    EXPECT_EQ(1, SSL_CTX_set1_available_client_cert_types(
+                     ctx.get(), list.data(), list.size()));
+  }
+
+  // Invalid configurations.
+  for (const auto &list : std::vector<std::vector<uint8_t>>({
+           // Empty list is invalid. To omit the extension, the client should
+           // set a list containing only the default, X.509.
+           {},
+           // Bogus value,
+           {0xff},
+           // Contains duplicate.
+           {TLSEXT_cert_type_x509, TLSEXT_cert_type_x509},
+           // Too long.
+           {TLSEXT_cert_type_x509, TLSEXT_cert_type_rpk, 0x03},
+       })) {
+    EXPECT_EQ(0, SSL_CTX_set1_available_client_cert_types(
+                     ctx.get(), list.data(), list.size()));
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
                             SSL_R_INVALID_CERT_TYPES_LIST));
   }

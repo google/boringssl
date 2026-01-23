@@ -3727,6 +3727,36 @@ static std::optional<Span<const uint8_t>> parse_clienthello_cert_types_list(
   return cert_types_list;
 }
 
+void ssl_setup_client_certificate_type(SSL_HANDSHAKE *hs) {
+  hs->offered_client_cert_types.clear();
+  InplaceVector<uint8_t, kNumCertTypes> available_cert_types;
+  if (!hs->ssl->config->available_client_cert_types.empty()) {
+    available_cert_types.CopyFrom(hs->ssl->config->available_client_cert_types);
+  } else {
+    // Compute the available cert types based on configured SSL_CREDENTIALs.
+    const auto append_if_not_present = [&](uint8_t cert_type) {
+      if (std::find(available_cert_types.begin(), available_cert_types.end(),
+                    cert_type) == available_cert_types.end()) {
+        available_cert_types.PushBack(cert_type);
+      }
+    };
+    for (const auto &credential : hs->config->cert->credentials) {
+      if (std::optional<uint8_t> cert_type =
+              ssl_credential_type_to_cert_type(credential->type);
+          cert_type.has_value()) {
+        append_if_not_present(*cert_type);
+      }
+    }
+  }
+  if (available_cert_types.empty() ||
+      // Omit extension if the only type would be the default, X.509.
+      (available_cert_types.size() == 1 &&
+       available_cert_types[0] == kDefaultCertType)) {
+    return;
+  }
+  hs->offered_client_cert_types = std::move(available_cert_types);
+}
+
 bool ssl_negotiate_client_certificate_type(
     const SSL_HANDSHAKE *hs, uint8_t *out_alert,
     const SSL_CLIENT_HELLO *client_hello) {
@@ -3771,7 +3801,18 @@ static bool ext_client_cert_type_add_clienthello(const SSL_HANDSHAKE *hs,
                                                  CBB *out,
                                                  CBB *out_compressible,
                                                  ssl_client_hello_type_t type) {
-  // TODO(crbug.com/467663225): Implement this.
+  if (hs->offered_client_cert_types.empty()) {
+    return true;
+  }
+  CBB contents, client_cert_types;
+  if (!CBB_add_u16(out, TLSEXT_TYPE_client_cert_type) ||
+      !CBB_add_u16_length_prefixed(out, &contents) ||
+      !CBB_add_u8_length_prefixed(&contents, &client_cert_types) ||
+      !CBB_add_bytes(&client_cert_types, hs->offered_client_cert_types.data(),
+                     hs->offered_client_cert_types.size()) ||
+      !CBB_flush(out)) {
+    return false;
+  }
   return true;
 }
 

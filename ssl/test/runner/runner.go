@@ -281,6 +281,27 @@ func initCertificates() {
 	}).ToCredential()
 }
 
+var (
+	rpkEcdsaP256 Credential
+	rpkRsa       Credential
+)
+
+func initRawPublicKeyCredentials() {
+	for _, def := range []struct {
+		key crypto.Signer
+		out *Credential
+	}{
+		{&ecdsaP256Key, &rpkEcdsaP256},
+		{&rsa2048Key, &rpkRsa},
+	} {
+		*def.out = Credential{
+			Type:       CredentialTypeRawPublicKey,
+			PrivateKey: def.key,
+			KeyPath:    writeTempKeyFile(def.key),
+		}
+	}
+}
+
 func flagInts(flagName string, vals []int) []string {
 	ret := make([]string, 0, 2*len(vals))
 	for _, val := range vals {
@@ -1452,6 +1473,8 @@ func appendCredentialFlags(flags []string, cred *Credential, prefix string, newC
 			flags = append(flags, prefix+"-new-spake2plusv1-credential")
 		case CredentialTypePreSharedKey:
 			flags = append(flags, prefix+"-new-psk-credential")
+		case CredentialTypeRawPublicKey:
+			flags = append(flags, prefix+"-new-rpk-credential")
 		default:
 			panic(fmt.Errorf("unknown credential type %d", cred.Type))
 		}
@@ -2217,6 +2240,7 @@ func main() {
 	}
 	initKeys()
 	initCertificates()
+	initRawPublicKeyCredentials()
 
 	if *shimConfigFile != "" {
 		encoded, err := os.ReadFile(*shimConfigFile)

@@ -3883,6 +3883,12 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
 // authenticate a TLS connection, assuming an out-of-band mechanism has been
 // used to bind the public keys to their presenting entities.
 //
+// A caller wishing to authenticate using a raw public key must construct an
+// |SSL_CREDENTIAL| with |SSL_CREDENTIAL_new_raw_public_key| and add it to the
+// credential list (see |SSL_CTX_add1_credential|). Callers may configure a mix
+// of raw public keys and other credentials on the same |SSL| or |SSL_CTX| to
+// support a range of peers.
+//
 // When raw public keys are in use, the client_certificate_type and
 // server_certificate_type extensions are sent in the handshake to indicate to
 // the peer which type(s) of certificate(s) can be exchanged.
@@ -3894,6 +3900,37 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
 // Certificate Types" subregistry of the TLS Extensions registry.
 #define TLSEXT_cert_type_x509 0x00
 #define TLSEXT_cert_type_rpk 0x02
+
+// SSL_CREDENTIAL_new_raw_public_key returns a new raw public key credential
+// using |pkey| as the public and private key, or nullptr on error. |pkey| must
+// have both a private and public key.
+//
+// Callers should then add the returned credential with
+// |SSL_CTX_add1_credential| and release it with |SSL_CREDENTIAL_free| when
+// done.
+//
+// This credential may be configured before the handshake or dynamically in the
+// early callback (see |SSL_CTX_set_select_certificate_cb|) and certificate
+// callback (see |SSL_CTX_set_cert_cb|).
+OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key(
+    EVP_PKEY *pkey);
+
+// SSL_CREDENTIAL_new_raw_public_key_custom returns a new raw public key
+// credential using |pubkey| as the public key and |method| as the custom
+// private key method, or nullptr on error. |pkey| must have a public key.
+// |method| must remain valid for the lifetime of the returned credential. See
+// |SSL_CREDENTIAL_set_private_key_method| for how the custom private key method
+// is used.
+//
+// Callers should then add the returned credential with
+// |SSL_CTX_add1_credential| and release it with |SSL_CREDENTIAL_free| when
+// done.
+//
+// This credential may be configured before the handshake or dynamically in the
+// early callback (see |SSL_CTX_set_select_certificate_cb|) and certificate
+// callback (see |SSL_CTX_set_cert_cb|).
+OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key_custom(
+    EVP_PKEY *pubkey, const SSL_PRIVATE_KEY_METHOD *method);
 
 // SSL_CTX_set1_accepted_peer_cert_types sets the types of certificates that the
 // caller wishes to accept from the peer, for |ctx|. |values| is a nonempty list
@@ -3910,6 +3947,30 @@ OPENSSL_EXPORT int SSL_CTX_set1_accepted_peer_cert_types(SSL_CTX *ctx,
 OPENSSL_EXPORT int SSL_set1_accepted_peer_cert_types(SSL *ssl,
                                                      const uint8_t *values,
                                                      size_t num_values);
+
+// SSL_CTX_set1_available_client_cert_types sets the types of certificates that
+// the caller, as a client, wishes to advertise in order to authenticate itself
+// to the server, for |ctx|. |values| is a nonempty list of |num_values|
+// certificate types (|TLSEXT_cert_type_*| values) in preference order. Any
+// values configured via this function will be sent in the
+// client_certificate_type extension in ClientHello. |values| may be empty to
+// indicate omission of the client_certificate_extension.
+//
+// Calling this function is optional: by default, the client_certificate_type
+// extension for a client will be determined implicitly by the types of
+// |SSL_CREDENTIAL|s present in the credential list. This function should only
+// be used if the caller configures client credentials late (after the handshake
+// begins), or wishes to override the default order derived from the credential
+// list. This returns one on success or zero on failure.
+OPENSSL_EXPORT int SSL_CTX_set1_available_client_cert_types(
+    SSL_CTX *ctx, const uint8_t *values, size_t num_values);
+
+// SSL_set1_available_client_cert_types behaves like
+// |SSL_CTX_set1_available_client_cert_types|, but configures the values on
+// |ssl|.
+OPENSSL_EXPORT int SSL_set1_available_client_cert_types(SSL *ssl,
+                                                        const uint8_t *values,
+                                                        size_t num_values);
 
 // SSL_get_negotiated_client_cert_type returns the connection's negotiated value
 // of client_certificate_type. If no type has been negotiated explicitly, it
@@ -6864,6 +6925,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_NO_SUPPORTED_PSK_MODE 332
 #define SSL_R_INVALID_CERT_TYPES_LIST 333
 #define SSL_R_UNSUPPORTED_CERTIFICATE 334
+#define SSL_R_MISSING_KEY 335
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

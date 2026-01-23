@@ -2397,6 +2397,7 @@ const (
 	CredentialTypeDelegated
 	CredentialTypeSPAKE2PlusV1
 	CredentialTypePreSharedKey
+	CredentialTypeRawPublicKey
 )
 
 // A Credential is a certificate chain and private key that a TLS endpoint may

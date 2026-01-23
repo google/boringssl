@@ -577,6 +577,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
                           CredentialConfigType::kSPAKE2PlusV1),
         NewCredentialFlag("-new-psk-credential",
                           CredentialConfigType::kPreSharedKey),
+        NewCredentialFlag("-new-rpk-credential",
+                          CredentialConfigType::kRawPublicKey),
         CredentialFlagWithDefault(
             StringFlag("-cert-file", &TestConfig::cert_file),
             StringFlag("-cert-file", &CredentialConfig::cert_file)),
@@ -631,6 +633,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
                       &TestConfig::accepted_peer_cert_types),
         OptionalIntFlag("-expect-client-certificate-type",
                         &TestConfig::expect_client_certificate_type),
+        IntVectorFlag("-available-client-cert-types",
+                      &TestConfig::available_client_cert_types),
     };
     std::sort(ret.begin(), ret.end(), FlagNameComparator{});
     return ret;
@@ -1458,6 +1462,16 @@ static const SSL_TICKET_AEAD_METHOD g_async_ticket_aead_method = {
 
 static bssl::UniquePtr<SSL_CREDENTIAL> CredentialFromConfig(
     const TestConfig &config, const CredentialConfig &cred_config, int number) {
+  bssl::UniquePtr<EVP_PKEY> pkey;
+  if (!cred_config.key_file.empty()) {
+    pkey = LoadPrivateKey(cred_config.key_file.c_str());
+    if (pkey == nullptr) {
+      return nullptr;
+    }
+  }
+  auto info = std::make_unique<CredentialInfo>();
+  info->number = number;
+
   bssl::UniquePtr<SSL_CREDENTIAL> cred;
   switch (cred_config.type) {
     case CredentialConfigType::kX509:
@@ -1509,13 +1523,22 @@ static bssl::UniquePtr<SSL_CREDENTIAL> CredentialFromConfig(
           cred_config.psk_identity.data(), cred_config.psk_identity.size(),
           cred_config.psk_hash, cred_config.psk_context.data(),
           cred_config.psk_context.size()));
+      break;
+    case CredentialConfigType::kRawPublicKey: {
+      assert(pkey != nullptr);
+      if (config.async || config.handshake_hints) {
+        info->private_key = UpRef(pkey);
+        cred.reset(SSL_CREDENTIAL_new_raw_public_key_custom(
+            pkey.get(), &g_async_private_key_method));
+      } else {
+        cred.reset(SSL_CREDENTIAL_new_raw_public_key(pkey.get()));
+      }
+      break;
+    }
   }
   if (cred == nullptr) {
     return nullptr;
   }
-
-  auto info = std::make_unique<CredentialInfo>();
-  info->number = number;
 
   if (!cred_config.cert_file.empty()) {
     bssl::UniquePtr<X509> x509;
@@ -1544,14 +1567,10 @@ static bssl::UniquePtr<SSL_CREDENTIAL> CredentialFromConfig(
     }
   }
 
-  if (!cred_config.key_file.empty()) {
-    bssl::UniquePtr<EVP_PKEY> pkey =
-        LoadPrivateKey(cred_config.key_file.c_str());
-    if (pkey == nullptr) {
-      return nullptr;
-    }
+  if (pkey != nullptr &&
+      cred_config.type != CredentialConfigType::kRawPublicKey) {
     if (config.async || config.handshake_hints) {
-      info->private_key = std::move(pkey);
+      info->private_key = UpRef(pkey);
       if (!SSL_CREDENTIAL_set_private_key_method(cred.get(),
                                                  &g_async_private_key_method)) {
         return nullptr;
@@ -2580,6 +2599,12 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
       !SSL_set1_accepted_peer_cert_types(ssl.get(),
                                          accepted_peer_cert_types.data(),
                                          accepted_peer_cert_types.size())) {
+    return nullptr;
+  }
+  if (!available_client_cert_types.empty() &&
+      !SSL_set1_available_client_cert_types(
+          ssl.get(), available_client_cert_types.data(),
+          available_client_cert_types.size())) {
     return nullptr;
   }
 

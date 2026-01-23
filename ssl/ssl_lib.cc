@@ -528,7 +528,9 @@ SSL *SSL_new(SSL_CTX *ctx) {
           ctx->alpn_client_proto_list) ||
       !ssl->config->verify_sigalgs.CopyFrom(ctx->verify_sigalgs) ||
       !ssl->config->accepted_peer_cert_types.TryCopyFrom(
-          ctx->accepted_peer_cert_types)) {
+          ctx->accepted_peer_cert_types) ||
+      !ssl->config->available_client_cert_types.TryCopyFrom(
+          ctx->available_client_cert_types)) {
     return nullptr;
   }
 
@@ -3620,6 +3622,22 @@ int SSL_set1_accepted_peer_cert_types(SSL *ssl, const uint8_t *values,
     return 0;
   }
   return set1_cert_types(&ssl->config->accepted_peer_cert_types,
+                         Span(values, num_values));
+}
+
+int SSL_CTX_set1_available_client_cert_types(SSL_CTX *ctx,
+                                             const uint8_t *values,
+                                             size_t num_values) {
+  return set1_cert_types(&ctx->available_client_cert_types,
+                         Span(values, num_values));
+}
+
+int SSL_set1_available_client_cert_types(SSL *ssl, const uint8_t *values,
+                                         size_t num_values) {
+  if (!ssl->config) {
+    return 0;
+  }
+  return set1_cert_types(&ssl->config->available_client_cert_types,
                          Span(values, num_values));
 }
 

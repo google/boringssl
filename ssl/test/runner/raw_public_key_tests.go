@@ -79,9 +79,114 @@ func addServerCertTypeTests() {
 }
 
 func addClientCertTypeTests() {
-	// Tests receiving a client_certificate_type extension from the client and
-	// selecting and sending our most-preferred shared cert type.
 	for _, ver := range allVersions(tls) {
+		// Tests sending client_certificate_type extension in the ClientHello based
+		// on configured client credentials.
+		// TODO(crbug.com/467663225): Test that server can select a client cert
+		// type, and client sends the credential.
+		for _, test := range []struct {
+			name                         string
+			clientCredentials            []*Credential
+			expectedClientHelloExtension []CertificateType
+		}{
+			{
+				name:                         "RPKOnly",
+				clientCredentials:            []*Credential{&rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+			},
+			{
+				name:                         "MultipleRPKs",
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &rpkRsa},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+			},
+			{
+				name:                         "RPKX509",
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListRPKX509,
+			},
+			{
+				name:                         "X509RPK",
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListX509RPK,
+			},
+		} {
+			testCases = append(testCases, testCase{
+				testType: clientTest,
+				name:     fmt.Sprintf("ClientCertificateType-Client-Offers%s-%s", test.name, ver.name),
+				config: Config{
+					MinVersion: ver.version,
+					MaxVersion: ver.version,
+					Bugs: ProtocolBugs{
+						ExpectClientCertificateTypes: test.expectedClientHelloExtension,
+					},
+				},
+				shimCredentials: test.clientCredentials,
+			})
+		}
+		// Tests that overriding the default client_certificate_type logic works,
+		// and client can explicitly configure types to send in the ClientHello
+		// independently of the credentials that are configured.
+		// TODO(crbug.com/467663225): Test that server can select a client cert
+		// type, and client sends the credential.
+		for _, test := range []struct {
+			name                         string
+			configuredClientCertTypes    []CertificateType
+			clientCredentials            []*Credential
+			expectedClientHelloExtension []CertificateType
+		}{
+			{
+				name:                         "RPKOnly-ConfiguredAsOnlyCredential",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{&rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+			},
+			{
+				name:                         "RPKOnly-ConfiguredAsFirstCredential",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+			},
+			{
+				name:                         "RPKOnly-ConfiguredAsSecondCredential",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+			},
+			{
+				name:                         "RPKX509-ConfiguredInOppositeOrder",
+				configuredClientCertTypes:    certTypesListRPKX509,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKX509,
+			},
+			{
+				name:                         "X509RPK-ConfiguredInOppositeOrder",
+				configuredClientCertTypes:    certTypesListX509RPK,
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListX509RPK,
+			},
+			{
+				name:                         "DefaultX509Only-Omitted",
+				configuredClientCertTypes:    certTypesListX509Only,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: []CertificateType{},
+			},
+		} {
+			testCases = append(testCases, testCase{
+				testType: clientTest,
+				name:     fmt.Sprintf("ClientCertificateType-Client-Explicit-Offers%s-%s", test.name, ver.name),
+				config: Config{
+					MinVersion: ver.version,
+					MaxVersion: ver.version,
+					Bugs: ProtocolBugs{
+						ExpectClientCertificateTypes: test.expectedClientHelloExtension,
+					},
+				},
+				flags:           flagCertTypes("-available-client-cert-types", test.configuredClientCertTypes),
+				shimCredentials: test.clientCredentials,
+			})
+		}
+		// Tests receiving a client_certificate_type extension from the client and
+		// selecting and sending our most-preferred shared cert type.
 		for _, test := range []struct {
 			name                         string
 			clientCertTypesReceived      []CertificateType
