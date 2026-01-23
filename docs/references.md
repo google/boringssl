@@ -6,8 +6,11 @@ This document collects links to useful references. It is currently incomplete, b
 
 ## Cryptographic Primitives
 
-* [RSA (PKCS #1, RFC 8017)](https://www.rfc-editor.org/rfc/rfc8017.html)
+* [AES (FIPS 197)](https://csrc.nist.gov/pubs/fips/197/final)
+* [GCM (SP 800-38D)](https://csrc.nist.gov/pubs/sp/800/38/d/final)
 * [ChaCha20-Poly1305 (RFC 7539)](https://www.rfc-editor.org/rfc/rfc7539.html)
+* [AES-GCM-SIV (RFC 8452)](https://www.rfc-editor.org/rfc/rfc8452.html)
+* [RSA (PKCS #1, RFC 8017)](https://www.rfc-editor.org/rfc/rfc8017.html)
 * [X25519 (RFC 7748)](https://www.rfc-editor.org/rfc/rfc7748.html)
 * [Ed25519 (RFC 8032)](https://www.rfc-editor.org/rfc/rfc8032.html)
 * [ML-KEM (FIPS 203)](https://csrc.nist.gov/pubs/fips/203/final)
@@ -25,6 +28,11 @@ This document collects links to useful references. It is currently incomplete, b
 * [PKIX (RFC 5280)](https://www.rfc-editor.org/rfc/rfc5280.html)
 * [New ASN.1 Modules for PKIX (RFC 5912)](https://www.rfc-editor.org/rfc/rfc5912.html)
 * [ITU X.509](https://www.itu.int/rec/t-rec-x.509)
+* [PrivateKeyInfo (PKCS #8, RFC 5208)](https://www.rfc-editor.org/rfc/rfc5208.html)
+* [PKCS #7 (RFC 2315)](https://www.rfc-editor.org/rfc/rfc2315.html)
+   * Called CMS 1.5, but this "CMS" now refers to the new version. PKCS #7 is the predecessor
+* [Cryptographic Message Syntax (RFC 5662)](https://www.rfc-editor.org/rfc/rfc5652.html)
+* [PKCS #12 (RFC 7292)](https://www.rfc-editor.org/rfc/rfc7292.html)
 * [Algorithm Identifiers (RFC 3279)](https://www.rfc-editor.org/rfc/rfc3279.html)
    * AlgorithmIdentifiers for pre-SHA-2 hashes
    * SPKIs for dsa, rsaEncryption, ecPublicKey
