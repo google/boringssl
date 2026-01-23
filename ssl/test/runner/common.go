@@ -205,6 +205,7 @@ const (
 	extensionUseSRTP                    uint16 = 14
 	extensionALPN                       uint16 = 16
 	extensionSignedCertificateTimestamp uint16 = 18
+	extensionServerCertificateType      uint16 = 20
 	extensionPadding                    uint16 = 21
 	extensionExtendedMasterSecret       uint16 = 23
 	extensionCompressedCertAlgs         uint16 = 27
@@ -268,6 +269,14 @@ const (
 const (
 	pointFormatUncompressed    uint8 = 0
 	pointFormatCompressedPrime uint8 = 1
+)
+
+// TLS certificate types (RFC 7250).
+type CertificateType uint8
+
+const (
+	certTypeX509         CertificateType = 0
+	certTypeRawPublicKey CertificateType = 2
 )
 
 // TLS CertificateStatusType (RFC 3546)
@@ -2236,6 +2245,11 @@ type ProtocolBugs struct {
 	// NewSessionTicket messages to have or not have the resumption_across_names
 	// flag set.
 	ExpectResumptionAcrossNames *bool
+
+	// ExpectServerCertificateTypes, if not nil, causes the server to
+	// expect the server_certificate_type extension sent by the peer to contain
+	// exactly the given values.
+	ExpectServerCertificateTypes []CertificateType
 }
 
 func (c *Config) serverInit() {

@@ -3877,6 +3877,41 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
     SSL_CREDENTIAL *cred, CRYPTO_BUFFER *dc);
 
 
+// Raw Public Keys (RFC 7250).
+//
+// Raw public keys can be used (e.g., instead of X.509 certificates) to
+// authenticate a TLS connection, assuming an out-of-band mechanism has been
+// used to bind the public keys to their presenting entities.
+//
+// When raw public keys are in use, the client_certificate_type and
+// server_certificate_type extensions are sent in the handshake to indicate to
+// the peer which type(s) of certificate(s) can be exchanged.
+
+// TODO(crbug.com/467663225): Implementation is not yet complete. The values
+// configured via functions in this section may not currently be used.
+
+// TLSEXT_cert_type_* are certificate types with values taken from the "TLS
+// Certificate Types" subregistry of the TLS Extensions registry.
+#define TLSEXT_cert_type_x509 0x00
+#define TLSEXT_cert_type_rpk 0x02
+
+// SSL_CTX_set1_accepted_peer_cert_types sets the types of certificates that the
+// caller wishes to accept from the peer, for |ctx|. |values| is a nonempty list
+// of |num_values| certificate types (|TLSEXT_cert_type_*| values) in preference
+// order. If a valid list is not configured explicitly, only X.509 certificates
+// are accepted by default. This function returns one on success or zero on
+// failure.
+OPENSSL_EXPORT int SSL_CTX_set1_accepted_peer_cert_types(SSL_CTX *ctx,
+                                                         const uint8_t *values,
+                                                         size_t num_values);
+
+// SSL_set1_accepted_peer_cert_types behaves like
+// |SSL_CTX_set1_accepted_peer_cert_types|, but configures the values on |ssl|.
+OPENSSL_EXPORT int SSL_set1_accepted_peer_cert_types(SSL *ssl,
+                                                     const uint8_t *values,
+                                                     size_t num_values);
+
+
 // Password Authenticated Key Exchange (PAKE).
 //
 // Password Authenticated Key Exchange protocols allow client and server to
@@ -6822,6 +6857,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_DUPLICATE_GROUP 330
 #define SSL_R_INVALID_PSK_FOR_CONNECTION 331
 #define SSL_R_NO_SUPPORTED_PSK_MODE 332
+#define SSL_R_INVALID_CERT_TYPES_LIST 333
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

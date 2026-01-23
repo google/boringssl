@@ -250,6 +250,7 @@ struct TestConfig {
   bool resumption_across_names_enabled = false;
   std::optional<bool> expect_resumable_across_names;
   bool no_server_name_ack = false;
+  std::vector<uint8_t> accepted_peer_cert_types;
 
   std::vector<const char *> handshaker_args;
 

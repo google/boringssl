@@ -9362,6 +9362,41 @@ TEST(SSLTest, ALPNConfig) {
   check_alpn_proto({});
 }
 
+TEST(SSLTest, AcceptedPeerCertTypesConfig) {
+  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(ctx);
+
+  // Valid configurations.
+  for (const auto &list : std::vector<std::vector<uint8_t>>({
+           // Listing only the default type is considered valid here; we just
+           // won't send a ClientHello extension for this list.
+           {TLSEXT_cert_type_x509},
+           {TLSEXT_cert_type_rpk},
+           {TLSEXT_cert_type_x509, TLSEXT_cert_type_rpk},
+           {TLSEXT_cert_type_rpk, TLSEXT_cert_type_x509},
+       })) {
+    EXPECT_EQ(1, SSL_CTX_set1_accepted_peer_cert_types(ctx.get(), list.data(),
+                                                       list.size()));
+  }
+
+  // Invalid configurations.
+  for (const auto &list : std::vector<std::vector<uint8_t>>({
+           // Empty list is invalid.
+           {},
+           // Bogus value.
+           {0xff},
+           // Contains duplicate.
+           {TLSEXT_cert_type_x509, TLSEXT_cert_type_x509},
+           // Too long.
+           {TLSEXT_cert_type_x509, TLSEXT_cert_type_rpk, 0x03},
+       })) {
+    EXPECT_EQ(0, SSL_CTX_set1_accepted_peer_cert_types(ctx.get(), list.data(),
+                                                       list.size()));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL,
+                            SSL_R_INVALID_CERT_TYPES_LIST));
+  }
+}
+
 // This is a basic unit-test class to verify completing handshake successfully,
 // sending the correct codepoint extension and having correct application
 // setting on different combination of ALPS codepoint settings. More integration

@@ -446,6 +446,7 @@ SSL_CTX *SSL_CTX_new(const SSL_METHOD *method) {
   if (!ret->supported_group_list_flags.Init(ret->supported_group_list.size())) {
     return nullptr;
   }
+  ret->accepted_peer_cert_types.PushBack(kDefaultCertType);
 
   return ret.release();
 }
@@ -525,7 +526,9 @@ SSL *SSL_new(SSL_CTX *ctx) {
           ctx->supported_group_list_flags) ||
       !ssl->config->alpn_client_proto_list.CopyFrom(
           ctx->alpn_client_proto_list) ||
-      !ssl->config->verify_sigalgs.CopyFrom(ctx->verify_sigalgs)) {
+      !ssl->config->verify_sigalgs.CopyFrom(ctx->verify_sigalgs) ||
+      !ssl->config->accepted_peer_cert_types.TryCopyFrom(
+          ctx->accepted_peer_cert_types)) {
     return nullptr;
   }
 
@@ -3574,3 +3577,48 @@ int SSL_set1_requested_trust_anchors(SSL *ssl, const uint8_t *ids,
 }
 
 int SSL_CTX_get_security_level(const SSL_CTX *ctx) { return 0; }
+
+static bool is_valid_cert_types_list(Span<const uint8_t> list) {
+  if (list.empty() || list.size() > kNumCertTypes) {
+    return false;
+  }
+  for (size_t i = 0u; i < list.size(); ++i) {
+    // Check that each value is a recognized cert type.
+    if (std::find(std::begin(kCertTypes), std::end(kCertTypes), list[i]) ==
+        std::end(kCertTypes)) {
+      return false;
+    }
+    // Reject duplicates.
+    for (size_t j = 0u; j < i; ++j) {
+      if (list[i] == list[j]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool set1_cert_types(InplaceVector<uint8_t, kNumCertTypes> *out,
+                            Span<const uint8_t> values) {
+  if (!is_valid_cert_types_list(values)) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CERT_TYPES_LIST);
+    return false;
+  }
+  out->CopyFrom(values);
+  return true;
+}
+
+int SSL_CTX_set1_accepted_peer_cert_types(SSL_CTX *ctx, const uint8_t *values,
+                                          size_t num_values) {
+  return set1_cert_types(&ctx->accepted_peer_cert_types,
+                         Span(values, num_values));
+}
+
+int SSL_set1_accepted_peer_cert_types(SSL *ssl, const uint8_t *values,
+                                      size_t num_values) {
+  if (!ssl->config) {
+    return 0;
+  }
+  return set1_cert_types(&ssl->config->accepted_peer_cert_types,
+                         Span(values, num_values));
+}

@@ -3694,6 +3694,52 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
   return true;
 }
 
+// Server certificate type
+//
+// https://www.rfc-editor.org/rfc/rfc7250.html#section-3
+
+static bool ext_server_cert_type_add_clienthello(const SSL_HANDSHAKE *hs,
+                                                 CBB *out,
+                                                 CBB *out_compressible,
+                                                 ssl_client_hello_type_t type) {
+  assert(!hs->config->accepted_peer_cert_types.empty());
+  // Omit extension if the only type would be the default, X.509.
+  if (hs->config->accepted_peer_cert_types.size() == 1 &&
+      hs->config->accepted_peer_cert_types[0] == kDefaultCertType) {
+    return true;
+  }
+  CBB contents, server_cert_types;
+  if (!CBB_add_u16(out, TLSEXT_TYPE_server_cert_type) ||
+      !CBB_add_u16_length_prefixed(out, &contents) ||
+      !CBB_add_u8_length_prefixed(&contents, &server_cert_types) ||
+      !CBB_add_bytes(&server_cert_types,
+                     hs->config->accepted_peer_cert_types.data(),
+                     hs->config->accepted_peer_cert_types.size()) ||
+      !CBB_flush(out)) {
+    return false;
+  }
+  return true;
+}
+
+static bool ext_server_cert_type_parse_serverhello(SSL_HANDSHAKE *hs,
+                                                   uint8_t *out_alert,
+                                                   CBS *contents) {
+  // TODO(crbug.com/467663225): Implement this.
+  return true;
+}
+
+static bool ext_server_cert_type_parse_clienthello(SSL_HANDSHAKE *hs,
+                                                   uint8_t *out_alert,
+                                                   CBS *contents) {
+  // TODO(crbug.com/467663225): Implement this.
+  return true;
+}
+
+static bool ext_server_cert_type_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
+  // TODO(crbug.com/467663225): Implement this.
+  return true;
+}
+
 // kExtensions contains all the supported extensions.
 static const struct tls_extension kExtensions[] = {
     {
@@ -3897,6 +3943,13 @@ static const struct tls_extension kExtensions[] = {
         ext_trust_anchors_parse_serverhello,
         ext_trust_anchors_parse_clienthello,
         ext_trust_anchors_add_serverhello,
+    },
+    {
+        TLSEXT_TYPE_server_cert_type,
+        ext_server_cert_type_add_clienthello,
+        ext_server_cert_type_parse_serverhello,
+        ext_server_cert_type_parse_clienthello,
+        ext_server_cert_type_add_serverhello,
     },
 };
 

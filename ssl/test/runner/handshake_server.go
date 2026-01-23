@@ -441,6 +441,12 @@ func (hs *serverHandshakeState) readClientHello() error {
 		}
 	}
 
+	if expected := c.config.Bugs.ExpectServerCertificateTypes; expected != nil {
+		if !slices.Equal(expected, hs.clientHello.serverCertificateTypes) {
+			return fmt.Errorf("tls: client offered server certificate types %v, but expected %v", hs.clientHello.serverCertificateTypes, expected)
+		}
+	}
+
 	applyBugsToClientHello(hs.clientHello, config)
 
 	return nil

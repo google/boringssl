@@ -297,6 +297,14 @@ func flagCurves(flagName string, vals []CurveID) []string {
 	return ret
 }
 
+func flagCertTypes(flagName string, vals []CertificateType) []string {
+	ret := make([]string, 0, 2*len(vals))
+	for _, val := range vals {
+		ret = append(ret, flagName, strconv.Itoa(int(val)))
+	}
+	return ret
+}
+
 func base64FlagValue(in []byte) string {
 	return base64.StdEncoding.EncodeToString(in)
 }
@@ -2273,6 +2281,7 @@ func main() {
 	addPAKETests()
 	addTrustAnchorTests()
 	addPSKTests()
+	addRawPublicKeyTests()
 
 	toAppend, err := convertToSplitHandshakeTests(testCases)
 	if err != nil {

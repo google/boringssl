@@ -627,6 +627,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         SetValueFlag("-expect-not-resumable-across-names",
                      &TestConfig::expect_resumable_across_names, false),
         BoolFlag("-no-server-name-ack", &TestConfig::no_server_name_ack),
+        IntVectorFlag("-accepted-peer-cert-types",
+                      &TestConfig::accepted_peer_cert_types),
     };
     std::sort(ret.begin(), ret.end(), FlagNameComparator{});
     return ret;
@@ -2571,6 +2573,12 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
   }
   if (jdk11_workaround) {
     SSL_set_jdk11_workaround(ssl.get(), 1);
+  }
+  if (!accepted_peer_cert_types.empty() &&
+      !SSL_set1_accepted_peer_cert_types(ssl.get(),
+                                         accepted_peer_cert_types.data(),
+                                         accepted_peer_cert_types.size())) {
+    return nullptr;
   }
 
   if (session != nullptr) {
