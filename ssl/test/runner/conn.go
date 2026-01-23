@@ -1476,7 +1476,9 @@ func (c *Conn) readHandshake() (any, error) {
 		if c.isClient && c.serverCertificateType != nil {
 			receivedCertificateType = *c.serverCertificateType
 		}
-		// TODO(crbug.com/467663225): Also parse RPK for client cert.
+		if !c.isClient && c.clientCertificateType != nil {
+			receivedCertificateType = *c.clientCertificateType
+		}
 		m = &certificateMsg{
 			hasRequestContext: c.vers.protocolVersion() >= VersionTLS13,
 			certificateType:   receivedCertificateType,

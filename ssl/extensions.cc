@@ -3729,6 +3729,7 @@ static std::optional<Span<const uint8_t>> parse_clienthello_cert_types_list(
 
 void ssl_setup_client_certificate_type(SSL_HANDSHAKE *hs) {
   hs->offered_client_cert_types.clear();
+  hs->ssl->s3->client_cert_type.reset();
   InplaceVector<uint8_t, kNumCertTypes> available_cert_types;
   if (!hs->ssl->config->available_client_cert_types.empty()) {
     available_cert_types.CopyFrom(hs->ssl->config->available_client_cert_types);
@@ -3819,7 +3820,25 @@ static bool ext_client_cert_type_add_clienthello(const SSL_HANDSHAKE *hs,
 static bool ext_client_cert_type_parse_serverhello(SSL_HANDSHAKE *hs,
                                                    uint8_t *out_alert,
                                                    CBS *contents) {
-  // TODO(crbug.com/467663225): Implement this.
+  if (contents == nullptr) {
+    return true;
+  }
+  uint8_t cert_type;
+  if (!CBS_get_u8(contents, &cert_type) || CBS_len(contents) != 0) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
+    *out_alert = SSL_AD_DECODE_ERROR;
+    return false;
+  }
+  // Reject if the server picked a cert type that we didn't offer in the
+  // ClientHello.
+  if (std::find(hs->offered_client_cert_types.begin(),
+                hs->offered_client_cert_types.end(),
+                cert_type) == hs->offered_client_cert_types.end()) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_CERTIFICATE);
+    *out_alert = SSL_AD_UNSUPPORTED_CERTIFICATE;
+    return false;
+  }
+  hs->ssl->s3->client_cert_type.emplace(cert_type);
   return true;
 }
 

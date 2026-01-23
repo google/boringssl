@@ -592,6 +592,101 @@ func addCertificateSelectionTests() {
 			expectedError: ":NO_COMMON_SIGNATURE_ALGORITHMS:",
 		},
 
+		// The default client_certificate_type is X.509, which should match X.509
+		// certificates but not raw public key credentials.
+		{
+			name:     "Client-CertificateType-Default-MatchesX509OverRawPublicKey",
+			testType: clientTest,
+			config: Config{
+				ClientAuth: RequestClientCert,
+			},
+			flags:         flagCertTypes("-available-client-cert-types", []CertificateType{certTypeX509, certTypeRawPublicKey}),
+			match:         &ecdsaP256Certificate,
+			mismatch:      &rpkEcdsaP256,
+			expectedError: ":UNKNOWN_CERTIFICATE_TYPE:",
+		},
+
+		// If client_certificate_type is explicitly negotiated to permit only raw
+		// public keys, X.509 certificates should not match.
+		{
+			name:     "Client-CertificateType-MatchesRawPublicKeyOverX509",
+			testType: clientTest,
+			config: Config{
+				ClientAuth: RequestClientCert,
+				Bugs: ProtocolBugs{
+					SendClientCertificateTypes: []CertificateType{certTypeRawPublicKey},
+				},
+			},
+			flags:         flagCertTypes("-available-client-cert-types", []CertificateType{certTypeX509, certTypeRawPublicKey}),
+			match:         &rpkEcdsaP256,
+			mismatch:      &ecdsaP256Certificate,
+			expectedError: ":UNKNOWN_CERTIFICATE_TYPE:",
+		},
+
+		// Raw Public Key credentials are subject to selection based on
+		// algorithm-based criteria for each TLS version.
+		{
+			name:       "Client-RawPublicKey-ClientCertificateType",
+			testType:   clientTest,
+			minVersion: VersionTLS12,
+			maxVersion: VersionTLS12,
+			config: Config{
+				ClientAuth:             RequestClientCert,
+				ClientCertificateTypes: []uint8{CertTypeECDSASign},
+				Bugs: ProtocolBugs{
+					SendClientCertificateTypes: []CertificateType{certTypeRawPublicKey},
+				},
+			},
+			match:         &rpkEcdsaP256,
+			mismatch:      &rpkRsa,
+			expectedError: ":UNKNOWN_CERTIFICATE_TYPE:",
+		},
+		{
+			name:       "Client-RawPublicKey-SignatureAlgorithm",
+			testType:   clientTest,
+			minVersion: VersionTLS12,
+			config: Config{
+				ClientAuth:                RequestClientCert,
+				VerifySignatureAlgorithms: []signatureAlgorithm{signatureECDSAWithP256AndSHA256},
+				Bugs: ProtocolBugs{
+					SendClientCertificateTypes: []CertificateType{certTypeRawPublicKey},
+				},
+			},
+			match:         &rpkEcdsaP256,
+			mismatch:      &rpkRsa,
+			expectedError: ":NO_COMMON_SIGNATURE_ALGORITHMS:",
+		},
+		{
+			name:       "Client-RawPublicKey-SignatureAlgorithmECDSACurve",
+			testType:   clientTest,
+			minVersion: VersionTLS13,
+			config: Config{
+				ClientAuth:                RequestClientCert,
+				VerifySignatureAlgorithms: []signatureAlgorithm{signatureECDSAWithP256AndSHA256},
+				Bugs: ProtocolBugs{
+					SendClientCertificateTypes: []CertificateType{certTypeRawPublicKey},
+				},
+			},
+			match:         &rpkEcdsaP256,
+			mismatch:      &rpkEcdsaP384,
+			expectedError: ":NO_COMMON_SIGNATURE_ALGORITHMS:",
+		},
+		{
+			name:       "Client-RawPublicKey-SignatureAlgorithmKeyPrefs",
+			testType:   clientTest,
+			minVersion: VersionTLS12,
+			config: Config{
+				ClientAuth:                RequestClientCert,
+				VerifySignatureAlgorithms: []signatureAlgorithm{signatureRSAPSSWithSHA256},
+				Bugs: ProtocolBugs{
+					SendClientCertificateTypes: []CertificateType{certTypeRawPublicKey},
+				},
+			},
+			match:         rpkRsa.WithSignatureAlgorithms(signatureRSAPSSWithSHA256),
+			mismatch:      rpkRsa.WithSignatureAlgorithms(signatureRSAPSSWithSHA384),
+			expectedError: ":NO_COMMON_SIGNATURE_ALGORITHMS:",
+		},
+
 		// By default, certificate selection does not take issuers
 		// into account.
 		{

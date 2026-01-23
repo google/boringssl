@@ -1407,22 +1407,28 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 			}
 		}
 
+		var pub crypto.PublicKey
 		var certs [][]byte
-		for _, cert := range certMsg.certificates {
-			certs = append(certs, cert.data)
-			// OCSP responses and SCT lists are not negotiated in
-			// client certificates.
-			if cert.ocspResponse != nil || cert.sctList != nil {
-				c.sendAlert(alertUnsupportedExtension)
-				return errors.New("tls: unexpected extensions in the client certificate")
+		switch certMsg.certificateType {
+		case certTypeX509:
+			for _, cert := range certMsg.certificates {
+				certs = append(certs, cert.data)
+				// OCSP responses and SCT lists are not negotiated in
+				// client certificates.
+				if cert.ocspResponse != nil || cert.sctList != nil {
+					c.sendAlert(alertUnsupportedExtension)
+					return errors.New("tls: unexpected extensions in the client certificate")
+				}
 			}
+			pub, err = hs.processCertsFromClient(certs)
+		case certTypeRawPublicKey:
+			pub, err = hs.processRawPublicKeyFromClient(certMsg.certificates)
 		}
-		pub, err := hs.processCertsFromClient(certs)
 		if err != nil {
 			return err
 		}
 
-		if len(c.peerCertificates) > 0 {
+		if len(c.peerCertificates) > 0 || len(c.peerRawPublicKey) > 0 {
 			certVerify, err := readHandshakeType[certificateVerifyMsg](c)
 			if err != nil {
 				return err
@@ -1796,6 +1802,7 @@ func (hs *serverHandshakeState) processClientExtensions(serverExtensions *server
 			serverExtensions.clientCertificateType = nil
 		} else {
 			serverExtensions.clientCertificateType = ptrTo(sendClientCertType[0])
+			c.clientCertificateType = serverExtensions.clientCertificateType
 		}
 	}
 
@@ -2061,11 +2068,17 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		}
 
 		var certificates [][]byte
-		for _, cert := range certMsg.certificates {
-			certificates = append(certificates, cert.data)
+		switch certMsg.certificateType {
+		case certTypeX509:
+			for _, cert := range certMsg.certificates {
+				certificates = append(certificates, cert.data)
+			}
+			pub, err = hs.processCertsFromClient(certificates)
+		case certTypeRawPublicKey:
+			if len(certMsg.certificates) > 0 {
+				pub, err = hs.processRawPublicKeyFromClient(certMsg.certificates)
+			}
 		}
-
-		pub, err = hs.processCertsFromClient(certificates)
 		if err != nil {
 			return err
 		}
@@ -2098,7 +2111,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 	// handshake-layer messages that is signed using the private key corresponding
 	// to the client's certificate. This allows us to verify that the client is in
 	// possession of the private key of the certificate.
-	if len(c.peerCertificates) > 0 {
+	if len(c.peerCertificates) > 0 || len(c.peerRawPublicKey) > 0 {
 		certVerify, err := readHandshakeType[certificateVerifyMsg](c)
 		if err != nil {
 			return err
@@ -2356,6 +2369,45 @@ func (hs *serverHandshakeState) processCertsFromClient(certificates [][]byte) (c
 	}
 
 	return nil, nil
+}
+
+// processRawPublicKeyFromClient takes the list of certificates from the Certificate message,
+// which for a RPK should contain exactly 1 entry, and parses it to return the raw public key.
+func (hs *serverHandshakeState) processRawPublicKeyFromClient(certificates []certificateEntry) (crypto.PublicKey, error) {
+	c := hs.c
+
+	if len(certificates) == 0 {
+		return nil, nil
+	}
+
+	if len(certificates) > 1 {
+		c.sendAlert(alertIllegalParameter)
+		return nil, errors.New("tls: too many certificates for RawPublicKey cert type")
+	}
+
+	c.peerRawPublicKey = certificates[0].data
+
+	rawPublicKey, err := x509.ParsePKIXPublicKey(c.peerRawPublicKey)
+	if err != nil {
+		c.sendAlert(alertBadCertificate)
+		return nil, errors.New("tls: failed to parse public key from raw public key: " + err.Error())
+	}
+
+	if len(certificates[0].ocspResponse) != 0 ||
+		len(certificates[0].sctList) != 0 ||
+		certificates[0].delegatedCredential != nil {
+		c.sendAlert(alertBadCertificate)
+		return nil, errors.New("tls: client sent unexpected extension with raw public key")
+	}
+
+	switch rawPublicKey.(type) {
+	case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey:
+		break
+	default:
+		c.sendAlert(alertUnsupportedCertificate)
+		return nil, fmt.Errorf("tls: client's raw public key is of unsupported type %T", rawPublicKey)
+	}
+	return rawPublicKey, nil
 }
 
 func verifyChannelIDMessage(channelIDMsg *channelIDMsg, channelIDHash []byte) (*ecdsa.PublicKey, error) {

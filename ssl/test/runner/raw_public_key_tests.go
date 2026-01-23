@@ -256,109 +256,342 @@ func addServerCertTypeTests() {
 func addClientCertTypeTests() {
 	for _, ver := range allVersions(tls) {
 		// Tests sending client_certificate_type extension in the ClientHello based
-		// on configured client credentials.
-		// TODO(crbug.com/467663225): Test that server can select a client cert
-		// type, and client sends the credential.
+		// on configured client credentials, and test that client responds to
+		// server's selected cert type by sending the credential if appropriate.
 		for _, test := range []struct {
 			name                         string
 			clientCredentials            []*Credential
 			expectedClientHelloExtension []CertificateType
+			serverSelectedClientCertType []CertificateType
+			skipCertificateRequest       bool
+			expectedNegotiated           CertificateType
+			expectedCredentialIndex      int
+			expectedFailure              string
 		}{
 			{
-				name:                         "RPKOnly",
+				name:                         "RPKOnly-SendsRequestedRPK",
 				clientCredentials:            []*Credential{&rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
 			},
 			{
-				name:                         "MultipleRPKs",
+				name:                         "RPKOnly-ServerRequestsX509InError",
+				clientCredentials:            []*Credential{&rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedFailure:              ":UNSUPPORTED_CERTIFICATE:",
+			},
+			{
+				name:                         "RPKOnly-ServerOmitsExtension",
+				clientCredentials:            []*Credential{&rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: []CertificateType{},
+				expectedFailure:              ":UNKNOWN_CERTIFICATE_TYPE:",
+			},
+			// If the server omits the extension and thus requests X.509 by default,
+			// it is not an error if the server doesn't send a CertificateRequest
+			// after all.
+			{
+				name:                         "RPKOnly-ServerOmitsExtension-NoCertRequest",
+				clientCredentials:            []*Credential{&rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: []CertificateType{},
+				skipCertificateRequest:       true,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      -1,
+			},
+			{
+				name:                         "MultipleRPKs-SendsFirstRPK",
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &rpkRsa},
 				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
 			},
 			{
-				name:                         "RPKX509",
+				name:                         "RPKX509-SendsRequestedRPK",
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListRPKX509,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
 			},
 			{
-				name:                         "X509RPK",
+				name:                         "RPKX509-SendsRequestedX509",
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListRPKX509,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      1,
+			},
+			{
+				name:                         "RPKX509-SendsDefaultX509",
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListRPKX509,
+				serverSelectedClientCertType: []CertificateType{},
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      1,
+			},
+			{
+				name:                         "X509RPK-SendsRequestedRPK",
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListX509RPK,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      1,
+			},
+			{
+				name:                         "X509RPK-SendsRequestedX509",
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListX509RPK,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "X509RPK-SendsDefaultX509",
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListX509RPK,
+				serverSelectedClientCertType: []CertificateType{},
+				expectedCredentialIndex:      0,
 			},
 		} {
+			clientAuth := RequestClientCert
+			if test.skipCertificateRequest {
+				clientAuth = NoClientCert
+			}
+			var expectedClientCredential *Credential
+			if test.expectedFailure == "" && test.expectedCredentialIndex != -1 {
+				expectedClientCredential = test.clientCredentials[test.expectedCredentialIndex]
+			}
 			testCases = append(testCases, testCase{
 				testType: clientTest,
 				name:     fmt.Sprintf("ClientCertificateType-Client-Offers%s-%s", test.name, ver.name),
 				config: Config{
 					MinVersion: ver.version,
 					MaxVersion: ver.version,
+					ClientAuth: clientAuth,
 					Bugs: ProtocolBugs{
 						ExpectClientCertificateTypes: test.expectedClientHelloExtension,
+						SendClientCertificateTypes:   test.serverSelectedClientCertType,
 					},
 				},
 				shimCredentials: test.clientCredentials,
+				flags: []string{
+					"-expect-client-certificate-type", strconv.Itoa(int(test.expectedNegotiated)),
+					"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex),
+				},
+				expectations: connectionExpectations{
+					peerCertificate: expectedClientCredential,
+				},
+				shouldFail:    test.expectedFailure != "",
+				expectedError: test.expectedFailure,
 			})
 		}
-		// Tests that overriding the default client_certificate_type logic works,
-		// and client can explicitly configure types to send in the ClientHello
-		// independently of the credentials that are configured.
-		// TODO(crbug.com/467663225): Test that server can select a client cert
-		// type, and client sends the credential.
+		// Tests that overriding the default client_certificate_type logic works, and
+		// client can explicitly configure types to send in the ClientHello, and test
+		// that client responds to server's selected cert type by sending the
+		// credential if appropriate.
 		for _, test := range []struct {
 			name                         string
 			configuredClientCertTypes    []CertificateType
 			clientCredentials            []*Credential
 			expectedClientHelloExtension []CertificateType
+			serverSelectedClientCertType []CertificateType
+			skipCertificateRequest       bool
+			expectedNegotiated           CertificateType
+			expectedCredentialIndex      int
+			expectedFailure              string
 		}{
 			{
-				name:                         "RPKOnly-ConfiguredAsOnlyCredential",
+				name:                         "RPKOnly-ConfiguredAsOnlyCredential-SendsRequestedRPK",
 				configuredClientCertTypes:    certTypesListRPKOnly,
 				clientCredentials:            []*Credential{&rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
 			},
 			{
-				name:                         "RPKOnly-ConfiguredAsFirstCredential",
+				name:                         "RPKOnly-ConfiguredAsOnlyCredential-ServerRequestsX509InError",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{&rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedFailure:              ":UNSUPPORTED_CERTIFICATE:",
+			},
+			{
+				name:                         "RPKOnly-ConfiguredAsFirstCredential-SendsRequestedRPK",
 				configuredClientCertTypes:    certTypesListRPKOnly,
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
 			},
 			{
-				name:                         "RPKOnly-ConfiguredAsSecondCredential",
+				name:                         "RPKOnly-ConfiguredAsFirstCredential-ServerRequestsX509InError",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedFailure:              ":UNSUPPORTED_CERTIFICATE:",
+			},
+			{
+				name:                         "RPKOnly-ConfiguredAsSecondCredential-SendsRequestedRPK",
 				configuredClientCertTypes:    certTypesListRPKOnly,
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      1,
 			},
 			{
-				name:                         "RPKX509-ConfiguredInOppositeOrder",
+				name:                         "RPKOnly-ConfiguredAsSecondCredential-ServerRequestsX509InError",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedFailure:              ":UNSUPPORTED_CERTIFICATE:",
+			},
+			{
+				name:                         "RPKX509-ConfiguredInOppositeOrder-SendsRequestedRPK",
 				configuredClientCertTypes:    certTypesListRPKX509,
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKX509,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      1,
 			},
 			{
-				name:                         "X509RPK-ConfiguredInOppositeOrder",
+				name:                         "RPKX509-ConfiguredInOppositeOrder-SendsRequestedX509",
+				configuredClientCertTypes:    certTypesListRPKX509,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: certTypesListRPKX509,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      0,
+			},
+			{
+				name:                         "X509RPK-ConfiguredInOppositeOrder-SendsRequestedRPK",
 				configuredClientCertTypes:    certTypesListX509RPK,
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListX509RPK,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      0,
 			},
 			{
-				name:                         "DefaultX509Only-Omitted",
+				name:                         "X509RPK-ConfiguredInOppositeOrder-SendsRequestedX509",
+				configuredClientCertTypes:    certTypesListX509RPK,
+				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedClientHelloExtension: certTypesListX509RPK,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedNegotiated:           certTypeX509,
+				expectedCredentialIndex:      1,
+			},
+			{
+				name:                         "DefaultX509Only-ServerRequestsX509InError",
 				configuredClientCertTypes:    certTypesListX509Only,
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: []CertificateType{},
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedFailure:              ":UNEXPECTED_EXTENSION:",
+			},
+			{
+				name:                         "DefaultX509Only-ServerRequestsRPKInError",
+				configuredClientCertTypes:    certTypesListX509Only,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: []CertificateType{},
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedFailure:              ":UNEXPECTED_EXTENSION:",
+			},
+			{
+				name:                         "DefaultX509Only-SendsDefaultX509",
+				configuredClientCertTypes:    certTypesListX509Only,
+				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedClientHelloExtension: []CertificateType{},
+				serverSelectedClientCertType: []CertificateType{},
+				expectedNegotiated:           certTypeX509, // Default.
+				expectedCredentialIndex:      0,
+			},
+			// The client falsely advertises an RPK and the server selects it. There
+			// is no such RPK to send, but the client should be able to proceed
+			// without a cert.
+			{
+				name:                         "RPK-NotActuallyConfigured-ServerRequestsRPK",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListRPKOnly,
+				expectedNegotiated:           certTypeRawPublicKey,
+				expectedCredentialIndex:      -1,
+			},
+			{
+				name:                         "RPK-NotActuallyConfigured-ServerRequestsX509InError",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: certTypesListX509Only,
+				expectedFailure:              ":UNSUPPORTED_CERTIFICATE:",
+			},
+			// If the server omits the extension and thus requests X.509 by default,
+			// it is not an error if the server doesn't send a CertificateRequest
+			// after all.
+			{
+				name:                         "RPK-NotActuallyConfigured-ServerOmitsExtension-NoCertRequest",
+				configuredClientCertTypes:    certTypesListRPKOnly,
+				clientCredentials:            []*Credential{},
+				expectedClientHelloExtension: certTypesListRPKOnly,
+				serverSelectedClientCertType: []CertificateType{},
+				skipCertificateRequest:       true,
+				expectedNegotiated:           certTypeX509, // Default
+				expectedCredentialIndex:      -1,
 			},
 		} {
-			testCases = append(testCases, testCase{
+			clientAuth := RequestClientCert
+			if test.skipCertificateRequest {
+				clientAuth = NoClientCert
+			}
+			var expectedClientCredential *Credential
+			if test.expectedFailure == "" && test.expectedCredentialIndex != -1 {
+				expectedClientCredential = test.clientCredentials[test.expectedCredentialIndex]
+			}
+			clientTestCase := testCase{
 				testType: clientTest,
 				name:     fmt.Sprintf("ClientCertificateType-Client-Explicit-Offers%s-%s", test.name, ver.name),
 				config: Config{
 					MinVersion: ver.version,
 					MaxVersion: ver.version,
+					ClientAuth: clientAuth,
 					Bugs: ProtocolBugs{
 						ExpectClientCertificateTypes: test.expectedClientHelloExtension,
+						SendClientCertificateTypes:   test.serverSelectedClientCertType,
 					},
 				},
-				flags:           flagCertTypes("-available-client-cert-types", test.configuredClientCertTypes),
+				flags: append(
+					[]string{"-expect-client-certificate-type", strconv.Itoa(int(test.expectedNegotiated)),
+						"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex)},
+					flagCertTypes("-available-client-cert-types", test.configuredClientCertTypes)...),
 				shimCredentials: test.clientCredentials,
-			})
+				expectations: connectionExpectations{
+					peerCertificate: expectedClientCredential,
+				},
+				shouldFail:    test.expectedFailure != "",
+				expectedError: test.expectedFailure,
+			}
+			// Test that the client can defer configuring credentials to the cert
+			// callback.
+			certCallbackTestCase := clientTestCase
+			certCallbackTestCase.flags = append(slices.Clip(certCallbackTestCase.flags), "-async")
+			certCallbackTestCase.name += "-CertCallback"
+
+			testCases = append(testCases,
+				clientTestCase,
+				certCallbackTestCase,
+			)
 		}
 		// Tests receiving a client_certificate_type extension from the client and
 		// selecting and sending our most-preferred shared cert type.
