@@ -308,16 +308,17 @@ int DH_generate_parameters_ex(DH *dh, int prime_bits, int generator,
   }
 
   // Make sure |dh| has the necessary elements
-  if (dh->p == nullptr) {
-    dh->p = BN_new();
-    if (dh->p == nullptr) {
+  auto *impl = FromOpaque(dh);
+  if (impl->p == nullptr) {
+    impl->p = BN_new();
+    if (impl->p == nullptr) {
       OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
       return 0;
     }
   }
-  if (dh->g == nullptr) {
-    dh->g = BN_new();
-    if (dh->g == nullptr) {
+  if (impl->g == nullptr) {
+    impl->g = BN_new();
+    if (impl->g == nullptr) {
       OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
       return 0;
     }
@@ -349,10 +350,10 @@ int DH_generate_parameters_ex(DH *dh, int prime_bits, int generator,
   if (t1_bn == nullptr || t2_bn == nullptr ||
       !BN_set_word(t1_bn.get(), t1) ||  //
       !BN_set_word(t2_bn.get(), t2) ||  //
-      !BN_generate_prime_ex(dh->p, prime_bits, 1, t1_bn.get(), t2_bn.get(),
+      !BN_generate_prime_ex(impl->p, prime_bits, 1, t1_bn.get(), t2_bn.get(),
                             cb) ||
       !BN_GENCB_call(cb, 3, 0) ||  //
-      !BN_set_word(dh->g, g)) {
+      !BN_set_word(impl->g, g)) {
     OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
     return 0;
   }
@@ -376,11 +377,14 @@ static int int_dh_bn_cpy(BIGNUM **dst, const BIGNUM *src) {
 }
 
 static int int_dh_param_copy(DH *to, const DH *from, int is_x942) {
+  auto *to_impl = FromOpaque(to);
+  const auto *from_impl = FromOpaque(from);
+
   if (is_x942 == -1) {
-    is_x942 = !!from->q;
+    is_x942 = !!from_impl->q;
   }
-  if (!int_dh_bn_cpy(&to->p, from->p) ||
-      !int_dh_bn_cpy(&to->g, from->g)) {
+  if (!int_dh_bn_cpy(&to_impl->p, from_impl->p) ||
+      !int_dh_bn_cpy(&to_impl->g, from_impl->g)) {
     return 0;
   }
 
@@ -388,7 +392,7 @@ static int int_dh_param_copy(DH *to, const DH *from, int is_x942) {
     return 1;
   }
 
-  if (!int_dh_bn_cpy(&to->q, from->q)) {
+  if (!int_dh_bn_cpy(&to_impl->q, from_impl->q)) {
     return 0;
   }
 

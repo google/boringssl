@@ -87,7 +87,6 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
 
 	// TODO(crbug.com/42220000): Temporary symbols, to be eliminated.
-	regexp.MustCompile(`.*dh_st.*`),
 	regexp.MustCompile(`.*dsa_st.*`),
 	regexp.MustCompile(`.*ec_group_st.*`),
 	regexp.MustCompile(`.*ec_key_st.*`),

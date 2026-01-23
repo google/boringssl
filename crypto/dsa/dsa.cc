@@ -920,21 +920,22 @@ DH *DSA_dup_DH(const DSA *dsa) {
   }
 
   UniquePtr<DH> ret(DH_new());
+  auto *impl = FromOpaque(ret.get());
   if (ret == nullptr) {
     return nullptr;
   }
   if (dsa->q != nullptr) {
-    ret->priv_length = BN_num_bits(dsa->q);
-    if ((ret->q = BN_dup(dsa->q)) == nullptr) {
+    impl->priv_length = BN_num_bits(dsa->q);
+    if ((impl->q = BN_dup(dsa->q)) == nullptr) {
       return nullptr;
     }
   }
-  if ((dsa->p != nullptr && (ret->p = BN_dup(dsa->p)) == nullptr) ||
-      (dsa->g != nullptr && (ret->g = BN_dup(dsa->g)) == nullptr) ||
+  if ((dsa->p != nullptr && (impl->p = BN_dup(dsa->p)) == nullptr) ||
+      (dsa->g != nullptr && (impl->g = BN_dup(dsa->g)) == nullptr) ||
       (dsa->pub_key != nullptr &&
-       (ret->pub_key = BN_dup(dsa->pub_key)) == nullptr) ||
+       (impl->pub_key = BN_dup(dsa->pub_key)) == nullptr) ||
       (dsa->priv_key != nullptr &&
-       (ret->priv_key = BN_dup(dsa->priv_key)) == nullptr)) {
+       (impl->priv_key = BN_dup(dsa->priv_key)) == nullptr)) {
     return nullptr;
   }
 

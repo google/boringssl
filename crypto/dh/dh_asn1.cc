@@ -52,9 +52,9 @@ DH *DH_parse_parameters(CBS *cbs) {
   }
 
   CBS child;
+  auto *impl = FromOpaque(ret.get());
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
-      !parse_integer(&child, &ret->p) ||
-      !parse_integer(&child, &ret->g)) {
+      !parse_integer(&child, &impl->p) || !parse_integer(&child, &impl->g)) {
     OPENSSL_PUT_ERROR(DH, DH_R_DECODE_ERROR);
     return nullptr;
   }
@@ -66,7 +66,7 @@ DH *DH_parse_parameters(CBS *cbs) {
       OPENSSL_PUT_ERROR(DH, DH_R_DECODE_ERROR);
       return nullptr;
     }
-    ret->priv_length = (unsigned)priv_length;
+    impl->priv_length = (unsigned)priv_length;
   }
 
   if (CBS_len(&child) != 0) {
@@ -84,11 +84,11 @@ DH *DH_parse_parameters(CBS *cbs) {
 
 int DH_marshal_parameters(CBB *cbb, const DH *dh) {
   CBB child;
+  auto *impl = FromOpaque(dh);
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, dh->p) ||
-      !marshal_integer(&child, dh->g) ||
-      (dh->priv_length != 0 &&
-       !CBB_add_asn1_uint64(&child, dh->priv_length)) ||
+      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->g) ||
+      (impl->priv_length != 0 &&
+       !CBB_add_asn1_uint64(&child, impl->priv_length)) ||
       !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DH, DH_R_ENCODE_ERROR);
     return 0;

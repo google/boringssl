@@ -20,7 +20,12 @@
 #include "../../internal.h"
 
 
-struct dh_st {
+DECLARE_OPAQUE_STRUCT(dh_st, DHImpl)
+
+BSSL_NAMESPACE_BEGIN
+
+class DHImpl : public dh_st {
+ public:
   BIGNUM *p;
   BIGNUM *g;
   BIGNUM *q;
@@ -34,11 +39,8 @@ struct dh_st {
   bssl::CRYPTO_MUTEX method_mont_p_lock;
   BN_MONT_CTX *method_mont_p;
 
-  int flags;
   bssl::CRYPTO_refcount_t references;
 };
-
-BSSL_NAMESPACE_BEGIN
 
 // dh_check_params_fast checks basic invariants on |dh|'s domain parameters. It
 // does not check that |dh| forms a valid group, only that the sizes are within
