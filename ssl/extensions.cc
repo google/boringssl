@@ -3918,15 +3918,22 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
 
 bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
                                 bool *out_needs_psk_binder,
-                                ssl_client_hello_type_t type,
-                                size_t header_len) {
+                                ssl_client_hello_type_t type) {
   *out_needs_psk_binder = false;
+
+  // |out| must contain the start of a ClientHello, which means it must begin
+  // with a TLS or DTLS version.
+  assert(CBB_len(out) != 0 && (CBB_data(out)[0] == SSL3_VERSION_MAJOR ||
+                               CBB_data(out)[0] == DTLS1_VERSION_MAJOR));
 
   if (type == ssl_client_hello_inner) {
     return ssl_add_clienthello_tlsext_inner(hs, out, out_encoded,
                                             out_needs_psk_binder);
   }
 
+  // Sample the length of the ClientHello thus far, including the message
+  // header.
+  size_t msg_len = SSL3_HM_HEADER_LENGTH + CBB_len(out);
   assert(out_encoded == nullptr);  // Only ClientHelloInner needs two outputs.
   SSL *const ssl = hs->ssl;
   CBB extensions;
@@ -3983,8 +3990,9 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
   size_t psk_extension_len = ext_pre_shared_key_clienthello_length(hs, type);
   if (!SSL_is_dtls(ssl) && !SSL_is_quic(ssl) &&
       !ssl->s3->used_hello_retry_request) {
-    header_len +=
-        SSL3_HM_HEADER_LENGTH + 2 + CBB_len(&extensions) + psk_extension_len;
+    msg_len += 2 /* length prefix */ + CBB_len(&extensions) + psk_extension_len;
+    // The length of the padding extension, excluding the four-byte extension
+    // header.
     size_t padding_len = 0;
 
     // The final extension must be non-empty. WebSphere Application
@@ -3993,24 +4001,24 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
     if (last_was_empty && psk_extension_len == 0) {
       padding_len = 1;
       // The addition of the padding extension may push us into the F5 bug.
-      header_len += 4 + padding_len;
+      msg_len += 4 + padding_len;
     }
 
     // Add padding to workaround bugs in F5 terminators. See RFC 7685.
     //
     // NB: because this code works out the length of all existing extensions
     // it MUST always appear last (save for any PSK extension).
-    if (header_len > 0xff && header_len < 0x200) {
+    if (msg_len > 0xff && msg_len < 0x200) {
       // If our calculations already included a padding extension, remove that
       // factor because we're about to change its length.
       if (padding_len != 0) {
-        header_len -= 4 + padding_len;
+        msg_len -= 4 + padding_len;
       }
-      padding_len = 0x200 - header_len;
-      // Extensions take at least four bytes to encode. Always include at least
-      // one byte of data if including the extension. WebSphere Application
-      // Server 7.0 is intolerant to the last extension being zero-length. See
-      // https://crbug.com/363583.
+      padding_len = 0x200 - msg_len;
+      // Extensions take at least four bytes to encode. WebSphere Application
+      // Server 7.0 is intolerant to the last extension being zero-length, so
+      // always include at least one byte of data if including the extension.
+      // See https://crbug.com/363583.
       if (padding_len >= 4 + 1) {
         padding_len -= 4;
       } else {

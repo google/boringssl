@@ -804,8 +804,7 @@ bool ssl_encrypt_client_hello(SSL_HANDSHAKE *hs, Span<const uint8_t> enc) {
                                                  ssl_client_hello_inner,
                                                  /*empty_session_id=*/true) ||
       !ssl_add_clienthello_tlsext(hs, &body, encoded_cbb.get(),
-                                  &needs_psk_binder, ssl_client_hello_inner,
-                                  CBB_len(&body)) ||
+                                  &needs_psk_binder, ssl_client_hello_inner) ||
       !ssl->method->finish_message(ssl, cbb.get(), &hello_inner)) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
@@ -883,8 +882,7 @@ bool ssl_encrypt_client_hello(SSL_HANDSHAKE *hs, Span<const uint8_t> enc) {
                                                  ssl_client_hello_outer,
                                                  /*empty_session_id=*/false) ||
       !ssl_add_clienthello_tlsext(hs, aad.get(), /*out_encoded=*/nullptr,
-                                  &needs_psk_binder, ssl_client_hello_outer,
-                                  CBB_len(aad.get()))) {
+                                  &needs_psk_binder, ssl_client_hello_outer)) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
