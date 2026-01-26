@@ -26,7 +26,7 @@ using namespace bssl;
 
 // constant_time_lt_args_8 behaves like |constant_time_lt_8| but takes |uint8_t|
 // arguments for a slightly simpler implementation.
-static inline uint8_t constant_time_lt_args_8(uint8_t a, uint8_t b) {
+static uint8_t constant_time_lt_args_8(uint8_t a, uint8_t b) {
   crypto_word_t aw = a;
   crypto_word_t bw = b;
   // |crypto_word_t| is larger than |uint8_t|, so |aw| and |bw| have the same
@@ -36,8 +36,7 @@ static inline uint8_t constant_time_lt_args_8(uint8_t a, uint8_t b) {
 
 // constant_time_in_range_8 returns |CONSTTIME_TRUE_8| if |min| <= |a| <= |max|
 // and |CONSTTIME_FALSE_8| otherwise.
-static inline uint8_t constant_time_in_range_8(uint8_t a, uint8_t min,
-                                               uint8_t max) {
+static uint8_t constant_time_in_range_8(uint8_t a, uint8_t min, uint8_t max) {
   a -= min;
   return constant_time_lt_args_8(a, max - min + 1);
 }

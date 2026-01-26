@@ -73,25 +73,25 @@ typedef __m128i vec_t;
 static int vec_capable() { return 1; }
 
 // vec_add performs a pair-wise addition of four uint16s from |a| and |b|.
-static inline vec_t vec_add(vec_t a, vec_t b) { return _mm_add_epi16(a, b); }
+static vec_t vec_add(vec_t a, vec_t b) { return _mm_add_epi16(a, b); }
 
 // vec_sub performs a pair-wise subtraction of four uint16s from |a| and |b|.
-static inline vec_t vec_sub(vec_t a, vec_t b) { return _mm_sub_epi16(a, b); }
+static vec_t vec_sub(vec_t a, vec_t b) { return _mm_sub_epi16(a, b); }
 
 // vec_mul multiplies each uint16_t in |a| by |b| and returns the resulting
 // vector.
-static inline vec_t vec_mul(vec_t a, uint16_t b) {
+static vec_t vec_mul(vec_t a, uint16_t b) {
   return _mm_mullo_epi16(a, _mm_set1_epi16(b));
 }
 
 // vec_fma multiplies each uint16_t in |b| by |c|, adds the result to |a|, and
 // returns the resulting vector.
-static inline vec_t vec_fma(vec_t a, vec_t b, uint16_t c) {
+static vec_t vec_fma(vec_t a, vec_t b, uint16_t c) {
   return _mm_add_epi16(a, _mm_mullo_epi16(b, _mm_set1_epi16(c)));
 }
 
 // vec3_rshift_word right-shifts the 24 uint16_t's in |v| by one uint16.
-static inline void vec3_rshift_word(vec_t v[3]) {
+static void vec3_rshift_word(vec_t v[3]) {
   // Intel's left and right shifting is backwards compared to the order in
   // memory because they're based on little-endian order of words (and not just
   // bytes). So the shifts in this function will be backwards from what one
@@ -108,7 +108,7 @@ static inline void vec3_rshift_word(vec_t v[3]) {
 }
 
 // vec4_rshift_word right-shifts the 32 uint16_t's in |v| by one uint16.
-static inline void vec4_rshift_word(vec_t v[4]) {
+static void vec4_rshift_word(vec_t v[4]) {
   // Intel's left and right shifting is backwards compared to the order in
   // memory because they're based on little-endian order of words (and not just
   // bytes). So the shifts in this function will be backwards from what one
@@ -130,13 +130,13 @@ static inline void vec4_rshift_word(vec_t v[4]) {
 
 // vec_merge_3_5 takes the final three uint16_t's from |left|, appends the first
 // five from |right|, and returns the resulting vector.
-static inline vec_t vec_merge_3_5(vec_t left, vec_t right) {
+static vec_t vec_merge_3_5(vec_t left, vec_t right) {
   return _mm_srli_si128(left, 10) | _mm_slli_si128(right, 6);
 }
 
 // poly3_vec_lshift1 left-shifts the 768 bits in |a_s|, and in |a_a|, by one
 // bit.
-static inline void poly3_vec_lshift1(vec_t a_s[6], vec_t a_a[6]) {
+static void poly3_vec_lshift1(vec_t a_s[6], vec_t a_a[6]) {
   vec_t carry_s = {0};
   vec_t carry_a = {0};
 
@@ -157,7 +157,7 @@ static inline void poly3_vec_lshift1(vec_t a_s[6], vec_t a_a[6]) {
 
 // poly3_vec_rshift1 right-shifts the 768 bits in |a_s|, and in |a_a|, by one
 // bit.
-static inline void poly3_vec_rshift1(vec_t a_s[6], vec_t a_a[6]) {
+static void poly3_vec_rshift1(vec_t a_s[6], vec_t a_a[6]) {
   vec_t carry_s = {0};
   vec_t carry_a = {0};
 
@@ -178,7 +178,7 @@ static inline void poly3_vec_rshift1(vec_t a_s[6], vec_t a_a[6]) {
 
 // vec_broadcast_bit duplicates the least-significant bit in |a| to all bits in
 // a vector and returns the result.
-static inline vec_t vec_broadcast_bit(vec_t a) {
+static vec_t vec_broadcast_bit(vec_t a) {
   return _mm_shuffle_epi32(_mm_srai_epi32(_mm_slli_epi64(a, 63), 31),
                            0b01010101);
 }
@@ -197,24 +197,24 @@ typedef uint16x8_t vec_t;
 
 static int vec_capable() { return CRYPTO_is_NEON_capable(); }
 
-static inline vec_t vec_add(vec_t a, vec_t b) { return a + b; }
+static vec_t vec_add(vec_t a, vec_t b) { return a + b; }
 
-static inline vec_t vec_sub(vec_t a, vec_t b) { return a - b; }
+static vec_t vec_sub(vec_t a, vec_t b) { return a - b; }
 
-static inline vec_t vec_mul(vec_t a, uint16_t b) { return vmulq_n_u16(a, b); }
+static vec_t vec_mul(vec_t a, uint16_t b) { return vmulq_n_u16(a, b); }
 
-static inline vec_t vec_fma(vec_t a, vec_t b, uint16_t c) {
+static vec_t vec_fma(vec_t a, vec_t b, uint16_t c) {
   return vmlaq_n_u16(a, b, c);
 }
 
-static inline void vec3_rshift_word(vec_t v[3]) {
+static void vec3_rshift_word(vec_t v[3]) {
   const uint16x8_t kZero = {0};
   v[2] = vextq_u16(v[1], v[2], 7);
   v[1] = vextq_u16(v[0], v[1], 7);
   v[0] = vextq_u16(kZero, v[0], 7);
 }
 
-static inline void vec4_rshift_word(vec_t v[4]) {
+static void vec4_rshift_word(vec_t v[4]) {
   const uint16x8_t kZero = {0};
   v[3] = vextq_u16(v[2], v[3], 7);
   v[2] = vextq_u16(v[1], v[2], 7);
@@ -222,20 +222,20 @@ static inline void vec4_rshift_word(vec_t v[4]) {
   v[0] = vextq_u16(kZero, v[0], 7);
 }
 
-static inline vec_t vec_merge_3_5(vec_t left, vec_t right) {
+static vec_t vec_merge_3_5(vec_t left, vec_t right) {
   return vextq_u16(left, right, 5);
 }
 
-static inline uint16_t vec_get_word(vec_t v, unsigned i) { return v[i]; }
+static uint16_t vec_get_word(vec_t v, unsigned i) { return v[i]; }
 
 #if !defined(OPENSSL_AARCH64)
 
-static inline vec_t vec_broadcast_bit(vec_t a) {
+static vec_t vec_broadcast_bit(vec_t a) {
   a = (vec_t)vshrq_n_s16(((int16x8_t)a) << 15, 15);
   return vdupq_lane_u16(vget_low_u16(a), 0);
 }
 
-static inline void poly3_vec_lshift1(vec_t a_s[6], vec_t a_a[6]) {
+static void poly3_vec_lshift1(vec_t a_s[6], vec_t a_a[6]) {
   vec_t carry_s = {0};
   vec_t carry_a = {0};
   const vec_t kZero = {0};
@@ -255,7 +255,7 @@ static inline void poly3_vec_lshift1(vec_t a_s[6], vec_t a_a[6]) {
   }
 }
 
-static inline void poly3_vec_rshift1(vec_t a_s[6], vec_t a_a[6]) {
+static void poly3_vec_rshift1(vec_t a_s[6], vec_t a_a[6]) {
   vec_t carry_s = {0};
   vec_t carry_a = {0};
   const vec_t kZero = {0};
@@ -685,8 +685,8 @@ void bssl::HRSS_poly3_mul(struct poly3 *out, const struct poly3 *x,
 
 // poly3_vec_cswap swaps (|a_s|, |a_a|) and (|b_s|, |b_a|) if |swap| is
 // |0xff..ff|. Otherwise, |swap| must be zero.
-static inline void poly3_vec_cswap(vec_t a_s[6], vec_t a_a[6], vec_t b_s[6],
-                                   vec_t b_a[6], const vec_t swap) {
+static void poly3_vec_cswap(vec_t a_s[6], vec_t a_a[6], vec_t b_s[6],
+                            vec_t b_a[6], const vec_t swap) {
   for (int i = 0; i < 6; i++) {
     const vec_t sum_s = swap & (a_s[i] ^ b_s[i]);
     a_s[i] ^= sum_s;
@@ -699,9 +699,8 @@ static inline void poly3_vec_cswap(vec_t a_s[6], vec_t a_a[6], vec_t b_s[6],
 }
 
 // poly3_vec_fmsub subtracts (|ms|, |ma|) × (|b_s|, |b_a|) from (|a_s|, |a_a|).
-static inline void poly3_vec_fmsub(vec_t a_s[6], vec_t a_a[6], vec_t b_s[6],
-                                   vec_t b_a[6], const vec_t ms,
-                                   const vec_t ma) {
+static void poly3_vec_fmsub(vec_t a_s[6], vec_t a_a[6], vec_t b_s[6],
+                            vec_t b_a[6], const vec_t ms, const vec_t ma) {
   for (int i = 0; i < 6; i++) {
     // See the bitslice formula, above.
     const vec_t s = b_s[i];

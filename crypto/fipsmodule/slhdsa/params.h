@@ -21,9 +21,8 @@
 
 #include "../bcm_interface.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+
+BSSL_NAMESPACE_BEGIN
 
 enum slh_dsa_hash_type {
   SLH_DSA_HASH_SHA2_256,
@@ -96,39 +95,39 @@ typedef struct slh_dsa_config {
   bool compressed_addresses;
 } slh_dsa_config;
 
-static inline uint32_t slhdsa_wots_len(const slh_dsa_config *config) {
+inline uint32_t slhdsa_wots_len(const slh_dsa_config *config) {
   return config->wots_len1 + config->wots_len2;
 }
 
-static inline uint32_t slhdsa_wots_bytes(const slh_dsa_config *config) {
+inline uint32_t slhdsa_wots_bytes(const slh_dsa_config *config) {
   return config->n * slhdsa_wots_len(config);
 }
 
-static inline uint32_t slhdsa_xmss_bytes(const slh_dsa_config *config) {
+inline uint32_t slhdsa_xmss_bytes(const slh_dsa_config *config) {
   return slhdsa_wots_bytes(config) + config->n * config->tree_height;
 }
 
-static inline uint32_t slhdsa_fors_msg_bytes(const slh_dsa_config *config) {
+inline uint32_t slhdsa_fors_msg_bytes(const slh_dsa_config *config) {
   return (config->fors_height * config->fors_trees + 7) / 8;
 }
 
-static inline uint32_t slhdsa_fors_bytes(const slh_dsa_config *config) {
+inline uint32_t slhdsa_fors_bytes(const slh_dsa_config *config) {
   return (config->fors_height + 1) * config->fors_trees * config->n;
 }
 
-static inline uint32_t slhdsa_tree_bits(const slh_dsa_config *config) {
+inline uint32_t slhdsa_tree_bits(const slh_dsa_config *config) {
   return config->tree_height * (config->d - 1);
 }
 
-static inline uint32_t slhdsa_tree_bytes(const slh_dsa_config *config) {
+inline uint32_t slhdsa_tree_bytes(const slh_dsa_config *config) {
   return (slhdsa_tree_bits(config) + 7) / 8;
 }
 
-static inline uint32_t slhdsa_leaf_bits(const slh_dsa_config *config) {
+inline uint32_t slhdsa_leaf_bits(const slh_dsa_config *config) {
   return config->tree_height;
 }
 
-static inline uint32_t slhdsa_leaf_bytes(const slh_dsa_config *config) {
+inline uint32_t slhdsa_leaf_bytes(const slh_dsa_config *config) {
   return (slhdsa_leaf_bits(config) + 7) / 8;
 }
 
@@ -174,8 +173,6 @@ static const slh_dsa_config kSLHDSAConfigSHAKE_256f = {
     /*compressed_addresses=*/false,
 };
 
-#if defined(__cplusplus)
-}  // extern C
-#endif
+BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_SLHDSA_PARAMS_H

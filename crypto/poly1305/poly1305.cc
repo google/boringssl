@@ -44,8 +44,7 @@ static_assert(
     sizeof(struct poly1305_state_st) + 63 <= sizeof(poly1305_state),
     "poly1305_state isn't large enough to hold aligned poly1305_state_st");
 
-static inline struct poly1305_state_st *poly1305_aligned_state(
-    poly1305_state *state) {
+static struct poly1305_state_st *poly1305_aligned_state(poly1305_state *state) {
   return reinterpret_cast<poly1305_state_st *>(align_pointer(state, 64));
 }
 

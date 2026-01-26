@@ -37,7 +37,8 @@ using namespace bssl;
 
 // bn_div_words divides a double-width |h|,|l| by |d| and returns the result,
 // which must fit in a |BN_ULONG|, i.e. |h < d|.
-static inline BN_ULONG bn_div_words(BN_ULONG h, BN_ULONG l, BN_ULONG d) {
+[[maybe_unused]]
+static BN_ULONG bn_div_words(BN_ULONG h, BN_ULONG l, BN_ULONG d) {
   assert(h < d);
   BN_ULONG dh, dl, q, ret = 0, th, tl, t;
   int i, count = 2;
@@ -111,8 +112,8 @@ static inline BN_ULONG bn_div_words(BN_ULONG h, BN_ULONG l, BN_ULONG d) {
 // half |nl|) with a single-width divisor. It sets |*quotient_out| and
 // |*rem_out| to be the quotient and numerator, respectively. The quotient must
 // fit in a |BN_ULONG|, i.e. |nh < d|.
-static inline void bn_div_rem_words(BN_ULONG *quotient_out, BN_ULONG *rem_out,
-                                    BN_ULONG nh, BN_ULONG nl, BN_ULONG d) {
+static void bn_div_rem_words(BN_ULONG *quotient_out, BN_ULONG *rem_out,
+                             BN_ULONG nh, BN_ULONG nl, BN_ULONG d) {
   assert(nh < d);
   // This operation is the x86 and x86_64 DIV instruction, but it is difficult
   // for the compiler to emit it. Dividing a |BN_ULLONG| by a |BN_ULONG| does

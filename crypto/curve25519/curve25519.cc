@@ -1026,7 +1026,7 @@ static void ge_double_scalarmult_vartime(ge_p2 *r, const uint8_t *a,
 
 // int64_lshift21 returns |a << 21| but is defined when shifting bits into the
 // sign bit. This works around a language flaw in C.
-static inline int64_t int64_lshift21(int64_t a) {
+static int64_t int64_lshift21(int64_t a) {
   return (int64_t)((uint64_t)a << 21);
 }
 

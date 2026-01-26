@@ -39,7 +39,7 @@ static const size_t kSizeTWithoutLower4Bits = (size_t) -16;
 #define GHASH_CHUNK (3 * 1024)
 
 #if defined(GHASH_ASM_X86_64) || defined(GHASH_ASM_X86)
-static inline void gcm_reduce_1bit(u128 *V) {
+static void gcm_reduce_1bit(u128 *V) {
   if (sizeof(crypto_word_t) == 8) {
     uint64_t T = UINT64_C(0xe100000000000000) & (0 - (V->hi & 1));
     V->hi = (V->lo << 63) | (V->hi >> 1);

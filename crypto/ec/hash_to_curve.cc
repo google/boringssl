@@ -28,6 +28,8 @@
 
 using namespace bssl;
 
+namespace {
+
 // This file implements hash-to-curve, as described in RFC 9380.
 //
 // This hash-to-curve implementation is written generically with the
@@ -50,9 +52,9 @@ using namespace bssl;
 
 // expand_message_xmd implements the operation described in section 5.3.1 of
 // RFC 9380. It returns one on success and zero on error.
-static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
-                              const uint8_t *msg, size_t msg_len,
-                              const uint8_t *dst, size_t dst_len) {
+int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
+                       const uint8_t *msg, size_t msg_len, const uint8_t *dst,
+                       size_t dst_len) {
   // See https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve/issues/352
   if (dst_len == 0) {
     OPENSSL_PUT_ERROR(EC, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
@@ -134,7 +136,7 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
 // num_bytes_to_derive determines the number of bytes to derive when hashing to
 // a number modulo |modulus|. See the hash_to_field operation defined in
 // section 5.2 of RFC 9380.
-static int num_bytes_to_derive(size_t *out, const BIGNUM *modulus, unsigned k) {
+int num_bytes_to_derive(size_t *out, const BIGNUM *modulus, unsigned k) {
   size_t bits = BN_num_bits(modulus);
   size_t L = (bits + k + 7) / 8;
   // We require 2^(8*L) < 2^(2*bits - 2) <= n^2 so to fit in bounds for
@@ -153,8 +155,8 @@ static int num_bytes_to_derive(size_t *out, const BIGNUM *modulus, unsigned k) {
 
 // big_endian_to_words decodes |in| as a big-endian integer and writes the
 // result to |out|. |num_words| must be large enough to contain the output.
-static void big_endian_to_words(BN_ULONG *out, size_t num_words,
-                                const uint8_t *in, size_t len) {
+void big_endian_to_words(BN_ULONG *out, size_t num_words, const uint8_t *in,
+                         size_t len) {
   assert(len <= num_words * sizeof(BN_ULONG));
   // Ensure any excess bytes are zeroed.
   OPENSSL_memset(out, 0, num_words * sizeof(BN_ULONG));
@@ -166,10 +168,9 @@ static void big_endian_to_words(BN_ULONG *out, size_t num_words,
 
 // hash_to_field implements the operation described in section 5.2
 // of RFC 9380, with count = 2. |k| is the security factor.
-static int hash_to_field2(const EC_GROUP *group, const EVP_MD *md,
-                          EC_FELEM *out1, EC_FELEM *out2, const uint8_t *dst,
-                          size_t dst_len, unsigned k, const uint8_t *msg,
-                          size_t msg_len) {
+int hash_to_field2(const EC_GROUP *group, const EVP_MD *md, EC_FELEM *out1,
+                   EC_FELEM *out2, const uint8_t *dst, size_t dst_len,
+                   unsigned k, const uint8_t *msg, size_t msg_len) {
   size_t L;
   uint8_t buf[4 * EC_MAX_BYTES];
   if (!num_bytes_to_derive(&L, &group->field.N, k) ||
@@ -187,9 +188,9 @@ static int hash_to_field2(const EC_GROUP *group, const EVP_MD *md,
 
 // hash_to_field1 implements the operation described in section 5.2
 // of RFC 9380, with count = 1. |k| is the security factor.
-static int hash_to_field1(const EC_GROUP *group, const EVP_MD *md,
-                          EC_FELEM *out, const uint8_t *dst, size_t dst_len,
-                          unsigned k, const uint8_t *msg, size_t msg_len) {
+int hash_to_field1(const EC_GROUP *group, const EVP_MD *md, EC_FELEM *out,
+                   const uint8_t *dst, size_t dst_len, unsigned k,
+                   const uint8_t *msg, size_t msg_len) {
   size_t L;
   uint8_t buf[2 * EC_MAX_BYTES];
   if (!num_bytes_to_derive(&L, &group->field.N, k) ||
@@ -205,9 +206,9 @@ static int hash_to_field1(const EC_GROUP *group, const EVP_MD *md,
 
 // hash_to_scalar behaves like |hash_to_field2| but returns a value modulo the
 // group order rather than a field element. |k| is the security factor.
-static int hash_to_scalar(const EC_GROUP *group, const EVP_MD *md,
-                          EC_SCALAR *out, const uint8_t *dst, size_t dst_len,
-                          unsigned k, const uint8_t *msg, size_t msg_len) {
+int hash_to_scalar(const EC_GROUP *group, const EVP_MD *md, EC_SCALAR *out,
+                   const uint8_t *dst, size_t dst_len, unsigned k,
+                   const uint8_t *msg, size_t msg_len) {
   const BIGNUM *order = EC_GROUP_get0_order(group);
   size_t L;
   uint8_t buf[EC_MAX_BYTES * 2];
@@ -223,8 +224,7 @@ static int hash_to_scalar(const EC_GROUP *group, const EVP_MD *md,
   return 1;
 }
 
-static inline void mul_A(const EC_GROUP *group, EC_FELEM *out,
-                         const EC_FELEM *in) {
+void mul_A(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *in) {
   assert(group->a_is_minus3);
   EC_FELEM tmp;
   ec_felem_add(group, &tmp, in, in);      // tmp = 2*in
@@ -233,7 +233,7 @@ static inline void mul_A(const EC_GROUP *group, EC_FELEM *out,
 }
 
 // sgn0 implements the operation described in section 4.1.2 of RFC 9380.
-static BN_ULONG sgn0(const EC_GROUP *group, const EC_FELEM *a) {
+BN_ULONG sgn0(const EC_GROUP *group, const EC_FELEM *a) {
   uint8_t buf[EC_MAX_BYTES];
   size_t len;
   ec_felem_to_bytes(group, buf, &len, a);
@@ -246,10 +246,10 @@ static BN_ULONG sgn0(const EC_GROUP *group, const EC_FELEM *a) {
 
 // sqrt_ratio_3mod4 implements the operation described in appendix F.2.1.2
 // of RFC 9380.
-static BN_ULONG sqrt_ratio_3mod4(const EC_GROUP *group, const EC_FELEM *Z,
-                                 const BN_ULONG *c1, size_t num_c1,
-                                 const EC_FELEM *c2, EC_FELEM *out_y,
-                                 const EC_FELEM *u, const EC_FELEM *v) {
+BN_ULONG sqrt_ratio_3mod4(const EC_GROUP *group, const EC_FELEM *Z,
+                          const BN_ULONG *c1, size_t num_c1, const EC_FELEM *c2,
+                          EC_FELEM *out_y, const EC_FELEM *u,
+                          const EC_FELEM *v) {
   assert(is_3mod4(group));
 
   void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
@@ -281,10 +281,10 @@ static BN_ULONG sqrt_ratio_3mod4(const EC_GROUP *group, const EC_FELEM *Z,
 
 // map_to_curve_simple_swu implements the operation described in section 6.6.2
 // of RFC 9380, using the straight-line implementation in appendix F.2.
-static void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
-                                    const BN_ULONG *c1, size_t num_c1,
-                                    const EC_FELEM *c2, EC_JACOBIAN *out,
-                                    const EC_FELEM *u) {
+void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
+                             const BN_ULONG *c1, size_t num_c1,
+                             const EC_FELEM *c2, EC_JACOBIAN *out,
+                             const EC_FELEM *u) {
   // This function requires the prime be 3 mod 4, and that A = -3.
   assert(is_3mod4(group));
   assert(group->a_is_minus3);
@@ -352,10 +352,10 @@ static void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
   out->Z = tv4;
 }
 
-static int hash_to_curve(const EC_GROUP *group, const EVP_MD *md,
-                         const EC_FELEM *Z, const EC_FELEM *c2, unsigned k,
-                         EC_JACOBIAN *out, const uint8_t *dst, size_t dst_len,
-                         const uint8_t *msg, size_t msg_len) {
+int hash_to_curve(const EC_GROUP *group, const EVP_MD *md, const EC_FELEM *Z,
+                  const EC_FELEM *c2, unsigned k, EC_JACOBIAN *out,
+                  const uint8_t *dst, size_t dst_len, const uint8_t *msg,
+                  size_t msg_len) {
   EC_FELEM u0, u1;
   if (!hash_to_field2(group, md, &u0, &u1, dst, dst_len, k, msg, msg_len)) {
     return 0;
@@ -378,10 +378,10 @@ static int hash_to_curve(const EC_GROUP *group, const EVP_MD *md,
   return 1;
 }
 
-static int encode_to_curve(const EC_GROUP *group, const EVP_MD *md,
-                           const EC_FELEM *Z, const EC_FELEM *c2, unsigned k,
-                           EC_JACOBIAN *out, const uint8_t *dst, size_t dst_len,
-                           const uint8_t *msg, size_t msg_len) {
+int encode_to_curve(const EC_GROUP *group, const EVP_MD *md, const EC_FELEM *Z,
+                    const EC_FELEM *c2, unsigned k, EC_JACOBIAN *out,
+                    const uint8_t *dst, size_t dst_len, const uint8_t *msg,
+                    size_t msg_len) {
   EC_FELEM u;
   if (!hash_to_field1(group, md, &u, dst, dst_len, k, msg, msg_len)) {
     return 0;
@@ -400,7 +400,7 @@ static int encode_to_curve(const EC_GROUP *group, const EVP_MD *md,
   return 1;
 }
 
-static int felem_from_u8(const EC_GROUP *group, EC_FELEM *out, uint8_t a) {
+int felem_from_u8(const EC_GROUP *group, EC_FELEM *out, uint8_t a) {
   uint8_t bytes[EC_MAX_BYTES] = {0};
   size_t len = BN_num_bytes(&group->field.N);
   bytes[len - 1] = a;
@@ -414,10 +414,10 @@ static int felem_from_u8(const EC_GROUP *group, EC_FELEM *out, uint8_t a) {
 // c2 = pow(10, (p+1)//4, p)
 // assert pow(c2, 2, p) == 10
 // ", ".join("0x%02x" % b for b in c2.to_bytes(256//8, 'big'))
-static const uint8_t kP256Sqrt10[] = {
-    0xda, 0x53, 0x8e, 0x3b, 0xe1, 0xd8, 0x9b, 0x99, 0xc9, 0x78, 0xfc,
-    0x67, 0x51, 0x80, 0xaa, 0xb2, 0x7b, 0x8d, 0x1f, 0xf8, 0x4c, 0x55,
-    0xd5, 0xb6, 0x2c, 0xcd, 0x34, 0x27, 0xe4, 0x33, 0xc4, 0x7f};
+const uint8_t kP256Sqrt10[] = {0xda, 0x53, 0x8e, 0x3b, 0xe1, 0xd8, 0x9b, 0x99,
+                               0xc9, 0x78, 0xfc, 0x67, 0x51, 0x80, 0xaa, 0xb2,
+                               0x7b, 0x8d, 0x1f, 0xf8, 0x4c, 0x55, 0xd5, 0xb6,
+                               0x2c, 0xcd, 0x34, 0x27, 0xe4, 0x33, 0xc4, 0x7f};
 
 // kP384Sqrt12 is sqrt(12) in P-384's field. It was computed as follows in
 // python3:
@@ -426,11 +426,13 @@ static const uint8_t kP256Sqrt10[] = {
 // c2 = pow(12, (p+1)//4, p)
 // assert pow(c2, 2, p) == 12
 // ", ".join("0x%02x" % b for b in c2.to_bytes(384//8, 'big'))
-static const uint8_t kP384Sqrt12[] = {
+const uint8_t kP384Sqrt12[] = {
     0x2a, 0xcc, 0xb4, 0xa6, 0x56, 0xb0, 0x24, 0x9c, 0x71, 0xf0, 0x50, 0x0e,
     0x83, 0xda, 0x2f, 0xdd, 0x7f, 0x98, 0xe3, 0x83, 0xd6, 0x8b, 0x53, 0x87,
     0x1f, 0x87, 0x2f, 0xcb, 0x9c, 0xcb, 0x80, 0xc5, 0x3c, 0x0d, 0xe1, 0xf8,
     0xa8, 0x0f, 0x7e, 0x19, 0x14, 0xe2, 0xec, 0x69, 0xf5, 0xa6, 0x26, 0xb3};
+
+}  // namespace
 
 int bssl::ec_hash_to_curve_p256_xmd_sha256_sswu(
     const EC_GROUP *group, EC_JACOBIAN *out, const uint8_t *dst, size_t dst_len,
