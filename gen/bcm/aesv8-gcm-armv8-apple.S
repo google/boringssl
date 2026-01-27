@@ -6,6 +6,7 @@
 #if !defined(OPENSSL_NO_ASM) && defined(OPENSSL_AARCH64) && defined(__APPLE__)
 #if __ARM_MAX_ARCH__ >= 8
 
+.arch_extension crypto
 
 .text
 .globl	_aes_gcm_enc_kernel
