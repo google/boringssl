@@ -6998,6 +6998,75 @@ TEST(X509Test, ExtensionFromConf) {
        nullptr,
        {}},
 
+      // crlDistributionPoints takes a series of key/value pairs, each of which
+      // becomes a distribution point. If a pair has a value, this is a
+      // shorthand to specify a GeneralName, which goes into a single
+      // distribution point as its sole fullName value. Otherwise, the key is a
+      // second reference which specifies the distribution point.
+      {"crlDistributionPoints",
+       "dp1, dp2, dp3, dp4, URI:http://a.example, DNS:example.com",
+       R"(
+# Empty distribution point. This is not actually allowed, but OpenSSL's config
+# syntax will construct it.
+[dp1]
+
+# A fullName with multiple names.
+[dp2]
+fullname = URI:http://a.example, URI:http://b.example
+
+# A nameRelativeToCRLIssuer, with all the other options.
+[dp3]
+relativename = relname
+reasons = keyCompromise, CACompromise
+CRLissuer = dirName:crlissuer
+# Unknown keys are silently ignored. This is probably a bug.
+foo = bar
+[relname]
+CN = Test
+[crlissuer]
+CN = CRL Issuer
+
+# cRLIssuer is, for some reason, a GeneralNames, yet RFC 5280 says "If present,
+# the cRLIssuer MUST only contain the distinguished name (DN) from the issuer
+# field of the CRL to which the DistributionPoint is pointing." While invalid by
+# this text, it is syntactically possible in both X.509 and OpenSSL's ad-hoc
+# config language to specify a multi-valued GeneralNames with non-DN SAN types.
+[dp4]
+CRLissuer = URI:http://example.com, DNS:example.com, IP:127.0.0.1
+)",
+       {0x30, 0x81, 0xbf, 0x06, 0x03, 0x55, 0x1d, 0x1f, 0x04, 0x81, 0xb7, 0x30,
+        0x81, 0xb4, 0x30, 0x00, 0x30, 0x28, 0xa0, 0x26, 0xa0, 0x24, 0x86, 0x10,
+        0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x61, 0x2e, 0x65, 0x78, 0x61,
+        0x6d, 0x70, 0x6c, 0x65, 0x86, 0x10, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f,
+        0x2f, 0x62, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x30, 0x30,
+        0xa0, 0x0f, 0xa1, 0x0d, 0x30, 0x0b, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c,
+        0x04, 0x54, 0x65, 0x73, 0x74, 0x81, 0x02, 0x05, 0x60, 0xa2, 0x19, 0xa4,
+        0x17, 0x30, 0x15, 0x31, 0x13, 0x30, 0x11, 0x06, 0x03, 0x55, 0x04, 0x03,
+        0x0c, 0x0a, 0x43, 0x52, 0x4c, 0x20, 0x49, 0x73, 0x73, 0x75, 0x65, 0x72,
+        0x30, 0x29, 0xa2, 0x27, 0x86, 0x12, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f,
+        0x2f, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d,
+        0x82, 0x0b, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f,
+        0x6d, 0x87, 0x04, 0x7f, 0x00, 0x00, 0x01, 0x30, 0x16, 0xa0, 0x14, 0xa0,
+        0x12, 0x86, 0x10, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x61, 0x2e,
+        0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x30, 0x11, 0xa0, 0x0f, 0xa0,
+        0x0d, 0x82, 0x0b, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63,
+        0x6f, 0x6d}},
+
+      // Multiple distribution point names within a single CRL distribution
+      // point are an error. Unlike issuingDistributionPoint, this seems to be
+      // only reachable by mixing full and relative in one distribution point.
+      // There is no inline form for this extension and, within a section, it is
+      // impossible to have a duplicate key because the parser silently
+      // overrides the old key.
+      {"crlDistributionPoints",
+       "dp",
+       R"([dp]
+fullname = URI:http://a.example
+relativename = relname
+[relname]
+CN = Test)",
+       {}},
+
       // subjectAltName has a series of string-based inputs for each name type.
       {"subjectAltName",
        "email:foo@example.com, URI:https://example.com, DNS:example.com, "
@@ -7595,6 +7664,7 @@ val2 = IA5:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
         X509V3_EXT_nconf(conf.get(), nullptr, t.name, t.value.c_str()));
     if (t.expected.empty()) {
       EXPECT_FALSE(ext);
+      ERR_clear_error();
     } else {
       ASSERT_TRUE(ext);
       uint8_t *der = nullptr;
@@ -7611,6 +7681,7 @@ val2 = IA5:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
     ext.reset(X509V3_EXT_nconf(conf.get(), &ctx, t.name, t.value.c_str()));
     if (t.expected.empty()) {
       EXPECT_FALSE(ext);
+      ERR_clear_error();
     } else {
       ASSERT_TRUE(ext);
       uint8_t *der = nullptr;
