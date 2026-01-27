@@ -348,11 +348,16 @@ int SSL_CREDENTIAL_set1_private_key(SSL_CREDENTIAL *cred, EVP_PKEY *key) {
     return 0;
   }
 
+  if (!EVP_PKEY_has_private(key)) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED);
+    return 0;
+  }
+
   // If the public half has been configured, check |key| matches. |pubkey| will
   // have been extracted from the certificate, delegated credential, etc.
   if (cred->pubkey != nullptr &&
       !ssl_compare_public_and_private_key(cred->pubkey.get(), key)) {
-    return false;
+    return 0;
   }
 
   cred->privkey = UpRef(key);
