@@ -165,9 +165,11 @@
 %define _aes256gcmsiv_enc_msg_x8 _ %+ BORINGSSL_PREFIX %+ _aes256gcmsiv_enc_msg_x8
 %define _aes256gcmsiv_kdf _ %+ BORINGSSL_PREFIX %+ _aes256gcmsiv_kdf
 %define _aes_gcm_dec_kernel _ %+ BORINGSSL_PREFIX %+ _aes_gcm_dec_kernel
+%define _aes_gcm_dec_kernel_eor3 _ %+ BORINGSSL_PREFIX %+ _aes_gcm_dec_kernel_eor3
 %define _aes_gcm_dec_update_vaes_avx2 _ %+ BORINGSSL_PREFIX %+ _aes_gcm_dec_update_vaes_avx2
 %define _aes_gcm_dec_update_vaes_avx512 _ %+ BORINGSSL_PREFIX %+ _aes_gcm_dec_update_vaes_avx512
 %define _aes_gcm_enc_kernel _ %+ BORINGSSL_PREFIX %+ _aes_gcm_enc_kernel
+%define _aes_gcm_enc_kernel_eor3 _ %+ BORINGSSL_PREFIX %+ _aes_gcm_enc_kernel_eor3
 %define _aes_gcm_enc_update_vaes_avx2 _ %+ BORINGSSL_PREFIX %+ _aes_gcm_enc_update_vaes_avx2
 %define _aes_gcm_enc_update_vaes_avx512 _ %+ BORINGSSL_PREFIX %+ _aes_gcm_enc_update_vaes_avx512
 %define _aes_hw_cbc_encrypt _ %+ BORINGSSL_PREFIX %+ _aes_hw_cbc_encrypt

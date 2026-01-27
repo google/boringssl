@@ -647,6 +647,7 @@ set(
 set(
   CRYPTO_INTERNAL_HEADERS
 
+  crypto/armv8_feature_parsing.h
   crypto/asn1/internal.h
   crypto/bcm_support.h
   crypto/bio/internal.h

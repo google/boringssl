@@ -50,6 +50,9 @@ void bssl::OPENSSL_cpuid_setup() {
   if (hwcap & ZX_ARM64_FEATURE_ISA_SHA512) {
     OPENSSL_armcap_P |= ARMV8_SHA512;
   }
+  if (hwcap & ZX_ARM64_FEATURE_ISA_SHA3) {
+    OPENSSL_armcap_P |= ARMV8_SHA3;
+  }
 }
 
 #endif  // OPENSSL_AARCH64 && OPENSSL_FUCHSIA && !OPENSSL_STATIC_ARMCAP

@@ -21,6 +21,9 @@
 #include <windows.h>
 
 
+#if !defined(PF_ARM_SHA3_INSTRUCTIONS_AVAILABLE)
+#define PF_ARM_SHA3_INSTRUCTIONS_AVAILABLE 64
+#endif
 #if !defined(PF_ARM_SHA512_INSTRUCTIONS_AVAILABLE)
 #define PF_ARM_SHA512_INSTRUCTIONS_AVAILABLE 65
 #endif
@@ -40,6 +43,9 @@ void bssl::OPENSSL_cpuid_setup() {
   }
   if (IsProcessorFeaturePresent(PF_ARM_SHA512_INSTRUCTIONS_AVAILABLE)) {
     OPENSSL_armcap_P |= ARMV8_SHA512;
+  }
+  if (IsProcessorFeaturePresent(PF_ARM_SHA3_INSTRUCTIONS_AVAILABLE)) {
+    OPENSSL_armcap_P |= ARMV8_SHA3;
   }
 }
 

@@ -495,6 +495,7 @@
             "include/openssl/xwing.h"
         ],
         "internal_hdrs": [
+            "crypto/armv8_feature_parsing.h",
             "crypto/asn1/internal.h",
             "crypto/bio/internal.h",
             "crypto/bytestring/internal.h",

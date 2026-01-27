@@ -615,6 +615,7 @@ boringssl_crypto_headers := \
   include/openssl/xwing.h
 
 boringssl_crypto_internal_headers := \
+  crypto/armv8_feature_parsing.h \
   crypto/asn1/internal.h \
   crypto/bcm_support.h \
   crypto/bio/internal.h \

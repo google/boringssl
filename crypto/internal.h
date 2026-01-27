@@ -1320,6 +1320,9 @@ inline int CRYPTO_is_VPCLMULQDQ_capable() {
 // ARMV8_SHA512 indicates support for hardware SHA-512 instructions.
 #define ARMV8_SHA512 (1 << 6)
 
+// ARMV8_SHA3 indicates support for eor3 instructions.
+#define ARMV8_SHA3 (1 << 7)
+
 #if defined(OPENSSL_STATIC_ARMCAP)
 // We assume |CRYPTO_is_*_capable| already checked static capabilities.
 inline uint32_t OPENSSL_get_armcap() { return 0; }
@@ -1401,6 +1404,15 @@ inline int CRYPTO_is_ARMv8_SHA512_capable() {
   return 1;
 #else
   return (OPENSSL_get_armcap() & ARMV8_SHA512) != 0;
+#endif
+}
+
+inline int CRYPTO_is_ARMv8_SHA3_capable() {
+  // There is no |OPENSSL_STATIC_ARMCAP_SHA3|.
+#if defined(__ARM_FEATURE_SHA3)
+  return 1;
+#else
+  return (OPENSSL_get_armcap() & ARMV8_SHA3) != 0;
 #endif
 }
 

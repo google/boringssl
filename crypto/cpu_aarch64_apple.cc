@@ -67,6 +67,10 @@ void bssl::OPENSSL_cpuid_setup() {
       has_hw_feature("hw.optional.armv8_2_sha512")) {
     OPENSSL_armcap_P |= ARMV8_SHA512;
   }
+  if (has_hw_feature("hw.optional.arm.FEAT_SHA3") ||
+      has_hw_feature("hw.optional.armv8_2_sha3")) {
+    OPENSSL_armcap_P |= ARMV8_SHA3;
+  }
 }
 
 #endif  // OPENSSL_AARCH64 && OPENSSL_APPLE && !OPENSSL_STATIC_ARMCAP

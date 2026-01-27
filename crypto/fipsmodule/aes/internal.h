@@ -307,6 +307,7 @@ enum gcm_impl_t {
   gcm_x86_vaes_avx2,
   gcm_x86_vaes_avx512,
   gcm_arm64_aes,
+  gcm_arm64_aes_eor3,
 };
 
 typedef struct { uint64_t hi,lo; } u128;
@@ -481,6 +482,7 @@ extern "C" void aes_gcm_dec_update_vaes_avx512(const uint8_t *in, uint8_t *out,
 #define GCM_FUNCREF
 
 inline int gcm_pmull_capable() { return CRYPTO_is_ARMv8_PMULL_capable(); }
+inline int gcm_sha3_capable() { return CRYPTO_is_ARMv8_SHA3_capable(); }
 
 extern "C" void gcm_init_v8(u128 Htable[16], const uint64_t H[2]);
 extern "C" void gcm_gmult_v8(uint8_t Xi[16], const u128 Htable[16]);
@@ -501,6 +503,12 @@ extern "C" void aes_gcm_enc_kernel(const uint8_t *in, uint64_t in_bits,
                                    void *out, void *Xi, uint8_t *ivec,
                                    const AES_KEY *key, const u128 Htable[16]);
 extern "C" void aes_gcm_dec_kernel(const uint8_t *in, uint64_t in_bits,
+                                   void *out, void *Xi, uint8_t *ivec,
+                                   const AES_KEY *key, const u128 Htable[16]);
+extern "C" void aes_gcm_enc_kernel_eor3(const uint8_t *in, uint64_t in_bits,
+                                   void *out, void *Xi, uint8_t *ivec,
+                                   const AES_KEY *key, const u128 Htable[16]);
+extern "C" void aes_gcm_dec_kernel_eor3(const uint8_t *in, uint64_t in_bits,
                                    void *out, void *Xi, uint8_t *ivec,
                                    const AES_KEY *key, const u128 Htable[16]);
 #endif

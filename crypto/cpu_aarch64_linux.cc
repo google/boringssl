@@ -32,6 +32,7 @@ void bssl::OPENSSL_cpuid_setup() {
   static const unsigned long kPMULL = 1 << 4;
   static const unsigned long kSHA1 = 1 << 5;
   static const unsigned long kSHA256 = 1 << 6;
+  static const unsigned long kSHA3 = 1 << 17;
   static const unsigned long kSHA512 = 1 << 21;
 
   if ((hwcap & kNEON) == 0) {
@@ -56,6 +57,9 @@ void bssl::OPENSSL_cpuid_setup() {
   }
   if (hwcap & kSHA512) {
     OPENSSL_armcap_P |= ARMV8_SHA512;
+  }
+  if (hwcap & kSHA3) {
+    OPENSSL_armcap_P |= ARMV8_SHA3;
   }
 }
 
