@@ -85,7 +85,7 @@ static int set_dist_point_name(DIST_POINT_NAME **pdp, const X509V3_CTX *ctx,
                                const CONF_VALUE *cnf) {
   STACK_OF(GENERAL_NAME) *fnm = nullptr;
   STACK_OF(X509_NAME_ENTRY) *rnm = nullptr;
-  if (!strncmp(cnf->name, "fullname", 9)) {
+  if (!strcmp(cnf->name, "fullname")) {
     // If |cnf| comes from |X509V3_parse_list|, which is possible for a v2i
     // function, |cnf->value| may be NULL.
     if (cnf->value == nullptr) {
