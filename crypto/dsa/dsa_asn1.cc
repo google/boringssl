@@ -21,8 +21,9 @@
 #include <openssl/err.h>
 #include <openssl/mem.h>
 
-#include "internal.h"
 #include "../bytestring/internal.h"
+#include "../mem_internal.h"
+#include "internal.h"
 
 
 using namespace bssl;
@@ -30,7 +31,7 @@ using namespace bssl;
 // This function is in dsa_asn1.c rather than dsa.c because it is reachable from
 // |EVP_PKEY| parsers. This makes it easier for the static linker to drop most
 // of the DSA implementation.
-int bssl::dsa_check_key(const DSA *dsa) {
+int bssl::dsa_check_key(const DSAImpl *dsa) {
   if (!dsa->p || !dsa->q || !dsa->g) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_MISSING_PARAMETERS);
     return 0;
@@ -138,7 +139,7 @@ int DSA_SIG_marshal(CBB *cbb, const DSA_SIG *sig) {
 }
 
 DSA *DSA_parse_public_key(CBS *cbs) {
-  UniquePtr<DSA> ret(DSA_new());
+  UniquePtr<DSAImpl> ret(FromOpaque(DSA_new()));
   if (ret == nullptr) {
     return nullptr;
   }
@@ -159,13 +160,13 @@ DSA *DSA_parse_public_key(CBS *cbs) {
 }
 
 int DSA_marshal_public_key(CBB *cbb, const DSA *dsa) {
+  const auto *impl = FromOpaque(dsa);
+
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, dsa->pub_key) ||
-      !marshal_integer(&child, dsa->p) ||
-      !marshal_integer(&child, dsa->q) ||
-      !marshal_integer(&child, dsa->g) ||
-      !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->pub_key) ||
+      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->q) ||
+      !marshal_integer(&child, impl->g) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_ENCODE_ERROR);
     return 0;
   }
@@ -173,7 +174,7 @@ int DSA_marshal_public_key(CBB *cbb, const DSA *dsa) {
 }
 
 DSA *DSA_parse_parameters(CBS *cbs) {
-  UniquePtr<DSA> ret(DSA_new());
+  UniquePtr<DSAImpl> ret(FromOpaque(DSA_new()));
   if (ret == nullptr) {
     return nullptr;
   }
@@ -193,12 +194,12 @@ DSA *DSA_parse_parameters(CBS *cbs) {
 }
 
 int DSA_marshal_parameters(CBB *cbb, const DSA *dsa) {
+  const auto *impl = FromOpaque(dsa);
+
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, dsa->p) ||
-      !marshal_integer(&child, dsa->q) ||
-      !marshal_integer(&child, dsa->g) ||
-      !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->q) ||
+      !marshal_integer(&child, impl->g) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_ENCODE_ERROR);
     return 0;
   }
@@ -206,7 +207,7 @@ int DSA_marshal_parameters(CBB *cbb, const DSA *dsa) {
 }
 
 DSA *DSA_parse_private_key(CBS *cbs) {
-  UniquePtr<DSA> ret(DSA_new());
+  UniquePtr<DSAImpl> ret(FromOpaque(DSA_new()));
   if (ret == nullptr) {
     return nullptr;
   }
@@ -241,15 +242,15 @@ DSA *DSA_parse_private_key(CBS *cbs) {
 }
 
 int DSA_marshal_private_key(CBB *cbb, const DSA *dsa) {
+  const auto *impl = FromOpaque(dsa);
+
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&child, 0 /* version */) ||
-      !marshal_integer(&child, dsa->p) ||
-      !marshal_integer(&child, dsa->q) ||
-      !marshal_integer(&child, dsa->g) ||
-      !marshal_integer(&child, dsa->pub_key) ||
-      !marshal_integer(&child, dsa->priv_key) ||
-      !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->q) ||
+      !marshal_integer(&child, impl->g) ||
+      !marshal_integer(&child, impl->pub_key) ||
+      !marshal_integer(&child, impl->priv_key) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_ENCODE_ERROR);
     return 0;
   }

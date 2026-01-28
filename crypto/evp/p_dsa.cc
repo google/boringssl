@@ -21,6 +21,7 @@
 #include <openssl/err.h>
 
 #include "../dsa/internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -38,7 +39,7 @@ static bssl::evp_decode_result_t dsa_pub_decode(const EVP_PKEY_ALG *alg,
   // Decode parameters. RFC 3279 permits DSA parameters to be omitted, in which
   // case they are implicitly determined from the issuing certificate, or
   // somewhere unspecified and out-of-band. We do not support this mode.
-  UniquePtr<DSA> dsa(DSA_parse_parameters(params));
+  UniquePtr<DSAImpl> dsa(FromOpaque(DSA_parse_parameters(params)));
   if (dsa == nullptr || CBS_len(params) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
@@ -59,7 +60,7 @@ static bssl::evp_decode_result_t dsa_pub_decode(const EVP_PKEY_ALG *alg,
 }
 
 static int dsa_pub_encode(CBB *out, const EVP_PKEY *key) {
-  const DSA *dsa = reinterpret_cast<const DSA *>(key->pkey);
+  const DSAImpl *dsa = reinterpret_cast<const DSAImpl *>(key->pkey);
   const int has_params =
       dsa->p != nullptr && dsa->q != nullptr && dsa->g != nullptr;
 
@@ -86,7 +87,7 @@ static bssl::evp_decode_result_t dsa_priv_decode(const EVP_PKEY_ALG *alg,
   // See PKCS#11, v2.40, section 2.5.
 
   // Decode parameters.
-  UniquePtr<DSA> dsa(DSA_parse_parameters(params));
+  UniquePtr<DSAImpl> dsa(FromOpaque(DSA_parse_parameters(params)));
   if (dsa == nullptr || CBS_len(params) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
@@ -123,7 +124,7 @@ static bssl::evp_decode_result_t dsa_priv_decode(const EVP_PKEY_ALG *alg,
 }
 
 static int dsa_priv_encode(CBB *out, const EVP_PKEY *key) {
-  const DSA *dsa = reinterpret_cast<const DSA *>(key->pkey);
+  const DSAImpl *dsa = reinterpret_cast<const DSAImpl *>(key->pkey);
   if (dsa == nullptr || dsa->priv_key == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
     return 0;
@@ -147,17 +148,17 @@ static int dsa_priv_encode(CBB *out, const EVP_PKEY *key) {
 }
 
 static int int_dsa_size(const EVP_PKEY *pkey) {
-  const DSA *dsa = reinterpret_cast<const DSA *>(pkey->pkey);
+  const DSAImpl *dsa = reinterpret_cast<const DSAImpl *>(pkey->pkey);
   return DSA_size(dsa);
 }
 
 static int dsa_bits(const EVP_PKEY *pkey) {
-  const DSA *dsa = reinterpret_cast<const DSA *>(pkey->pkey);
+  const DSAImpl *dsa = reinterpret_cast<const DSAImpl *>(pkey->pkey);
   return BN_num_bits(DSA_get0_p(dsa));
 }
 
 static int dsa_missing_parameters(const EVP_PKEY *pkey) {
-  const DSA *dsa = reinterpret_cast<const DSA *>(pkey->pkey);
+  const DSAImpl *dsa = reinterpret_cast<const DSAImpl *>(pkey->pkey);
   if (DSA_get0_p(dsa) == nullptr || DSA_get0_q(dsa) == nullptr ||
       DSA_get0_g(dsa) == nullptr) {
     return 1;
@@ -176,8 +177,8 @@ static int dup_bn_into(BIGNUM **out, BIGNUM *src) {
 }
 
 static int dsa_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
-  DSA *to_dsa = reinterpret_cast<DSA *>(to->pkey);
-  const DSA *from_dsa = reinterpret_cast<const DSA *>(from->pkey);
+  DSAImpl *to_dsa = reinterpret_cast<DSAImpl *>(to->pkey);
+  const DSAImpl *from_dsa = reinterpret_cast<const DSAImpl *>(from->pkey);
   if (!dup_bn_into(&to_dsa->p, from_dsa->p) ||
       !dup_bn_into(&to_dsa->q, from_dsa->q) ||
       !dup_bn_into(&to_dsa->g, from_dsa->g)) {
@@ -188,16 +189,16 @@ static int dsa_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
 }
 
 static bool dsa_equal_parameters(const EVP_PKEY *a, const EVP_PKEY *b) {
-  const DSA *a_dsa = reinterpret_cast<const DSA *>(a->pkey);
-  const DSA *b_dsa = reinterpret_cast<const DSA *>(b->pkey);
+  const DSAImpl *a_dsa = reinterpret_cast<const DSAImpl *>(a->pkey);
+  const DSAImpl *b_dsa = reinterpret_cast<const DSAImpl *>(b->pkey);
   return BN_cmp(DSA_get0_p(a_dsa), DSA_get0_p(b_dsa)) == 0 &&
          BN_cmp(DSA_get0_q(a_dsa), DSA_get0_q(b_dsa)) == 0 &&
          BN_cmp(DSA_get0_g(a_dsa), DSA_get0_g(b_dsa)) == 0;
 }
 
 static bool dsa_pub_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
-  const DSA *a_dsa = reinterpret_cast<const DSA *>(a->pkey);
-  const DSA *b_dsa = reinterpret_cast<const DSA *>(b->pkey);
+  const DSAImpl *a_dsa = reinterpret_cast<const DSAImpl *>(a->pkey);
+  const DSAImpl *b_dsa = reinterpret_cast<const DSAImpl *>(b->pkey);
   return BN_cmp(DSA_get0_pub_key(b_dsa), DSA_get0_pub_key(a_dsa)) == 0;
 }
 
@@ -212,7 +213,7 @@ static bool dsa_priv_present(const EVP_PKEY *pk) {
 }
 
 static void int_dsa_free(EVP_PKEY *pkey) {
-  DSA_free(reinterpret_cast<DSA *>(pkey->pkey));
+  DSA_free(reinterpret_cast<DSAImpl *>(pkey->pkey));
   pkey->pkey = nullptr;
 }
 

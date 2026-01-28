@@ -20,7 +20,16 @@
 #include "../internal.h"
 
 
-struct dsa_st {
+DECLARE_OPAQUE_STRUCT(dsa_st, DSAImpl)
+
+BSSL_NAMESPACE_BEGIN
+
+class DSAImpl : public dsa_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
+
+  ~DSAImpl();
+
   BIGNUM *p;
   BIGNUM *q;
   BIGNUM *g;
@@ -36,11 +45,9 @@ struct dsa_st {
   CRYPTO_EX_DATA ex_data;
 };
 
-BSSL_NAMESPACE_BEGIN
-
 // dsa_check_key performs cheap self-checks on |dsa|, and ensures it is within
 // DoS bounds. It returns one on success and zero on error.
-int dsa_check_key(const DSA *dsa);
+int dsa_check_key(const DSAImpl *dsa);
 
 BSSL_NAMESPACE_END
 
