@@ -5996,7 +5996,6 @@ TEST(X509Test, Print) {
   size_t data_len;
   ASSERT_TRUE(BIO_mem_contents(bio.get(), &data, &data_len));
   auto print = BytesAsStringView(Span(data, data_len));
-  // Note that the expected output contains trailing whitespace.
   EXPECT_EQ(print, R"(Certificate:
     Data:
         Version: 3 (0x2)
@@ -6025,13 +6024,13 @@ TEST(X509Test, Print) {
         X509v3 extensions:
             X509v3 Key Usage: critical
                 Digital Signature, Key Encipherment
-            X509v3 Extended Key Usage: 
+            X509v3 Extended Key Usage:
                 TLS Web Server Authentication, TLS Web Client Authentication
             X509v3 Basic Constraints: critical
                 CA:FALSE
-            X509v3 Subject Key Identifier: 
+            X509v3 Subject Key Identifier:
                 A3:79:A6:F6:EE:AF:B9:A5:5E:37:8C:11:80:34:E2:75
-            X509v3 Authority Key Identifier: 
+            X509v3 Authority Key Identifier:
                 keyid:8C:1A:68:A8:B5:76:DB:5D:57:7B:1F:8D:14:B2:06:A3
 
     Signature Algorithm: sha256WithRSAEncryption
