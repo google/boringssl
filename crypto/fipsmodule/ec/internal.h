@@ -584,7 +584,12 @@ struct ec_group_st {
   // comment is a human-readable string describing the curve.
   const char *comment;
 
-  int curve_name;  // optional NID for named curve
+  // curve_name is the optional NID for named curve.
+  //
+  // If curve_name is NID_undef, the actual type is ECCustomGroup and the
+  // refcount must be respected when allocating/freeing.
+  int curve_name;
+
   uint8_t oid[9];
   uint8_t oid_len;
 
@@ -598,11 +603,18 @@ struct ec_group_st {
   // field_greater_than_order is one if |field| is greater than |order| and zero
   // otherwise.
   int field_greater_than_order;
-
-  bssl::CRYPTO_refcount_t references;
 } /* EC_GROUP */;
 
 BSSL_NAMESPACE_BEGIN
+
+class ECCustomGroup : public ec_group_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
+
+  ~ECCustomGroup();
+
+  bssl::CRYPTO_refcount_t references;
+};
 
 EC_GROUP *ec_group_new(const EC_METHOD *meth, const BIGNUM *p, const BIGNUM *a,
                        const BIGNUM *b, BN_CTX *ctx);
@@ -706,8 +718,7 @@ class OPENSSL_EXPORT ECKey : public ec_key_st {
  public:
   static constexpr bool kAllowUniquePtr = true;
 
-  // Used by ec_test.cc.
-  OPENSSL_EXPORT ~ECKey();
+  ~ECKey();
 
   EC_GROUP *group;
 
