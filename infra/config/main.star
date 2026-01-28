@@ -232,6 +232,12 @@ luci.cq_tryjob_verifier(
     ],
 )
 
+def compile_only(properties):
+    compile_properties = dict(properties)
+    compile_properties["run_unit_tests"] = False
+    compile_properties["run_ssl_tests"] = False
+    return compile_properties
+
 def both_builders(
         name,
         host,
@@ -280,17 +286,13 @@ def both_builders(
         properties = properties,
     )
     if cq_compile_only:
-        compile_properties = dict(properties)
-        compile_properties["run_unit_tests"] = False
-        compile_properties["run_ssl_tests"] = False
         cq_builder(
             name + "_compile",
             cq_compile_only,
             recipe = recipe,
             cq_enabled = cq_enabled,
             execution_timeout = execution_timeout,
-            properties = compile_properties,
-        )
+            properties = compile_only(properties))
 
 LINUX_HOST = {
     "dimensions": {
@@ -527,16 +529,14 @@ both_builders(
     LINUX_HOST,
     category = "android|riscv64",
     short_name = "rel",
-    properties = {
+    properties = compile_only({
         "android": True,
         "cmake_args": {
             "ANDROID_ABI": "riscv64",
             "ANDROID_PLATFORM": "android-35",
             "CMAKE_BUILD_TYPE": "Release",
         },
-        "run_unit_tests": False,
-        "run_ssl_tests": False,
-    },
+    }),
 )
 
 both_builders("docs", LINUX_HOST, recipe = "boringssl_docs", short_name = "doc")
@@ -549,14 +549,12 @@ both_builders(
     MAC_X86_64_HOST,
     category = "ios",
     short_name = "64",
-    properties = {
+    properties = compile_only({
         "cmake_args": {
             "CMAKE_OSX_ARCHITECTURES": "arm64",
             "CMAKE_OSX_SYSROOT": "iphoneos",
         },
-        "run_unit_tests": False,
-        "run_ssl_tests": False,
-    },
+    }),
 )
 both_builders(
     "linux",
@@ -996,6 +994,21 @@ both_builders(
         "sde": True,
     },
 )
+cq_builder(
+    "win32_shared_compile",
+    WIN_HOST,
+    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
+    # category = "win|x86",
+    # short_name = "sh",
+    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    cq_enabled = False,
+    properties = compile_only({
+        "msvc_target": "x86",
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+    }),
+)
 both_builders(
     "win32_small",
     WIN_HOST,
@@ -1077,6 +1090,21 @@ both_builders(
         "sde": True,
     },
 )
+cq_builder(
+    "win64_shared_compile",
+    WIN_HOST,
+    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
+    # category = "win|x64",
+    # short_name = "sh",
+    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    cq_enabled = False,
+    properties = compile_only({
+        "msvc_target": "x64",
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+    }),
+)
 both_builders(
     "win64_small",
     WIN_HOST,
@@ -1112,7 +1140,7 @@ both_builders(
     WIN_HOST,
     category = "win|arm64",
     short_name = "clang",
-    properties = {
+    properties = compile_only({
         "clang": True,
         "cmake_args": {
             # Clang doesn't pick up arm64 from msvc_target. Specify it as a
@@ -1127,9 +1155,7 @@ both_builders(
             "checkout_nasm": False,
         },
         "msvc_target": "arm64",
-        "run_unit_tests": False,
-        "run_ssl_tests": False,
-    },
+    }),
 )
 
 both_builders(
@@ -1137,7 +1163,7 @@ both_builders(
     WIN_HOST,
     category = "win|arm64",
     short_name = "msvc",
-    properties = {
+    properties = compile_only({
         "cmake_args": {
             # This is a cross-compile, so CMake needs to be told the processor.
             # MSVC will pick up the architecture from msvc_target.
@@ -1150,7 +1176,5 @@ both_builders(
             "checkout_nasm": False,
         },
         "msvc_target": "arm64",
-        "run_unit_tests": False,
-        "run_ssl_tests": False,
-    },
+    }),
 )
