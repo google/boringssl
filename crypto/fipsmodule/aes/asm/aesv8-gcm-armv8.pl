@@ -245,8 +245,8 @@ die "can't locate arm-xlate.pl";
 open OUT, "|-", $^X, $xlate, $flavour, $output;
 *STDOUT=*OUT;
 
-# Converts an EOR3 pseudo-instruction into the corresponding into either the
-# raw EOR3 encoding or into two EOR2 instructions.
+# Converts an EOR3 pseudo-instruction into either the raw EOR3 encoding or into
+# two EOR2 instructions.
 sub process_eor3_match {
     my ($vd_str, $vn_str, $vm_str, $va_str, $is_eor3) = @_;
 
