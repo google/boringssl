@@ -149,6 +149,37 @@ impl PublicKey {
             Err(InvalidSignatureError)
         }
     }
+
+    /// Verify that `signature` is a valid RSA-PSS signature of a digest of
+    /// `signed_msg`, by this public key. The specified hash function is used
+    /// to compute the digest and for MGF1. The salt length is set to be equal
+    /// to the digest length.
+    pub fn verify_pss<Hash: digest::Algorithm>(
+        &self,
+        signed_msg: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignatureError> {
+        let digest = Hash::hash_to_vec(signed_msg);
+        let hash_ptr = Hash::get_md(sealed::SealedType).as_ptr();
+        let result = unsafe {
+            bssl_sys::RSA_verify_pss_mgf1(
+                self.0,
+                digest.as_slice().as_ffi_ptr(),
+                digest.len(),
+                hash_ptr,
+                hash_ptr,
+                // Hard-coded as the use of RSA_PSS_SALTLEN_AUTO is discouraged.
+                bssl_sys::RSA_PSS_SALTLEN_DIGEST,
+                signature.as_ffi_ptr(),
+                signature.len(),
+            )
+        };
+        if result == 1 {
+            Ok(())
+        } else {
+            Err(InvalidSignatureError)
+        }
+    }
 }
 
 // Safety:
@@ -296,6 +327,36 @@ impl PrivateKey {
         }
     }
 
+    /// Compute the signature of the digest of `to_be_signed` with RSASSA-PSS
+    /// using this private key. The specified hash function is used to compute
+    /// the digest and for MGF1. The salt length is set to be equal to the
+    /// digest length.
+    pub fn sign_pss<Hash: digest::Algorithm>(&self, to_be_signed: &[u8]) -> Vec<u8> {
+        let digest = Hash::hash_to_vec(to_be_signed);
+        let hash_ptr = Hash::get_md(sealed::SealedType).as_ptr();
+        let max_output = unsafe { bssl_sys::RSA_size(self.0) } as usize;
+
+        unsafe {
+            with_output_vec(max_output, |out_buf| {
+                let mut out_len: usize = 0;
+                let result = bssl_sys::RSA_sign_pss_mgf1(
+                    self.0,
+                    &mut out_len,
+                    out_buf,
+                    max_output,
+                    digest.as_slice().as_ffi_ptr(),
+                    digest.len(),
+                    hash_ptr,
+                    hash_ptr,
+                    bssl_sys::RSA_PSS_SALTLEN_DIGEST,
+                );
+                assert_eq!(1, result);
+                assert!(out_len <= max_output);
+                out_len
+            })
+        }
+    }
+
     /// Return the public key corresponding to this private key.
     pub fn as_public(&self) -> PublicKey {
         // Safety: `self.0` is valid by construction and `RSA_up_ref` means
@@ -327,13 +388,24 @@ mod test {
     use super::*;
 
     #[test]
-    fn sign_and_verify() {
+    fn sign_and_verify_pkcs1() {
         let key = PrivateKey::from_der_private_key_info(TEST_PKCS8_BYTES).unwrap();
         let signed_msg = b"hello world";
         let sig = key.sign_pkcs1::<digest::Sha256>(signed_msg);
         assert!(key
             .as_public()
             .verify_pkcs1::<digest::Sha256>(signed_msg, &sig)
+            .is_ok());
+    }
+
+    #[test]
+    fn sign_and_verify_pss() {
+        let key = PrivateKey::from_der_private_key_info(TEST_PKCS8_BYTES).unwrap();
+        let signed_msg = b"hello world";
+        let sig = key.sign_pss::<digest::Sha384>(signed_msg);
+        assert!(key
+            .as_public()
+            .verify_pss::<digest::Sha384>(signed_msg, &sig)
             .is_ok());
     }
 
