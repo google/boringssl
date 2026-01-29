@@ -148,6 +148,10 @@ static void FrozenTimeCallback(const SSL *ssl, timeval *out_clock) {
   out_clock->tv_usec = 0;
 }
 
+static ssl_verify_result_t AcceptAnyCertificate(SSL *ssl, uint8_t *out_alert) {
+  return ssl_verify_ok;
+}
+
 static const CipherTest kCipherTests[] = {
     // Selecting individual ciphers should work.
     {
@@ -2212,6 +2216,8 @@ TEST(SSLTest, SetGroupIdsWithFlags_DefaultGroups) {
   ASSERT_TRUE(server_ctx);
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   ASSERT_TRUE(client_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
   bssl::UniquePtr<SSL> client, server;
   CreateClientAndServer(&client, &server, client_ctx.get(), server_ctx.get());
 
@@ -2583,6 +2589,8 @@ TEST(SSLTest, ECHClientRandomsMatch) {
 
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   ASSERT_TRUE(client_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
                                     server_ctx.get()));
@@ -2947,6 +2955,8 @@ TEST(SSLTest, ECHThreads) {
 
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   ASSERT_TRUE(client_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
                                     server_ctx.get()));
@@ -2979,6 +2989,8 @@ TEST(SSLTest, TLS13ExporterAvailability) {
   // Configure only TLS 1.3.
   ASSERT_TRUE(SSL_CTX_set_min_proto_version(client_ctx.get(), TLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), TLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
@@ -3194,6 +3206,8 @@ class SSLVersionTest : public ::testing::TestWithParam<VersionParam> {
     ASSERT_TRUE(key_);
     client_ctx_ = CreateContext();
     ASSERT_TRUE(client_ctx_);
+    SSL_CTX_set_custom_verify(client_ctx_.get(), SSL_VERIFY_PEER,
+                              AcceptAnyCertificate);
     server_ctx_ = CreateContext();
     ASSERT_TRUE(server_ctx_);
     // Set up a server cert. Client certs can be set up explicitly.
@@ -3719,6 +3733,8 @@ TEST(SSLTest, WriteAfterWrongVersionOnEarlyData) {
   SSL_CTX_set_early_data_enabled(server_ctx.get(), 1);
   SSL_CTX_set_session_cache_mode(client_ctx.get(), SSL_SESS_CACHE_BOTH);
   SSL_CTX_set_session_cache_mode(server_ctx.get(), SSL_SESS_CACHE_BOTH);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   // Get an early-data-capable session.
   bssl::UniquePtr<SSL_SESSION> session =
@@ -3777,6 +3793,8 @@ TEST(SSLTest, SessionDuplication) {
       CreateContextWithTestCertificate(TLS_method());
   ASSERT_TRUE(client_ctx);
   ASSERT_TRUE(server_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, client_ctx.get(),
@@ -4566,6 +4584,8 @@ TEST(SSLTest, EarlyCallbackVersionSwitch) {
   ASSERT_TRUE(client_ctx);
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), TLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), TLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   SSL_CTX_set_select_certificate_cb(
       server_ctx.get(),
@@ -5421,6 +5441,7 @@ TEST(SSLTest, OverrideKeyMethodWithKey) {
   bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
   ASSERT_TRUE(ctx);
   ASSERT_TRUE(SSL_CTX_use_certificate(ctx.get(), leaf.get()));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   // Configuring an |SSL_PRIVATE_KEY_METHOD| and then overwriting it with an
   // |EVP_PKEY| should clear the |SSL_PRIVATE_KEY_METHOD|.
@@ -5454,6 +5475,7 @@ TEST(SSLTest, OverrideChain) {
   ASSERT_TRUE(ctx);
   ASSERT_TRUE(SSL_CTX_use_certificate(ctx.get(), leaf.get()));
   ASSERT_TRUE(SSL_CTX_use_PrivateKey(ctx.get(), key.get()));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   // Configure one chain, then replace it with another. Note this API considers
   // the chain to exclude the leaf.
@@ -5488,6 +5510,7 @@ TEST(SSLTest, OverrideChainAndKey) {
   certs = {leaf2.get()};
   ASSERT_TRUE(SSL_CTX_set_chain_and_key(ctx.get(), certs.data(), certs.size(),
                                         key2.get(), nullptr));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, ctx.get(), ctx.get()));
@@ -5516,12 +5539,16 @@ TEST(SSLTest, CredentialChains) {
   std::vector<CRYPTO_BUFFER *> wrong_chain = {leaf.get(), leaf.get(),
                                               leaf.get()};
 
-  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
-  ASSERT_TRUE(ctx);
+  bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(client_ctx);
+  bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(server_ctx);
   bssl::UniquePtr<SSL_CREDENTIAL> cred(SSL_CREDENTIAL_new_x509());
   ASSERT_TRUE(cred);
   bssl::UniquePtr<SSL_CREDENTIAL> cred2(SSL_CREDENTIAL_new_x509());
   ASSERT_TRUE(cred2);
+
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   // Configure one chain (including the leaf), then replace it with another.
   ASSERT_TRUE(SSL_CREDENTIAL_set1_cert_chain(cred.get(), wrong_chain.data(),
@@ -5557,13 +5584,13 @@ TEST(SSLTest, CredentialChains) {
   ASSERT_TRUE(SSL_CREDENTIAL_set1_private_key(cred2.get(), testkey.get()));
   SSL_CREDENTIAL_set_must_match_issuer(cred.get(), 1);
   SSL_CREDENTIAL_set_must_match_issuer(cred2.get(), 1);
-  ASSERT_TRUE(SSL_CTX_add1_credential(ctx.get(), cred.get()));
-  ASSERT_TRUE(SSL_CTX_add1_credential(ctx.get(), cred2.get()));
+  ASSERT_TRUE(SSL_CTX_add1_credential(server_ctx.get(), cred.get()));
+  ASSERT_TRUE(SSL_CTX_add1_credential(server_ctx.get(), cred2.get()));
 
   bssl::UniquePtr<SSL> client, server;
 
   // With no CA requested by client, we should fail with only cred1 and cred2
-  ASSERT_FALSE(ConnectClientAndServer(&client, &server, ctx.get(), ctx.get()));
+  ASSERT_FALSE(ConnectClientAndServer(&client, &server, client_ctx.get(), server_ctx.get()));
 
   // Have the client request a bogus name that will not match
   bssl::UniquePtr<CRYPTO_BUFFER> bogus_subject = GetBogusIssuerBuffer();
@@ -5577,8 +5604,8 @@ TEST(SSLTest, CredentialChains) {
   bogus_subject_config.ca_names = bogus_subjects.get();
   bogus_subjects.release();
   // A bogus issuer that does not match should fail
-  ASSERT_FALSE(ConnectClientAndServer(&client2, &server2, ctx.get(), ctx.get(),
-                                      bogus_subject_config));
+  ASSERT_FALSE(ConnectClientAndServer(&client2, &server2, client_ctx.get(),
+                                      server_ctx.get(), bogus_subject_config));
 
   // Have the client request the name of the chain ca.
   bssl::UniquePtr<CRYPTO_BUFFER> chain_subject =
@@ -5593,8 +5620,8 @@ TEST(SSLTest, CredentialChains) {
   chain_subject_config.ca_names = chain_subjects.get();
   chain_subjects.release();
   // If we ask for the chain ca subject, we should get it
-  ASSERT_TRUE(ConnectClientAndServer(&client3, &server3, ctx.get(), ctx.get(),
-                                     chain_subject_config));
+  ASSERT_TRUE(ConnectClientAndServer(&client3, &server3, client_ctx.get(),
+                                     server_ctx.get(), chain_subject_config));
   EXPECT_TRUE(BuffersEqual(SSL_get0_peer_certificates(client3.get()),
                            {leaf.get(), ca.get()}));
 
@@ -5610,8 +5637,8 @@ TEST(SSLTest, CredentialChains) {
   test_subject_config.ca_names = test_subjects.get();
   test_subjects.release();
   // If we ask for the test ca subject, we should get it
-  ASSERT_TRUE(ConnectClientAndServer(&client4, &server4, ctx.get(), ctx.get(),
-                                     test_subject_config));
+  ASSERT_TRUE(ConnectClientAndServer(&client4, &server4, client_ctx.get(),
+                                     server_ctx.get(), test_subject_config));
   EXPECT_TRUE(BuffersEqual(SSL_get0_peer_certificates(client4.get()),
                            {testcert.get()}));
 
@@ -5621,11 +5648,12 @@ TEST(SSLTest, CredentialChains) {
   ASSERT_TRUE(
       SSL_CREDENTIAL_set1_cert_chain(cred3.get(), chain.data(), chain.size()));
   ASSERT_TRUE(SSL_CREDENTIAL_set1_private_key(cred3.get(), key.get()));
-  ASSERT_TRUE(SSL_CTX_add1_credential(ctx.get(), cred3.get()));
+  ASSERT_TRUE(SSL_CTX_add1_credential(server_ctx.get(), cred3.get()));
 
   // With no CA sent, we should now succeed.
   bssl::UniquePtr<SSL> client5, server5;
-  ASSERT_TRUE(ConnectClientAndServer(&client5, &server5, ctx.get(), ctx.get()));
+  ASSERT_TRUE(ConnectClientAndServer(&client5, &server5, client_ctx.get(),
+                                     server_ctx.get()));
   EXPECT_TRUE(BuffersEqual(SSL_get0_peer_certificates(client5.get()),
                            {leaf.get(), ca.get()}));
 }
@@ -6112,6 +6140,8 @@ TEST_P(TicketAEADMethodTest, Resume) {
   ASSERT_TRUE(server_ctx);
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   ASSERT_TRUE(client_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   const uint16_t version = testing::get<0>(GetParam());
   const unsigned retry_count = testing::get<1>(GetParam());
@@ -6394,6 +6424,7 @@ TEST(SSLTest, ShutdownIgnoresTickets) {
   ASSERT_TRUE(ctx);
   ASSERT_TRUE(SSL_CTX_set_min_proto_version(ctx.get(), TLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(ctx.get(), TLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   SSL_CTX_set_session_cache_mode(ctx.get(), SSL_SESS_CACHE_BOTH);
 
@@ -6487,6 +6518,8 @@ TEST(SSLTest, CertCompression) {
       client_ctx.get(), 0x1234, XORCompressFunc, XORDecompressFunc));
   ASSERT_TRUE(SSL_CTX_add_cert_compression_alg(
       server_ctx.get(), 0x1234, XORCompressFunc, XORDecompressFunc));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, client_ctx.get(),
@@ -6534,6 +6567,8 @@ void VerifyHandoff(bool use_new_alps_codepoint) {
   uint8_t keys[48];
   SSL_CTX_get_tlsext_ticket_keys(server_ctx.get(), &keys, sizeof(keys));
   SSL_CTX_set_tlsext_ticket_keys(handshaker_ctx.get(), &keys, sizeof(keys));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   for (bool early_data : {false, true}) {
     SCOPED_TRACE(early_data);
@@ -6671,6 +6706,8 @@ TEST(SSLTest, HandoffDeclined) {
 
   SSL_CTX_set_handoff_mode(server_ctx.get(), true);
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), TLS1_2_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
@@ -6937,6 +6974,8 @@ TEST(SSLTest, ZeroSizedWiteFlushesHandshakeMessages) {
   ASSERT_TRUE(client_ctx);
   EXPECT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), TLS1_3_VERSION));
   EXPECT_TRUE(SSL_CTX_set_min_proto_version(client_ctx.get(), TLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, client_ctx.get(),
@@ -7567,6 +7606,8 @@ class QUICMethodTest : public testing::Test {
     SSL_CTX_set_max_proto_version(server_ctx_.get(), TLS1_3_VERSION);
     SSL_CTX_set_min_proto_version(client_ctx_.get(), TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(client_ctx_.get(), TLS1_3_VERSION);
+    SSL_CTX_set_custom_verify(client_ctx_.get(), SSL_VERIFY_PEER,
+                              AcceptAnyCertificate);
 
     static const uint8_t kALPNProtos[] = {0x03, 'f', 'o', 'o'};
     ASSERT_EQ(SSL_CTX_set_alpn_protos(client_ctx_.get(), kALPNProtos,
@@ -8528,6 +8569,8 @@ TEST_F(QUICMethodTest, ForbidCrossProtocolResumptionServer) {
   // Attempt a resumption with g_last_session using TLS_method.
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   ASSERT_TRUE(client_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   ASSERT_TRUE(SSL_CTX_set_quic_method(server_ctx_.get(), nullptr));
 
@@ -8970,6 +9013,7 @@ TEST(SSLTest, WriteWhileExplicitRenegotiate) {
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(ctx.get(), TLS1_2_VERSION));
   ASSERT_TRUE(SSL_CTX_set_strict_cipher_list(
       ctx.get(), "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(CreateClientAndServer(&client, &server, ctx.get(), ctx.get()));
@@ -9047,6 +9091,7 @@ TEST(SSLTest, ConnectionPropertiesDuringRenegotiate) {
       ctx.get(), "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"));
   ASSERT_TRUE(SSL_CTX_set1_groups_list(ctx.get(), "X25519"));
   ASSERT_TRUE(SSL_CTX_set1_sigalgs_list(ctx.get(), "rsa_pkcs1_sha256"));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   // Connect a client and server that accept renegotiation.
   bssl::UniquePtr<SSL> client, server;
@@ -9097,6 +9142,8 @@ TEST(SSLTest, CopyWithoutEarlyData) {
   SSL_CTX_set_session_cache_mode(server_ctx.get(), SSL_SESS_CACHE_BOTH);
   SSL_CTX_set_early_data_enabled(client_ctx.get(), 1);
   SSL_CTX_set_early_data_enabled(server_ctx.get(), 1);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL_SESSION> session =
       CreateClientSession(client_ctx.get(), server_ctx.get());
@@ -9144,6 +9191,8 @@ TEST(SSLTest, ProcessTLS13NewSessionTicket) {
   ASSERT_TRUE(SSL_CTX_set_min_proto_version(server_ctx.get(), TLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), TLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), TLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, client_ctx.get(),
@@ -9201,6 +9250,8 @@ TEST(SSLTest, BIO) {
       CreateContextWithTestCertificate(TLS_method()));
   ASSERT_TRUE(client_ctx);
   ASSERT_TRUE(server_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   for (bool take_ownership : {true, false}) {
     // For simplicity, get the handshake out of the way first.
@@ -9257,6 +9308,7 @@ TEST(SSLTest, ALPNConfig) {
   ASSERT_TRUE(key);
   ASSERT_TRUE(SSL_CTX_use_certificate(ctx.get(), cert.get()));
   ASSERT_TRUE(SSL_CTX_use_PrivateKey(ctx.get(), key.get()));
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   // Set up some machinery to check the configured ALPN against what is actually
   // sent over the wire. Note that the ALPN callback is only called when the
@@ -9307,6 +9359,8 @@ class AlpsNewCodepointTest : public testing::Test {
     server_ctx_ = CreateContextWithTestCertificate(TLS_method());
     ASSERT_TRUE(client_ctx_);
     ASSERT_TRUE(server_ctx_);
+    SSL_CTX_set_custom_verify(client_ctx_.get(), SSL_VERIFY_PEER,
+                              AcceptAnyCertificate);
   }
 
   void SetUpApplicationSetting() {
@@ -9479,6 +9533,8 @@ TEST(SSLTest, CanReleasePrivateKey) {
       CreateContextWithTestCertificate(TLS_method());
   ASSERT_TRUE(client_ctx);
   SSL_CTX_set_session_cache_mode(client_ctx.get(), SSL_SESS_CACHE_BOTH);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   // Note this assumes the transport buffer is large enough to fit the client
   // and server first flights. We check this with |SSL_ERROR_WANT_READ|. If the
@@ -9817,6 +9873,8 @@ TEST(SSLTest, NumTickets) {
   ASSERT_TRUE(SSL_CTX_use_PrivateKey(server_ctx.get(), key.get()));
   SSL_CTX_set_session_cache_mode(server_ctx.get(), SSL_SESS_CACHE_BOTH);
 
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
   SSL_CTX_set_session_cache_mode(client_ctx.get(), SSL_SESS_CACHE_BOTH);
   static size_t ticket_count;
   SSL_CTX_sess_set_new_cb(client_ctx.get(), [](SSL *, SSL_SESSION *) -> int {
@@ -10232,6 +10290,8 @@ TEST(SSLTest, EmptyWriteBlockedOnHandshakeData) {
   // Configure only TLS 1.3. This test requires post-handshake NewSessionTicket.
   ASSERT_TRUE(SSL_CTX_set_min_proto_version(client_ctx.get(), TLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), TLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   // Connect a client and server with tiny buffer between the two.
   bssl::UniquePtr<SSL> client(SSL_new(client_ctx.get())),
@@ -10305,6 +10365,8 @@ TEST(SSLTest, ErrorSyscallAfterCloseNotify) {
       CreateContextWithTestCertificate(TLS_method());
   ASSERT_TRUE(client_ctx);
   ASSERT_TRUE(server_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, client_ctx.get(),
                                      server_ctx.get()));
@@ -10370,6 +10432,8 @@ TEST(SSLTest, QuietShutdown) {
       CreateContextWithTestCertificate(TLS_method());
   ASSERT_TRUE(client_ctx);
   ASSERT_TRUE(server_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
   SSL_CTX_set_quiet_shutdown(server_ctx.get(), 1);
   bssl::UniquePtr<SSL> client, server;
   ASSERT_TRUE(ConnectClientAndServer(&client, &server, client_ctx.get(),
@@ -10767,6 +10831,8 @@ TEST(SSLTest, EarlyDataVersionMismatch) {
   SSL_CTX_set_early_data_enabled(server_ctx.get(), 1);
   SSL_CTX_set_session_cache_mode(client_ctx.get(), SSL_SESS_CACHE_BOTH);
   SSL_CTX_set_session_cache_mode(server_ctx.get(), SSL_SESS_CACHE_BOTH);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL_SESSION> session =
       CreateClientSession(client_ctx.get(), server_ctx.get());
@@ -10833,6 +10899,8 @@ TEST(SSLTest, EarlyDataDisabledInDTLS13) {
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), DTLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_min_proto_version(server_ctx.get(), DTLS1_3_VERSION));
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), DTLS1_3_VERSION));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
 
   bssl::UniquePtr<SSL_SESSION> session =
       CreateClientSession(client_ctx.get(), server_ctx.get());
@@ -10846,6 +10914,7 @@ TEST(SSLTest, IDOnlyTLS13Session) {
   ASSERT_TRUE(ctx);
   SSL_CTX_set_session_cache_mode(ctx.get(),
                                  SSL_SESS_CACHE_CLIENT | SSL_SESS_CACHE_SERVER);
+  SSL_CTX_set_custom_verify(ctx.get(), SSL_VERIFY_PEER, AcceptAnyCertificate);
 
   ASSERT_TRUE(SSL_CTX_set_max_proto_version(ctx.get(), TLS1_3_VERSION));
   bssl::UniquePtr<SSL_SESSION> session =
