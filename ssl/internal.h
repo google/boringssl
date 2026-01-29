@@ -1256,11 +1256,10 @@ bool tls13_derive_session_psk(SSL_SESSION *session, Span<const uint8_t> nonce,
 
 // tls13_write_psk_binder calculates the PSK binder value over |transcript| and
 // |msg|, and replaces the last bytes of |msg| with the resulting value. It
-// returns true on success, and false on failure. If |out_binder_len| is
-// non-NULL, it sets |*out_binder_len| to the length of the value computed.
+// returns true on success, and false on failure. |msg| should contain the body
+// of a ClientHello, but not the message header.
 bool tls13_write_psk_binder(const SSL_HANDSHAKE *hs,
-                            const SSLTranscript &transcript, Span<uint8_t> msg,
-                            size_t *out_binder_len);
+                            const SSLTranscript &transcript, Span<uint8_t> msg);
 
 // tls13_verify_psk_binder verifies that the handshake transcript, truncated up
 // to the binders has a valid signature using the value of |session|'s
@@ -3626,18 +3625,12 @@ bool tls1_get_shared_group(SSL_HANDSHAKE *hs, uint16_t *out_group_id);
 // ssl_add_clienthello_tlsext writes ClientHello extensions to |out| for |type|.
 // It returns true on success and false on failure. |out| must currently contain
 // a ClientHello message, not including the message and record header. (Its
-// current length will be used to compute padding.)
+// contents will be used to compute padding and PSK binders.)
 //
 // If |type| is |ssl_client_hello_inner|, this function also writes the
 // compressed extensions to |out_encoded|. Otherwise, |out_encoded| should be
 // nullptr.
-//
-// On success, the function sets |*out_needs_psk_binder| to whether the last
-// ClientHello extension was the pre_shared_key extension and needs a PSK binder
-// filled in. The caller should then update |out| and, if applicable,
-// |out_encoded| with the binder after completing the whole message.
 bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
-                                bool *out_needs_psk_binder,
                                 ssl_client_hello_type_t type);
 
 bool ssl_add_serverhello_tlsext(SSL_HANDSHAKE *hs, CBB *out);

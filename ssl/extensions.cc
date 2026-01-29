@@ -1914,26 +1914,37 @@ static size_t ext_pre_shared_key_clienthello_length(
   return 15 + ssl->session->ticket.size() + binder_len;
 }
 
+// ext_pre_shared_key_add_clienthello writes a pre_shared_key extension to
+// |out_extensions| and flushes |out_client_hello|, invalidating
+// |out_extensions|. |out_extensions| must be a child of |out_client_hello|.
+//
+// This function differs from other |CBB| functions because it needs to
+// accommodate PSK binders. It must write the PSK extension, flush the |CBB| to
+// write out a length prefix, and then finally sample the whole ClientHello.
 static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
-                                               CBB *out, bool *out_needs_binder,
+                                               CBB *out_client_hello,
+                                               CBB *out_extensions,
+                                               size_t *out_psk_len,
                                                ssl_client_hello_type_t type) {
   const SSL *const ssl = hs->ssl;
-  *out_needs_binder = false;
   if (!should_offer_psk(hs, type)) {
-    return true;
+    *out_psk_len = 0;
+    // Discard empty extensions blocks.
+    if (CBB_len(out_extensions) == 0) {
+      CBB_discard_child(out_client_hello);
+    }
+    return CBB_flush(out_client_hello);
   }
 
   OPENSSL_timeval now = ssl_ctx_get_current_time(ssl->ctx.get());
   uint32_t ticket_age = 1000 * (now.tv_sec - ssl->session->time);
   uint32_t obfuscated_ticket_age = ticket_age + ssl->session->ticket_age_add;
 
-  // Fill in a placeholder zero binder of the appropriate length. It will be
-  // computed and filled in later after length prefixes are computed.
   size_t binder_len = EVP_MD_size(ssl_session_get_digest(ssl->session.get()));
-
+  const size_t len_before = CBB_len(out_extensions);
   CBB contents, identity, ticket, binders, binder;
-  if (!CBB_add_u16(out, TLSEXT_TYPE_pre_shared_key) ||
-      !CBB_add_u16_length_prefixed(out, &contents) ||
+  if (!CBB_add_u16(out_extensions, TLSEXT_TYPE_pre_shared_key) ||
+      !CBB_add_u16_length_prefixed(out_extensions, &contents) ||
       !CBB_add_u16_length_prefixed(&contents, &identity) ||
       !CBB_add_u16_length_prefixed(&identity, &ticket) ||
       !CBB_add_bytes(&ticket, ssl->session->ticket.data(),
@@ -1941,12 +1952,24 @@ static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
       !CBB_add_u32(&identity, obfuscated_ticket_age) ||
       !CBB_add_u16_length_prefixed(&contents, &binders) ||
       !CBB_add_u8_length_prefixed(&binders, &binder) ||
-      !CBB_add_zeros(&binder, binder_len)) {
+      // Fill in a placeholder zero binder of the appropriate length. It will be
+      // computed and filled in later after length prefixes are computed.
+      !CBB_add_zeros(&binder, binder_len) ||  //
+      !CBB_flush(out_extensions)) {
+    return false;
+  }
+  // Sample the length of the PSK extension.
+  *out_psk_len = CBB_len(out_extensions) - len_before;
+
+  // Close |out_extensions| and fill in the binder.
+  const auto &transcript =
+      type == ssl_client_hello_inner ? hs->inner_transcript : hs->transcript;
+  if (!CBB_flush(out_client_hello) ||
+      !tls13_write_psk_binder(hs, transcript, CBBAsSpan(out_client_hello))) {
     return false;
   }
 
-  *out_needs_binder = true;
-  return CBB_flush(out);
+  return true;
 }
 
 bool ssl_ext_pre_shared_key_parse_serverhello(SSL_HANDSHAKE *hs,
@@ -3810,8 +3833,7 @@ static bool add_padding_extension(CBB *cbb, uint16_t ext, size_t len) {
 }
 
 static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
-                                             CBB *out_encoded,
-                                             bool *out_needs_psk_binder) {
+                                             CBB *out_encoded) {
   // When writing ClientHelloInner, we construct the real and encoded
   // ClientHellos concurrently, to handle compression. Uncompressed extensions
   // are written to |extensions| and copied to |extensions_encoded|. Compressed
@@ -3901,15 +3923,16 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
     }
   }
 
-  // The PSK extension must be last. It is never compressed. Note, if there is a
-  // binder, the caller will need to update both ClientHelloInner and
-  // EncodedClientHelloInner after computing it.
-  const size_t len_before = CBB_len(&extensions);
-  if (!ext_pre_shared_key_add_clienthello(hs, &extensions, out_needs_psk_binder,
-                                          ssl_client_hello_inner) ||
-      !CBB_add_bytes(&extensions_encoded, CBB_data(&extensions) + len_before,
-                     CBB_len(&extensions) - len_before) ||
-      !CBB_flush(out) ||  //
+  // The PSK extension must be last. It is never compressed.
+  size_t psk_len;
+  if (!ext_pre_shared_key_add_clienthello(hs, out, &extensions, &psk_len,
+                                          ssl_client_hello_inner)) {
+    return false;
+  }
+
+  // Copy the PSK extension to EncodedClientHelloInner.
+  auto psk = CBBAsSpan(out).last(psk_len);
+  if (!CBB_add_bytes(&extensions_encoded, psk.data(), psk.size()) ||
       !CBB_flush(out_encoded)) {
     return false;
   }
@@ -3918,18 +3941,14 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
 }
 
 bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
-                                bool *out_needs_psk_binder,
                                 ssl_client_hello_type_t type) {
-  *out_needs_psk_binder = false;
-
   // |out| must contain the start of a ClientHello, which means it must begin
   // with a TLS or DTLS version.
   assert(CBB_len(out) != 0 && (CBB_data(out)[0] == SSL3_VERSION_MAJOR ||
                                CBB_data(out)[0] == DTLS1_VERSION_MAJOR));
 
   if (type == ssl_client_hello_inner) {
-    return ssl_add_clienthello_tlsext_inner(hs, out, out_encoded,
-                                            out_needs_psk_binder);
+    return ssl_add_clienthello_tlsext_inner(hs, out, out_encoded);
   }
 
   // Sample the length of the ClientHello thus far, including the message
@@ -3988,10 +4007,10 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
   // In cleartext ClientHellos, we add the padding extension to work around
   // bugs. We also apply this padding to ClientHelloOuter, to keep the wire
   // images aligned.
-  size_t psk_extension_len = ext_pre_shared_key_clienthello_length(hs, type);
+  size_t psk_len = ext_pre_shared_key_clienthello_length(hs, type);
   if (!SSL_is_dtls(ssl) && !SSL_is_quic(ssl) &&
       !ssl->s3->used_hello_retry_request) {
-    msg_len += 2 /* length prefix */ + CBB_len(&extensions) + psk_extension_len;
+    msg_len += 2 /* length prefix */ + CBB_len(&extensions) + psk_len;
     // The length of the padding extension, excluding the four-byte extension
     // header.
     size_t padding_len = 0;
@@ -3999,7 +4018,7 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
     // The final extension must be non-empty. WebSphere Application
     // Server 7.0 is intolerant to the last extension being zero-length. See
     // https://crbug.com/363583.
-    if (last_was_empty && psk_extension_len == 0) {
+    if (last_was_empty && psk_len == 0) {
       padding_len = 1;
       // The addition of the padding extension may push us into the F5 bug.
       msg_len += 4 + padding_len;
@@ -4034,21 +4053,13 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
   }
 
   // The PSK extension must be last, including after the padding.
-  const size_t len_before = CBB_len(&extensions);
-  if (!ext_pre_shared_key_add_clienthello(hs, &extensions, out_needs_psk_binder,
+  size_t psk_len_actual;
+  if (!ext_pre_shared_key_add_clienthello(hs, out, &extensions, &psk_len_actual,
                                           type)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
-  assert(psk_extension_len == CBB_len(&extensions) - len_before);
-  (void)len_before;  // |assert| is omitted in release builds.
-
-  // Discard empty extensions blocks.
-  if (CBB_len(&extensions) == 0) {
-    CBB_discard_child(out);
-  }
-
-  return CBB_flush(out);
+  assert(psk_len_actual == psk_len);
+  return true;
 }
 
 bool ssl_add_serverhello_tlsext(SSL_HANDSHAKE *hs, CBB *out) {

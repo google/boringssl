@@ -510,6 +510,10 @@ static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
                              const SSLTranscript &transcript,
                              Span<const uint8_t> client_hello,
                              size_t binders_len, bool is_dtls) {
+  // |client_hello| should not include the message header and begin with a
+  // version number.
+  assert(!client_hello.empty() && (client_hello[0] == SSL3_VERSION_MAJOR ||
+                                   client_hello[0] == DTLS1_VERSION_MAJOR));
   const EVP_MD *digest = ssl_session_get_digest(session);
 
   // Compute the binder key.
@@ -534,38 +538,27 @@ static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
     return false;
   }
 
-  // Hash the transcript and truncated ClientHello.
-  if (client_hello.size() < binders_len) {
+  // Hash the transcript and truncated ClientHello. As part of this, construct
+  // the expected ClientHello header.
+  if (client_hello.size() < binders_len || client_hello.size() > 0xffffff) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
+  uint8_t header[4] = {
+      SSL3_MT_CLIENT_HELLO,
+      static_cast<uint8_t>(client_hello.size() >> 16),
+      static_cast<uint8_t>(client_hello.size() >> 8),
+      static_cast<uint8_t>(client_hello.size()),
+  };
   auto truncated = client_hello.subspan(0, client_hello.size() - binders_len);
   uint8_t context[EVP_MAX_MD_SIZE];
   unsigned context_len;
   ScopedEVP_MD_CTX ctx;
-  if (!is_dtls) {
-    if (!transcript.CopyToHashContext(ctx.get(), digest) ||
-        !EVP_DigestUpdate(ctx.get(), truncated.data(), truncated.size()) ||
-        !EVP_DigestFinal_ex(ctx.get(), context, &context_len)) {
-      return false;
-    }
-  } else {
-    // In DTLS 1.3, the transcript hash is computed over only the TLS 1.3
-    // handshake messages (i.e. only type and length in the header), not the
-    // full DTLSHandshake messages that are in |truncated|. This code pulls
-    // the header and body out of the truncated ClientHello and writes those
-    // to the hash context so the correct binder value is computed.
-    if (truncated.size() < DTLS1_HM_HEADER_LENGTH) {
-      return false;
-    }
-    auto header = truncated.first<4>();
-    auto body = truncated.subspan<12>();
-    if (!transcript.CopyToHashContext(ctx.get(), digest) ||
-        !EVP_DigestUpdate(ctx.get(), header.data(), header.size()) ||
-        !EVP_DigestUpdate(ctx.get(), body.data(), body.size()) ||
-        !EVP_DigestFinal_ex(ctx.get(), context, &context_len)) {
-      return false;
-    }
+  if (!transcript.CopyToHashContext(ctx.get(), digest) ||
+      !EVP_DigestUpdate(ctx.get(), header, sizeof(header)) ||
+      !EVP_DigestUpdate(ctx.get(), truncated.data(), truncated.size()) ||
+      !EVP_DigestFinal_ex(ctx.get(), context, &context_len)) {
+    return false;
   }
 
   if (!tls13_verify_data(out, out_len, digest, session->ssl_version, binder_key,
@@ -578,8 +571,8 @@ static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
 }
 
 bool tls13_write_psk_binder(const SSL_HANDSHAKE *hs,
-                            const SSLTranscript &transcript, Span<uint8_t> msg,
-                            size_t *out_binder_len) {
+                            const SSLTranscript &transcript,
+                            Span<uint8_t> msg) {
   const SSL *const ssl = hs->ssl;
   const EVP_MD *digest = ssl_session_get_digest(ssl->session.get());
   const size_t hash_len = EVP_MD_size(digest);
@@ -598,9 +591,6 @@ bool tls13_write_psk_binder(const SSL_HANDSHAKE *hs,
 
   auto msg_binder = msg.last(verify_data_len);
   OPENSSL_memcpy(msg_binder.data(), verify_data, verify_data_len);
-  if (out_binder_len != nullptr) {
-    *out_binder_len = verify_data_len;
-  }
   return true;
 }
 
@@ -614,7 +604,7 @@ bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
   // prefix removed. The caller is assumed to have parsed |msg|, extracted
   // |binders|, and verified the PSK extension is last.
   if (!tls13_psk_binder(verify_data, &verify_data_len, session, hs->transcript,
-                        msg.raw, 2 + CBS_len(binders), SSL_is_dtls(hs->ssl)) ||
+                        msg.body, 2 + CBS_len(binders), SSL_is_dtls(hs->ssl)) ||
       // We only consider the first PSK, so compare against the first binder.
       !CBS_get_u8_length_prefixed(binders, &binder)) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);

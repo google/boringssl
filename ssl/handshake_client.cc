@@ -223,27 +223,13 @@ bool ssl_add_client_hello(SSL_HANDSHAKE *hs) {
   ssl_client_hello_type_t type = hs->selected_ech_config
                                      ? ssl_client_hello_outer
                                      : ssl_client_hello_unencrypted;
-  bool needs_psk_binder;
   Array<uint8_t> msg;
   if (!ssl->method->init_message(ssl, cbb.get(), &body, SSL3_MT_CLIENT_HELLO) ||
       !ssl_write_client_hello_without_extensions(hs, &body, type,
                                                  /*empty_session_id=*/false) ||
-      !ssl_add_clienthello_tlsext(hs, &body, /*out_encoded=*/nullptr,
-                                  &needs_psk_binder, type) ||
+      !ssl_add_clienthello_tlsext(hs, &body, /*out_encoded=*/nullptr, type) ||
       !ssl->method->finish_message(ssl, cbb.get(), &msg)) {
     return false;
-  }
-
-  // Now that the length prefixes have been computed, fill in the placeholder
-  // PSK binder.
-  if (needs_psk_binder) {
-    // ClientHelloOuter cannot have a PSK binder. Otherwise the
-    // ClientHellOuterAAD computation would break.
-    assert(type != ssl_client_hello_outer);
-    if (!tls13_write_psk_binder(hs, hs->transcript, Span(msg),
-                                /*out_binder_len=*/nullptr)) {
-      return false;
-    }
   }
 
   return ssl->method->add_message(ssl, std::move(msg));
