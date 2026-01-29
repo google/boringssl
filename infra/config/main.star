@@ -965,6 +965,7 @@ cq_builder(
     cq_enabled = False,
     properties = compile_only({
         "clang": True,
+        "prefixed_symbols": True,
     }),
 )
 
