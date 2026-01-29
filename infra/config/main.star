@@ -633,7 +633,7 @@ cq_builder(
     MAC_X86_64_HOST,
     # TODO(crbug.com/42220000): Enable as both_builders once it's working.
     # category = "ios",
-    # short_name = "pfx64",
+    # short_name = "64pfx",
     # cq_compile_only = MAC_X86_64_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
     properties = compile_only({
@@ -1432,6 +1432,32 @@ both_builders(
         "msvc_target": "arm64",
     }),
 )
+cq_builder(
+    "win_arm64_prefixed_compile",
+    WIN_HOST,
+    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
+    # category = "win|arm64",
+    # short_name = "clangpfx",
+    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    cq_enabled = False,
+    properties = compile_only({
+        "clang": True,
+        "cmake_args": {
+            # Clang doesn't pick up arm64 from msvc_target. Specify it as a
+            # cross-compile.
+            "CMAKE_SYSTEM_NAME": "Windows",
+            "CMAKE_SYSTEM_PROCESSOR": "arm64",
+            "CMAKE_ASM_FLAGS": "--target=arm64-windows",
+            "CMAKE_C_FLAGS": "--target=arm64-windows",
+            "CMAKE_CXX_FLAGS": "--target=arm64-windows",
+        },
+        "gclient_vars": {
+            "checkout_nasm": False,
+        },
+        "msvc_target": "arm64",
+        "prefixed_symbols": True,
+    }),
+)
 
 both_builders(
     "win_arm64_msvc_compile",
@@ -1451,5 +1477,29 @@ both_builders(
             "checkout_nasm": False,
         },
         "msvc_target": "arm64",
+    }),
+)
+cq_builder(
+    "win_arm64_msvc_prefixed_compile",
+    WIN_HOST,
+    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
+    # category = "win|arm64",
+    # short_name = "msvcpfx",
+    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    cq_enabled = False,
+    properties = compile_only({
+        "cmake_args": {
+            # This is a cross-compile, so CMake needs to be told the processor.
+            # MSVC will pick up the architecture from msvc_target.
+            "CMAKE_SYSTEM_NAME": "Windows",
+            "CMAKE_SYSTEM_PROCESSOR": "arm64",
+            # We do not currently support Windows arm64 assembly with MSVC.
+            "OPENSSL_NO_ASM": "1",
+        },
+        "gclient_vars": {
+            "checkout_nasm": False,
+        },
+        "msvc_target": "arm64",
+        "prefixed_symbols": True,
     }),
 )
