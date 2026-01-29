@@ -453,13 +453,13 @@ both_builders(
     },
 )
 
-cq_builder(
+both_builders(
     "android_aarch64_prefixed_compile",
-    LINUX_HOST,  # WALLEYE_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "android|aarch64",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
+    LINUX_HOST,
+    category = "android|aarch64",
+    short_name = "pfx",
+    # Redundant with android_arm_prefixed_compile + mac_arm64_prefixed_compile.
+    # Thus, don't unnecessarily draw resources for it.
     cq_enabled = False,
     properties = compile_only({
         "android": True,
@@ -526,14 +526,11 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "android_arm_prefixed_compile",
-    LINUX_HOST,  # WALLEYE_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "android|thumb",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    LINUX_HOST,
+    category = "android|thumb",
+    short_name = "pfx",
     properties = compile_only({
         "android": True,
         "cmake_args": {
@@ -560,14 +557,11 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "android_arm_armmode_prefixed_compile",
-    LINUX_HOST,  # WALLEYE_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "android|arm",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    LINUX_HOST,
+    category = "android|arm",
+    short_name = "pfx",
     properties = compile_only({
         "android": True,
         "cmake_args": {
@@ -592,14 +586,11 @@ both_builders(
         },
     }),
 )
-cq_builder(
+both_builders(
     "android_riscv64_prefixed_compile",
-    LINUX_HOST,  # WALLEYE_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "android|riscv64",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    LINUX_HOST,
+    category = "android|riscv64",
+    short_name = "pfx",
     properties = compile_only({
         "android": True,
         "cmake_args": {
@@ -628,13 +619,13 @@ both_builders(
         },
     }),
 )
-cq_builder(
+both_builders(
     "ios64_prefixed_compile",
     MAC_X86_64_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "ios",
-    # short_name = "64pfx",
-    # cq_compile_only = MAC_X86_64_HOST,  # Reduce CQ cycle times.
+    category = "ios",
+    short_name = "64pfx",
+    # Redundant with mac_arm64_prefixed_compile.
+    # Thus, don't unnecessarily draw resources for it.
     cq_enabled = False,
     properties = compile_only({
         "cmake_args": {
@@ -673,14 +664,11 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "linux_prefixed_compile",
     LINUX_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "linux",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "linux",
+    short_name = "pfx",
     properties = compile_only({
         "check_stack": True,
         "cmake_args": {
@@ -764,14 +752,11 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "linux32_prefixed_compile",
     LINUX_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "linux|32",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "linux|32",
+    short_name = "pfx",
     properties = compile_only({
         "check_stack": True,
         "cmake_args": {
@@ -955,13 +940,13 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "linux_clang_prefixed_compile",
     LINUX_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "linux|clang",
-    # short_name = "pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
+    category = "linux|clang",
+    short_name = "pfx",
+    # Redundant with linux_prefixed_compile + win64_clang_prefixed_compile.
+    # Thus, don't unnecessarily draw resources for it.
     cq_enabled = False,
     properties = compile_only({
         "clang": True,
@@ -1034,14 +1019,11 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "linux_nosse2_noasm_prefixed_compile",
     LINUX_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "linux|clang",
-    # short_name = "nosse2pfx",
-    # cq_compile_only = LINUX_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "linux|clang",
+    short_name = "nosse2pfx",
     properties = compile_only({
         "cmake_args": {
             "OPENSSL_NO_ASM": "1",
@@ -1093,13 +1075,13 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "mac_prefixed_compile",
     MAC_X86_64_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "mac",
-    # short_name = "pfx",
-    # cq_compile_only = MAC_X86_64_HOST,  # Reduce CQ cycle times.
+    category = "mac",
+    short_name = "pfx",
+    # Redundant with linux_prefixed_compile + mac_arm64_prefixed_compile.
+    # Thus, don't unnecessarily draw resources for it.
     cq_enabled = False,
     properties = compile_only({
         "prefixed_symbols": True,
@@ -1118,14 +1100,11 @@ both_builders(
         "rust": True,
     },
 )
-cq_builder(
+both_builders(
     "mac_arm64_prefixed_compile",
     MAC_ARM64_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "mac",
-    # short_name = "arm64pfx",
-    # cq_compile_only = MAC_ARM64_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "mac",
+    short_name = "arm64pfx",
     properties = compile_only({
         "prefixed_symbols": True,
     }),
@@ -1175,14 +1154,11 @@ both_builders(
         "sde": True,
     },
 )
-cq_builder(
+both_builders(
     "win32_prefixed_compile",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x86",
-    # short_name = "pfx",
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "win|x86",
+    short_name = "pfx",
     properties = compile_only({
         "msvc_target": "x86",
         "prefixed_symbols": True,
@@ -1257,14 +1233,11 @@ both_builders(
         },
     },
 )
-cq_builder(
+both_builders(
     "win32_clang_prefixed_compile",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x86",
-    # short_name = "clangpfx",
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "win|x86",
+    short_name = "clangpfx",
     properties = compile_only({
         "clang": True,
         "msvc_target": "x86",
@@ -1323,14 +1296,11 @@ both_builders(
         "sde": True,
     },
 )
-cq_builder(
+both_builders(
     "win64_prefixed_compile",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x64",
-    # short_name = "pfx",
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "win|x64",
+    short_name = "pfx",
     properties = compile_only({
         "msvc_target": "x64",
         "prefixed_symbols": True,
@@ -1396,14 +1366,11 @@ both_builders(
         "msvc_target": "x64",
     },
 )
-cq_builder(
+both_builders(
     "win64_clang_prefixed_compile",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x64",
-    # short_name = "clangpfx",
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "win|x64",
+    short_name = "clangpfx",
     properties = compile_only({
         "clang": True,
         "msvc_target": "x64",
@@ -1433,14 +1400,11 @@ both_builders(
         "msvc_target": "arm64",
     }),
 )
-cq_builder(
+both_builders(
     "win_arm64_prefixed_compile",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|arm64",
-    # short_name = "clangpfx",
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "win|arm64",
+    short_name = "clangpfx",
     properties = compile_only({
         "clang": True,
         "cmake_args": {
@@ -1480,14 +1444,11 @@ both_builders(
         "msvc_target": "arm64",
     }),
 )
-cq_builder(
+both_builders(
     "win_arm64_msvc_prefixed_compile",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|arm64",
-    # short_name = "msvcpfx",
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
-    cq_enabled = False,
+    category = "win|arm64",
+    short_name = "msvcpfx",
     properties = compile_only({
         "cmake_args": {
             # This is a cross-compile, so CMake needs to be told the processor.
