@@ -44,6 +44,7 @@
 #include "../test/test_util.h"
 #include "../test/wycheproof_util.h"
 
+BSSL_NAMESPACE_BEGIN
 namespace {
 // evp_test dispatches between multiple test types. PublicKey and PrivateKey
 // tests take a key name parameter and key information. If the test is
@@ -1273,3 +1274,4 @@ TEST(EVPTest, WycheproofRSAPKCS1Decrypt) {
       "third_party/wycheproof_testvectors/rsa_pkcs1_4096_test.txt");
 }
 }  // namespace
+BSSL_NAMESPACE_END

@@ -26,6 +26,7 @@
 #include <openssl/stack.h>
 #include <openssl/x509.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "internal.h"
 
@@ -563,8 +564,7 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
     if (hints && hs->hints_requested) {
       hints->cert_compression_alg_id = hs->cert_compression_alg_id;
       if (!hints->cert_compression_input.CopyFrom(msg) ||
-          !hints->cert_compression_output.CopyFrom(
-              Span(CBB_data(&compressed), CBB_len(&compressed)))) {
+          !hints->cert_compression_output.CopyFrom(CBBAsSpan(&compressed))) {
         return false;
       }
     }

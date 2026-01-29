@@ -26,6 +26,7 @@
 #include <openssl/rand.h>
 
 #include "../crypto/internal.h"
+#include "../crypto/bytestring/internal.h"
 #include "internal.h"
 
 
@@ -1003,8 +1004,7 @@ static int send_ack(SSL *ssl) {
     return -1;
   }
 
-  ssl_do_msg_callback(ssl, /*is_write=*/1, SSL3_RT_ACK,
-                      Span(CBB_data(&cbb), CBB_len(&cbb)));
+  ssl_do_msg_callback(ssl, /*is_write=*/1, SSL3_RT_ACK, CBBAsSpan(&cbb));
 
   int bio_ret =
       BIO_write(ssl->wbio.get(), record, static_cast<int>(record_len));

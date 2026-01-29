@@ -28,6 +28,7 @@
 #include <openssl/stack.h>
 
 #include "../asn1/internal.h"
+#include "../bytestring/internal.h"
 #include "../internal.h"
 #include "internal.h"
 
@@ -46,8 +47,7 @@ int X509_verify(X509 *x509, EVP_PKEY *pkey) {
     return 0;
   }
   return x509_verify_signature(&impl->sig_alg, &impl->signature,
-                               Span(CBB_data(cbb.get()), CBB_len(cbb.get())),
-                               pkey);
+                               CBBAsSpan(cbb.get()), pkey);
 }
 
 int X509_REQ_verify(X509_REQ *req, EVP_PKEY *pkey) {
@@ -85,8 +85,7 @@ int X509_sign_ctx(X509 *x, EVP_MD_CTX *ctx) {
   if (!CBB_init(cbb.get(), 128) || !x509_marshal_tbs_cert(cbb.get(), x)) {
     return 0;
   }
-  return x509_sign_to_bit_string(ctx, &impl->signature,
-                                 Span(CBB_data(cbb.get()), CBB_len(cbb.get())));
+  return x509_sign_to_bit_string(ctx, &impl->signature, CBBAsSpan(cbb.get()));
 }
 
 int X509_REQ_sign(X509_REQ *x, EVP_PKEY *pkey, const EVP_MD *md) {

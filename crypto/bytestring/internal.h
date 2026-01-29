@@ -68,6 +68,15 @@ OPENSSL_EXPORT int CBS_get_asn1_implicit_string(CBS *in, CBS *out,
 // This function may be used to help implement legacy i2d ASN.1 functions.
 int CBB_finish_i2d(CBB *cbb, uint8_t **outp);
 
+// CBBAsSpan returns a span containing |cbb|'s contents. It does not flush
+// |cbb|. The span is valid until the next operation to |cbb|.
+//
+// To avoid unfinalized length prefixes, it is a fatal error to call this on a
+// CBB with any active children.
+inline Span<uint8_t> CBBAsSpan(const CBB *cbb) {
+  return Span(CBB_data(cbb), CBB_len(cbb));
+}
+
 // D2IFromCBS takes a functor of type |Unique<T>(CBS*)| and implements the d2i
 // calling convention. For compatibility with functions that don't tag their
 // return value (e.g. public APIs), |T*(CBS)| is also accepted. The callback can

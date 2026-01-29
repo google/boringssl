@@ -28,6 +28,7 @@
 #include <openssl/hpke.h>
 #include <openssl/rand.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "internal.h"
 
@@ -255,8 +256,7 @@ bool ssl_decode_client_hello_inner(
     return false;
   }
 
-  if (!is_valid_client_hello_inner(ssl, out_alert,
-                                   Span(CBB_data(&body), CBB_len(&body)))) {
+  if (!is_valid_client_hello_inner(ssl, out_alert, CBBAsSpan(&body))) {
     return false;
   }
 
@@ -817,10 +817,7 @@ bool ssl_encrypt_client_hello(SSL_HANDSHAKE *hs, Span<const uint8_t> enc) {
       return false;
     }
     // Also update the EncodedClientHelloInner.
-    auto encoded_binder =
-        Span(const_cast<uint8_t *>(CBB_data(encoded_cbb.get())),
-             CBB_len(encoded_cbb.get()))
-            .last(binder_len);
+    auto encoded_binder = CBBAsSpan(encoded_cbb.get()).last(binder_len);
     auto hello_inner_binder = Span(hello_inner).last(binder_len);
     OPENSSL_memcpy(encoded_binder.data(), hello_inner_binder.data(),
                    binder_len);

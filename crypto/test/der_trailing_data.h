@@ -19,6 +19,8 @@
 
 #include <openssl/span.h>
 
+BSSL_NAMESPACE_BEGIN
+
 // TestDERTrailingData decodes |in| as an arbitrary DER structure. It then calls
 // |func| multiple times on different modified versions of |in|, each time with
 // extra data appended to a different constructed element. The extra data will
@@ -32,7 +34,9 @@
 // TestDERTrailingData returns whether it successful rewrote |in| and called
 // |func| for every constructed element.
 bool TestDERTrailingData(
-    bssl::Span<const uint8_t> in,
-    std::function<void(bssl::Span<const uint8_t> rewritten, size_t n)> func);
+    Span<const uint8_t> in,
+    std::function<void(Span<const uint8_t> rewritten, size_t n)> func);
+
+BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_HEADER_CRYPTO_TEST_DER_TRAILING_DATA_H

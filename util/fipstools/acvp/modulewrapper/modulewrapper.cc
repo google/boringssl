@@ -47,6 +47,7 @@
 #include <openssl/span.h>
 #include <openssl/tls_prf.h>
 
+#include "../../../../crypto/bytestring/internal.h"
 #include "../../../../crypto/fipsmodule/bcm_interface.h"
 #include "../../../../crypto/fipsmodule/ec/internal.h"
 #include "../../../../crypto/fipsmodule/rand/internal.h"
@@ -2088,8 +2089,7 @@ static bool MLDSAKeyGen(const Span<const uint8_t> args[],
     return false;
   }
 
-  return write_reply(
-      {pub_key_bytes, Span(CBB_data(cbb.get()), CBB_len(cbb.get()))});
+  return write_reply({pub_key_bytes, CBBAsSpan(cbb.get())});
 }
 
 template <typename PrivateKey, size_t SignatureBytes,
@@ -2221,8 +2221,7 @@ static bool MLKEMKeyGen(const Span<const uint8_t> args[],
     return false;
   }
 
-  return write_reply(
-      {pub_key_bytes, Span(CBB_data(cbb.get()), CBB_len(cbb.get()))});
+  return write_reply({pub_key_bytes, CBBAsSpan(cbb.get())});
 }
 
 template <typename PublicKey, bcm_status (*ParsePublic)(PublicKey *, CBS *),

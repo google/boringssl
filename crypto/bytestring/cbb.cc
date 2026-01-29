@@ -272,7 +272,7 @@ err:
   return 0;
 }
 
-const uint8_t *CBB_data(const CBB *cbb) {
+uint8_t *CBB_data(const CBB *cbb) {
   assert(cbb->child == nullptr);
   if (cbb->is_child) {
     return cbb->u.child.base->buf + cbb->u.child.offset +
