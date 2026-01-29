@@ -46,8 +46,10 @@
 #if defined(__ELF__)
 // Every ELF object file, even empty ones, should disable executable stacks. See
 // https://www.airs.com/blog/archives/518.
+// clang-format off
 .pushsection .note.GNU-stack, "", %progbits
 .popsection
+// clang-format on
 #endif
 
 #if defined(__CET__) && defined(OPENSSL_X86_64)
@@ -186,7 +188,9 @@
 #define AARCH64_VALIDATE_LINK_REGISTER
 #endif
 
-#if GNU_PROPERTY_AARCH64_POINTER_AUTH != 0 || GNU_PROPERTY_AARCH64_BTI != 0
+#if defined(__ELF__) && \
+    (GNU_PROPERTY_AARCH64_POINTER_AUTH != 0 || GNU_PROPERTY_AARCH64_BTI != 0)
+// clang-format off
 .pushsection .note.gnu.property, "a";
 .balign 8;
 .long 4;
@@ -198,6 +202,7 @@
 .long (GNU_PROPERTY_AARCH64_POINTER_AUTH | GNU_PROPERTY_AARCH64_BTI);
 .long 0;
 .popsection;
+// clang-format on
 #endif
 #endif  // ARM || AARCH64
 
