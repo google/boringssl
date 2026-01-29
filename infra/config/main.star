@@ -637,7 +637,6 @@ cq_builder(
     # cq_compile_only = MAC_X86_64_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
     properties = compile_only({
-        "android": True,
         "cmake_args": {
             "CMAKE_OSX_ARCHITECTURES": "arm64",
             "CMAKE_OSX_SYSROOT": "iphoneos",
