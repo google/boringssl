@@ -467,7 +467,7 @@ cq_builder(
             "ANDROID_ABI": "arm64-v8a",
             "ANDROID_PLATFORM": "android-24",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 
@@ -540,7 +540,7 @@ cq_builder(
             "ANDROID_ABI": "armeabi-v7a",
             "ANDROID_PLATFORM": "android-24",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 
@@ -575,7 +575,7 @@ cq_builder(
             "ANDROID_ARM_MODE": "arm",
             "ANDROID_PLATFORM": "android-24",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -607,7 +607,7 @@ cq_builder(
             "ANDROID_ARM_MODE": "arm",
             "ANDROID_PLATFORM": "android-24",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 
@@ -642,7 +642,7 @@ cq_builder(
             "CMAKE_OSX_ARCHITECTURES": "arm64",
             "CMAKE_OSX_SYSROOT": "iphoneos",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 
@@ -687,7 +687,7 @@ cq_builder(
         "cmake_args": {
             "RUST_BINDINGS": "x86_64-unknown-linux-gnu",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
         # Also build and test the Rust code.
         "rust": True,
     }),
@@ -783,7 +783,7 @@ cq_builder(
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
             "CMAKE_C_FLAGS": "-m32 -msse2",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -1047,7 +1047,7 @@ cq_builder(
             "OPENSSL_NO_ASM": "1",
             "OPENSSL_NO_SSE2_FOR_TESTING": "1",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -1102,7 +1102,7 @@ cq_builder(
     # cq_compile_only = MAC_X86_64_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
     properties = compile_only({
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -1127,7 +1127,7 @@ cq_builder(
     # cq_compile_only = MAC_ARM64_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
     properties = compile_only({
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -1185,7 +1185,7 @@ cq_builder(
     cq_enabled = False,
     properties = compile_only({
         "msvc_target": "x86",
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 cq_builder(
@@ -1216,7 +1216,7 @@ cq_builder(
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -1277,7 +1277,7 @@ cq_builder(
             "CMAKE_C_FLAGS": "-m32 -msse2",
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 
@@ -1333,7 +1333,7 @@ cq_builder(
     cq_enabled = False,
     properties = compile_only({
         "msvc_target": "x64",
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 cq_builder(
@@ -1364,7 +1364,7 @@ cq_builder(
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 both_builders(
@@ -1407,7 +1407,7 @@ cq_builder(
     properties = compile_only({
         "clang": True,
         "msvc_target": "x64",
-        "prefixed": True,
+        "prefixed_symbols": True,
     }),
 )
 
