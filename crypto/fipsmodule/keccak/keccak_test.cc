@@ -96,7 +96,16 @@ TEST(KeccakTest, KeccakTestVectors) {
   FileTestGTest("crypto/fipsmodule/keccak/keccak_tests.txt", KeccakFileTest);
 }
 
-TEST(KeccakTest, MultiPass) {
+// Unoptimized builds are much slower, and iterative tests run Keccak many
+// times. Disable them in unoptimized builds for now.
+// https://crbug.com/479850443
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(__OPTIMIZE__)
+#define DISABLE_IF_NOT_OPTIMIZED(t) DISABLED_ ## t
+#else
+#define DISABLE_IF_NOT_OPTIMIZED(t) t
+#endif
+
+TEST(KeccakTest, DISABLE_IF_NOT_OPTIMIZED(MultiPass)) {
   // Example from keccak_tests.txt with an input long enough to be interesting.
   uint8_t input[500] = {
       0xd0, 0xee, 0x72, 0x13, 0xea, 0x0c, 0xd3, 0x4f, 0x99, 0xe8, 0x27, 0x8c,
