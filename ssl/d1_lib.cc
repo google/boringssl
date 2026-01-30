@@ -16,7 +16,10 @@
 
 #include <assert.h>
 #include <limits.h>
+#include <stdint.h>
 #include <string.h>
+
+#include <algorithm>
 
 #include <openssl/err.h>
 #include <openssl/mem.h>

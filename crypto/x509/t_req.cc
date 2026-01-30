@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <openssl/asn1.h>
 #include <openssl/bn.h>
 #include <openssl/buffer.h>
 #include <openssl/err.h>
