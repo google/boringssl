@@ -410,6 +410,14 @@ class Vector {
     return true;
   }
 
+  // EraseIf removes all elements that satisfy the predicate |pred|.
+  template <typename Pred>
+  void EraseIf(Pred pred) {
+    auto it = std::remove_if(begin(), end(), pred);
+    std::destroy(it, end());
+    size_ = it - begin();
+  }
+
  private:
   // If there is no room for one more element, creates a new backing array with
   // double the size of the old one and copies elements over.
@@ -622,25 +630,11 @@ class InplaceVector {
     return *ret;
   }
 
+  // EraseIf removes all elements that satisfy the predicate |pred|.
   template <typename Pred>
   void EraseIf(Pred pred) {
-    // See if anything needs to be erased at all. This avoids a self-move.
-    auto iter = std::find_if(begin(), end(), pred);
-    if (iter == end()) {
-      return;
-    }
-
-    // Elements before the first to be erased may be left as-is.
-    size_t new_size = iter - begin();
-    // Swap all subsequent elements in if they are to be kept.
-    for (size_t i = new_size + 1; i < size(); i++) {
-      if (!pred((*this)[i])) {
-        (*this)[new_size] = std::move((*this)[i]);
-        new_size++;
-      }
-    }
-
-    Shrink(new_size);
+    auto it = std::remove_if(begin(), end(), pred);
+    Shrink(it - begin());
   }
 
  private:
