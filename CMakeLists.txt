@@ -76,15 +76,11 @@ foreach(VAR CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_ASM_FLAGS)
 endforeach()
 
 if(BORINGSSL_PREFIX)
-  if(FIPS AND NOT BUILD_SHARED_LIBS)
-    # Symbol prefixing is currently incompatible with delocate.
-    message(FATAL_ERROR "Cannot use BORINGSSL_PREFIX with FIPS and static libraries")
-  endif()
-
   add_definitions(-DBORINGSSL_PREFIX=${BORINGSSL_PREFIX})
 
   # CMake automatically connects include_directories to the NASM command-line,
   # but not add_definitions.
+  set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -DBORINGSSL_PREFIX=${BORINGSSL_PREFIX}")
   set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DBORINGSSL_PREFIX=${BORINGSSL_PREFIX}")
 
   # Also add the generated files to NASM's includes. With a final slash for NASM 2.

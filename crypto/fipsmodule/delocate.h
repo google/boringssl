@@ -20,20 +20,26 @@
 #include "../internal.h"
 
 
+#if defined(BORINGSSL_PREFIX)
+#define BCM_ADD_PREFIX(name) BORINGSSL_ADD_PREFIX(bcm_##name)
+#else
+#define BCM_ADD_PREFIX(name) bcm_##name
+#endif
+
 #if !defined(BORINGSSL_SHARED_LIBRARY) && defined(BORINGSSL_FIPS) && \
     !defined(OPENSSL_ASAN) && !defined(OPENSSL_MSAN)
 #define DEFINE_BSS_GET(type, name, init_value)                                 \
   /* delocate needs C linkage and for |name| to be unique across BCM. */       \
   extern "C" {                                                                 \
-  extern type bcm_##name;                                                      \
-  type bcm_##name = init_value;                                                \
-  type *bcm_##name##_bss_get() __attribute__((const));                         \
+  extern type BCM_ADD_PREFIX(name);                                            \
+  type BCM_ADD_PREFIX(name) = init_value;                                      \
+  type *BCM_ADD_PREFIX(name##_bss_get)() __attribute__((const));               \
   } /* extern "C" */                                                           \
                                                                                \
   /* The getter functions are exported, but static variables are usually named \
    * with short names. Define a static wrapper function so the caller can use  \
    * a short name, while the symbol itself is prefixed. */                     \
-  static type *name##_bss_get() { return bcm_##name##_bss_get(); }
+  static type *name##_bss_get() { return BCM_ADD_PREFIX(name##_bss_get)(); }
 // For FIPS builds we require that CRYPTO_ONCE_INIT be zero.
 #define DEFINE_STATIC_ONCE(name) \
   DEFINE_BSS_GET(bssl::CRYPTO_once_t, name, CRYPTO_ONCE_INIT)

@@ -87,6 +87,11 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
 }
 
+var skipSymbols = []*regexp.Regexp{
+	// TODO(crbug.com/42220000): Marker symbols for delocate.
+	regexp.MustCompile(`^BORINGSSL_bcm_text_(start|end)$`),
+}
+
 const (
 	ObjFileFormatELF   = "elf"
 	ObjFileFormatMachO = "macho"
@@ -191,6 +196,11 @@ SYMBOLS:
 				if symRE.MatchString(s) {
 					continue SYMBOLS
 				}
+			}
+		}
+		for _, symRE := range skipSymbols {
+			if symRE.MatchString(s) {
+				continue SYMBOLS
 			}
 		}
 		msg := s
