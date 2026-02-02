@@ -148,7 +148,7 @@ func BuildAsmGlobalsNasmX86Header(syms []string) []byte {
 	return output.Bytes()
 }
 
-// BuildAsmGlobalsNasmHeader builds a symbol prefixing include for the Netwide Assembler (nasm).
+// BuildAsmGlobalsNasmX8664Header builds a symbol prefixing include for the Netwide Assembler (nasm).
 func BuildAsmGlobalsNasmX8664Header(syms []string) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, ";")
