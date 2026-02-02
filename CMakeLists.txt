@@ -65,8 +65,6 @@ if(NOT FIPS)
     # CMake automatically connects include_directories to the NASM
     # command-line, but not add_definitions.
     set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DBORINGSSL_DISPATCH_TEST")
-    # Also add the generated files to NASM's includes. With a final slash.
-    set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/gen/")
   endif()
 endif()
 
@@ -88,6 +86,9 @@ if(BORINGSSL_PREFIX)
   # CMake automatically connects include_directories to the NASM command-line,
   # but not add_definitions.
   set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DBORINGSSL_PREFIX=${BORINGSSL_PREFIX}")
+
+  # Also add the generated files to NASM's includes. With a final slash for NASM 2.
+  set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/gen/")
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
