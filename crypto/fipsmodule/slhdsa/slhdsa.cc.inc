@@ -31,6 +31,14 @@
 
 using namespace bssl;
 
+#if defined(BORINGSSL_FIPS)
+
+DEFINE_STATIC_ONCE(g_slhdsa_keygen_self_test_once)
+DEFINE_STATIC_ONCE(g_slhdsa_sign_self_test_once)
+DEFINE_STATIC_ONCE(g_slhdsa_verify_self_test_once)
+
+#endif
+
 namespace {
 
 namespace fips {
@@ -265,8 +273,6 @@ static int verify_self_test() {
 
 #if defined(BORINGSSL_FIPS)
 
-DEFINE_STATIC_ONCE(g_slhdsa_keygen_self_test_once)
-
 void ensure_keygen_self_test() {
   CRYPTO_once(g_slhdsa_keygen_self_test_once_bss_get(), []() {
     if (!keygen_self_test()) {
@@ -275,8 +281,6 @@ void ensure_keygen_self_test() {
   });
 }
 
-DEFINE_STATIC_ONCE(g_slhdsa_sign_self_test_once)
-
 void ensure_sign_self_test() {
   CRYPTO_once(g_slhdsa_sign_self_test_once_bss_get(), []() {
     if (!sign_self_test()) {
@@ -284,8 +288,6 @@ void ensure_sign_self_test() {
     }
   });
 }
-
-DEFINE_STATIC_ONCE(g_slhdsa_verify_self_test_once)
 
 void ensure_verify_self_test() {
   CRYPTO_once(g_slhdsa_verify_self_test_once_bss_get(), []() {

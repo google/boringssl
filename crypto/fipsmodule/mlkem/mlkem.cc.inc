@@ -31,6 +31,14 @@
 
 using namespace bssl;
 
+#if defined(BORINGSSL_FIPS)
+
+DEFINE_STATIC_ONCE(g_mlkem_keygen_self_test_once)
+DEFINE_STATIC_ONCE(g_mlkem_encap_self_test_once)
+DEFINE_STATIC_ONCE(g_mlkem_decap_self_test_once)
+
+#endif
+
 namespace mlkem {
 namespace {
 
@@ -1032,8 +1040,6 @@ static int decap_self_test() {
 
 #if defined(BORINGSSL_FIPS)
 
-DEFINE_STATIC_ONCE(g_mlkem_keygen_self_test_once)
-
 void ensure_keygen_self_test() {
   CRYPTO_once(g_mlkem_keygen_self_test_once_bss_get(), []() {
     if (!keygen_self_test()) {
@@ -1042,8 +1048,6 @@ void ensure_keygen_self_test() {
   });
 }
 
-DEFINE_STATIC_ONCE(g_mlkem_encap_self_test_once)
-
 void ensure_encap_self_test() {
   CRYPTO_once(g_mlkem_encap_self_test_once_bss_get(), []() {
     if (!encap_self_test()) {
@@ -1051,8 +1055,6 @@ void ensure_encap_self_test() {
     }
   });
 }
-
-DEFINE_STATIC_ONCE(g_mlkem_decap_self_test_once)
 
 void ensure_decap_self_test() {
   CRYPTO_once(g_mlkem_decap_self_test_once_bss_get(), []() {
