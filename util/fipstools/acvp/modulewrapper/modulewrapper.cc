@@ -1860,6 +1860,17 @@ static bool RSASigGen(const Span<const uint8_t> args[],
   std::vector<uint8_t> sig(RSA_size(key));
   size_t sig_len;
   if (UsePSS) {
+    uint32_t salt_len;
+    if (args[2].size() != sizeof(salt_len)) {
+      return false;
+    }
+    memcpy(&salt_len, args[2].data(), sizeof(salt_len));
+    if (salt_len != digest_len) {
+      LOG_ERROR(
+          "PSS salt length %u does not match digest length %u.\n",
+          static_cast<unsigned>(salt_len), static_cast<unsigned>(digest_len));
+      return false;
+    }
     if (!RSA_sign_pss_mgf1(key, &sig_len, sig.data(), sig.size(), digest_buf,
                            digest_len, md, md, RSA_PSS_SALTLEN_DIGEST)) {
       return false;

@@ -71,6 +71,7 @@ type rsaSigGenGroup struct {
 	SigType     string          `json:"sigType"`
 	ModulusBits uint32          `json:"modulo"`
 	Hash        string          `json:"hashAlg"`
+	SaltLen     uint32          `json:"saltLen"`
 	Tests       []rsaSigGenTest `json:"tests"`
 }
 
@@ -206,6 +207,10 @@ func processSigGen(vectorSet []byte, m Transactable) (any, error) {
 			return nil, fmt.Errorf("RSA SigGen test group has type %q, but only generation tests (%q) are supported", group.Type, expectedType)
 		}
 
+		if group.SigType != "pss" && group.SaltLen > 0 {
+			return nil, fmt.Errorf("RSA SigGen test group %d has sig type %s but saltLen %d - not 0", group.ID, group.SigType, group.SaltLen)
+		}
+
 		response := rsaSigGenTestGroupResponse{
 			ID: group.ID,
 		}
@@ -220,7 +225,12 @@ func processSigGen(vectorSet []byte, m Transactable) (any, error) {
 				return nil, fmt.Errorf("test case %d/%d contains invalid hex: %s", group.ID, test.ID, err)
 			}
 
-			m.TransactAsync(operation, 3, [][]byte{uint32le(group.ModulusBits), msg}, func(result [][]byte) error {
+			args := [][]byte{uint32le(group.ModulusBits), msg}
+			if group.SigType == "pss" {
+				args = append(args, uint32le(group.SaltLen))
+			}
+
+			m.TransactAsync(operation, 3, args, func(result [][]byte) error {
 				if len(response.N) == 0 {
 					response.N = hex.EncodeToString(result[0])
 					response.E = hex.EncodeToString(result[1])

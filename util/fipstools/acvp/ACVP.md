@@ -101,7 +101,7 @@ The other commands are as follows. (Note that you only need to implement the com
 | RSA/keyGen           | Modulus bit-size | e, p, q, n, d |
 | RSA/keyGen/crt       | Modulus bit-size | e, p, q, n, d, dmp1, dmq1, iqmp |
 | RSA/sigGen/&lt;HASH&gt;/pkcs1v1.5 | Modulus bit-size, message | n, e, signature |
-| RSA/sigGen/&lt;HASH&gt;/pss       | Modulus bit-size, message | n, e, signature |
+| RSA/sigGen/&lt;HASH&gt;/pss       | Modulus bit-size, message, salt length bytes | n, e, signature |
 | RSA/sigVer/&lt;HASH&gt;/pkcs1v1.5 | n, e, message, signature | Single-byte validity flag |
 | RSA/sigVer/&lt;HASH&gt;/pss       | n, e, message, signature | Single-byte validity flag |
 | SHA-1                | Value to hash             | Digest  |
