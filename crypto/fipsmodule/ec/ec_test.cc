@@ -31,6 +31,7 @@
 #include <openssl/span.h>
 
 #include "../../ec/internal.h"
+#include "../../mem_internal.h"
 #include "../../test/file_test.h"
 #include "../../test/test_util.h"
 #include "../bn/internal.h"
@@ -455,7 +456,8 @@ TEST(ECTest, SetNULLKey) {
 }
 
 TEST(ECTest, PointAtInfinity) {
-  UniquePtr<EC_KEY> key(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
+  UniquePtr<ECKey> key(
+      FromOpaque(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1)));
   ASSERT_TRUE(key);
 
   UniquePtr<EC_POINT> inf(EC_POINT_new(key->group));

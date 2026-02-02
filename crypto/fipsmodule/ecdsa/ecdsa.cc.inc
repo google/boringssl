@@ -185,17 +185,19 @@ int bssl::ecdsa_sign_fixed_with_nonce_for_known_answer_test(
     const uint8_t *digest, size_t digest_len, uint8_t *sig, size_t *out_sig_len,
     size_t max_sig_len, const EC_KEY *eckey, const uint8_t *nonce,
     size_t nonce_len) {
-  if (eckey->ecdsa_meth && eckey->ecdsa_meth->sign) {
+  const ECKey *impl = FromOpaque(eckey);
+
+  if (impl->ecdsa_meth && impl->ecdsa_meth->sign) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_NOT_IMPLEMENTED);
     return 0;
   }
 
-  const EC_GROUP *group = EC_KEY_get0_group(eckey);
-  if (group == nullptr || eckey->priv_key == nullptr) {
+  const EC_GROUP *group = EC_KEY_get0_group(impl);
+  if (group == nullptr || impl->priv_key == nullptr) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
-  const EC_SCALAR *priv_key = &eckey->priv_key->scalar;
+  const EC_SCALAR *priv_key = &impl->priv_key->scalar;
 
   EC_SCALAR k;
   if (!ec_scalar_from_bytes(group, &k, nonce, nonce_len)) {
@@ -209,20 +211,22 @@ int bssl::ecdsa_sign_fixed_with_nonce_for_known_answer_test(
 int bssl::ecdsa_sign_fixed(const uint8_t *digest, size_t digest_len,
                            uint8_t *sig, size_t *out_sig_len,
                            size_t max_sig_len, const EC_KEY *eckey) {
+  const ECKey *impl = FromOpaque(eckey);
+
   boringssl_ensure_ecc_self_test();
 
-  if (eckey->ecdsa_meth && eckey->ecdsa_meth->sign) {
+  if (impl->ecdsa_meth && impl->ecdsa_meth->sign) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_NOT_IMPLEMENTED);
     return 0;
   }
 
-  const EC_GROUP *group = EC_KEY_get0_group(eckey);
-  if (group == nullptr || eckey->priv_key == nullptr) {
+  const EC_GROUP *group = EC_KEY_get0_group(impl);
+  if (group == nullptr || impl->priv_key == nullptr) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
   const BIGNUM *order = EC_GROUP_get0_order(group);
-  const EC_SCALAR *priv_key = &eckey->priv_key->scalar;
+  const EC_SCALAR *priv_key = &impl->priv_key->scalar;
 
   // Generate the ECDSA per-message secret number by rejection sampling. This
   // function implements FIPS 186-5, A.3.2, repeating the process on failure.

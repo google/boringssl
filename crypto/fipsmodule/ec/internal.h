@@ -27,6 +27,8 @@
 #include "../bn/internal.h"
 
 
+DECLARE_OPAQUE_STRUCT(ec_key_st, ECKey)
+
 BSSL_NAMESPACE_BEGIN
 
 // EC internals.
@@ -699,9 +701,14 @@ typedef struct {
   EC_SCALAR scalar;
 } EC_WRAPPED_SCALAR;
 
-BSSL_NAMESPACE_END
+// Exported, as the destructor is used by ec_test.cc.
+class OPENSSL_EXPORT ECKey : public ec_key_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
 
-struct ec_key_st {
+  // Used by ec_test.cc.
+  OPENSSL_EXPORT ~ECKey();
+
   EC_GROUP *group;
 
   // Ideally |pub_key| would be an |EC_AFFINE| so serializing it does not pay an
@@ -719,6 +726,8 @@ struct ec_key_st {
 
   CRYPTO_EX_DATA ex_data;
 } /* EC_KEY */;
+
+BSSL_NAMESPACE_END
 
 
 #endif  // OPENSSL_HEADER_CRYPTO_FIPSMODULE_EC_INTERNAL_H

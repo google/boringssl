@@ -30,6 +30,7 @@
 #include "../bytestring/internal.h"
 #include "../fipsmodule/ec/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "internal.h"
 
 
@@ -108,7 +109,7 @@ EC_KEY *bssl::ec_key_parse_private_key(
     return nullptr;
   }
 
-  UniquePtr<EC_KEY> ret(EC_KEY_new());
+  UniquePtr<ECKey> ret(FromOpaque(EC_KEY_new()));
   if (ret == nullptr || !EC_KEY_set_group(ret.get(), group)) {
     return nullptr;
   }
@@ -177,7 +178,9 @@ EC_KEY *EC_KEY_parse_private_key(CBS *cbs, const EC_GROUP *group) {
 
 int EC_KEY_marshal_private_key(CBB *cbb, const EC_KEY *key,
                                unsigned enc_flags) {
-  if (key == nullptr || key->group == nullptr || key->priv_key == nullptr) {
+  const ECKey *key_impl = FromOpaque(key);
+  if (key_impl == nullptr || key_impl->group == nullptr ||
+      key_impl->priv_key == nullptr) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
@@ -187,8 +190,8 @@ int EC_KEY_marshal_private_key(CBB *cbb, const EC_KEY *key,
       !CBB_add_asn1_uint64(&ec_private_key, 1 /* version */) ||
       !CBB_add_asn1(&ec_private_key, &private_key, CBS_ASN1_OCTETSTRING) ||
       !BN_bn2cbb_padded(&private_key,
-                        BN_num_bytes(EC_GROUP_get0_order(key->group)),
-                        EC_KEY_get0_private_key(key))) {
+                        BN_num_bytes(EC_GROUP_get0_order(key_impl->group)),
+                        EC_KEY_get0_private_key(key_impl))) {
     OPENSSL_PUT_ERROR(EC, EC_R_ENCODE_ERROR);
     return 0;
   }
@@ -196,7 +199,7 @@ int EC_KEY_marshal_private_key(CBB *cbb, const EC_KEY *key,
   if (!(enc_flags & EC_PKEY_NO_PARAMETERS)) {
     CBB child;
     if (!CBB_add_asn1(&ec_private_key, &child, kParametersTag) ||
-        !EC_KEY_marshal_curve_name(&child, key->group) ||
+        !EC_KEY_marshal_curve_name(&child, key_impl->group) ||
         !CBB_flush(&ec_private_key)) {
       OPENSSL_PUT_ERROR(EC, EC_R_ENCODE_ERROR);
       return 0;
@@ -204,15 +207,15 @@ int EC_KEY_marshal_private_key(CBB *cbb, const EC_KEY *key,
   }
 
   // TODO(fork): replace this flexibility with sensible default?
-  if (!(enc_flags & EC_PKEY_NO_PUBKEY) && key->pub_key != nullptr) {
+  if (!(enc_flags & EC_PKEY_NO_PUBKEY) && key_impl->pub_key != nullptr) {
     CBB child, public_key;
     if (!CBB_add_asn1(&ec_private_key, &child, kPublicKeyTag) ||
         !CBB_add_asn1(&child, &public_key, CBS_ASN1_BITSTRING) ||
         // As in a SubjectPublicKeyInfo, the byte-encoded public key is then
         // encoded as a BIT STRING with bits ordered as in the DER encoding.
         !CBB_add_u8(&public_key, 0 /* padding */) ||
-        !EC_POINT_point2cbb(&public_key, key->group, key->pub_key,
-                            key->conv_form, nullptr) ||
+        !EC_POINT_point2cbb(&public_key, key_impl->group, key_impl->pub_key,
+                            key_impl->conv_form, nullptr) ||
         !CBB_flush(&ec_private_key)) {
       OPENSSL_PUT_ERROR(EC, EC_R_ENCODE_ERROR);
       return 0;
@@ -475,24 +478,26 @@ EC_KEY *d2i_ECParameters(EC_KEY **out_key, const uint8_t **inp, long len) {
 }
 
 int i2d_ECParameters(const EC_KEY *key, uint8_t **outp) {
-  if (key == nullptr || key->group == nullptr) {
+  const ECKey *key_impl = FromOpaque(key);
+  if (key_impl == nullptr || key_impl->group == nullptr) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return -1;
   }
   return I2DFromCBB(
       /*initial_capacity=*/16, outp, [&](CBB *cbb) -> bool {
-        return EC_KEY_marshal_curve_name(cbb, key->group);
+        return EC_KEY_marshal_curve_name(cbb, key_impl->group);
       });
 }
 
 EC_KEY *o2i_ECPublicKey(EC_KEY **keyp, const uint8_t **inp, long len) {
-  EC_KEY *ret = nullptr;
+  ECKey *ret = nullptr;
 
-  if (keyp == nullptr || *keyp == nullptr || (*keyp)->group == nullptr) {
+  if (keyp == nullptr || *keyp == nullptr ||
+      FromOpaque(*keyp)->group == nullptr) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return nullptr;
   }
-  ret = *keyp;
+  ret = FromOpaque(*keyp);
   if (ret->pub_key == nullptr &&
       (ret->pub_key = EC_POINT_new(ret->group)) == nullptr) {
     return nullptr;
@@ -512,12 +517,13 @@ int i2o_ECPublicKey(const EC_KEY *key, uint8_t **outp) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
+  const ECKey *key_impl = FromOpaque(key);
   // No initial capacity because |EC_POINT_point2cbb| will internally reserve
   // the right size in one shot, so it's best to leave this at zero.
   int ret = I2DFromCBB(
       /*initial_capacity=*/0, outp, [&](CBB *cbb) -> bool {
-        return EC_POINT_point2cbb(cbb, key->group, key->pub_key, key->conv_form,
-                                  nullptr);
+        return EC_POINT_point2cbb(cbb, key_impl->group, key_impl->pub_key,
+                                  key_impl->conv_form, nullptr);
       });
   // Historically, this function used the wrong return value on error.
   return ret > 0 ? ret : 0;
