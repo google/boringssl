@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <stdint.h>
+
 #include <openssl/asn1.h>
 #include <openssl/cipher.h>
 #include <openssl/evp.h>
 #include <openssl/obj.h>
 #include <openssl/x509.h>
 
+#include "../internal.h"
 #include "internal.h"
 
 

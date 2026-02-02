@@ -15,6 +15,8 @@
 #include <openssl/evp.h>
 
 #include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include <openssl/bn.h>
 #include <openssl/dh.h>

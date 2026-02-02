@@ -22,6 +22,7 @@
 #include <openssl/dsa.h>
 #include <openssl/evp.h>
 #include <openssl/mem.h>
+#include <openssl/pool.h>
 #include <openssl/rsa.h>
 #include <openssl/span.h>
 #include <openssl/stack.h>
