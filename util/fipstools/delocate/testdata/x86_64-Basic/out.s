@@ -1,8 +1,6 @@
 .text
 .file 2 "inserted_by_delocate.c"
 .loc 2 1 0
-.globl BORINGSSL_bcm_text_start
-.hidden BORINGSSL_bcm_text_start
 BORINGSSL_bcm_text_start:
 .LBORINGSSL_bcm_text_start_local_target:
 	# Most instructions and lines should pass unaltered. This is made up of
@@ -62,8 +60,6 @@ foo:
 .uleb128 .foo-1-.bar
 .text
 .loc 2 2 0
-.globl BORINGSSL_bcm_text_end
-.hidden BORINGSSL_bcm_text_end
 BORINGSSL_bcm_text_end:
 .LBORINGSSL_bcm_text_end_local_target:
 .type BORINGSSL_bcm_text_hash, @object

@@ -195,6 +195,14 @@ func (d *delocation) processDirective(statement, directive *node32) (*node32, er
 	}, ruleArgs, ruleArg)
 
 	switch directiveName {
+	case "addrsig", "addrsig_sym":
+		// Remove .addrsig and .addrsig_sym tables.
+		// Instead, consider all symbols inside the BCM address-significant
+		// so the linker will not merge them with other symbols,
+		// potentially breaking the integrity check of the BCM.
+		d.writeCommentedNode(statement)
+		break
+
 	case "comm", "lcomm":
 		if len(args) < 1 {
 			return nil, errors.New("comm directive has no arguments")
@@ -262,6 +270,14 @@ func (d *delocation) processDirective(statement, directive *node32) (*node32, er
 		case ".bss":
 			d.writeNode(statement)
 			return d.handleBSS(statement)
+
+		case ".llvm_addrsig":
+			// Remove .llvm_addrsig sections.
+			// Instead, consider all symbols inside the BCM address-significant
+			// so the linker will not merge them with other symbols,
+			// potentially breaking the integrity check of the BCM.
+			d.writeCommentedNode(statement)
+			d.output.WriteString(".section .discard_llvm_addrsig, \"e\", @progbits\n")
 		}
 
 	case "reloc":
@@ -1519,11 +1535,6 @@ func transform(w stringWriter, inputs []inputFile) error {
 	}
 	w.WriteString(fmt.Sprintf(".file %d \"inserted_by_delocate.c\"%s\n", maxObservedFileNumber+1, fileTrailing))
 	w.WriteString(fmt.Sprintf(".loc %d 1 0\n", maxObservedFileNumber+1))
-	// Mark BORINGSSL_bcm_text_start as global, so that our tools can more reliably find it,
-	// but hidden so it does not pollute downstream consumers' dynamic symbol tables. This
-	// is primarily a hook for objcopy to upgrade to visible, if needed to sample the hash.
-	w.WriteString(".globl BORINGSSL_bcm_text_start\n")
-	w.WriteString(".hidden BORINGSSL_bcm_text_start\n")
 	w.WriteString("BORINGSSL_bcm_text_start:\n")
 	w.WriteString(localTargetName("BORINGSSL_bcm_text_start") + ":\n")
 
@@ -1535,8 +1546,6 @@ func transform(w stringWriter, inputs []inputFile) error {
 
 	w.WriteString(".text\n")
 	w.WriteString(fmt.Sprintf(".loc %d 2 0\n", maxObservedFileNumber+1))
-	w.WriteString(".globl BORINGSSL_bcm_text_end\n")
-	w.WriteString(".hidden BORINGSSL_bcm_text_end\n")
 	w.WriteString("BORINGSSL_bcm_text_end:\n")
 	w.WriteString(localTargetName("BORINGSSL_bcm_text_end") + ":\n")
 

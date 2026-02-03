@@ -1,8 +1,6 @@
 .text
 .file 1002 "inserted_by_delocate.c" md5 0x00000000000000000000000000000000
 .loc 1002 1 0
-.globl BORINGSSL_bcm_text_start
-.hidden BORINGSSL_bcm_text_start
 BORINGSSL_bcm_text_start:
 .LBORINGSSL_bcm_text_start_local_target:
 .file 10 "some/path/file.c" "file.c"
@@ -13,8 +11,6 @@ BORINGSSL_bcm_text_start:
         movq %rax, %rbx
 .text
 .loc 1002 2 0
-.globl BORINGSSL_bcm_text_end
-.hidden BORINGSSL_bcm_text_end
 BORINGSSL_bcm_text_end:
 .LBORINGSSL_bcm_text_end_local_target:
 .type BORINGSSL_bcm_text_hash, @object

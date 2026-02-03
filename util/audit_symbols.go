@@ -85,12 +85,13 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^fprintf$`),                                     // fprintf()
 	regexp.MustCompile(`^snprintf$`),                                    // snprintf()
 	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
+
+	// Symbols in the FIPS module.
+	// They are provided for tooling only and should not be read internally.
+	regexp.MustCompile(`^BORINGSSL_bcm_(rodata|text)_(start|end)$`),
 }
 
-var skipSymbols = []*regexp.Regexp{
-	// TODO(crbug.com/42220000): Marker symbols for delocate.
-	regexp.MustCompile(`^BORINGSSL_bcm_text_(start|end)$`),
-}
+var skipSymbols = []*regexp.Regexp{}
 
 const (
 	ObjFileFormatELF   = "elf"

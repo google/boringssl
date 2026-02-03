@@ -1,8 +1,6 @@
 .text
 .file 1 "inserted_by_delocate.c"
 .loc 1 1 0
-.globl BORINGSSL_bcm_text_start
-.hidden BORINGSSL_bcm_text_start
 BORINGSSL_bcm_text_start:
 .LBORINGSSL_bcm_text_start_local_target:
 	.type foo, @function
@@ -168,8 +166,6 @@ bar:
 .reloc .Ltmp0_BCM_1, R_AARCH64_PATCHINST, ds
 .text
 .loc 1 2 0
-.globl BORINGSSL_bcm_text_end
-.hidden BORINGSSL_bcm_text_end
 BORINGSSL_bcm_text_end:
 .LBORINGSSL_bcm_text_end_local_target:
 .type bcm_redirector_memcpy, @function
