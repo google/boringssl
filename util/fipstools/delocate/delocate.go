@@ -349,13 +349,27 @@ func (d *delocation) processLabelContainingDirective(statement, directive *node3
 
 func (d *delocation) processSymbolDefiningDirective(statement, directive *node32) (*node32, error) {
 	changed := false
-	assertNodeType(directive, ruleSymbolDefiningDirectiveName)
-	name := d.contents(directive)
 
-	node := directive.next
-	assertNodeType(node, ruleWS)
+	var format string
 
-	node = node.next
+	node := directive
+	switch node.pegRule {
+	case ruleSymbolDefiningDirectiveName:
+		// .set a, b
+		name := d.contents(node)
+		format = fmt.Sprintf("\t%s\t%%s, %%s\n", name)
+		node = node.next
+		assertNodeType(node, ruleWS)
+		node = node.next
+
+	case ruleLocalSymbol, ruleSymbolName:
+		// a = b
+		format = "\t%s = %s\n"
+
+	default:
+		return nil, fmt.Errorf("unknown symbol defining directive type %q", rul3s[directive.pegRule])
+	}
+
 	symbol := d.contents(node)
 	isLocal := node.pegRule == ruleLocalSymbol
 	if isLocal {
@@ -376,11 +390,11 @@ func (d *delocation) processSymbolDefiningDirective(statement, directive *node32
 		d.writeNode(statement)
 	} else {
 		d.writeCommentedNode(statement)
-		fmt.Fprintf(d.output, "\t%s\t%s, %s\n", name, symbol, arg)
+		fmt.Fprintf(d.output, format, symbol, arg)
 	}
 
 	if !isLocal {
-		fmt.Fprintf(d.output, "\t%s\t%s, %s\n", name, localTargetName(symbol), arg)
+		fmt.Fprintf(d.output, format, localTargetName(symbol), arg)
 	}
 
 	return statement, nil
