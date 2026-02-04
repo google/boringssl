@@ -531,6 +531,14 @@ bool SetupContext(FileTest *t, const KeyMap *key_map, EVP_PKEY_CTX *ctx) {
   if (t->HasAttribute("DiffieHellmanPad") && !EVP_PKEY_CTX_set_dh_pad(ctx, 1)) {
     return false;
   }
+  if (t->HasAttribute("Context")) {
+    std::vector<uint8_t> context;
+    if (!t->GetBytes(&context, "Context") ||
+        !EVP_PKEY_CTX_set1_signature_context_string(ctx, context.data(),
+                                                    context.size())) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -904,12 +912,6 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
       return;
     }
 
-    // We do not currently support signature contexts.
-    // TODO(crbug.com/449751916): Support this.
-    if (!sig_ctx.empty()) {
-      return;
-    }
-
     if (EVP_PKEY_id(key.get()) == EVP_PKEY_DSA) {
       // DSA is deprecated and is not usable via EVP.
       DSA *dsa = EVP_PKEY_get0_DSA(key.get());
@@ -931,6 +933,12 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PSS_PADDING));
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md));
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx, pss_salt_len));
+      }
+      if (!sig_ctx.empty() &&
+          !EVP_PKEY_CTX_set1_signature_context_string(pctx, sig_ctx.data(),
+                                                      sig_ctx.size())) {
+        EXPECT_FALSE(expect_valid);
+        return;
       }
       int ret = EVP_DigestVerify(ctx.get(), sig.data(), sig.size(), msg.data(),
                                  msg.size());
@@ -989,7 +997,6 @@ TEST(EVPTest, WycheproofEd25519) {
 // TODO(crbug.com/449751916): We also test these in the low-level ML-DSA code.
 // The EVP-level tests are not yet redundant:
 //
-// * We can't yet run the tests with a context argument.
 // * We can't yet run the signing tests with external entropy.
 //
 // When/if we add |EVP_PKEY|-based APIs for those, we may be able to remove the

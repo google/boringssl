@@ -18,8 +18,8 @@
 
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
-#include <openssl/nid.h>
 #include <openssl/mldsa.h>
+#include <openssl/nid.h>
 #include <openssl/span.h>
 
 #include "../fipsmodule/bcm_interface.h"
@@ -35,6 +35,8 @@ constexpr CBS_ASN1_TAG kSeedTag = CBS_ASN1_CONTEXT_SPECIFIC | 0;
 constexpr uint8_t kMLDSA44OID[] = {OBJ_ENC_ML_DSA_44};
 constexpr uint8_t kMLDSA65OID[] = {OBJ_ENC_ML_DSA_65};
 constexpr uint8_t kMLDSA87OID[] = {OBJ_ENC_ML_DSA_87};
+
+constexpr int kMaxContextLength = 255;
 
 // We must generate EVP bindings for three ML-DSA algorithms. Define a traits
 // type that captures the functions and other parameters of an ML-DSA algorithm.
@@ -145,6 +147,11 @@ void KeyData<Traits>::Free(KeyData<Traits> *data) {
     Delete(static_cast<PublicKeyData<Traits> *>(data));
   }
 }
+
+struct MldsaPkeyCtx {
+  bssl::Array<uint8_t> context;
+};
+
 
 // Finally, MLDSAImplementation instantiates the methods themselves.
 
@@ -345,9 +352,30 @@ struct MLDSAImplementation {
     return Traits::kPublicKeyBytes * 8;
   }
 
-  // There is, for now, no context state to copy. When we add support for
-  // streaming signing, that will change.
-  static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
+  static int Init(EvpPkeyCtx *ctx) {
+    MldsaPkeyCtx *mctx = New<MldsaPkeyCtx>();
+    if (mctx == nullptr) {
+      return 0;
+    }
+    ctx->data = mctx;
+    return 1;
+  }
+
+  static void Cleanup(EvpPkeyCtx *ctx) {
+    Delete(static_cast<MldsaPkeyCtx *>(ctx->data));
+  }
+
+  static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
+    if (!Init(dst)) {
+      return 0;
+    }
+    MldsaPkeyCtx *sctx = static_cast<MldsaPkeyCtx *>(src->data);
+    MldsaPkeyCtx *dctx = static_cast<MldsaPkeyCtx *>(dst->data);
+    if (!dctx->context.CopyFrom(sctx->context)) {
+      return 0;
+    }
+    return 1;
+  }
 
   static int SignMessage(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
                          const uint8_t *tbs, size_t tbslen) {
@@ -364,8 +392,9 @@ struct MLDSAImplementation {
       OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    if (!Traits::Sign(sig, &priv_data->priv, tbs, tbslen, /*context=*/nullptr,
-                      /*context_len=*/0)) {
+    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
+    if (!Traits::Sign(sig, &priv_data->priv, tbs, tbslen, mctx->context.data(),
+                      mctx->context.size())) {
       return 0;
     }
     *siglen = Traits::kSignatureBytes;
@@ -375,19 +404,39 @@ struct MLDSAImplementation {
   static int VerifyMessage(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
                            const uint8_t *tbs, size_t tbslen) {
     const auto *pub = GetKeyData(ctx->pkey.get())->GetPublicKey();
-    if (!Traits::Verify(pub, sig, siglen, tbs, tbslen, /*context=*/nullptr,
-                        /*context_len=*/0)) {
+    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
+    if (!Traits::Verify(pub, sig, siglen, tbs, tbslen, mctx->context.data(),
+                        mctx->context.size())) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SIGNATURE);
       return 0;
     }
     return 1;
   }
 
+  static int Ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
+    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
+    switch (type) {
+      case EVP_PKEY_CTRL_SIGNATURE_CONTEXT_STRING: {
+        if (p1 < 0 || p1 > kMaxContextLength) {
+          OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PARAMETERS);
+          return 0;
+        }
+        uint8_t *context = reinterpret_cast<uint8_t *>(p2);
+        return mctx->context.CopyFrom(
+            bssl::Span<uint8_t>(context, p1));
+      }
+
+      default:
+        OPENSSL_PUT_ERROR(EVP, EVP_R_COMMAND_NOT_SUPPORTED);
+        return 0;
+    }
+  }
+
   static constexpr EVP_PKEY_CTX_METHOD pkey_method = {
       Traits::kType,
-      /*init=*/nullptr,
+      &Init,
       &CopyContext,
-      /*cleanup=*/nullptr,
+      &Cleanup,
       // TODO(crbug.com/449751916): Add keygen support.
       /*keygen=*/nullptr,
       /*sign=*/nullptr,
@@ -399,7 +448,7 @@ struct MLDSAImplementation {
       /*decrypt=*/nullptr,
       /*derive=*/nullptr,
       /*paramgen=*/nullptr,
-      /*ctrl=*/nullptr,
+      &Ctrl,
   };
 
   static constexpr EVP_PKEY_ASN1_METHOD BuildASN1Method() {
