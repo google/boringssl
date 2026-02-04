@@ -29,6 +29,9 @@ var TaskSkipped = errors.New("task skipped")
 
 // Task is a task the pregenerate system can perform.
 type Task struct {
+	// Kind is the kind/type of the task in human readable form.
+	Kind string
+
 	// Destination is the destination path for this task, using forward
 	// slashes and relative to the source directory. That is, use the "path"
 	// package, not "path/filepath".
@@ -71,7 +74,7 @@ func (t *Task) runInternal() (out []byte, err error) {
 		err := dep.wait()
 		if err != nil {
 			if errors.Is(err, TaskSkipped) {
-				fmt.Fprintf(os.Stderr, "task %q dependency %q skipped - carrying on with previously saved data: %v\n", t, dep, err)
+				logV.Printf("task %q dependency %q skipped - carrying on with previously saved data: %v", t, dep, err)
 				continue
 			}
 			return nil, fmt.Errorf("task %q dependency %q unfulfilled: %w", t, dep, err)
@@ -107,8 +110,9 @@ func (t *Task) Close(err error) {
 }
 
 // NewSimpleTask creates a new task based on a lambda for what it does.
-func NewSimpleTask(dst string, runFunc func() ([]byte, error), dependencies ...*Task) *Task {
+func NewSimpleTask(kind, dst string, runFunc func() ([]byte, error), dependencies ...*Task) *Task {
 	return (&Task{
+		Kind:         kind,
 		Destination:  dst,
 		Dependencies: dependencies,
 		RunFunc:      runFunc,
@@ -117,7 +121,7 @@ func NewSimpleTask(dst string, runFunc func() ([]byte, error), dependencies ...*
 
 // NewPerlasmTask creates a new task that runs perlasm.
 func NewPerlasmTask(dst, src string, perlasmArgs []string) *Task {
-	return NewSimpleTask(dst, func() (data []byte, err error) {
+	return NewSimpleTask("perlasm", dst, func() (data []byte, err error) {
 		if *perlPath == "" {
 			return nil, fmt.Errorf("%w: perl has been disabled by flag", TaskSkipped)
 		}

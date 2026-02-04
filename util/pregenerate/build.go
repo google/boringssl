@@ -196,7 +196,7 @@ func writeHeader(b *bytes.Buffer, comment string) {
 }
 
 func buildVariablesTask(targets map[string]build.Target, dst, comment string, writeVariable func(b *bytes.Buffer, name string, val []string)) *Task {
-	return NewSimpleTask(dst, func() ([]byte, error) {
+	return NewSimpleTask("sources", dst, func() ([]byte, error) {
 		var b bytes.Buffer
 		writeHeader(&b, comment)
 
@@ -265,13 +265,13 @@ func writeGNVariable(b *bytes.Buffer, name string, val []string) {
 }
 
 func jsonTask(targets map[string]build.Target, dst string) *Task {
-	return NewSimpleTask(dst, func() ([]byte, error) {
+	return NewSimpleTask("sources", dst, func() ([]byte, error) {
 		return json.MarshalIndent(targets, "", "  ")
 	})
 }
 
 func soongTask(targets map[string]build.Target, dst string) *Task {
-	return NewSimpleTask(dst, func() ([]byte, error) {
+	return NewSimpleTask("sources", dst, func() ([]byte, error) {
 		var b bytes.Buffer
 		writeHeader(&b, "//")
 
@@ -351,19 +351,19 @@ func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string, target
 	addGeneratedHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_win_asm.inc")
 	addGeneratedHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc")
 	return []*Task{
-		NewSimpleTask("include/openssl/prefix_symbols_internal_c.h", func() ([]byte, error) {
+		NewSimpleTask("prefix_symbols_internal", "include/openssl/prefix_symbols_internal_c.h", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
 			return BuildAsmGlobalsCHeader(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("include/openssl/prefix_symbols_internal_S.h", func() ([]byte, error) {
+		NewSimpleTask("prefix_symbols_internal", "include/openssl/prefix_symbols_internal_S.h", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
 			return BuildAsmGlobalsGasHeader(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_win_asm.inc", func() ([]byte, error) {
+		NewSimpleTask("prefix_symbols_internal", "gen/boringssl_prefix_symbols_internal_x86_win_asm.inc", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
 			return BuildAsmGlobalsNasmX86Header(syms), err
 		}, perlAsmTasks...),
-		NewSimpleTask("gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc", func() ([]byte, error) {
+		NewSimpleTask("prefix_symbols_internal", "gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
 			return BuildAsmGlobalsNasmX8664Header(syms), err
 		}, perlAsmTasks...),
@@ -384,11 +384,11 @@ func MakePrefixingIncludes(in map[string]InputTarget, targetsOut map[string]buil
 	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols.h")
 	var once sync.Once
 	return []*Task{
-		NewSimpleTask("include/openssl/prefix_symbols.h", func() ([]byte, error) {
+		NewSimpleTask("prefix_symbols", "include/openssl/prefix_symbols.h", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
 			return cHeader, err
 		}),
-		NewSimpleTask("rust/bssl-sys/boringssl_prefix_symbols_bindgen.rs.in", func() ([]byte, error) {
+		NewSimpleTask("prefix_symbols", "rust/bssl-sys/boringssl_prefix_symbols_bindgen.rs.in", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
 			return bindgenInclude, err
 		}),

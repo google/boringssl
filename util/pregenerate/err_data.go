@@ -204,7 +204,7 @@ func (e *errorData) readErrorDataFile(filename string) error {
 
 func NewErrDataTask(targetName string, inputs []string) *Task {
 	dst := path.Join("gen", targetName, "err_data.cc")
-	return NewSimpleTask(dst, func() ([]byte, error) {
+	return NewSimpleTask("err_data", dst, func() ([]byte, error) {
 		e := &errorData{
 			reasons:    newStringList(),
 			libraryMap: make(map[string]uint32),
