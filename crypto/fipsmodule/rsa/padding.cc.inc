@@ -192,7 +192,7 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
     goto err;
   }
 
-  MSBits = (BN_num_bits(rsa->n) - 1) & 0x7;
+  MSBits = (BN_num_bits(FromOpaque(rsa)->n) - 1) & 0x7;
   emLen = RSA_size(rsa);
   if (EM[0] & (0xFF << MSBits)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_FIRST_OCTET_INVALID);
@@ -281,12 +281,12 @@ int RSA_padding_add_PKCS1_PSS_mgf1(const RSA *rsa, unsigned char *EM,
   FIPS_service_indicator_lock_state();
   hLen = EVP_MD_size(Hash);
 
-  if (BN_is_zero(rsa->n)) {
+  if (BN_is_zero(FromOpaque(rsa)->n)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_EMPTY_PUBLIC_KEY);
     goto err;
   }
 
-  MSBits = (BN_num_bits(rsa->n) - 1) & 0x7;
+  MSBits = (BN_num_bits(FromOpaque(rsa)->n) - 1) & 0x7;
   emLen = RSA_size(rsa);
   if (MSBits == 0) {
     assert(emLen >= 1);

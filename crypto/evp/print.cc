@@ -26,6 +26,8 @@
 #include "../internal.h"
 
 
+using namespace bssl;
+
 static int print_hex(BIO *bp, const uint8_t *data, size_t len, int off) {
   for (size_t i = 0; i < len; i++) {
     if ((i % 15) == 0) {
@@ -98,7 +100,7 @@ static int bn_print(BIO *bp, const char *name, const BIGNUM *num, int off) {
 
 // RSA keys.
 
-static int do_rsa_print(BIO *out, const RSA *rsa, int off,
+static int do_rsa_print(BIO *out, const RSAImpl *rsa, int off,
                         int include_private) {
   int mod_len = 0;
   if (rsa->n != nullptr) {
@@ -142,11 +144,11 @@ static int do_rsa_print(BIO *out, const RSA *rsa, int off,
 }
 
 static int rsa_pub_print(BIO *bp, const EVP_PKEY *pkey, int indent) {
-  return do_rsa_print(bp, EVP_PKEY_get0_RSA(pkey), indent, 0);
+  return do_rsa_print(bp, FromOpaque(EVP_PKEY_get0_RSA(pkey)), indent, 0);
 }
 
 static int rsa_priv_print(BIO *bp, const EVP_PKEY *pkey, int indent) {
-  return do_rsa_print(bp, EVP_PKEY_get0_RSA(pkey), indent, 1);
+  return do_rsa_print(bp, FromOpaque(EVP_PKEY_get0_RSA(pkey)), indent, 1);
 }
 
 

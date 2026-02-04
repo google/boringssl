@@ -26,6 +26,7 @@
 
 #include "../../bcm_support.h"
 #include "../../internal.h"
+#include "../../mem_internal.h"
 #include "../bn/internal.h"
 #include "../delocate.h"
 #include "../service_indicator/internal.h"
@@ -39,12 +40,14 @@ static_assert(OPENSSL_RSA_MAX_MODULUS_BITS <=
               "Max RSA size too big for Montgomery arithmetic");
 
 int bssl::rsa_check_public_key(const RSA *rsa) {
-  if (rsa->n == nullptr) {
+  auto *impl = FromOpaque(rsa);
+
+  if (impl->n == nullptr) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
 
-  unsigned n_bits = BN_num_bits(rsa->n);
+  unsigned n_bits = BN_num_bits(impl->n);
   if (n_bits > OPENSSL_RSA_MAX_MODULUS_BITS) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_MODULUS_TOO_LARGE);
     return 0;
@@ -57,24 +60,24 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
 
   // RSA moduli must be positive and odd. In addition to being necessary for RSA
   // in general, we cannot setup Montgomery reduction with even moduli.
-  if (!BN_is_odd(rsa->n) || BN_is_negative(rsa->n)) {
+  if (!BN_is_odd(impl->n) || BN_is_negative(impl->n)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_RSA_PARAMETERS);
     return 0;
   }
 
   static const unsigned kMaxExponentBits = 33;
-  if (rsa->e != nullptr) {
+  if (impl->e != nullptr) {
     // Reject e = 1, negative e, and even e. e must be odd to be relatively
     // prime with phi(n).
-    unsigned e_bits = BN_num_bits(rsa->e);
-    if (e_bits < 2 || BN_is_negative(rsa->e) || !BN_is_odd(rsa->e)) {
+    unsigned e_bits = BN_num_bits(impl->e);
+    if (e_bits < 2 || BN_is_negative(impl->e) || !BN_is_odd(impl->e)) {
       OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_E_VALUE);
       return 0;
     }
-    if (rsa->flags & RSA_FLAG_LARGE_PUBLIC_EXPONENT) {
+    if (impl->flags & RSA_FLAG_LARGE_PUBLIC_EXPONENT) {
       // The caller has requested disabling DoS protections. Still, e must be
       // less than n.
-      if (BN_ucmp(rsa->n, rsa->e) <= 0) {
+      if (BN_ucmp(impl->n, impl->e) <= 0) {
         OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_E_VALUE);
         return 0;
       }
@@ -95,9 +98,9 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
 
       // The upper bound on |e_bits| and lower bound on |n_bits| imply e is
       // bounded by n.
-      assert(BN_ucmp(rsa->n, rsa->e) > 0);
+      assert(BN_ucmp(impl->n, impl->e) > 0);
     }
-  } else if (!(rsa->flags & RSA_FLAG_NO_PUBLIC_EXPONENT)) {
+  } else if (!(impl->flags & RSA_FLAG_NO_PUBLIC_EXPONENT)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
@@ -124,7 +127,7 @@ static int ensure_fixed_copy(BIGNUM **out, const BIGNUM *in, int width) {
 // After this function has returned, |rsa| may not be changed. This is needed
 // because |RSA| is a public struct and, additionally, OpenSSL 1.1.0 opaquified
 // it wrong (see https://github.com/openssl/openssl/issues/5158).
-static int freeze_private_key(RSA *rsa, BN_CTX *ctx) {
+static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
   CRYPTO_MUTEX_lock_read(&rsa->lock);
   int frozen = rsa->private_key_frozen;
   CRYPTO_MUTEX_unlock_read(&rsa->lock);
@@ -222,23 +225,25 @@ err:
 }
 
 void bssl::rsa_invalidate_key(RSA *rsa) {
-  rsa->private_key_frozen = 0;
+  auto *impl = FromOpaque(rsa);
 
-  BN_MONT_CTX_free(rsa->mont_n);
-  rsa->mont_n = nullptr;
-  BN_MONT_CTX_free(rsa->mont_p);
-  rsa->mont_p = nullptr;
-  BN_MONT_CTX_free(rsa->mont_q);
-  rsa->mont_q = nullptr;
+  impl->private_key_frozen = 0;
 
-  BN_free(rsa->d_fixed);
-  rsa->d_fixed = nullptr;
-  BN_free(rsa->dmp1_fixed);
-  rsa->dmp1_fixed = nullptr;
-  BN_free(rsa->dmq1_fixed);
-  rsa->dmq1_fixed = nullptr;
-  BN_free(rsa->iqmp_mont);
-  rsa->iqmp_mont = nullptr;
+  BN_MONT_CTX_free(impl->mont_n);
+  impl->mont_n = nullptr;
+  BN_MONT_CTX_free(impl->mont_p);
+  impl->mont_p = nullptr;
+  BN_MONT_CTX_free(impl->mont_q);
+  impl->mont_q = nullptr;
+
+  BN_free(impl->d_fixed);
+  impl->d_fixed = nullptr;
+  BN_free(impl->dmp1_fixed);
+  impl->dmp1_fixed = nullptr;
+  BN_free(impl->dmq1_fixed);
+  impl->dmq1_fixed = nullptr;
+  BN_free(impl->iqmp_mont);
+  impl->iqmp_mont = nullptr;
 }
 
 int bssl::rsa_default_sign_raw(RSA *rsa, size_t *out_len, uint8_t *out,
@@ -289,12 +294,15 @@ err:
 }
 
 
-static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx);
+static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSAImpl *rsa,
+                           BN_CTX *ctx);
 
 int bssl::rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
                                       size_t max_out, const uint8_t *in,
                                       size_t in_len, int padding) {
-  if (rsa->n == nullptr || rsa->e == nullptr) {
+  auto *impl = FromOpaque(rsa);
+
+  if (impl->n == nullptr || impl->e == nullptr) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
@@ -342,14 +350,14 @@ int bssl::rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
     goto err;
   }
 
-  if (BN_ucmp(f, rsa->n) >= 0) {
+  if (BN_ucmp(f, impl->n) >= 0) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE_FOR_MODULUS);
     goto err;
   }
 
-  if (!BN_MONT_CTX_set_locked(&rsa->mont_n, &rsa->lock, rsa->n, ctx.get()) ||
-      !BN_mod_exp_mont(result, f, rsa->e, &rsa->mont_n->N, ctx.get(),
-                       rsa->mont_n)) {
+  if (!BN_MONT_CTX_set_locked(&impl->mont_n, &impl->lock, impl->n, ctx.get()) ||
+      !BN_mod_exp_mont(result, f, impl->e, &impl->mont_n->N, ctx.get(),
+                       impl->mont_n)) {
     goto err;
   }
 
@@ -393,7 +401,9 @@ int RSA_verify_raw(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
 
 int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
                                         const uint8_t *in, size_t len) {
-  if (rsa->n == nullptr || rsa->d == nullptr) {
+  auto *impl = FromOpaque(rsa);
+
+  if (impl->n == nullptr || impl->d == nullptr) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
@@ -410,25 +420,25 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
   }
 
   // The caller should have ensured this.
-  assert(len == BN_num_bytes(rsa->n));
+  assert(len == BN_num_bytes(impl->n));
   if (BN_bin2bn(in, len, f) == nullptr) {
     return 0;
   }
 
   // The input to the RSA private transform may be secret, but padding is
   // expected to construct a value within range, so we can leak this comparison.
-  if (constant_time_declassify_int(BN_ucmp(f, rsa->n) >= 0)) {
+  if (constant_time_declassify_int(BN_ucmp(f, impl->n) >= 0)) {
     // Usually the padding functions would catch this.
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE_FOR_MODULUS);
     return 0;
   }
 
-  if (!freeze_private_key(rsa, ctx.get())) {
+  if (!freeze_private_key(impl, ctx.get())) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
     return 0;
   }
 
-  if (rsa->e == nullptr && (rsa->flags & RSA_FLAG_NO_PUBLIC_EXPONENT) == 0) {
+  if (impl->e == nullptr && (impl->flags & RSA_FLAG_NO_PUBLIC_EXPONENT) == 0) {
     // Unless the private key was specifically created with an API like
     // |RSA_new_private_key_no_e|, don't allow RSA keys to be missing the public
     // exponent, which disables some fault attack mitigations. (It should not be
@@ -437,19 +447,19 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
     return 0;
   }
 
-  if (rsa->p != nullptr && rsa->q != nullptr && rsa->e != nullptr &&
-      rsa->dmp1 != nullptr && rsa->dmq1 != nullptr && rsa->iqmp != nullptr &&
-      // Require that we can reduce |f| by |rsa->p| and |rsa->q| in constant
+  if (impl->p != nullptr && impl->q != nullptr && impl->e != nullptr &&
+      impl->dmp1 != nullptr && impl->dmq1 != nullptr && impl->iqmp != nullptr &&
+      // Require that we can reduce |f| by |impl->p| and |impl->q| in constant
       // time, which requires primes be the same size, rounded to the Montgomery
       // coefficient. (See |mod_montgomery|.) This is not required by RFC 8017,
       // but it is true for keys generated by us and all common implementations.
-      bn_less_than_montgomery_R(rsa->q, rsa->mont_p) &&
-      bn_less_than_montgomery_R(rsa->p, rsa->mont_q)) {
-    if (!rsa_mod_exp_crt(result, f, rsa, ctx.get())) {
+      bn_less_than_montgomery_R(impl->q, impl->mont_p) &&
+      bn_less_than_montgomery_R(impl->p, impl->mont_q)) {
+    if (!rsa_mod_exp_crt(result, f, impl, ctx.get())) {
       return 0;
     }
-  } else if (!BN_mod_exp_mont_consttime(result, f, rsa->d_fixed, rsa->n,
-                                        ctx.get(), rsa->mont_n)) {
+  } else if (!BN_mod_exp_mont_consttime(result, f, impl->d_fixed, impl->n,
+                                        ctx.get(), impl->mont_n)) {
     return 0;
   }
 
@@ -463,11 +473,11 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
   //
   // This check is cheap assuming |e| is small, which we require in
   // |rsa_check_public_key|.
-  if (rsa->e != nullptr) {
+  if (impl->e != nullptr) {
     BIGNUM *vrfy = BN_CTX_get(ctx.get());
     if (vrfy == nullptr ||
-        !BN_mod_exp_mont(vrfy, result, rsa->e, rsa->n, ctx.get(),
-                         rsa->mont_n) ||
+        !BN_mod_exp_mont(vrfy, result, impl->e, impl->n, ctx.get(),
+                         impl->mont_n) ||
         !constant_time_declassify_int(BN_equal_consttime(vrfy, f))) {
       OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
       return 0;
@@ -479,7 +489,7 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
   // the result.
   //
   // See Falko Strenzke, "Manger's Attack revisited", ICICS 2010.
-  assert(result->width == rsa->mont_n->N.width);
+  assert(result->width == impl->mont_n->N.width);
   bn_assert_fits_in_bytes(result, len);
   if (!BN_bn2bin_padded(out, len, result)) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
@@ -520,7 +530,8 @@ static int mod_montgomery(BIGNUM *r, const BIGNUM *I, const BIGNUM *p,
   return 1;
 }
 
-static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
+static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSAImpl *rsa,
+                           BN_CTX *ctx) {
   assert(ctx != nullptr);
 
   assert(rsa->n != nullptr);
@@ -559,7 +570,7 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
       !BN_mod_exp_mont_consttime(r0, r1, rsa->dmp1_fixed, p, ctx,
                                  rsa->mont_p) ||
       // Compute r0 = r0 - m1 mod p. |m1| is reduced mod |q|, not |p|, so we
-      // just run |mod_montgomery| again for simplicity. This could be more
+      // just run |mod_montgomery| again for srsaicity. This could be more
       // efficient with more cases: if |p > q|, |m1| is already reduced. If
       // |p < q| but they have the same bit width, |bn_reduce_once| suffices.
       // However, compared to over 2048 Montgomery multiplications above, this
@@ -724,7 +735,7 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
 //
 // This function returns one on success and zero on failure. It has a failure
 // probability of about 2^-20.
-static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
+static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
                                  BN_GENCB *cb) {
   if (bits > OPENSSL_RSA_MAX_MODULUS_BITS) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_MODULUS_TOO_LARGE);
@@ -814,7 +825,7 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     }
 
     // Calculate d = e^(-1) (mod lcm(p-1, q-1)), per FIPS 186-5. This differs
-    // from typical RSA implementations which use (p-1)*(q-1).
+    // from typical RSA rsaementations which use (p-1)*(q-1).
     //
     // Note this means the size of d might reveal information about p-1 and
     // q-1. However, we do operations with Chinese Remainder Theorem, so we only
@@ -862,7 +873,7 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     return 0;
   }
 
-  // Sanity-check that |rsa->n| has the specified size. This is implied by
+  // Sanity-check that |rsa->n| has the specified size. This is rsaied by
   // |generate_prime|'s bounds.
   if (BN_num_bits(rsa->n) != (unsigned)bits) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
@@ -892,7 +903,7 @@ static void replace_bn_mont_ctx(BN_MONT_CTX **out, BN_MONT_CTX **in) {
   *in = nullptr;
 }
 
-static int RSA_generate_key_ex_maybe_fips(RSA *rsa, int bits,
+static int RSA_generate_key_ex_maybe_fips(RSAImpl *rsa, int bits,
                                           const BIGNUM *e_value, BN_GENCB *cb,
                                           int check_fips) {
   boringssl_ensure_rsa_self_test();
@@ -902,7 +913,7 @@ static int RSA_generate_key_ex_maybe_fips(RSA *rsa, int bits,
     return 0;
   }
 
-  UniquePtr<RSA> tmp;
+  UniquePtr<RSAImpl> tmp;
 
   // |rsa_generate_key_impl|'s 2^-20 failure probability is too high at scale,
   // so we run the FIPS algorithm four times, bringing it down to 2^-80. We
@@ -912,7 +923,7 @@ static int RSA_generate_key_ex_maybe_fips(RSA *rsa, int bits,
   do {
     ERR_clear_error();
     // Generate into scratch space, to avoid leaving partial work on failure.
-    tmp.reset(RSA_new());
+    tmp.reset(FromOpaque(RSA_new()));
     if (tmp == nullptr) {
       return 0;
     }
@@ -955,7 +966,7 @@ static int RSA_generate_key_ex_maybe_fips(RSA *rsa, int bits,
 
 int RSA_generate_key_ex(RSA *rsa, int bits, const BIGNUM *e_value,
                         BN_GENCB *cb) {
-  return RSA_generate_key_ex_maybe_fips(rsa, bits, e_value, cb,
+  return RSA_generate_key_ex_maybe_fips(FromOpaque(rsa), bits, e_value, cb,
                                         /*check_fips=*/0);
 }
 
@@ -972,7 +983,8 @@ int RSA_generate_key_fips(RSA *rsa, int bits, BN_GENCB *cb) {
 
   BIGNUM *e = BN_new();
   int ret = e != nullptr && BN_set_word(e, RSA_F4) &&
-            RSA_generate_key_ex_maybe_fips(rsa, bits, e, cb, /*check_fips=*/1);
+            RSA_generate_key_ex_maybe_fips(FromOpaque(rsa), bits, e, cb,
+                                           /*check_fips=*/1);
   BN_free(e);
 
   if (ret) {

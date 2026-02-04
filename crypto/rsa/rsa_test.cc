@@ -34,6 +34,7 @@
 #include "../fipsmodule/bn/internal.h"
 #include "../fipsmodule/rsa/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
 #include "../test/test_data.h"
 #include "../test/test_util.h"
 
@@ -576,7 +577,7 @@ TEST(RSATest, CheckFIPS) {
 }
 
 TEST(RSATest, GenerateFIPS) {
-  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<RSAImpl> rsa(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
 
   // RSA_generate_key_fips may only be used for 2048-, 3072-, and 4096-bit
@@ -595,7 +596,7 @@ TEST(RSATest, GenerateFIPS) {
   for (const size_t bits : {2048, 3072, 4096}) {
     SCOPED_TRACE(bits);
 
-    rsa.reset(RSA_new());
+    rsa.reset(FromOpaque(RSA_new()));
     ASSERT_TRUE(rsa);
     ASSERT_TRUE(RSA_generate_key_fips(rsa.get(), bits, nullptr));
     EXPECT_EQ(bits, BN_num_bits(rsa->n));
@@ -603,7 +604,7 @@ TEST(RSATest, GenerateFIPS) {
 }
 
 TEST(RSATest, BadKey) {
-  UniquePtr<RSA> key(RSA_new());
+  UniquePtr<RSAImpl> key(FromOpaque(RSA_new()));
   UniquePtr<BIGNUM> e(BN_new());
   ASSERT_TRUE(key);
   ASSERT_TRUE(e);
@@ -622,13 +623,14 @@ TEST(RSATest, BadKey) {
   size_t der_len;
   ASSERT_TRUE(RSA_private_key_to_bytes(&der, &der_len, key.get()));
   UniquePtr<uint8_t> delete_der(der);
-  key.reset(RSA_private_key_from_bytes(der, der_len));
+  key.reset(FromOpaque(RSA_private_key_from_bytes(der, der_len)));
   EXPECT_FALSE(key);
 }
 
 TEST(RSATest, ASN1) {
   // Test that private keys may be decoded.
-  UniquePtr<RSA> rsa(RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
+  UniquePtr<RSAImpl> rsa(
+      FromOpaque(RSA_private_key_from_bytes(kKey1, sizeof(kKey1))));
   ASSERT_TRUE(rsa);
 
   // Test that the serialization round-trips.
@@ -643,7 +645,7 @@ TEST(RSATest, ASN1) {
   delete_der.reset(der);
 
   // Public keys may be parsed back out.
-  rsa.reset(RSA_public_key_from_bytes(der, der_len));
+  rsa.reset(FromOpaque(RSA_public_key_from_bytes(der, der_len)));
   ASSERT_TRUE(rsa);
   EXPECT_FALSE(rsa->p);
   EXPECT_FALSE(rsa->q);
@@ -664,8 +666,8 @@ TEST(RSATest, ASN1) {
   ERR_clear_error();
 
   // Public keys with negative moduli are invalid.
-  rsa.reset(
-      RSA_public_key_from_bytes(kEstonianRSAKey, sizeof(kEstonianRSAKey)));
+  rsa.reset(FromOpaque(
+      RSA_public_key_from_bytes(kEstonianRSAKey, sizeof(kEstonianRSAKey))));
   EXPECT_FALSE(rsa);
   ERR_clear_error();
 }
@@ -683,22 +685,22 @@ TEST(RSATest, RoundKeyLengths) {
   ASSERT_TRUE(e);
   ASSERT_TRUE(BN_set_word(e.get(), RSA_F4));
 
-  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<RSAImpl> rsa(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
   ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1025, e.get(), nullptr));
   EXPECT_EQ(1024u, BN_num_bits(rsa->n));
 
-  rsa.reset(RSA_new());
+  rsa.reset(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
   ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1027, e.get(), nullptr));
   EXPECT_EQ(1024u, BN_num_bits(rsa->n));
 
-  rsa.reset(RSA_new());
+  rsa.reset(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
   ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1151, e.get(), nullptr));
   EXPECT_EQ(1024u, BN_num_bits(rsa->n));
 
-  rsa.reset(RSA_new());
+  rsa.reset(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
   ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1152, e.get(), nullptr));
   EXPECT_EQ(1152u, BN_num_bits(rsa->n));
@@ -750,7 +752,7 @@ TEST(RSATest, CheckKey) {
       "a54bb61ea5e64b9423102933ea100c12dad809fbf9589515e9d28e867f6b95c2d307f792"
       "cac28c6d7d23f441cb5b62798233db29b5cc0348";
 
-  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<RSAImpl> rsa(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
 
   // Missing n or e does not pass.
@@ -895,7 +897,7 @@ TEST(RSATest, CheckKey) {
 }
 
 TEST(RSATest, KeygenFail) {
-  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<RSAImpl> rsa(FromOpaque(RSA_new()));
   ASSERT_TRUE(rsa);
 
   // Cause RSA key generation after a prime has been generated, to test that
@@ -1195,7 +1197,8 @@ TEST(RSATest, Negative) {
 TEST(RSATest, LargeE) {
   // Test an RSA key with large e by swapping d and e in kKey1.
   // Since e is small, e mod (p-1) and e mod (q-1) will simply be e.
-  UniquePtr<RSA> key(RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
+  UniquePtr<RSAImpl> key(
+      FromOpaque(RSA_private_key_from_bytes(kKey1, sizeof(kKey1))));
   ASSERT_TRUE(key);
   const BIGNUM *n = RSA_get0_n(key.get());
   const BIGNUM *e = RSA_get0_e(key.get());
@@ -1207,14 +1210,15 @@ TEST(RSATest, LargeE) {
   // By default, the large exponent is not allowed as e.
   UniquePtr<RSA> pub(RSA_new_public_key(n, /*e=*/d));
   EXPECT_FALSE(pub);
-  UniquePtr<RSA> priv(RSA_new_private_key(n, /*e=*/d, /*d=*/e, p, q,
-                                          /*dmp1=*/e, /*dmq1=*/e, iqmp));
+  UniquePtr<RSAImpl> priv(
+      FromOpaque(RSA_new_private_key(n, /*e=*/d, /*d=*/e, p, q,
+                                     /*dmp1=*/e, /*dmq1=*/e, iqmp)));
   EXPECT_FALSE(priv);
 
   // Constructing such a key piecemeal also would not work. This was only
   // possible with private APIs, so when |RSA| is opaque, this case will be
   // impossible.
-  priv.reset(RSA_new());
+  priv.reset(FromOpaque(RSA_new()));
   ASSERT_TRUE(priv);
   priv->n = BN_dup(n);
   ASSERT_TRUE(priv->n);
@@ -1233,8 +1237,9 @@ TEST(RSATest, LargeE) {
   // But the "large e" APIs tolerate it.
   pub.reset(RSA_new_public_key_large_e(n, /*e=*/d));
   ASSERT_TRUE(pub);
-  priv.reset(RSA_new_private_key_large_e(n, /*e=*/d, /*d=*/e, p, q, /*dmp1=*/e,
-                                         /*dmq1=*/e, iqmp));
+  priv.reset(FromOpaque(RSA_new_private_key_large_e(n, /*e=*/d, /*d=*/e, p, q,
+                                                    /*dmp1=*/e,
+                                                    /*dmq1=*/e, iqmp)));
   ASSERT_TRUE(priv);
 
   // Test that operations work correctly.
@@ -1342,7 +1347,8 @@ TEST(RSATest, KeyLimits) {
 
 #if defined(OPENSSL_THREADS)
 TEST(RSATest, Threads) {
-  UniquePtr<RSA> rsa_template(RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
+  UniquePtr<RSAImpl> rsa_template(
+      FromOpaque(RSA_private_key_from_bytes(kKey1, sizeof(kKey1))));
   ASSERT_TRUE(rsa_template);
 
   const uint8_t kDummyHash[32] = {0};
@@ -1354,7 +1360,7 @@ TEST(RSATest, Threads) {
 
   // RSA keys may be assembled piece-meal and then used in parallel between
   // threads, which requires internal locking to create some derived properties.
-  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<RSAImpl> rsa(FromOpaque(RSA_new()));
   rsa->n = BN_dup(rsa_template->n);
   ASSERT_TRUE(rsa->n);
   rsa->e = BN_dup(rsa_template->e);

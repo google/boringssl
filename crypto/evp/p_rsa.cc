@@ -167,7 +167,7 @@ static bssl::evp_decode_result_t rsa_decode_pss_params(
 }
 
 static int rsa_pub_encode_pss(CBB *out, const EVP_PKEY *key) {
-  const RSA *rsa = reinterpret_cast<const RSA *>(key->pkey);
+  const RSAImpl *rsa = reinterpret_cast<const RSAImpl *>(key->pkey);
   CBB spki, algorithm, key_bitstring;
   if (!CBB_add_asn1(out, &spki, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&spki, &algorithm, CBS_ASN1_SEQUENCE) ||
@@ -194,7 +194,8 @@ static bssl::evp_decode_result_t rsa_pub_decode_pss(const EVP_PKEY_ALG *alg,
     return ret;
   }
 
-  UniquePtr<RSA> rsa(RSA_public_key_from_bytes(CBS_data(key), CBS_len(key)));
+  UniquePtr<RSAImpl> rsa(
+      FromOpaque(RSA_public_key_from_bytes(CBS_data(key), CBS_len(key))));
   if (rsa == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
@@ -206,7 +207,7 @@ static bssl::evp_decode_result_t rsa_pub_decode_pss(const EVP_PKEY_ALG *alg,
 }
 
 static int rsa_priv_encode_pss(CBB *out, const EVP_PKEY *key) {
-  const RSA *rsa = reinterpret_cast<const RSA *>(key->pkey);
+  const RSAImpl *rsa = reinterpret_cast<const RSAImpl *>(key->pkey);
   CBB pkcs8, algorithm, private_key;
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
@@ -233,7 +234,8 @@ static bssl::evp_decode_result_t rsa_priv_decode_pss(const EVP_PKEY_ALG *alg,
     return ret;
   }
 
-  UniquePtr<RSA> rsa(RSA_private_key_from_bytes(CBS_data(key), CBS_len(key)));
+  UniquePtr<RSAImpl> rsa(
+      FromOpaque(RSA_private_key_from_bytes(CBS_data(key), CBS_len(key))));
   if (rsa == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
@@ -374,7 +376,7 @@ static int pkey_rsa_init(EvpPkeyCtx *ctx) {
     rctx->pad_mode = RSA_PKCS1_PSS_PADDING;
     // Pick up PSS parameters from the key.
     if (ctx->pkey != nullptr && ctx->pkey->pkey != nullptr) {
-      RSA *rsa = static_cast<RSA *>(ctx->pkey->pkey);
+      RSAImpl *rsa = static_cast<RSAImpl *>(ctx->pkey->pkey);
       const EVP_MD *md = rsa_pss_params_get_md(rsa->pss_params);
       if (md != nullptr) {
         rctx->md = rctx->mgf1md = md;

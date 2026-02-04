@@ -342,7 +342,9 @@ int RSA_private_encrypt(size_t flen, const uint8_t *from, uint8_t *to, RSA *rsa,
 
 int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                 const uint8_t *in, size_t in_len, int padding) {
-  if (rsa->n == nullptr || rsa->e == nullptr) {
+  auto *impl = FromOpaque(rsa);
+
+  if (impl->n == nullptr || impl->e == nullptr) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
@@ -396,15 +398,15 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
     goto err;
   }
 
-  if (BN_ucmp(f, rsa->n) >= 0) {
+  if (BN_ucmp(f, impl->n) >= 0) {
     // usually the padding functions would catch this
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE_FOR_MODULUS);
     goto err;
   }
 
-  if (!BN_MONT_CTX_set_locked(&rsa->mont_n, &rsa->lock, rsa->n, ctx.get()) ||
-      !BN_mod_exp_mont(result, f, rsa->e, &rsa->mont_n->N, ctx.get(),
-                       rsa->mont_n)) {
+  if (!BN_MONT_CTX_set_locked(&impl->mont_n, &impl->lock, impl->n, ctx.get()) ||
+      !BN_mod_exp_mont(result, f, impl->e, &impl->mont_n->N, ctx.get(),
+                       impl->mont_n)) {
     goto err;
   }
 
@@ -490,8 +492,9 @@ err:
 
 int RSA_decrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                 const uint8_t *in, size_t in_len, int padding) {
-  if (rsa->meth->decrypt) {
-    return rsa->meth->decrypt(rsa, out_len, out, max_out, in, in_len, padding);
+  auto *impl = FromOpaque(rsa);
+  if (impl->meth->decrypt) {
+    return impl->meth->decrypt(rsa, out_len, out, max_out, in, in_len, padding);
   }
 
   return rsa_default_decrypt(rsa, out_len, out, max_out, in, in_len, padding);

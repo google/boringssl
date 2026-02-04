@@ -192,7 +192,7 @@ static RSA *self_test_rsa_key() {
       0x89, 0x29, 0xc7, 0x05, 0x27, 0x68, 0x90, 0x15,
   };
 
-  RSA *rsa = RSA_new();
+  RSAImpl *rsa = FromOpaque(RSA_new());
   if (rsa == nullptr ||  //
       !set_bignum(&rsa->n, kN, sizeof(kN)) ||
       !set_bignum(&rsa->e, kE, sizeof(kE)) ||

@@ -23,6 +23,8 @@
 #include "../../internal.h"
 
 
+DECLARE_OPAQUE_STRUCT(rsa_st, RSAImpl)
+
 BSSL_NAMESPACE_BEGIN
 
 // TODO(crbug.com/42290480): Raise this limit. 512-bit RSA was factored in 1999.
@@ -42,9 +44,13 @@ enum rsa_pss_params_t {
   rsa_pss_sha512,
 };
 
-BSSL_NAMESPACE_END
+// Exported because rsa_test.cc uses this class and links to the .so.
+class OPENSSL_EXPORT RSAImpl : public rsa_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
 
-struct rsa_st {
+  ~RSAImpl();
+
   RSA_METHOD *meth;
 
   BIGNUM *n;
@@ -85,11 +91,8 @@ struct rsa_st {
 
   // private_key_frozen is one if the key has been used for a private key
   // operation and may no longer be mutated.
-  unsigned private_key_frozen:1;
+  unsigned private_key_frozen : 1;
 };
-
-
-BSSL_NAMESPACE_BEGIN
 
 #define RSA_PKCS1_PADDING_SIZE 11
 

@@ -54,7 +54,7 @@ static int marshal_integer(CBB *cbb, BIGNUM *bn) {
 }
 
 RSA *RSA_parse_public_key(CBS *cbs) {
-  RSA *ret = RSA_new();
+  RSAImpl *ret = FromOpaque(RSA_new());
   if (ret == nullptr) {
     return nullptr;
   }
@@ -91,9 +91,9 @@ RSA *RSA_public_key_from_bytes(const uint8_t *in, size_t in_len) {
 
 int RSA_marshal_public_key(CBB *cbb, const RSA *rsa) {
   CBB child;
+  const RSAImpl *impl = FromOpaque(rsa);
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, rsa->n) ||
-      !marshal_integer(&child, rsa->e) ||
+      !marshal_integer(&child, impl->n) || !marshal_integer(&child, impl->e) ||
       !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_ENCODE_ERROR);
     return 0;
@@ -120,7 +120,7 @@ int RSA_public_key_to_bytes(uint8_t **out_bytes, size_t *out_len,
 static const uint64_t kVersionTwoPrime = 0;
 
 RSA *RSA_parse_private_key(CBS *cbs) {
-  RSA *ret = RSA_new();
+  RSAImpl *ret = FromOpaque(RSA_new());
   if (ret == nullptr) {
     return nullptr;
   }
@@ -179,18 +179,16 @@ RSA *RSA_private_key_from_bytes(const uint8_t *in, size_t in_len) {
 }
 
 int RSA_marshal_private_key(CBB *cbb, const RSA *rsa) {
+  const RSAImpl *impl = FromOpaque(rsa);
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&child, kVersionTwoPrime) ||
-      !marshal_integer(&child, rsa->n) ||
-      !marshal_integer(&child, rsa->e) ||
-      !marshal_integer(&child, rsa->d) ||
-      !marshal_integer(&child, rsa->p) ||
-      !marshal_integer(&child, rsa->q) ||
-      !marshal_integer(&child, rsa->dmp1) ||
-      !marshal_integer(&child, rsa->dmq1) ||
-      !marshal_integer(&child, rsa->iqmp) ||
-      !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->n) || !marshal_integer(&child, impl->e) ||
+      !marshal_integer(&child, impl->d) || !marshal_integer(&child, impl->p) ||
+      !marshal_integer(&child, impl->q) ||
+      !marshal_integer(&child, impl->dmp1) ||
+      !marshal_integer(&child, impl->dmq1) ||
+      !marshal_integer(&child, impl->iqmp) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_ENCODE_ERROR);
     return 0;
   }
