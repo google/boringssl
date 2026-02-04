@@ -738,7 +738,7 @@ both_builders(
     "linux32_nosse2_noasm",
     LINUX_HOST,
     category = "linux|x86|gcc",
-    short_name = "na",
+    short_name = "nosse2",
     properties = {
         "cmake_args": {
             "OPENSSL_NO_ASM": "1",
