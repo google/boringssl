@@ -221,6 +221,7 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
 #define EVP_PKEY_CTRL_HKDF_SALT (EVP_PKEY_ALG_CTRL + 17)
 #define EVP_PKEY_CTRL_HKDF_INFO (EVP_PKEY_ALG_CTRL + 18)
 #define EVP_PKEY_CTRL_DH_PAD (EVP_PKEY_ALG_CTRL + 19)
+#define EVP_PKEY_CTRL_MLDSA_CONTEXT (EVP_PKEY_ALG_CTRL + 20)
 
 class EvpPkeyCtx : public evp_pkey_ctx_st {
  public:

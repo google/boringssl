@@ -530,6 +530,36 @@ bool SetupContext(FileTest *t, const KeyMap *key_map, EVP_PKEY_CTX *ctx) {
   if (t->HasAttribute("DiffieHellmanPad") && !EVP_PKEY_CTX_set_dh_pad(ctx, 1)) {
     return false;
   }
+  if (t->HasAttribute("MlDsa44Ctx")) {
+    std::vector<uint8_t> context;
+    if (!t->GetBytes(&context, "MlDsa44Ctx")) {
+      return false;
+    }
+    if (!EVP_PKEY_CTX_set_mldsa_44_context(ctx, context.data(),
+                           context.size())) {
+      return false;
+    }
+  }
+  if (t->HasAttribute("MlDsa65Ctx")) {
+    std::vector<uint8_t> context;
+    if (!t->GetBytes(&context, "MlDsa65Ctx")) {
+      return false;
+    }
+    if (!EVP_PKEY_CTX_set_mldsa_65_context(ctx, context.data(),
+                           context.size())) {
+      return false;
+    }
+  }
+  if (t->HasAttribute("MlDsa87Ctx")) {
+    std::vector<uint8_t> context;
+    if (!t->GetBytes(&context, "MlDsa87Ctx")) {
+      return false;
+    }
+    if (!EVP_PKEY_CTX_set_mldsa_87_context(ctx, context.data(),
+                           context.size())) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -674,7 +704,7 @@ bool TestEVPOperation(FileTest *t, const KeyMap *key_map, bool copy_ctx) {
     if (ctx == nullptr ||  //
         !md_op_init(ctx.get(), &pctx, digest, nullptr, key) ||
         !MaybeReplaceWithCopy(&ctx, copy_ctx) ||
-        !SetupContext(t, key_map, pctx) ||
+        !SetupContext(t, key_map, ctx->pctx) ||
         !MaybeReplaceWithCopy(&ctx, copy_ctx)) {
       return false;
     }
@@ -902,12 +932,6 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
       return;
     }
 
-    // We do not currently support signature contexts.
-    // TODO(crbug.com/449751916): Support this.
-    if (!sig_ctx.empty()) {
-      return;
-    }
-
     if (EVP_PKEY_id(key.get()) == EVP_PKEY_DSA) {
       // DSA is deprecated and is not usable via EVP.
       DSA *dsa = EVP_PKEY_get0_DSA(key.get());
@@ -929,6 +953,21 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PSS_PADDING));
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md));
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx, pss_salt_len));
+      }
+      if (!sig_ctx.empty()) {
+        if (EVP_PKEY_id(key.get()) == EVP_PKEY_ML_DSA_44) {
+          ASSERT_TRUE(EVP_PKEY_CTX_set_mldsa_44_context(pctx, sig_ctx.data(),
+                                                        sig_ctx.size()));
+        } else if (EVP_PKEY_id(key.get()) == EVP_PKEY_ML_DSA_65) {
+          ASSERT_TRUE(EVP_PKEY_CTX_set_mldsa_65_context(pctx, sig_ctx.data(),
+                                                        sig_ctx.size()));
+        } else if (EVP_PKEY_id(key.get()) == EVP_PKEY_ML_DSA_87) {
+          ASSERT_TRUE(EVP_PKEY_CTX_set_mldsa_87_context(pctx, sig_ctx.data(),
+                                                        sig_ctx.size()));
+        } else {
+          // We do not support context for non-mldsa keys.
+          return;
+        }
       }
       int ret = EVP_DigestVerify(ctx.get(), sig.data(), sig.size(), msg.data(),
                                  msg.size());
@@ -987,7 +1026,6 @@ TEST(EVPTest, WycheproofEd25519) {
 // TODO(crbug.com/449751916): We also test these in the low-level ML-DSA code.
 // The EVP-level tests are not yet redundant:
 //
-// * We can't yet run the tests with a context argument.
 // * We can't yet run the signing tests with external entropy.
 //
 // When/if we add |EVP_PKEY|-based APIs for those, we may be able to remove the

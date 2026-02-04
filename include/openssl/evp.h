@@ -1024,6 +1024,25 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_set_ec_paramgen_curve_nid(EVP_PKEY_CTX *ctx,
 OPENSSL_EXPORT int EVP_PKEY_CTX_set_dh_pad(EVP_PKEY_CTX *ctx, int pad);
 
 
+// ML-DSA-specific control functions.
+
+// EVP_PKEY_CTX_set_mldsa_44_context sets the context for an ML-DSA signing or
+// verification operation.
+OPENSSL_EXPORT int EVP_PKEY_CTX_set_mldsa_44_context(EVP_PKEY_CTX* ctx,
+                                                     uint8_t* context,
+                                                     size_t context_len);
+// EVP_PKEY_CTX_set_mldsa_65_context sets the context for an ML-DSA signing or
+// verification operation.
+OPENSSL_EXPORT int EVP_PKEY_CTX_set_mldsa_65_context(EVP_PKEY_CTX* ctx,
+                                                     uint8_t* context,
+                                                     size_t context_len);
+// EVP_PKEY_CTX_set_mldsa_87_context sets the context for an ML-DSA signing or
+// verification operation.
+OPENSSL_EXPORT int EVP_PKEY_CTX_set_mldsa_87_context(EVP_PKEY_CTX* ctx,
+                                                     uint8_t* context,
+                                                     size_t context_len);
+
+
 // Deprecated functions.
 
 // EVP_PKEY_RSA2 was historically an alternate form for RSA public keys (OID
