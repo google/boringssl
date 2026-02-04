@@ -30,25 +30,25 @@
 
 using namespace bssl;
 
-static void dh_free(EVP_PKEY *pkey) {
+static void dh_free(EvpPkey *pkey) {
   DH_free(reinterpret_cast<DH *>(pkey->pkey));
   pkey->pkey = nullptr;
 }
 
-static int dh_size(const EVP_PKEY *pkey) {
+static int dh_size(const EvpPkey *pkey) {
   return DH_size(reinterpret_cast<const DH *>(pkey->pkey));
 }
 
-static int dh_bits(const EVP_PKEY *pkey) {
+static int dh_bits(const EvpPkey *pkey) {
   return DH_bits(reinterpret_cast<const DH *>(pkey->pkey));
 }
 
-static int dh_param_missing(const EVP_PKEY *pkey) {
+static int dh_param_missing(const EvpPkey *pkey) {
   const DH *dh = reinterpret_cast<const DH *>(pkey->pkey);
   return dh == nullptr || DH_get0_p(dh) == nullptr || DH_get0_g(dh) == nullptr;
 }
 
-static int dh_param_copy(EVP_PKEY *to, const EVP_PKEY *from) {
+static int dh_param_copy(EvpPkey *to, const EvpPkey *from) {
   if (dh_param_missing(from)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
     return 0;
@@ -71,7 +71,7 @@ static int dh_param_copy(EVP_PKEY *to, const EVP_PKEY *from) {
   return 1;
 }
 
-static bool dh_param_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
+static bool dh_param_equal(const EvpPkey *a, const EvpPkey *b) {
   if (dh_param_missing(a) || dh_param_missing(b)) {
     return false;
   }
@@ -84,7 +84,7 @@ static bool dh_param_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
          BN_cmp(DH_get0_g(a_dh), DH_get0_g(b_dh)) == 0;
 }
 
-static bool dh_pub_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
+static bool dh_pub_equal(const EvpPkey *a, const EvpPkey *b) {
   if (!dh_param_equal(a, b)) {
     return false;
   }
@@ -94,12 +94,12 @@ static bool dh_pub_equal(const EVP_PKEY *a, const EVP_PKEY *b) {
   return BN_cmp(DH_get0_pub_key(a_dh), DH_get0_pub_key(b_dh)) == 0;
 }
 
-static bool dh_has_pub(const EVP_PKEY *pk) {
+static bool dh_has_pub(const EvpPkey *pk) {
   const DH *pk_dh = reinterpret_cast<const DH *>(pk->pkey);
   return DH_get0_pub_key(pk_dh) != nullptr;
 }
 
-static bool dh_has_priv(const EVP_PKEY *pk) {
+static bool dh_has_priv(const EvpPkey *pk) {
   const DH *pk_dh = reinterpret_cast<const DH *>(pk->pkey);
   return DH_get0_priv_key(pk_dh) != nullptr;
 }
@@ -145,7 +145,7 @@ int EVP_PKEY_assign_DH(EVP_PKEY *pkey, DH *key) {
   if (key == nullptr) {
     return 0;
   }
-  evp_pkey_set0(pkey, &dh_asn1_meth, key);
+  evp_pkey_set0(FromOpaque(pkey), &dh_asn1_meth, key);
   return 1;
 }
 
@@ -154,7 +154,7 @@ DH *EVP_PKEY_get0_DH(const EVP_PKEY *pkey) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_EXPECTING_A_DH_KEY);
     return nullptr;
   }
-  return reinterpret_cast<DH *>(const_cast<EVP_PKEY *>(pkey)->pkey);
+  return reinterpret_cast<DH *>(const_cast<EvpPkey *>(FromOpaque(pkey))->pkey);
 }
 
 DH *EVP_PKEY_get1_DH(const EVP_PKEY *pkey) {
@@ -198,7 +198,7 @@ static void pkey_dh_cleanup(EvpPkeyCtx *ctx) {
   ctx->data = nullptr;
 }
 
-static int pkey_dh_keygen(EvpPkeyCtx *ctx, EVP_PKEY *pkey) {
+static int pkey_dh_keygen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
   DH *dh = DH_new();
   if (dh == nullptr || !EVP_PKEY_assign_DH(pkey, dh)) {
     DH_free(dh);

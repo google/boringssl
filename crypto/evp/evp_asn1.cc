@@ -25,9 +25,10 @@
 #include <openssl/rsa.h>
 #include <openssl/span.h>
 
-#include "internal.h"
 #include "../bytestring/internal.h"
 #include "../internal.h"
+#include "../mem_internal.h"
+#include "internal.h"
 
 
 using namespace bssl;
@@ -48,7 +49,7 @@ EVP_PKEY *EVP_PKEY_from_subject_public_key_info(const uint8_t *in, size_t len,
     return nullptr;
   }
 
-  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  UniquePtr<EvpPkey> ret(FromOpaque(EVP_PKEY_new()));
   if (ret == nullptr) {
     return nullptr;
   }
@@ -83,12 +84,13 @@ EVP_PKEY *EVP_PKEY_from_subject_public_key_info(const uint8_t *in, size_t len,
 }
 
 int EVP_marshal_public_key(CBB *cbb, const EVP_PKEY *key) {
-  if (key->ameth == nullptr || key->ameth->pub_encode == nullptr) {
+  auto *impl = FromOpaque(key);
+  if (impl->ameth == nullptr || impl->ameth->pub_encode == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return 0;
   }
 
-  return key->ameth->pub_encode(cbb, key);
+  return impl->ameth->pub_encode(cbb, impl);
 }
 
 EVP_PKEY *EVP_PKEY_from_private_key_info(const uint8_t *in, size_t len,
@@ -109,7 +111,7 @@ EVP_PKEY *EVP_PKEY_from_private_key_info(const uint8_t *in, size_t len,
     return nullptr;
   }
 
-  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  UniquePtr<EvpPkey> ret(FromOpaque(EVP_PKEY_new()));
   if (ret == nullptr) {
     return nullptr;
   }
@@ -135,12 +137,13 @@ EVP_PKEY *EVP_PKEY_from_private_key_info(const uint8_t *in, size_t len,
 }
 
 int EVP_marshal_private_key(CBB *cbb, const EVP_PKEY *key) {
-  if (key->ameth == nullptr || key->ameth->priv_encode == nullptr) {
+  auto *impl = FromOpaque(key);
+  if (impl->ameth == nullptr || impl->ameth->priv_encode == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return 0;
   }
 
-  return key->ameth->priv_encode(cbb, key);
+  return impl->ameth->priv_encode(cbb, impl);
 }
 
 EVP_PKEY *EVP_parse_public_key(CBS *cbs) {

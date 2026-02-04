@@ -38,7 +38,7 @@ OPENSSL_DECLARE_ERROR_REASON(EVP, NOT_XOF_OR_INVALID_LENGTH)
 OPENSSL_DECLARE_ERROR_REASON(EVP, EMPTY_PSK)
 
 EVP_PKEY *EVP_PKEY_new() {
-  EVP_PKEY *ret = NewZeroed<EVP_PKEY>();
+  EvpPkey *ret = NewZeroed<EvpPkey>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -47,27 +47,36 @@ EVP_PKEY *EVP_PKEY_new() {
   return ret;
 }
 
+EvpPkey::~EvpPkey() {
+  // Refcount can be 1 if called by UniquePtr and 0 if called by EVP_PKEY_free.
+  BSSL_CHECK(references.load() <= 1);
+
+  evp_pkey_set0(this, nullptr, nullptr);
+}
+
 void EVP_PKEY_free(EVP_PKEY *pkey) {
   if (pkey == nullptr) {
     return;
   }
 
-  if (!CRYPTO_refcount_dec_and_test_zero(&pkey->references)) {
+  auto *impl = FromOpaque(pkey);
+  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
     return;
   }
 
-  evp_pkey_set0(pkey, nullptr, nullptr);
-  Delete(pkey);
+  Delete(impl);
 }
 
 int EVP_PKEY_up_ref(EVP_PKEY *pkey) {
-  CRYPTO_refcount_inc(&pkey->references);
+  auto *impl = FromOpaque(pkey);
+  CRYPTO_refcount_inc(&impl->references);
   return 1;
 }
 
 int EVP_PKEY_is_opaque(const EVP_PKEY *pkey) {
-  if (pkey->ameth && pkey->ameth->pkey_opaque) {
-    return pkey->ameth->pkey_opaque(pkey);
+  auto *impl = FromOpaque(pkey);
+  if (impl->ameth && impl->ameth->pkey_opaque) {
+    return impl->ameth->pkey_opaque(impl);
   }
   return 0;
 }
@@ -78,38 +87,43 @@ int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b) {
     return 0;
   }
 
-  return a->ameth != nullptr && a->ameth->pub_equal != nullptr &&
-         a->ameth->pub_equal(a, b);
+  auto *a_impl = FromOpaque(a);
+  auto *b_impl = FromOpaque(b);
+  return a_impl->ameth != nullptr && a_impl->ameth->pub_equal != nullptr &&
+         a_impl->ameth->pub_equal(a_impl, b_impl);
 }
 
 int EVP_PKEY_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
-  if (EVP_PKEY_id(to) == EVP_PKEY_NONE) {
+  auto *to_impl = FromOpaque(to);
+  auto *from_impl = FromOpaque(from);
+
+  if (EVP_PKEY_id(to_impl) == EVP_PKEY_NONE) {
     // TODO(crbug.com/42290409): This shouldn't leave |to| in a half-empty state
     // on error. The complexity here largely comes from parameterless DSA keys,
     // which we no longer support, so this function can probably be trimmed
     // down.
-    evp_pkey_set0(to, from->ameth, nullptr);
-  } else if (EVP_PKEY_id(to) != EVP_PKEY_id(from)) {
+    evp_pkey_set0(to_impl, from_impl->ameth, nullptr);
+  } else if (EVP_PKEY_id(to_impl) != EVP_PKEY_id(from_impl)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DIFFERENT_KEY_TYPES);
     return 0;
   }
 
-  if (EVP_PKEY_missing_parameters(from)) {
+  if (EVP_PKEY_missing_parameters(from_impl)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
     return 0;
   }
 
   // Once set, parameters may not change.
-  if (!EVP_PKEY_missing_parameters(to)) {
-    if (EVP_PKEY_cmp_parameters(to, from) == 1) {
+  if (!EVP_PKEY_missing_parameters(to_impl)) {
+    if (EVP_PKEY_cmp_parameters(to_impl, from_impl) == 1) {
       return 1;
     }
     OPENSSL_PUT_ERROR(EVP, EVP_R_DIFFERENT_PARAMETERS);
     return 0;
   }
 
-  if (from->ameth && from->ameth->param_copy) {
-    return from->ameth->param_copy(to, from);
+  if (from_impl->ameth && from_impl->ameth->param_copy) {
+    return from_impl->ameth->param_copy(to_impl, from_impl);
   }
 
   // TODO(https://crbug.com/42290406): If the algorithm takes no parameters,
@@ -119,31 +133,35 @@ int EVP_PKEY_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
 }
 
 int EVP_PKEY_missing_parameters(const EVP_PKEY *pkey) {
-  if (pkey->ameth && pkey->ameth->param_missing) {
-    return pkey->ameth->param_missing(pkey);
+  auto *impl = FromOpaque(pkey);
+  if (impl->ameth && impl->ameth->param_missing) {
+    return impl->ameth->param_missing(impl);
   }
   return 0;
 }
 
 int EVP_PKEY_size(const EVP_PKEY *pkey) {
-  if (pkey && pkey->ameth && pkey->ameth->pkey_size) {
-    return pkey->ameth->pkey_size(pkey);
+  auto *impl = FromOpaque(pkey);
+  if (impl && impl->ameth && impl->ameth->pkey_size) {
+    return impl->ameth->pkey_size(impl);
   }
   return 0;
 }
 
 int EVP_PKEY_bits(const EVP_PKEY *pkey) {
-  if (pkey && pkey->ameth && pkey->ameth->pkey_bits) {
-    return pkey->ameth->pkey_bits(pkey);
+  auto *impl = FromOpaque(pkey);
+  if (impl && impl->ameth && impl->ameth->pkey_bits) {
+    return impl->ameth->pkey_bits(impl);
   }
   return 0;
 }
 
 int EVP_PKEY_id(const EVP_PKEY *pkey) {
-  return pkey->ameth != nullptr ? pkey->ameth->pkey_id : EVP_PKEY_NONE;
+  auto *impl = FromOpaque(pkey);
+  return impl->ameth != nullptr ? impl->ameth->pkey_id : EVP_PKEY_NONE;
 }
 
-void bssl::evp_pkey_set0(EVP_PKEY *pkey, const EVP_PKEY_ASN1_METHOD *method,
+void bssl::evp_pkey_set0(EvpPkey *pkey, const EVP_PKEY_ASN1_METHOD *method,
                          void *pkey_data) {
   if (pkey->ameth && pkey->ameth->pkey_free) {
     pkey->ameth->pkey_free(pkey);
@@ -179,10 +197,11 @@ int EVP_PKEY_assign(EVP_PKEY *pkey, int type, void *key) {
 }
 
 int EVP_PKEY_set_type(EVP_PKEY *pkey, int type) {
-  if (pkey && pkey->pkey) {
+  auto *impl = FromOpaque(pkey);
+  if (impl && impl->pkey) {
     // Some callers rely on |pkey| getting cleared even if |type| is
     // unsupported, usually setting |type| to |EVP_PKEY_NONE|.
-    evp_pkey_set0(pkey, nullptr, nullptr);
+    evp_pkey_set0(impl, nullptr, nullptr);
   }
 
   // This function broadly isn't useful. It initializes |EVP_PKEY| for a type,
@@ -198,8 +217,8 @@ int EVP_PKEY_set_type(EVP_PKEY *pkey, int type) {
     return 0;
   }
 
-  if (pkey) {
-    evp_pkey_set0(pkey, alg->method, nullptr);
+  if (impl) {
+    evp_pkey_set0(impl, alg->method, nullptr);
   }
 
   return 1;
@@ -211,7 +230,7 @@ EVP_PKEY *EVP_PKEY_from_raw_private_key(const EVP_PKEY_ALG *alg,
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return nullptr;
   }
-  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  UniquePtr<EvpPkey> ret(FromOpaque(EVP_PKEY_new()));
   if (ret == nullptr || !alg->method->set_priv_raw(ret.get(), in, len)) {
     return nullptr;
   }
@@ -224,7 +243,7 @@ EVP_PKEY *EVP_PKEY_from_private_seed(const EVP_PKEY_ALG *alg, const uint8_t *in,
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return nullptr;
   }
-  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  UniquePtr<EvpPkey> ret(FromOpaque(EVP_PKEY_new()));
   if (ret == nullptr || !alg->method->set_priv_seed(ret.get(), in, len)) {
     return nullptr;
   }
@@ -237,7 +256,7 @@ EVP_PKEY *EVP_PKEY_from_raw_public_key(const EVP_PKEY_ALG *alg,
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return nullptr;
   }
-  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  UniquePtr<EvpPkey> ret(FromOpaque(EVP_PKEY_new()));
   if (ret == nullptr || !alg->method->set_pub_raw(ret.get(), in, len)) {
     return nullptr;
   }
@@ -276,40 +295,49 @@ EVP_PKEY *EVP_PKEY_new_raw_public_key(int type, ENGINE *unused,
 
 int EVP_PKEY_get_raw_private_key(const EVP_PKEY *pkey, uint8_t *out,
                                  size_t *out_len) {
-  if (pkey->ameth->get_priv_raw == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl->ameth->get_priv_raw == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  return pkey->ameth->get_priv_raw(pkey, out, out_len);
+  return impl->ameth->get_priv_raw(impl, out, out_len);
 }
 
 int EVP_PKEY_get_private_seed(const EVP_PKEY *pkey, uint8_t *out,
                               size_t *out_len) {
-  if (pkey->ameth->get_priv_seed == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl->ameth->get_priv_seed == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  return pkey->ameth->get_priv_seed(pkey, out, out_len);
+  return impl->ameth->get_priv_seed(impl, out, out_len);
 }
 
 int EVP_PKEY_get_raw_public_key(const EVP_PKEY *pkey, uint8_t *out,
                                 size_t *out_len) {
-  if (pkey->ameth->get_pub_raw == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl->ameth->get_pub_raw == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  return pkey->ameth->get_pub_raw(pkey, out, out_len);
+  return impl->ameth->get_pub_raw(impl, out, out_len);
 }
 
 int EVP_PKEY_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b) {
   if (EVP_PKEY_id(a) != EVP_PKEY_id(b)) {
     return 0;
   }
-  if (a->ameth && a->ameth->param_equal) {
-    return a->ameth->param_equal(a, b);
+
+  auto *a_impl = FromOpaque(a);
+  auto *b_impl = FromOpaque(b);
+  if (a_impl->ameth && a_impl->ameth->param_equal) {
+    return a_impl->ameth->param_equal(a_impl, b_impl);
   }
   // If the algorithm does not use parameters, the two null value compare as
   // vacuously equal.
@@ -347,21 +375,25 @@ void EVP_cleanup() {}
 
 int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const uint8_t *in,
                                    size_t len) {
-  if (pkey->ameth->set1_tls_encodedpoint == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl->ameth->set1_tls_encodedpoint == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  return pkey->ameth->set1_tls_encodedpoint(pkey, in, len);
+  return impl->ameth->set1_tls_encodedpoint(impl, in, len);
 }
 
 size_t EVP_PKEY_get1_tls_encodedpoint(const EVP_PKEY *pkey, uint8_t **out_ptr) {
-  if (pkey->ameth->get1_tls_encodedpoint == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl->ameth->get1_tls_encodedpoint == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
-  return pkey->ameth->get1_tls_encodedpoint(pkey, out_ptr);
+  return impl->ameth->get1_tls_encodedpoint(impl, out_ptr);
 }
 
 int EVP_PKEY_base_id(const EVP_PKEY *pkey) {
@@ -372,17 +404,21 @@ int EVP_PKEY_base_id(const EVP_PKEY *pkey) {
 }
 
 int EVP_PKEY_has_public(const EVP_PKEY *pkey) {
-  if (pkey == nullptr || pkey->ameth == nullptr ||
-      pkey->ameth->pub_present == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl == nullptr || impl->ameth == nullptr ||
+      impl->ameth->pub_present == nullptr) {
     return 0;
   }
-  return pkey->ameth->pub_present(pkey);
+  return impl->ameth->pub_present(impl);
 }
 
 int EVP_PKEY_has_private(const EVP_PKEY *pkey) {
-  if (pkey == nullptr || pkey->ameth == nullptr ||
-      pkey->ameth->priv_present == nullptr) {
+  auto *impl = FromOpaque(pkey);
+
+  if (impl == nullptr || impl->ameth == nullptr ||
+      impl->ameth->priv_present == nullptr) {
     return 0;
   }
-  return pkey->ameth->priv_present(pkey);
+  return impl->ameth->priv_present(impl);
 }

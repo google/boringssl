@@ -45,7 +45,7 @@ static const EVP_PKEY_CTX_METHOD *evp_pkey_meth_find(int type) {
   return nullptr;
 }
 
-static EvpPkeyCtx *evp_pkey_ctx_new(EVP_PKEY *pkey,
+static EvpPkeyCtx *evp_pkey_ctx_new(EvpPkey *pkey,
                                     const EVP_PKEY_CTX_METHOD *pmeth) {
   UniquePtr<EvpPkeyCtx> ret = MakeUnique<EvpPkeyCtx>();
   if (!ret) {
@@ -65,19 +65,20 @@ static EvpPkeyCtx *evp_pkey_ctx_new(EVP_PKEY *pkey,
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e) {
-  if (pkey == nullptr || pkey->ameth == nullptr) {
+  auto *impl = FromOpaque(pkey);
+  if (impl == nullptr || impl->ameth == nullptr) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_PASSED_NULL_PARAMETER);
     return nullptr;
   }
 
-  const EVP_PKEY_CTX_METHOD *pkey_method = pkey->ameth->pkey_method;
+  const EVP_PKEY_CTX_METHOD *pkey_method = impl->ameth->pkey_method;
   if (pkey_method == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
-    ERR_add_error_dataf("algorithm %d", pkey->ameth->pkey_id);
+    ERR_add_error_dataf("algorithm %d", impl->ameth->pkey_id);
     return nullptr;
   }
 
-  return evp_pkey_ctx_new(pkey, pkey_method);
+  return evp_pkey_ctx_new(impl, pkey_method);
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
@@ -334,7 +335,7 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer) {
     return 0;
   }
 
-  impl->peerkey = UpRef(peer);
+  impl->peerkey = UpRef(FromOpaque(peer));
   ret = impl->pmeth->ctrl(impl, EVP_PKEY_CTRL_PEER_KEY, 1, peer);
   if (ret <= 0) {
     impl->peerkey = nullptr;
@@ -390,7 +391,7 @@ int EVP_PKEY_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
     }
   }
 
-  if (!impl->pmeth->keygen(impl, *out_pkey)) {
+  if (!impl->pmeth->keygen(impl, FromOpaque(*out_pkey))) {
     EVP_PKEY_free(*out_pkey);
     *out_pkey = nullptr;
     return 0;
@@ -431,7 +432,7 @@ int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
     }
   }
 
-  if (!impl->pmeth->paramgen(impl, *out_pkey)) {
+  if (!impl->pmeth->paramgen(impl, FromOpaque(*out_pkey))) {
     EVP_PKEY_free(*out_pkey);
     *out_pkey = nullptr;
     return 0;

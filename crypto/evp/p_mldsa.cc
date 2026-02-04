@@ -62,7 +62,7 @@ MAKE_MLDSA_TRAITS(44)
 MAKE_MLDSA_TRAITS(65)
 MAKE_MLDSA_TRAITS(87)
 
-// For each ML-DSA variant, the |EVP_PKEY| must hold a public or private key.
+// For each ML-DSA variant, the |EvpPkey| must hold a public or private key.
 // EVP uses the same type for public and private keys, so the representation
 // must support both. The private key type contains the public key struct in it,
 // so we use a pointer to either a PrivateKeyData<Traits> or
@@ -150,21 +150,21 @@ void KeyData<Traits>::Free(KeyData<Traits> *data) {
 
 template <typename Traits>
 struct MLDSAImplementation {
-  static KeyData<Traits> *GetKeyData(EVP_PKEY *pkey) {
+  static KeyData<Traits> *GetKeyData(EvpPkey *pkey) {
     assert(pkey->ameth == &asn1_method);
     return static_cast<KeyData<Traits> *>(pkey->pkey);
   }
 
-  static const KeyData<Traits> *GetKeyData(const EVP_PKEY *pkey) {
-    return GetKeyData(const_cast<EVP_PKEY *>(pkey));
+  static const KeyData<Traits> *GetKeyData(const EvpPkey *pkey) {
+    return GetKeyData(const_cast<EvpPkey *>(pkey));
   }
 
-  static void PkeyFree(EVP_PKEY *pkey) {
+  static void PkeyFree(EvpPkey *pkey) {
     KeyData<Traits>::Free(GetKeyData(pkey));
     pkey->pkey = nullptr;
   }
 
-  static int SetPrivateSeed(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
+  static int SetPrivateSeed(EvpPkey *pkey, const uint8_t *in, size_t len) {
     auto priv = MakeUnique<PrivateKeyData<Traits>>();
     if (priv == nullptr) {
       return 0;
@@ -180,7 +180,7 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static int SetRawPublic(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
+  static int SetRawPublic(EvpPkey *pkey, const uint8_t *in, size_t len) {
     auto pub = MakeUnique<PublicKeyData<Traits>>();
     if (pub == nullptr) {
       return 0;
@@ -195,7 +195,7 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static int GetPrivateSeed(const EVP_PKEY *pkey, uint8_t *out,
+  static int GetPrivateSeed(const EvpPkey *pkey, uint8_t *out,
                             size_t *out_len) {
     const auto *priv = GetKeyData(pkey)->AsPrivateKeyData();
     if (priv == nullptr) {
@@ -215,7 +215,7 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static int GetRawPublic(const EVP_PKEY *pkey, uint8_t *out, size_t *out_len) {
+  static int GetRawPublic(const EvpPkey *pkey, uint8_t *out, size_t *out_len) {
     const auto *pub = GetKeyData(pkey)->GetPublicKey();
     if (out == nullptr) {
       *out_len = Traits::kPublicKeyBytes;
@@ -233,9 +233,8 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static evp_decode_result_t DecodePublic(const EVP_PKEY_ALG *alg,
-                                          EVP_PKEY *out, CBS *params,
-                                          CBS *key) {
+  static evp_decode_result_t DecodePublic(const EVP_PKEY_ALG *alg, EvpPkey *out,
+                                          CBS *params, CBS *key) {
     // The parameters must be omitted. See
     // draft-ietf-lamps-dilithium-certificates-13, Section 2.
     if (CBS_len(params) != 0) {
@@ -246,7 +245,7 @@ struct MLDSAImplementation {
                                                           : evp_decode_error;
   }
 
-  static int EncodePublic(CBB *out, const EVP_PKEY *pkey) {
+  static int EncodePublic(CBB *out, const EvpPkey *pkey) {
     const auto *pub = GetKeyData(pkey)->GetPublicKey();
     // See draft-ietf-lamps-dilithium-certificates-13, Sections 2 and 4.
     CBB spki, algorithm, key_bitstring;
@@ -264,16 +263,16 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static bool EqualPublic(const EVP_PKEY *a, const EVP_PKEY *b) {
+  static bool EqualPublic(const EvpPkey *a, const EvpPkey *b) {
     const auto *a_pub = GetKeyData(a)->GetPublicKey();
     const auto *b_pub = GetKeyData(b)->GetPublicKey();
     return Traits::PublicKeysEqual(a_pub, b_pub);
   }
 
-  static bool HasPublic(const EVP_PKEY *pk) { return true; }
+  static bool HasPublic(const EvpPkey *pk) { return true; }
 
   static evp_decode_result_t DecodePrivate(const EVP_PKEY_ALG *alg,
-                                           EVP_PKEY *out, CBS *params,
+                                           EvpPkey *out, CBS *params,
                                            CBS *key) {
     // The parameters must be omitted. See
     // draft-ietf-lamps-dilithium-certificates-13, Section 2.
@@ -312,7 +311,7 @@ struct MLDSAImplementation {
                : evp_decode_error;
   }
 
-  static int EncodePrivate(CBB *out, const EVP_PKEY *pkey) {
+  static int EncodePrivate(CBB *out, const EvpPkey *pkey) {
     const auto *priv = GetKeyData(pkey)->AsPrivateKeyData();
     if (priv == nullptr) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
@@ -336,12 +335,12 @@ struct MLDSAImplementation {
     return 1;
   }
 
-  static bool HasPrivate(const EVP_PKEY *pk) {
+  static bool HasPrivate(const EvpPkey *pk) {
     return GetKeyData(pk)->AsPrivateKeyData() != nullptr;
   }
 
-  static int PkeySize(const EVP_PKEY *pkey) { return Traits::kSignatureBytes; }
-  static int PkeyBits(const EVP_PKEY *pkey) {
+  static int PkeySize(const EvpPkey *pkey) { return Traits::kSignatureBytes; }
+  static int PkeyBits(const EvpPkey *pkey) {
     // OpenSSL counts the bits in the public key serialization.
     return Traits::kPublicKeyBytes * 8;
   }
