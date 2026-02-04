@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -42,29 +41,9 @@ var (
 	numWorkers = flag.Int("num-workers", runtime.NumCPU(), "Runs the given number of workers")
 	dryRun     = flag.Bool("dry-run", false, "Skip actually writing any files")
 	perlPath   = flag.String("perl", "perl", "Path to the perl command")
-	clangPath  = flag.String("clang", findClang(), "Path to the clang command")
+	clangPath  = flag.String("clang", "clang", "Path to the clang command")
 	list       = flag.Bool("list", false, "List all generated files, rather than actually run them")
 )
-
-// findClang returns where clang likely is installed.
-//
-// TODO(crbug.com/42220000): Have the CI builder pass the flag, then remove this hack.
-func findClang() string {
-	if path, err := exec.LookPath("clang"); err == nil {
-		return path
-	}
-	for _, path := range []string{
-		filepath.Join(runtime.GOROOT(), "../llvm-build/bin/clang"),
-		filepath.Join(runtime.GOROOT(), "../llvm-build/bin/clang.exe"),
-		filepath.Join(runtime.GOROOT(), "../llvm-build/bin/clang-cl"),
-		filepath.Join(runtime.GOROOT(), "../llvm-build/bin/clang-cl.exe"),
-	} {
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-	return "clang"
-}
 
 type gotextdiffHandleWrapper struct {
 	io.Writer

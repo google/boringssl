@@ -84,13 +84,6 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 			"/D", "BORINGSSL_ALL_PUBLIC_SYMBOLS",
 			"-",
 		}
-		// If running on the BoringSSL CI, provide the MSVC environment.
-		// TODO(crbug.com/42220000): Have the CI builder pass this instead, then remove this hack.
-		if _, err := os.Stat("util/bot/windows_sdk"); err == nil {
-			cmd, args = "python3", append([]string{
-				"util/bot/vs_env.py", "x86", cmd,
-			}, args...)
-		}
 	} else {
 		// Standard Clang args.
 		args = []string{
