@@ -180,7 +180,13 @@ def get_category(name, host, recipe, properties):
     else:
         arch = host["dimensions"]["cpu"]
 
-    return os + "|" + arch + "|" + compiler
+    category = os + "|" + arch + "|" + compiler
+
+    # Use categories to keep all FIPS builds together.
+    if cmake_args.get("FIPS") == "1":
+        category += "|fips"
+
+    return category
 
 def get_short_name(name, host, recipe, properties):
     if recipe == "boringssl_docs":
@@ -202,8 +208,6 @@ def get_short_name(name, host, recipe, properties):
             untags.append("dbg")
 
     # Build features.
-    if cmake_args.get("FIPS") == "1":
-        tags.append("fips")
     if "DOPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED=1" in cmake_args.get("CMAKE_CXX_FLAGS", ""):
         tags.append("nth")
         untags.append("dbg")
@@ -241,7 +245,7 @@ def get_short_name(name, host, recipe, properties):
             # As a special exception, Android noasm builds are release builds.
             untags.append("dbg")
     if cmake_args.get("OPENSSL_NO_SSE2_FOR_TESTING") == "1":
-        tags.append("nosse2")
+        tags.append("n2")
         untags.append("dbg")
         untags.append("na")
 
