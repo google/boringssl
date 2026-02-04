@@ -90,7 +90,6 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`.*ec_group_st.*`),
 	regexp.MustCompile(`.*evp_pkey_st.*`),
 	regexp.MustCompile(`.*rsa_st.*`),
-	regexp.MustCompile(`.*x509_store_st.*`),
 }
 
 const (

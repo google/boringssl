@@ -1517,20 +1517,23 @@ int X509_STORE_CTX_init(X509_STORE_CTX *ctx, X509_STORE *store, X509 *x509,
     goto err;
   }
 
-  // Inherit callbacks and flags from X509_STORE.
+  {
+    // Inherit callbacks and flags from X509_STORE.
 
-  ctx->verify_cb = store->verify_cb;
+    auto *store_impl = FromOpaque(store);
+    ctx->verify_cb = store_impl->verify_cb;
 
-  if (!X509_VERIFY_PARAM_inherit(ctx->param, store->param) ||
-      !X509_VERIFY_PARAM_inherit(ctx->param,
-                                 X509_VERIFY_PARAM_lookup("default"))) {
-    goto err;
-  }
+    if (!X509_VERIFY_PARAM_inherit(ctx->param, store_impl->param) ||
+        !X509_VERIFY_PARAM_inherit(ctx->param,
+                                   X509_VERIFY_PARAM_lookup("default"))) {
+      goto err;
+    }
 
-  if (store->verify_cb) {
-    ctx->verify_cb = store->verify_cb;
-  } else {
-    ctx->verify_cb = null_callback;
+    if (store_impl->verify_cb) {
+      ctx->verify_cb = store_impl->verify_cb;
+    } else {
+      ctx->verify_cb = null_callback;
+    }
   }
 
   return 1;

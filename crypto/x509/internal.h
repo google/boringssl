@@ -26,6 +26,7 @@
 // Internal structures.
 
 DECLARE_OPAQUE_STRUCT(x509_st, X509Impl)
+DECLARE_OPAQUE_STRUCT(x509_store_st, X509Store)
 DECLARE_OPAQUE_STRUCT(X509_name_st, X509Name)
 
 struct X509_pubkey_st {
@@ -329,12 +330,13 @@ DEFINE_NAMESPACED_STACK_OF(X509_LOOKUP)
 
 using StackOfX509Lookup = STACK_OF(X509_LOOKUP);
 
-BSSL_NAMESPACE_END
-
 // This is used to hold everything.  It is used for all certificate
 // validation.  Once we have a certificate chain, the 'verify'
 // function is then called to actually check the cert chain.
-struct x509_store_st {
+class X509Store : public x509_store_st {
+ public:
+  ~X509Store();
+
   // The following is a cache of trusted certs
   STACK_OF(X509_OBJECT) *objs;  // Cache of all objects
   bssl::CRYPTO_MUTEX objs_lock;
@@ -349,6 +351,8 @@ struct x509_store_st {
 
   bssl::CRYPTO_refcount_t references;
 } /* X509_STORE */;
+
+BSSL_NAMESPACE_END
 
 // This is the functions plus an instance of the local variables.
 struct x509_lookup_st {

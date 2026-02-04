@@ -287,13 +287,14 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, const X509_NAME *name,
       }
 
       // we have added it to the cache so now pull it out again
-      CRYPTO_MUTEX_lock_write(&xl->store_ctx->objs_lock);
+      auto *store_impl = FromOpaque(xl->store_ctx);
+      CRYPTO_MUTEX_lock_write(&store_impl->objs_lock);
       tmp = nullptr;
-      sk_X509_OBJECT_sort(xl->store_ctx->objs);
-      if (sk_X509_OBJECT_find(xl->store_ctx->objs, &idx, &stmp)) {
-        tmp = sk_X509_OBJECT_value(xl->store_ctx->objs, idx);
+      sk_X509_OBJECT_sort(store_impl->objs);
+      if (sk_X509_OBJECT_find(store_impl->objs, &idx, &stmp)) {
+        tmp = sk_X509_OBJECT_value(store_impl->objs, idx);
       }
-      CRYPTO_MUTEX_unlock_write(&xl->store_ctx->objs_lock);
+      CRYPTO_MUTEX_unlock_write(&store_impl->objs_lock);
 
       // If a CRL, update the last file suffix added for this
 
