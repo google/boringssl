@@ -364,7 +364,7 @@ cq_builder(
 both_builders(
     "android_aarch64",
     WALLEYE_HOST,
-    category = "android|aarch64",
+    category = "android|armv8|clang",
     short_name = "dbg",
     cq_compile_only = LINUX_HOST,
     properties = {
@@ -378,7 +378,7 @@ both_builders(
 both_builders(
     "android_aarch64_rel",
     WALLEYE_HOST,
-    category = "android|aarch64",
+    category = "android|armv8|clang",
     short_name = "rel",
     cq_compile_only = LINUX_HOST,
     cq_enabled = False,
@@ -395,8 +395,8 @@ both_builders(
     "android_aarch64_fips_rel",
     # The Android FIPS configuration requires a newer device.
     WALLEYE_HOST,
-    category = "android|aarch64",
-    short_name = "fips",
+    category = "android|armv8|clang",
+    short_name = "shfips",
     cq_compile_only = LINUX_HOST,
     properties = {
         "android": True,
@@ -415,8 +415,8 @@ both_builders(
     "android_aarch64_fips_noasm_rel",
     # The Android FIPS configuration requires a newer device.
     WALLEYE_HOST,
-    category = "android|aarch64",
-    short_name = "fips3",
+    category = "android|armv8|clang",
+    short_name = "shfipsna",
     cq_compile_only = LINUX_HOST,
     properties = {
         "android": True,
@@ -439,8 +439,8 @@ both_builders(
     "android_aarch64_fips_static_rel",
     # The Android FIPS configuration requires a newer device.
     WALLEYE_HOST,
-    category = "android|aarch64",
-    short_name = "fips2",
+    category = "android|armv8|clang",
+    short_name = "fips",
     cq_compile_only = LINUX_HOST,
     properties = {
         "android": True,
@@ -456,7 +456,7 @@ both_builders(
 both_builders(
     "android_aarch64_prefixed_compile",
     LINUX_HOST,
-    category = "android|aarch64",
+    category = "android|armv8|clang",
     short_name = "pfx",
     # Redundant with android_arm_prefixed_compile + mac_arm64_prefixed_compile.
     # Thus, don't unnecessarily draw resources for it.
@@ -474,7 +474,7 @@ both_builders(
 both_builders(
     "android_arm",
     WALLEYE_HOST,
-    category = "android|thumb",
+    category = "android|thumb|clang",
     short_name = "dbg",
     cq_compile_only = LINUX_HOST,
     properties = {
@@ -488,7 +488,7 @@ both_builders(
 both_builders(
     "android_arm_rel",
     WALLEYE_HOST,
-    category = "android|thumb",
+    category = "android|thumb|clang",
     short_name = "rel",
     cq_compile_only = LINUX_HOST,
     cq_enabled = False,
@@ -511,7 +511,7 @@ both_builders(
     "android_arm_fips_rel",
     # The Android FIPS configuration requires a newer device.
     WALLEYE_HOST,
-    category = "android|thumb",
+    category = "android|thumb|clang",
     short_name = "fips",
     cq_compile_only = LINUX_HOST,
     properties = {
@@ -529,7 +529,7 @@ both_builders(
 both_builders(
     "android_arm_prefixed_compile",
     LINUX_HOST,
-    category = "android|thumb",
+    category = "android|thumb|clang",
     short_name = "pfx",
     properties = compile_only({
         "android": True,
@@ -544,7 +544,7 @@ both_builders(
 both_builders(
     "android_arm_armmode_rel",
     WALLEYE_HOST,
-    category = "android|arm",
+    category = "android|arm|clang",
     short_name = "rel",
     cq_compile_only = LINUX_HOST,
     properties = {
@@ -560,7 +560,7 @@ both_builders(
 both_builders(
     "android_arm_armmode_prefixed_compile",
     LINUX_HOST,
-    category = "android|arm",
+    category = "android|arm|clang",
     short_name = "pfx",
     properties = compile_only({
         "android": True,
@@ -575,7 +575,7 @@ both_builders(
 both_builders(
     "android_riscv64_compile_only",
     LINUX_HOST,
-    category = "android|riscv64",
+    category = "android|riscv64|clang",
     short_name = "rel",
     properties = compile_only({
         "android": True,
@@ -589,7 +589,7 @@ both_builders(
 both_builders(
     "android_riscv64_prefixed_compile",
     LINUX_HOST,
-    category = "android|riscv64",
+    category = "android|riscv64|clang",
     short_name = "pfx",
     properties = compile_only({
         "android": True,
@@ -610,8 +610,8 @@ both_builders("docs", LINUX_HOST, recipe = "boringssl_docs", short_name = "doc")
 both_builders(
     "ios64_compile",
     MAC_X86_64_HOST,
-    category = "ios",
-    short_name = "64",
+    category = "ios|armv8|clang",
+    short_name = "dbg",
     properties = compile_only({
         "cmake_args": {
             "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -622,8 +622,8 @@ both_builders(
 both_builders(
     "ios64_prefixed_compile",
     MAC_X86_64_HOST,
-    category = "ios",
-    short_name = "64pfx",
+    category = "ios|armv8|clang",
+    short_name = "pfx",
     # Redundant with mac_arm64_prefixed_compile.
     # Thus, don't unnecessarily draw resources for it.
     cq_enabled = False,
@@ -639,7 +639,7 @@ both_builders(
 both_builders(
     "linux",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "dbg",
     properties = {
         "check_stack": True,
@@ -656,7 +656,7 @@ both_builders(
 both_builders(
     "linux_rel",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "rel",
     properties = {
         "cmake_args": {
@@ -667,7 +667,7 @@ both_builders(
 both_builders(
     "linux_prefixed_compile",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "pfx",
     properties = compile_only({
         "check_stack": True,
@@ -682,7 +682,7 @@ both_builders(
 both_builders(
     "linux32",
     LINUX_HOST,
-    category = "linux|32",
+    category = "linux|x86|gcc",
     short_name = "dbg",
     properties = {
         "check_stack": True,
@@ -699,7 +699,7 @@ both_builders(
 both_builders(
     "linux32_rel",
     LINUX_HOST,
-    category = "linux|32",
+    category = "linux|x86|gcc",
     short_name = "rel",
     properties = {
         "cmake_args": {
@@ -716,7 +716,7 @@ both_builders(
 both_builders(
     "linux32_sde",
     LINUX_HOST,
-    category = "linux|32",
+    category = "linux|x86|gcc",
     short_name = "sde",
     cq_enabled = False,
     execution_timeout = SDE_TIMEOUT,
@@ -737,8 +737,8 @@ both_builders(
 both_builders(
     "linux32_nosse2_noasm",
     LINUX_HOST,
-    category = "linux|32",
-    short_name = "nosse2",
+    category = "linux|x86|gcc",
+    short_name = "na",
     properties = {
         "cmake_args": {
             "OPENSSL_NO_ASM": "1",
@@ -755,7 +755,7 @@ both_builders(
 both_builders(
     "linux32_prefixed_compile",
     LINUX_HOST,
-    category = "linux|32",
+    category = "linux|x86|gcc",
     short_name = "pfx",
     properties = compile_only({
         "check_stack": True,
@@ -773,7 +773,7 @@ both_builders(
 both_builders(
     "linux_clang_cfi",
     LINUX_HOST,
-    category = "linux|clang",
+    category = "linux|x86-64|clang",
     short_name = "cfi",
     cq_enabled = False,
     properties = {
@@ -786,7 +786,7 @@ both_builders(
 both_builders(
     "linux_clang_rel",
     LINUX_HOST,
-    category = "linux|clang",
+    category = "linux|x86-64|clang",
     short_name = "rel",
     properties = {
         "clang": True,
@@ -798,7 +798,7 @@ both_builders(
 both_builders(
     "linux_clang_rel_msan",
     LINUX_HOST,
-    category = "linux|clang",
+    category = "linux|x86-64|clang",
     short_name = "msan",
     properties = {
         "clang": True,
@@ -816,7 +816,7 @@ both_builders(
 both_builders(
     "linux_clang_rel_tsan",
     LINUX_HOST,
-    category = "linux|clang",
+    category = "linux|x86-64|clang",
     short_name = "tsan",
     cq_enabled = False,
     properties = {
@@ -838,7 +838,7 @@ both_builders(
 both_builders(
     "linux_clang_ubsan",
     LINUX_HOST,
-    category = "linux|clang",
+    category = "linux|x86-64|clang",
     short_name = "ubsan",
     cq_enabled = True,
     properties = {
@@ -852,8 +852,8 @@ both_builders(
 both_builders(
     "linux_fips",
     LINUX_HOST,
-    category = "linux|fips",
-    short_name = "dbg",
+    category = "linux|x86-64|gcc",
+    short_name = "fipsdbg",
     properties = {
         "cmake_args": {
             "FIPS": "1",
@@ -863,8 +863,8 @@ both_builders(
 both_builders(
     "linux_fips_rel",
     LINUX_HOST,
-    category = "linux|fips",
-    short_name = "rel",
+    category = "linux|x86-64|gcc",
+    short_name = "fips",
     properties = {
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
@@ -875,8 +875,8 @@ both_builders(
 both_builders(
     "linux_fips_clang",
     LINUX_HOST,
-    category = "linux|fips|clang",
-    short_name = "dbg",
+    category = "linux|x86-64|clang",
+    short_name = "fipsdbg",
     properties = {
         "clang": True,
         "cmake_args": {
@@ -887,8 +887,8 @@ both_builders(
 both_builders(
     "linux_fips_clang_rel",
     LINUX_HOST,
-    category = "linux|fips|clang",
-    short_name = "rel",
+    category = "linux|x86-64|clang",
+    short_name = "fips",
     properties = {
         "clang": True,
         "cmake_args": {
@@ -900,8 +900,8 @@ both_builders(
 both_builders(
     "linux_fips_noasm_asan",
     LINUX_HOST,
-    category = "linux|fips",
-    short_name = "asan",
+    category = "linux|x86-64|clang",
+    short_name = "fipsdbgna",
     properties = {
         "clang": True,
         "cmake_args": {
@@ -914,7 +914,7 @@ both_builders(
 both_builders(
     "linux_fuzz",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|clang",
     short_name = "fuzz",
     properties = {
         "clang": True,
@@ -930,7 +930,7 @@ both_builders(
 both_builders(
     "linux_noasm_asan",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|clang",
     short_name = "asan",
     properties = {
         "clang": True,
@@ -943,7 +943,7 @@ both_builders(
 both_builders(
     "linux_clang_prefixed_compile",
     LINUX_HOST,
-    category = "linux|clang",
+    category = "linux|x86-64|clang",
     short_name = "pfx",
     # Redundant with linux_prefixed_compile + win64_clang_prefixed_compile.
     # Thus, don't unnecessarily draw resources for it.
@@ -957,8 +957,8 @@ both_builders(
 both_builders(
     "linux_nothreads",
     LINUX_HOST,
-    category = "linux",
-    short_name = "not",
+    category = "linux|x86-64|gcc",
+    short_name = "nth",
     properties = {
         "cmake_args": {
             "CMAKE_C_FLAGS": "-DOPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED=1",
@@ -969,7 +969,7 @@ both_builders(
 both_builders(
     "linux_sde",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "sde",
     cq_enabled = False,
     execution_timeout = SDE_TIMEOUT,
@@ -984,7 +984,7 @@ both_builders(
 both_builders(
     "linux_shared",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "sh",
     properties = {
         "cmake_args": {
@@ -998,7 +998,7 @@ both_builders(
 both_builders(
     "linux_small",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "sm",
     properties = {
         "cmake_args": {
@@ -1010,7 +1010,7 @@ both_builders(
 both_builders(
     "linux_nosse2_noasm",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "nosse2",
     properties = {
         "cmake_args": {
@@ -1022,8 +1022,8 @@ both_builders(
 both_builders(
     "linux_nosse2_noasm_prefixed_compile",
     LINUX_HOST,
-    category = "linux|clang",
-    short_name = "nosse2pfx",
+    category = "linux|x86-64|gcc",
+    short_name = "pfxnosse2",
     properties = compile_only({
         "cmake_args": {
             "OPENSSL_NO_ASM": "1",
@@ -1035,14 +1035,14 @@ both_builders(
 both_builders(
     "linux_bazel",
     LINUX_HOST,
-    category = "linux",
+    category = "linux|x86-64|gcc",
     short_name = "bzl",
     recipe = "boringssl_bazel",
 )
 both_builders(
     "mac",
     MAC_X86_64_HOST,
-    category = "mac",
+    category = "mac|x86-64|clang",
     short_name = "dbg",
     properties = {
         "cmake_args": {
@@ -1055,7 +1055,7 @@ both_builders(
 both_builders(
     "mac_rel",
     MAC_X86_64_HOST,
-    category = "mac",
+    category = "mac|x86-64|clang",
     short_name = "rel",
     properties = {
         "cmake_args": {
@@ -1066,7 +1066,7 @@ both_builders(
 both_builders(
     "mac_small",
     MAC_X86_64_HOST,
-    category = "mac",
+    category = "mac|x86-64|clang",
     short_name = "sm",
     properties = {
         "cmake_args": {
@@ -1078,7 +1078,7 @@ both_builders(
 both_builders(
     "mac_prefixed_compile",
     MAC_X86_64_HOST,
-    category = "mac",
+    category = "mac|x86-64|clang",
     short_name = "pfx",
     # Redundant with linux_prefixed_compile + mac_arm64_prefixed_compile.
     # Thus, don't unnecessarily draw resources for it.
@@ -1090,8 +1090,8 @@ both_builders(
 both_builders(
     "mac_arm64",
     MAC_ARM64_HOST,
-    category = "mac",
-    short_name = "arm64",
+    category = "mac|armv8|clang",
+    short_name = "dbg",
     properties = {
         "cmake_args": {
             "RUST_BINDINGS": "aarch64-apple-darwin",
@@ -1103,8 +1103,8 @@ both_builders(
 both_builders(
     "mac_arm64_prefixed_compile",
     MAC_ARM64_HOST,
-    category = "mac",
-    short_name = "arm64pfx",
+    category = "mac|armv8|clang",
+    short_name = "pfx",
     properties = compile_only({
         "prefixed_symbols": True,
     }),
@@ -1112,14 +1112,14 @@ both_builders(
 both_builders(
     "mac_arm64_bazel",
     MAC_ARM64_HOST,
-    category = "mac",
+    category = "mac|armv8|clang",
     short_name = "bzl",
     recipe = "boringssl_bazel",
 )
 both_builders(
     "win32",
     WIN_HOST,
-    category = "win|x86",
+    category = "win|x86|msvc",
     short_name = "dbg",
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
@@ -1129,7 +1129,7 @@ both_builders(
 both_builders(
     "win32_rel",
     WIN_HOST,
-    category = "win|x86",
+    category = "win|x86|msvc",
     short_name = "rel",
     properties = {
         "cmake_args": {
@@ -1141,7 +1141,7 @@ both_builders(
 both_builders(
     "win32_sde",
     WIN_HOST,
-    category = "win|x86",
+    category = "win|x86|msvc",
     short_name = "sde",
     cq_enabled = False,
     execution_timeout = SDE_TIMEOUT,
@@ -1157,7 +1157,7 @@ both_builders(
 both_builders(
     "win32_prefixed_compile",
     WIN_HOST,
-    category = "win|x86",
+    category = "win|x86|msvc",
     short_name = "pfx",
     properties = compile_only({
         "msvc_target": "x86",
@@ -1168,7 +1168,7 @@ cq_builder(
     "win32_shared_compile",
     WIN_HOST,
     # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x86",
+    # category = "win|x86|msvc",
     # short_name = "sh",
     # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
@@ -1183,7 +1183,7 @@ cq_builder(
     "win32_shared_prefixed_compile",
     WIN_HOST,
     # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x86",
+    # category = "win|x86|msvc",
     # short_name = "shpfx",
     # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
@@ -1198,7 +1198,7 @@ cq_builder(
 both_builders(
     "win32_small",
     WIN_HOST,
-    category = "win|x86",
+    category = "win|x86|msvc",
     short_name = "sm",
     properties = {
         "cmake_args": {
@@ -1216,8 +1216,8 @@ both_builders(
 both_builders(
     "win32_clang",
     WIN_HOST,
-    category = "win|x86",
-    short_name = "clang",
+    category = "win|x86|clang",
+    short_name = "dbg",
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "clang": True,
@@ -1236,8 +1236,8 @@ both_builders(
 both_builders(
     "win32_clang_prefixed_compile",
     WIN_HOST,
-    category = "win|x86",
-    short_name = "clangpfx",
+    category = "win|x86|clang",
+    short_name = "pfx",
     properties = compile_only({
         "clang": True,
         "msvc_target": "x86",
@@ -1257,7 +1257,7 @@ both_builders(
 both_builders(
     "win64",
     WIN_HOST,
-    category = "win|x64",
+    category = "win|x86-64|msvc",
     short_name = "dbg",
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
@@ -1268,7 +1268,7 @@ both_builders(
 both_builders(
     "win64_rel",
     WIN_HOST,
-    category = "win|x64",
+    category = "win|x86-64|msvc",
     short_name = "rel",
     properties = {
         "cmake_args": {
@@ -1283,7 +1283,7 @@ both_builders(
 both_builders(
     "win64_sde",
     WIN_HOST,
-    category = "win|x64",
+    category = "win|x86-64|msvc",
     short_name = "sde",
     cq_enabled = False,
     execution_timeout = SDE_TIMEOUT,
@@ -1299,7 +1299,7 @@ both_builders(
 both_builders(
     "win64_prefixed_compile",
     WIN_HOST,
-    category = "win|x64",
+    category = "win|x86-64|msvc",
     short_name = "pfx",
     properties = compile_only({
         "msvc_target": "x64",
@@ -1310,7 +1310,7 @@ cq_builder(
     "win64_shared_compile",
     WIN_HOST,
     # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x64",
+    # category = "win|x86-64|msvc",
     # short_name = "sh",
     # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
@@ -1325,7 +1325,7 @@ cq_builder(
     "win64_shared_prefixed_compile",
     WIN_HOST,
     # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # category = "win|x64",
+    # category = "win|x86-64|msvc",
     # short_name = "shpfx",
     # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
@@ -1340,7 +1340,7 @@ cq_builder(
 both_builders(
     "win64_small",
     WIN_HOST,
-    category = "win|x64",
+    category = "win|x86-64|msvc",
     short_name = "sm",
     properties = {
         "cmake_args": {
@@ -1358,8 +1358,8 @@ both_builders(
 both_builders(
     "win64_clang",
     WIN_HOST,
-    category = "win|x64",
-    short_name = "clg",
+    category = "win|x86-64|clang",
+    short_name = "dbg",
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "clang": True,
@@ -1369,8 +1369,8 @@ both_builders(
 both_builders(
     "win64_clang_prefixed_compile",
     WIN_HOST,
-    category = "win|x64",
-    short_name = "clangpfx",
+    category = "win|x86-64|clang",
+    short_name = "pfx",
     properties = compile_only({
         "clang": True,
         "msvc_target": "x64",
@@ -1381,8 +1381,8 @@ both_builders(
 both_builders(
     "win_arm64_compile",
     WIN_HOST,
-    category = "win|arm64",
-    short_name = "clang",
+    category = "win|armv8|clang",
+    short_name = "dbg",
     properties = compile_only({
         "clang": True,
         "cmake_args": {
@@ -1403,8 +1403,8 @@ both_builders(
 both_builders(
     "win_arm64_prefixed_compile",
     WIN_HOST,
-    category = "win|arm64",
-    short_name = "clangpfx",
+    category = "win|armv8|clang",
+    short_name = "pfx",
     properties = compile_only({
         "clang": True,
         "cmake_args": {
@@ -1427,8 +1427,8 @@ both_builders(
 both_builders(
     "win_arm64_msvc_compile",
     WIN_HOST,
-    category = "win|arm64",
-    short_name = "msvc",
+    category = "win|armv8|msvc",
+    short_name = "na",
     properties = compile_only({
         "cmake_args": {
             # This is a cross-compile, so CMake needs to be told the processor.
@@ -1447,8 +1447,8 @@ both_builders(
 both_builders(
     "win_arm64_msvc_prefixed_compile",
     WIN_HOST,
-    category = "win|arm64",
-    short_name = "msvcpfx",
+    category = "win|armv8|msvc",
+    short_name = "pfxna",
     properties = compile_only({
         "cmake_args": {
             # This is a cross-compile, so CMake needs to be told the processor.
