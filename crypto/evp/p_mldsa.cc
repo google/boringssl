@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <openssl/evp.h>
+
 #include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
+
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/mldsa.h>
 #include <openssl/nid.h>
+#include <openssl/mldsa.h>
 #include <openssl/span.h>
 
 #include "../fipsmodule/bcm_interface.h"
@@ -145,11 +145,6 @@ void KeyData<Traits>::Free(KeyData<Traits> *data) {
     Delete(static_cast<PublicKeyData<Traits> *>(data));
   }
 }
-
-struct MldsaPkeyCtx {
-  bssl::Array<uint8_t> context;
-};
-
 
 // Finally, MLDSAImplementation instantiates the methods themselves.
 
@@ -350,31 +345,9 @@ struct MLDSAImplementation {
     return Traits::kPublicKeyBytes * 8;
   }
 
-  static int Init(EvpPkeyCtx *ctx) {
-    MldsaPkeyCtx *mctx = New<MldsaPkeyCtx>();
-    if (mctx == nullptr) {
-      return 0;
-    }
-    ctx->data = mctx;
-    return 1;
-  }
-
-  static void Cleanup(EvpPkeyCtx *ctx) {
-    Delete(static_cast<MldsaPkeyCtx *>(ctx->data));
-  }
-
-  // Will change when we add support for streaming signing.
-  static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
-    if (!Init(dst)) {
-      return 0;
-    }
-    MldsaPkeyCtx *sctx = static_cast<MldsaPkeyCtx *>(src->data);
-    MldsaPkeyCtx *dctx = static_cast<MldsaPkeyCtx *>(dst->data);
-    if (!dctx->context.CopyFrom(sctx->context)) {
-      return 0;
-    }
-    return 1;
-  }
+  // There is, for now, no context state to copy. When we add support for
+  // streaming signing, that will change.
+  static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
   static int SignMessage(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
                          const uint8_t *tbs, size_t tbslen) {
@@ -391,9 +364,8 @@ struct MLDSAImplementation {
       OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
-    if (!Traits::Sign(sig, &priv_data->priv, tbs, tbslen, mctx->context.data(),
-                      mctx->context.size())) {
+    if (!Traits::Sign(sig, &priv_data->priv, tbs, tbslen, /*context=*/nullptr,
+                      /*context_len=*/0)) {
       return 0;
     }
     *siglen = Traits::kSignatureBytes;
@@ -403,35 +375,19 @@ struct MLDSAImplementation {
   static int VerifyMessage(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
                            const uint8_t *tbs, size_t tbslen) {
     const auto *pub = GetKeyData(ctx->pkey.get())->GetPublicKey();
-    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
-    if (!Traits::Verify(pub, sig, siglen, tbs, tbslen, mctx->context.data(),
-                        mctx->context.size())) {
+    if (!Traits::Verify(pub, sig, siglen, tbs, tbslen, /*context=*/nullptr,
+                        /*context_len=*/0)) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SIGNATURE);
       return 0;
     }
     return 1;
   }
 
-  static int Ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
-    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
-    switch (type) {
-      case EVP_PKEY_CTRL_MLDSA_CONTEXT: {
-        uint8_t* context = reinterpret_cast<uint8_t*>(p2);
-        return mctx->context.CopyFrom(
-            bssl::Span<uint8_t>(context, p1));
-      }
-
-      default:
-        OPENSSL_PUT_ERROR(EVP, EVP_R_COMMAND_NOT_SUPPORTED);
-        return 0;
-    }
-  }
-
   static constexpr EVP_PKEY_CTX_METHOD pkey_method = {
       Traits::kType,
-      &Init,
+      /*init=*/nullptr,
       &CopyContext,
-      &Cleanup,
+      /*cleanup=*/nullptr,
       // TODO(crbug.com/449751916): Add keygen support.
       /*keygen=*/nullptr,
       /*sign=*/nullptr,
@@ -443,7 +399,7 @@ struct MLDSAImplementation {
       /*decrypt=*/nullptr,
       /*derive=*/nullptr,
       /*paramgen=*/nullptr,
-      &Ctrl,
+      /*ctrl=*/nullptr,
   };
 
   static constexpr EVP_PKEY_ASN1_METHOD BuildASN1Method() {
@@ -496,30 +452,6 @@ struct MLDSAImplementation {
 };
 
 }  // namespace
-
-int EVP_PKEY_CTX_set_mldsa_44_context(EVP_PKEY_CTX* ctx, uint8_t* context,
-                                      size_t context_len) {
-  return bssl::EVP_PKEY_CTX_ctrl(FromOpaque(ctx), EVP_PKEY_ML_DSA_44,
-                                 EVP_PKEY_OP_SIGN | EVP_PKEY_OP_VERIFY,
-                                 EVP_PKEY_CTRL_MLDSA_CONTEXT, context_len,
-                                 reinterpret_cast<void*>(context));
-}
-
-int EVP_PKEY_CTX_set_mldsa_65_context(EVP_PKEY_CTX* ctx, uint8_t* context,
-                                      size_t context_len) {
-  return bssl::EVP_PKEY_CTX_ctrl(FromOpaque(ctx), EVP_PKEY_ML_DSA_65,
-                                 EVP_PKEY_OP_SIGN | EVP_PKEY_OP_VERIFY,
-                                 EVP_PKEY_CTRL_MLDSA_CONTEXT, context_len,
-                                 reinterpret_cast<void*>(context));
-}
-
-int EVP_PKEY_CTX_set_mldsa_87_context(EVP_PKEY_CTX* ctx, uint8_t* context,
-                                      size_t context_len) {
-  return bssl::EVP_PKEY_CTX_ctrl(FromOpaque(ctx), EVP_PKEY_ML_DSA_87,
-                                 EVP_PKEY_OP_SIGN | EVP_PKEY_OP_VERIFY,
-                                 EVP_PKEY_CTRL_MLDSA_CONTEXT, context_len,
-                                 reinterpret_cast<void*>(context));
-}
 
 const EVP_PKEY_ALG *EVP_pkey_ml_dsa_44() {
   return &MLDSAImplementation<MLDSA44Traits>::pkey_alg;
