@@ -383,6 +383,48 @@ def compile_only(properties):
     compile_properties["run_ssl_tests"] = False
     return compile_properties
 
+def cq_builders(
+        name,
+        host,
+        *,
+        recipe = "boringssl",
+        cq_enabled = True,
+        cq_compile_only = None,
+        execution_timeout = None,
+        properties = {}):
+    """Defines a CQ builder, possibly with an associated compile-only builder.
+
+    Args:
+      name: The name to use for both builders.
+      host: The host to run on.
+      recipe: The recipe to run.
+      cq_enabled: Whether the try builder is enabled by default. (If false,
+        the builder is includable_only.)
+      cq_compile_only: If cq_compile_only is specified, we generate both a
+        disabled builder that matches the CI builder, and a compile-only
+        builder. The compile-only builder is controlled by cq_enabled.
+        cq_compile_only also specifies the host to run on, because the
+        compile-only builder usually has weaker requirements.
+      execution_timeout: Overrides the default timeout.
+      properties: Properties to pass to the recipe.
+    """
+    cq_builder(
+        name,
+        host,
+        recipe = recipe,
+        cq_enabled = cq_enabled and not cq_compile_only,
+        execution_timeout = execution_timeout,
+        properties = properties,
+    )
+    if cq_compile_only:
+        cq_builder(
+            name + "_compile",
+            cq_compile_only,
+            recipe = recipe,
+            cq_enabled = cq_enabled,
+            execution_timeout = execution_timeout,
+            properties = compile_only(properties))
+
 def both_builders(
         name,
         host,
@@ -398,8 +440,6 @@ def both_builders(
       name: The name to use for both builders.
       host: The host to run on.
       recipe: The recipe to run.
-      category: Category in which to display the builder in the console view.
-      short_name: The short name for the builder in the console view.
       cq_enabled: Whether the try builder is enabled by default. (If false,
         the builder is includable_only.)
       cq_compile_only: If cq_compile_only is specified, we generate both a
@@ -417,23 +457,14 @@ def both_builders(
         execution_timeout = execution_timeout,
         properties = properties,
     )
-
-    cq_builder(
+    cq_builders(
         name,
         host,
         recipe = recipe,
-        cq_enabled = cq_enabled and not cq_compile_only,
+        cq_enabled = cq_enabled,
+        cq_compile_only = cq_compile_only,
         execution_timeout = execution_timeout,
-        properties = properties,
-    )
-    if cq_compile_only:
-        cq_builder(
-            name + "_compile",
-            cq_compile_only,
-            recipe = recipe,
-            cq_enabled = cq_enabled,
-            execution_timeout = execution_timeout,
-            properties = compile_only(properties))
+        properties = properties)
 
 LINUX_HOST = {
     "dimensions": {
@@ -1195,32 +1226,30 @@ both_builders(
         "prefixed_symbols": True,
     }),
 )
-cq_builder(
-    "win32_shared_compile",
+cq_builders(
+    "win32_shared",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
-    properties = compile_only({
+    cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    properties = {
         "msvc_target": "x86",
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
-    }),
+    },
 )
-cq_builder(
-    "win32_shared_prefixed_compile",
+cq_builders(
+    "win32_shared_prefixed",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
-    properties = compile_only({
+    cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    properties = {
         "msvc_target": "x86",
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
         "prefixed_symbols": True,
-    }),
+    },
 )
 both_builders(
     "win32_small",
@@ -1319,32 +1348,30 @@ both_builders(
         "prefixed_symbols": True,
     }),
 )
-cq_builder(
-    "win64_shared_compile",
+cq_builders(
+    "win64_shared",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
-    properties = compile_only({
+    cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    properties = {
         "msvc_target": "x64",
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
-    }),
+    },
 )
-cq_builder(
-    "win64_shared_prefixed_compile",
+cq_builders(
+    "win64_shared_prefixed",
     WIN_HOST,
-    # TODO(crbug.com/42220000): Enable as both_builders once it's working.
-    # cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     cq_enabled = False,
-    properties = compile_only({
+    cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    properties = {
         "msvc_target": "x64",
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
         "prefixed_symbols": True,
-    }),
+    },
 )
 both_builders(
     "win64_small",
