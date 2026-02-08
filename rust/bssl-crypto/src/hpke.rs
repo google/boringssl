@@ -149,7 +149,7 @@ impl Kem {
             bssl_sys::EVP_HPKE_KEY_init(
                 key.as_mut_ffi_ptr(),
                 self.as_ffi_ptr(),
-                priv_key.as_ptr(),
+                priv_key.as_ffi_ptr(),
                 priv_key.len(),
             )
         };
