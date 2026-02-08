@@ -54,7 +54,7 @@ macro_rules! tls12_suites {
 tls12_suites! {
     TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 {
         Sha256,
-        1 << 24,
+        u64::MAX,
         ECDHE,
         TLS12_ECDSA_SCHEMES,
         TLS12_CHACHA20_POLY1305_AEAD

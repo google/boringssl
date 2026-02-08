@@ -281,7 +281,7 @@ where
         message: &[u8],
         signature: &[u8],
     ) -> bool {
-        // Safety: we would only allow SHA-256 hashing onto P-256 and SHA-386 hashing onto P-384
+        // Safety: we would only allow SHA-256 hashing onto P-256 and SHA-384 hashing onto P-384
         public_key.verify(message, signature).is_ok()
     }
 }

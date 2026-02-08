@@ -12,27 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! `rustls` Adapters
+//! BoringSSL-backed [`rustls::crypto::CryptoProvider`].
 //!
-//! This module provides a provider builder `CryptoProviderBuilder`,
-//! which constructs a [`rustls::crypto::CryptoProvider`] for interop with `rustls` TLS stack.
+//! This module provides [`CryptoProviderBuilder`], which constructs a
+//! [`rustls::crypto::CryptoProvider`] backed by BoringSSL. The resulting
+//! provider can be used with [`rustls`] to establish TLS 1.2 and TLS 1.3
+//! connections.
 //!
-//! # Supported signature schemes
+//! ```
+//! use std::sync::Arc;
+//! use bssl_tls::rustls_provider::CryptoProviderBuilder;
+//! use rustls::client::ClientConfig;
 //!
-//! ## [RFC 8446] IANA assignments for TLS supported signature scheme
+//! let provider = CryptoProviderBuilder::full();
+//! let _config = ClientConfig::builder_with_provider(Arc::new(provider))
+//!     .with_safe_default_protocol_versions()
+//!     .unwrap()
+//!     .with_root_certificates(rustls::RootCertStore::empty())
+//!     .with_no_client_auth();
+//! ```
 //!
-//! - `TLS_AES_128_GCM_SHA256`
-//! - `TLS_AES_256_GCM_SHA384`
-//! - `TLS_CHACHA20_POLY1305_SHA256`
+//! For finer-grained control, individual cipher suites and key exchange
+//! groups can be selected:
 //!
-//! # Supported key exchange groups
+//! ```
+//! use std::sync::Arc;
+//! use bssl_tls::rustls_provider::{CryptoProviderBuilder, cipher_suites, key_exchange};
+//! use rustls::{SupportedCipherSuite, client::ClientConfig};
 //!
-//! - [`secp256r1`] backed by [`key_exchange::ECDH_P256`]
-//! - [`secp384r1`] backed by [`key_exchange::ECDH_P384`]
-//! - [`X25519`] backed by [`key_exchange::X25519`]
-//!
-//! [RFC 8446]: https://datatracker.ietf.org/doc/html/rfc8446
-//! [`X25519`]: https://datatracker.ietf.org/doc/html/rfc7748
+//! let provider = CryptoProviderBuilder::new()
+//!     .with_key_exchange_group(key_exchange::X25519)
+//!     .with_cipher_suite(SupportedCipherSuite::Tls13(
+//!         cipher_suites::TLS13_AES_256_GCM_SHA384,
+//!     ))
+//!     .build();
+//! let _config = ClientConfig::builder_with_provider(Arc::new(provider))
+//!     .with_safe_default_protocol_versions()
+//!     .unwrap()
+//!     .with_root_certificates(rustls::RootCertStore::empty())
+//!     .with_no_client_auth();
+//! ```
 
 use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use bssl_sys::RAND_bytes;
@@ -275,9 +294,9 @@ impl CryptoProviderBuilder {
     /// groups.
     pub fn with_default_key_exchange_groups(mut self) -> Self {
         self.kx_groups.extend_from_slice(&[
+            key_exchange::X25519,
             key_exchange::ECDH_P256,
             key_exchange::ECDH_P384,
-            key_exchange::X25519,
         ]);
         self
     }

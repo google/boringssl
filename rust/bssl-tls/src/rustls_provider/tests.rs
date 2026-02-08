@@ -43,6 +43,18 @@ const ECDSA_P256_SVC_CERT: &'static [u8] =
 const ECDSA_P256_SVC_KEY: &'static [u8] =
     include_bytes!("./tests/BoringSSLServerTest-ECDSA-P256.key");
 
+const ECDSA_P384_SVC_CERT: &'static [u8] =
+    include_bytes!("./tests/BoringSSLServerTest-ECDSA-P384.crt");
+
+const ECDSA_P384_SVC_KEY: &'static [u8] =
+    include_bytes!("./tests/BoringSSLServerTest-ECDSA-P384.key");
+
+const ED25519_SVC_CERT: &'static [u8] =
+    include_bytes!("./tests/BoringSSLServerTest-Ed25519.crt");
+
+const ED25519_SVC_KEY: &'static [u8] =
+    include_bytes!("./tests/BoringSSLServerTest-Ed25519.key");
+
 const RSA_PSS_SVC_CERT: &'static [u8] =
     include_bytes!("./tests/BoringSSLServerTest-RSA-PSS-SHA256.crt");
 
@@ -438,5 +450,143 @@ fn tls13_chacha20_poly1305_sha256() {
                 client_provider,
             )
         },
+    );
+}
+
+#[test]
+fn tls12_ecdhe_rsa_with_chacha20_poly1305_sha256() {
+    let providers = [CryptoProviderBuilder::full, ring::default_provider];
+    let test_provider = || {
+        CryptoProviderBuilder::new()
+            .with_default_key_exchange_groups()
+            .with_cipher_suite(SupportedCipherSuite::Tls12(
+                cipher_suites::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+            ))
+            .build()
+    };
+    test_half_connection(
+        &providers,
+        test_provider,
+        |client_provider, server_provider| {
+            test_cipher_suite(
+                CA_CERT,
+                RSA_SVC_CERT,
+                RSA_SVC_KEY,
+                &[&TLS12],
+                server_provider,
+                client_provider,
+            )
+        },
+    );
+}
+
+#[test]
+fn tls13_rsa_server_cert() {
+    test_cipher_suite(
+        CA_CERT,
+        RSA_SVC_CERT,
+        RSA_SVC_KEY,
+        &[&TLS13],
+        CryptoProviderBuilder::full(),
+        CryptoProviderBuilder::full(),
+    );
+}
+
+#[test]
+fn tls13_rsa_pss_server_cert() {
+    test_cipher_suite(
+        CA_CERT,
+        RSA_PSS_SVC_CERT,
+        RSA_SVC_KEY,
+        &[&TLS13],
+        CryptoProviderBuilder::full(),
+        CryptoProviderBuilder::full(),
+    );
+}
+
+#[test]
+fn tls13_ecdsa_p384_server_cert() {
+    let providers = [CryptoProviderBuilder::full, ring::default_provider];
+    let test_provider = || {
+        CryptoProviderBuilder::new()
+            .with_default_key_exchange_groups()
+            .with_full_cipher_suites()
+            .build()
+    };
+    test_half_connection(
+        &providers,
+        test_provider,
+        |client_provider, server_provider| {
+            test_cipher_suite(
+                CA_CERT,
+                ECDSA_P384_SVC_CERT,
+                ECDSA_P384_SVC_KEY,
+                &[&TLS13],
+                server_provider,
+                client_provider,
+            )
+        },
+    );
+}
+
+#[test]
+fn tls12_ecdsa_p384_server_cert() {
+    let providers = [CryptoProviderBuilder::full, ring::default_provider];
+    let test_provider = || {
+        CryptoProviderBuilder::new()
+            .with_default_key_exchange_groups()
+            .with_full_cipher_suites()
+            .build()
+    };
+    test_half_connection(
+        &providers,
+        test_provider,
+        |client_provider, server_provider| {
+            test_cipher_suite(
+                CA_CERT,
+                ECDSA_P384_SVC_CERT,
+                ECDSA_P384_SVC_KEY,
+                &[&TLS12],
+                server_provider,
+                client_provider,
+            )
+        },
+    );
+}
+
+#[test]
+fn tls13_ed25519_server_cert() {
+    // Ed25519 is not supported by ring, so test BoringSSL on both sides.
+    test_cipher_suite(
+        CA_CERT,
+        ED25519_SVC_CERT,
+        ED25519_SVC_KEY,
+        &[&TLS13],
+        CryptoProviderBuilder::full(),
+        CryptoProviderBuilder::full(),
+    );
+}
+
+#[test]
+fn full_provider_both_sides_tls13() {
+    test_cipher_suite(
+        CA_CERT,
+        ECDSA_P256_SVC_CERT,
+        ECDSA_P256_SVC_KEY,
+        &[&TLS13],
+        CryptoProviderBuilder::full(),
+        CryptoProviderBuilder::full(),
+    );
+}
+
+#[test]
+fn full_provider_both_sides_tls12() {
+    test_cipher_suite(
+        CA_CERT,
+        ECDSA_P256_SVC_CERT,
+        ECDSA_P256_SVC_KEY,
+        &[&TLS12],
+        CryptoProviderBuilder::full(),
+        CryptoProviderBuilder::full(),
     );
 }

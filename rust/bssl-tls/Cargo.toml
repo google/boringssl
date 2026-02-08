@@ -32,5 +32,5 @@ default = []
 std = ["bssl-crypto/std"]
 # `mlalgs` enables ML-KEM and ML-DSA support. This requires Rust 1.82.
 mlalgs = ["bssl-crypto/mlalgs"]
-# `rustls` enables the adapters to key traits for inter-op with `rustls` crate
+# `rustls-adapters` enables the adapters to key traits for inter-op with `rustls` crate
 rustls-adapters = ["rustls/tls12", "rustls/std"]

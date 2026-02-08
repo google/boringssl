@@ -23,7 +23,11 @@
 #![allow(private_bounds)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
-//! Rust BoringSSL bindings
+//! BoringSSL-backed [`rustls`] adapters.
+//!
+//! This crate provides a [`rustls::crypto::CryptoProvider`] backed by
+//! BoringSSL, for use with the [`rustls`] TLS stack. See
+//! [`rustls_provider`] for details and examples.
 
 extern crate alloc;
 extern crate core;
