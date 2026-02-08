@@ -22,7 +22,7 @@ use core::marker::PhantomData;
 
 use bssl_sys::CRYPTO_tls1_prf;
 
-use crate::{digest, sealed, FfiMutSlice, ForeignTypeRef};
+use crate::{digest, sealed, FfiMutSlice, FfiSlice, ForeignTypeRef};
 
 /// The special pseudo-random function used by TLS 1.2
 pub struct Tls12Prf<A>(PhantomData<fn() -> A>);
@@ -40,8 +40,8 @@ impl<A: digest::Algorithm> Tls12Prf<A> {
         seed2: Option<&[u8]>,
         output: &mut [u8],
     ) -> Result<(), ()> {
-        let (seed2, seed2_len) = if let Some(seed) = seed2 {
-            (seed.as_ptr(), seed.len())
+        let (seed2_ptr, seed2_len) = if let Some(seed2) = seed2 {
+            (seed2.as_ffi_ptr(), seed2.len())
         } else {
             (core::ptr::null(), 0)
         };
@@ -54,13 +54,13 @@ impl<A: digest::Algorithm> Tls12Prf<A> {
                 A::get_md(sealed::SealedType).as_ptr(),
                 output.as_mut_ffi_ptr(),
                 output.len(),
-                secret.as_ptr(),
+                secret.as_ffi_ptr(),
                 secret.len(),
-                label.as_ptr(),
+                label.as_ffi_ptr(),
                 label.len(),
-                seed1.as_ptr(),
+                seed1.as_ffi_ptr(),
                 seed1.len(),
-                seed2,
+                seed2_ptr,
                 seed2_len,
             )
         };
