@@ -9,6 +9,8 @@
 
 // We only use our custom libc++ for testing, so enable all checks.
 #define _LIBCPP_HARDENING_MODE _LIBCPP_HARDENING_MODE_DEBUG
+#define _LIBCPP_ASSERTION_SEMANTIC_DEFAULT \
+  _LIBCPP_ASSERTION_SEMANTIC_HARDENING_DEPENDENT
 
 // libc++ headers disable std::string ASan annotations if this is not defined.
 // This is to avoid false positives when libc++'s runtime components are
