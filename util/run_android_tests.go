@@ -364,7 +364,6 @@ func main() {
 	var libraries []string
 	if _, err := os.Stat(filepath.Join(*buildDir, "libcrypto.so")); err == nil {
 		libraries = []string{
-			"libboringssl_gtest.so",
 			"libcrypto.so",
 			"libdecrepit.so",
 			"libpki.so",
