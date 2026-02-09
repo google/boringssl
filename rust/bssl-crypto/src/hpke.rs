@@ -75,6 +75,8 @@
 use crate::{scoped, with_output_vec, with_output_vec_fallible, FfiSlice};
 use alloc::vec::Vec;
 
+use internal::HpkeKey;
+
 /// Supported KEM algorithms with values detailed in RFC 9180.
 #[derive(Clone, Copy)]
 pub enum Kem {
@@ -142,6 +144,20 @@ impl Kem {
     /// Get a private key's corresponding public key, or `None` if the private
     /// key is invalid.
     pub fn public_from_private(&self, priv_key: &[u8]) -> Option<Vec<u8>> {
+        let HpkeKey { key } = self.parse_from_private_key(priv_key)?;
+
+        let pub_key = Self::get_value_from_key(
+            &key,
+            bssl_sys::EVP_HPKE_KEY_public_key,
+            bssl_sys::EVP_HPKE_MAX_PUBLIC_KEY_LENGTH as usize,
+        );
+        Some(pub_key)
+    }
+
+    /// Parse a private key in accordance to the given KEM scheme.
+    ///
+    /// The call returns `None` if `priv_key` is invalid.
+    pub fn parse_from_private_key(&self, priv_key: &[u8]) -> Option<HpkeKey> {
         let mut key = scoped::EvpHpkeKey::new();
         // Safety: `key`, `self`, and `priv_key` must be valid and this function
         // doesn't take ownership of any of them.
@@ -153,16 +169,7 @@ impl Kem {
                 priv_key.len(),
             )
         };
-        if ret != 1 {
-            return None;
-        }
-
-        let pub_key = Self::get_value_from_key(
-            &key,
-            bssl_sys::EVP_HPKE_KEY_public_key,
-            bssl_sys::EVP_HPKE_MAX_PUBLIC_KEY_LENGTH as usize,
-        );
-        Some(pub_key)
+        (ret == 1).then_some(HpkeKey { key })
     }
 
     fn get_value_from_key(
@@ -188,6 +195,23 @@ impl Kem {
                 // Safety: `out_len` bytes have been written, as required.
                 out_len
             })
+        }
+    }
+}
+
+#[doc(hidden)]
+pub mod internal {
+    use crate::scoped;
+
+    /// HPKE key suitable for interfacing with TLS stack.
+    pub struct HpkeKey {
+        pub(crate) key: scoped::EvpHpkeKey,
+    }
+
+    impl HpkeKey {
+        /// Safety: the handle to the underlying key **shall not** be used for mutating access.
+        pub unsafe fn as_ffi_ptr(&self) -> *const bssl_sys::EVP_HPKE_KEY {
+            self.key.as_ffi_ptr()
         }
     }
 }
