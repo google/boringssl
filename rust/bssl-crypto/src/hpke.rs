@@ -79,6 +79,7 @@ use internal::HpkeKey;
 
 /// Supported KEM algorithms with values detailed in RFC 9180.
 #[derive(Clone, Copy)]
+#[repr(u16)]
 pub enum Kem {
     /// KEM using DHKEM P-256 and HKDF-SHA256.
     P256HkdfSha256 = 16, // 0x0010
@@ -216,19 +217,27 @@ pub mod internal {
     }
 }
 
-/// Supported KDF algorithms with values detailed in RFC 9180.
+/// Supported KDF algorithms with values detailed in §7.2 of [RFC 9180].
+///
+/// [RFC 9180]: https://datatracker.ietf.org/doc/html/rfc9180#section-7.2
 #[derive(Clone, Copy)]
+#[repr(u16)]
 pub enum Kdf {
-    #[allow(missing_docs)]
+    /// HKDF-SHA256 as defined in [RFC 5869]
+    /// [RFC 5869]: https://datatracker.ietf.org/doc/html/rfc5869
     HkdfSha256 = 1,
 }
 
-/// Supported AEAD algorithms with values detailed in RFC 9180.
+/// Supported AEAD algorithms with values detailed in §7.3 of [RFC 9180].
+///
+/// [RFC 9180]: https://datatracker.ietf.org/doc/html/rfc9180#section-7.3
 #[derive(Clone, Copy)]
-#[allow(missing_docs)]
 pub enum Aead {
+    /// AES-GCM-128 defined by [NIST](https://doi.org/10.6028/nist.sp.800-38d)
     Aes128Gcm = 1,
+    /// AES-GCM-256 defined by [NIST](https://doi.org/10.6028/nist.sp.800-38d)
     Aes256Gcm = 2,
+    /// ChaCha20-Poly1305 defined by [RFC 8439](https://datatracker.ietf.org/doc/html/rfc8439)
     Chacha20Poly1305 = 3,
 }
 
@@ -270,14 +279,14 @@ pub struct Params {
 impl Params {
     /// New `Params` from KEM, KDF, and AEAD enums.
     pub fn new(kem: Kem, _kdf: Kdf, aead: Aead) -> Self {
-        // Safety: EVP_hpke_hkdf_sha256 just returns pointer to static data.
-        unsafe {
-            Self {
-                kem: kem.as_ffi_ptr(),
-                // Only one KDF is supported thus far.
-                kdf: bssl_sys::EVP_hpke_hkdf_sha256(),
-                aead: aead.as_ffi_ptr(),
-            }
+        Self {
+            kem: kem.as_ffi_ptr(),
+            // Only one KDF is supported thus far.
+            kdf: unsafe {
+                // Safety: EVP_hpke_hkdf_sha256 just returns pointer to static data.
+                bssl_sys::EVP_hpke_hkdf_sha256()
+            },
+            aead: aead.as_ffi_ptr(),
         }
     }
 
