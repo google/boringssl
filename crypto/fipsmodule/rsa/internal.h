@@ -44,8 +44,7 @@ enum rsa_pss_params_t {
   rsa_pss_sha512,
 };
 
-// Exported because rsa_test.cc uses this class and links to the .so.
-class OPENSSL_EXPORT RSAImpl : public rsa_st {
+class RSAImpl : public rsa_st {
  public:
   static constexpr bool kAllowUniquePtr = true;
 

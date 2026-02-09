@@ -518,7 +518,6 @@ elseif(MSVC)
       "-wd4127" # conditional expression is constant
       "-wd4244" # 'function' : conversion from 'int' to 'uint8_t',
                 # possible loss of data
-      "-wd4251" # needs to have dll-interface to be used by clients of class
       "-wd4267" # conversion from 'size_t' to 'int', possible loss of data
       "-wd4702" # unreachable code; MSVC's warning is too aggressive. See
                 # https://crbug.com/385161043
@@ -694,6 +693,14 @@ add_library(pki ${PKI_SOURCES})
 target_link_libraries(pki crypto)
 target_compile_options(pki PRIVATE ${PKI_CXX_FLAGS})
 target_compile_definitions(pki PRIVATE -DBORINGSSL_IMPLEMENTATION)
+if(MSVC)
+  # libpki has a DLL C++ interface, where this warning is expected:
+  set(PKI_MSVC_DISABLED_WARNINGS_LIST
+      "-wd4251" # assignment within conditional expression
+      )
+  target_compile_options(pki PUBLIC
+    "$<$<COMPILE_LANGUAGE:C,CXX>:${PKI_MSVC_DISABLED_WARNINGS_LIST}>")
+endif()
 
 if(BUILD_TESTING)
   add_library(test_support_lib STATIC

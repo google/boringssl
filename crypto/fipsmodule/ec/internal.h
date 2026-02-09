@@ -713,8 +713,7 @@ typedef struct {
   EC_SCALAR scalar;
 } EC_WRAPPED_SCALAR;
 
-// Exported, as the destructor is used by ec_test.cc.
-class OPENSSL_EXPORT ECKey : public ec_key_st {
+class ECKey : public ec_key_st {
  public:
   static constexpr bool kAllowUniquePtr = true;
 

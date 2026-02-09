@@ -456,15 +456,15 @@ TEST(ECTest, SetNULLKey) {
 }
 
 TEST(ECTest, PointAtInfinity) {
-  UniquePtr<ECKey> key(
-      FromOpaque(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1)));
+  UniquePtr<EC_KEY> key_opaque(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
+  ECKey *key = FromOpaque(key_opaque.get());
   ASSERT_TRUE(key);
 
   UniquePtr<EC_POINT> inf(EC_POINT_new(key->group));
   ASSERT_TRUE(inf);
   ASSERT_TRUE(EC_POINT_set_to_infinity(key->group, inf.get()));
   // Configuring a public key with the point at infinity is invalid.
-  EXPECT_FALSE(EC_KEY_set_public_key(key.get(), inf.get()));
+  EXPECT_FALSE(EC_KEY_set_public_key(key, inf.get()));
 }
 
 TEST(ECTest, GroupMismatch) {
