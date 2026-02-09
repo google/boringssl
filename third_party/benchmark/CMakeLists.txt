@@ -1,7 +1,7 @@
 # Require CMake 3.10. If available, use the policies up to CMake 3.22.
 cmake_minimum_required (VERSION 3.13...3.22)
 
-project (benchmark VERSION 1.9.4 LANGUAGES CXX)
+project (benchmark VERSION 1.9.5 LANGUAGES CXX)
 
 option(BENCHMARK_ENABLE_TESTING "Enable testing of the benchmark library." ON)
 option(BENCHMARK_ENABLE_EXCEPTIONS "Enable the use of exceptions in the benchmark library." ON)
@@ -29,6 +29,7 @@ endif()
 option(BENCHMARK_ENABLE_INSTALL "Enable installation of benchmark. (Projects embedding benchmark may want to turn this OFF.)" ON)
 option(BENCHMARK_ENABLE_DOXYGEN "Build documentation with Doxygen." OFF)
 option(BENCHMARK_INSTALL_DOCS "Enable installation of documentation." ON)
+option(BENCHMARK_INSTALL_TOOLS "Enable installation of tools." ON)
 
 # Allow unmet dependencies to be met using CMake's ExternalProject mechanics, which
 # may require downloading the source code.
@@ -196,6 +197,7 @@ else()
   add_cxx_compiler_flag(-Wfloat-equal)
   add_cxx_compiler_flag(-Wold-style-cast)
   add_cxx_compiler_flag(-Wconversion)
+  add_cxx_compiler_flag(-Wformat=2)
   if(BENCHMARK_ENABLE_WERROR)
       add_cxx_compiler_flag(-Werror)
   endif()
@@ -216,6 +218,9 @@ else()
     # See #631 for rationale.
     add_cxx_compiler_flag(-wd1786)
     add_cxx_compiler_flag(-fno-finite-math-only)
+    # ICC17u2: overloaded virtual function "benchmark::Fixture::SetUp" is only partially
+    # overridden (because of deprecated overload)
+    add_cxx_compiler_flag(-wd654)
   endif()
   # Disable deprecation warnings for release builds (when -Werror is enabled).
   if(BENCHMARK_ENABLE_WERROR)
@@ -230,9 +235,7 @@ else()
       add_cxx_compiler_flag(-Wstrict-aliasing)
     endif()
   endif()
-  # ICC17u2: overloaded virtual function "benchmark::Fixture::SetUp" is only partially overridden
-  # (because of deprecated overload)
-  add_cxx_compiler_flag(-wd654)
+
   add_cxx_compiler_flag(-Wthread-safety)
   if (HAVE_CXX_FLAG_WTHREAD_SAFETY)
     cxx_feature_check(THREAD_SAFETY_ATTRIBUTES "-DINCLUDE_DIRECTORIES=${PROJECT_SOURCE_DIR}/include")
@@ -307,10 +310,17 @@ if (BENCHMARK_USE_LIBCXX)
 endif(BENCHMARK_USE_LIBCXX)
 
 # C++ feature checks
-# Determine the correct regular expression engine to use
+# Determine the correct regular expression engine to use. First compatible engine found is used.
 cxx_feature_check(STD_REGEX)
-cxx_feature_check(GNU_POSIX_REGEX)
-cxx_feature_check(POSIX_REGEX)
+
+if(NOT HAVE_STD_REGEX)
+  cxx_feature_check(GNU_POSIX_REGEX)
+endif()
+
+if(NOT HAVE_STD_REGEX AND NOT HAVE_GNU_POSIX_REGEX)
+  cxx_feature_check(POSIX_REGEX)
+endif()
+
 if(NOT HAVE_STD_REGEX AND NOT HAVE_GNU_POSIX_REGEX AND NOT HAVE_POSIX_REGEX)
   message(FATAL_ERROR "Failed to determine the source files for the regular expression backend")
 endif()

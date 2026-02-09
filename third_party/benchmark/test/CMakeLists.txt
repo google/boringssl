@@ -186,6 +186,9 @@ benchmark_add_test(NAME templated_fixture_method_test COMMAND templated_fixture_
 compile_output_test(user_counters_test)
 benchmark_add_test(NAME user_counters_test COMMAND user_counters_test --benchmark_min_time=0.01s)
 
+compile_output_test(user_counters_threads_test)
+benchmark_add_test(NAME user_counters_threads_test COMMAND user_counters_threads_test --benchmark_min_time=0.01s)
+
 compile_output_test(perf_counters_test)
 benchmark_add_test(NAME perf_counters_test COMMAND perf_counters_test --benchmark_min_time=0.01s --benchmark_perf_counters=CYCLES,INSTRUCTIONS)
 
@@ -218,6 +221,9 @@ benchmark_add_test(NAME profiler_manager_iterations COMMAND profiler_manager_ite
 
 compile_output_test(complexity_test)
 benchmark_add_test(NAME complexity_benchmark COMMAND complexity_test --benchmark_min_time=1000000x)
+
+compile_output_test(locale_impermeability_test)
+benchmark_add_test(NAME locale_impermeability_test COMMAND locale_impermeability_test)
 
 ###############################################################################
 # GoogleTest Unit Tests

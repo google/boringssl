@@ -39,7 +39,7 @@ void BM_SpeedRandom(benchmark::State &state) {
 
 static const int64_t kInputSizes[] = {16, 256, 1350, 8192, 16384};
 
-void SetInputLength(benchmark::internal::Benchmark *bench) {
+void SetInputLength(benchmark::Benchmark *bench) {
   bench->ArgName("InputSize");
   auto input_sizes = bssl::bench::GetInputSizes(bench);
   if (input_sizes.empty()) {

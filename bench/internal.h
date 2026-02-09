@@ -63,7 +63,7 @@ int RegisterBenchmark(void (*handle)());
 //
 // This function can only be used in the context of |BSSL_BENCH_LAZY_REGISTER|.
 // Otherwise, the benchmark will be aborted.
-void SetThreads(benchmark::internal::Benchmark *bench);
+void SetThreads(benchmark::Benchmark *bench);
 
 // For benchmark registration, get the input size from the runtime flag.
 // This is an interim solution, until the next `google/benchmark` release,
@@ -71,7 +71,7 @@ void SetThreads(benchmark::internal::Benchmark *bench);
 //
 // This function can only be used in the context of |BSSL_BENCH_LAZY_REGISTER|.
 // Otherwise, the benchmark will be aborted.
-Span<const int64_t> GetInputSizes(benchmark::internal::Benchmark *bench);
+Span<const int64_t> GetInputSizes(benchmark::Benchmark *bench);
 
 }  // namespace bench
 

@@ -56,9 +56,7 @@ int AddCases(std::initializer_list<TestCase> const& v) {
 #define ADD_CASES(...) \
   const int CONCAT(dummy, __LINE__) = AddCases({__VA_ARGS__})
 
-}  // end namespace
-
-using ReturnVal = benchmark::internal::Benchmark const* const;
+using ReturnVal = benchmark::Benchmark const* const;
 
 //----------------------------------------------------------------------------//
 // Test RegisterBenchmark with no additional arguments
@@ -182,6 +180,7 @@ void RunTestTwo() {
   }
   assert(EB == ExpectedResults.end());
 }
+}  // end namespace
 
 int main(int argc, char* argv[]) {
   benchmark::MaybeReenterWithoutASLR(argc, argv);

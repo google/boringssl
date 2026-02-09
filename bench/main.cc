@@ -46,7 +46,7 @@ std::vector<int> &GetNumThreadsList() {
 }
 }  // namespace
 
-void SetThreads(benchmark::internal::Benchmark *bench) {
+void SetThreads(benchmark::Benchmark *bench) {
   if (!flags_parsed) {
     fprintf(stderr,
             "Benchmark %s attempts to set thread count before flag parsing is "
@@ -71,7 +71,7 @@ int RegisterBenchmark(void (*handle)()) {
   return 0;
 }
 
-Span<const int64_t> GetInputSizes(benchmark::internal::Benchmark *bench) {
+Span<const int64_t> GetInputSizes(benchmark::Benchmark *bench) {
   if (!flags_parsed) {
     fprintf(stderr,
             "Benchmark %s attempts to set thread count before flag parsing is "
