@@ -423,8 +423,7 @@ static const char kTLS13LabelFinished[] = "finished";
 // Finished key for both Finished messages and the PSK binder. |out| must have
 // space available for |EVP_MAX_MD_SIZE| bytes.
 static bool tls13_verify_data(uint8_t *out, size_t *out_len,
-                              const EVP_MD *digest, uint16_t version,
-                              Span<const uint8_t> secret,
+                              const EVP_MD *digest, Span<const uint8_t> secret,
                               Span<const uint8_t> context, bool is_dtls) {
   uint8_t key_buf[EVP_MAX_MD_SIZE];
   auto key = Span(key_buf, EVP_MD_size(digest));
@@ -447,8 +446,7 @@ bool tls13_finished_mac(SSL_HANDSHAKE *hs, uint8_t *out, size_t *out_len,
   uint8_t context_hash[EVP_MAX_MD_SIZE];
   size_t context_hash_len;
   if (!hs->transcript.GetHash(context_hash, &context_hash_len) ||
-      !tls13_verify_data(out, out_len, hs->transcript.Digest(),
-                         hs->ssl->s3->version, traffic_secret,
+      !tls13_verify_data(out, out_len, hs->transcript.Digest(), traffic_secret,
                          Span(context_hash, context_hash_len),
                          SSL_is_dtls(hs->ssl))) {
     return false;
@@ -557,9 +555,8 @@ bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
   }
 
   BSSL_CHECK(out.size() >= EVP_MD_size(digest));
-  if (!tls13_verify_data(out.data(), out_len, digest, session->ssl_version,
-                         binder_key, Span(context, context_len),
-                         SSL_is_dtls(hs->ssl))) {
+  if (!tls13_verify_data(out.data(), out_len, digest, binder_key,
+                         Span(context, context_len), SSL_is_dtls(hs->ssl))) {
     return false;
   }
 
