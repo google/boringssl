@@ -1226,10 +1226,9 @@ both_builders(
         "prefixed_symbols": True,
     }),
 )
-cq_builders(
+both_builders(
     "win32_shared",
     WIN_HOST,
-    cq_enabled = False,
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "msvc_target": "x86",
@@ -1238,10 +1237,9 @@ cq_builders(
         },
     },
 )
-cq_builders(
+both_builders(
     "win32_shared_prefixed",
     WIN_HOST,
-    cq_enabled = False,
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "msvc_target": "x86",
@@ -1348,10 +1346,9 @@ both_builders(
         "prefixed_symbols": True,
     }),
 )
-cq_builders(
+both_builders(
     "win64_shared",
     WIN_HOST,
-    cq_enabled = False,
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "msvc_target": "x64",
@@ -1360,10 +1357,9 @@ cq_builders(
         },
     },
 )
-cq_builders(
+both_builders(
     "win64_shared_prefixed",
     WIN_HOST,
-    cq_enabled = False,
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "msvc_target": "x64",
