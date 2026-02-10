@@ -66,7 +66,8 @@ uint32_t ssl_hash_session_id(Span<const uint8_t> session_id) {
   return hash;
 }
 
-UniquePtr<SSL_SESSION> SSL_SESSION_dup(SSL_SESSION *session, int dup_flags) {
+UniquePtr<SSL_SESSION> SSL_SESSION_dup(const SSL_SESSION *session,
+                                       int dup_flags) {
   UniquePtr<SSL_SESSION> new_session = ssl_session_new(session->x509_method);
   if (!new_session) {
     return nullptr;
