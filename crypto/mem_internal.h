@@ -102,6 +102,21 @@ struct DeleterImpl<T, std::enable_if_t<T::kAllowRefCountedUniquePtr>> {
 
 }  // namespace internal
 
+// All types with kAllowRefCountedUniquePtr types also automatically get an
+// UpRef function. Other types may be C structs which require a
+// |BORINGSSL_MAKE_UP_REF| registration.
+template <typename T, typename = std::enable_if_t<T::kAllowRefCountedUniquePtr>>
+inline UniquePtr<T> UpRef(T *v) {
+  if (v != nullptr) {
+    v->UpRefInternal();
+  }
+  return UniquePtr<T>(v);
+}
+template <typename T, typename = std::enable_if_t<T::kAllowRefCountedUniquePtr>>
+inline UniquePtr<T> UpRef(const UniquePtr<T> &ptr) {
+  return UpRef(ptr.get());
+}
+
 // MakeUnique behaves like |std::make_unique| but returns nullptr on allocation
 // error.
 template <typename T, typename... Args>
