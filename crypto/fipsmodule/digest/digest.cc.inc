@@ -218,4 +218,6 @@ int EVP_MD_CTX_type(const EVP_MD_CTX *ctx) {
   return EVP_MD_type(EVP_MD_CTX_get0_md(ctx));
 }
 
+EVP_PKEY_CTX *EVP_MD_CTX_pkey_ctx(const EVP_MD_CTX *ctx) { return ctx->pctx; }
+
 int EVP_add_digest(const EVP_MD *digest) { return 1; }

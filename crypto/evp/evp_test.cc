@@ -546,7 +546,8 @@ bool MaybeReplaceWithCopy(bssl::UniquePtr<EVP_PKEY_CTX> *ctx, bool copy_ctx) {
   return true;
 }
 
-bool MaybeReplaceWithCopy(bssl::UniquePtr<EVP_MD_CTX> *ctx, bool copy_ctx) {
+bool MaybeReplaceWithCopy(bssl::UniquePtr<EVP_MD_CTX> *ctx, EVP_PKEY_CTX **pctx,
+                          bool copy_ctx) {
   if (!copy_ctx) {
     return true;
   }
@@ -555,6 +556,7 @@ bool MaybeReplaceWithCopy(bssl::UniquePtr<EVP_MD_CTX> *ctx, bool copy_ctx) {
     return false;
   }
   *ctx = std::move(copy);
+  *pctx = EVP_MD_CTX_pkey_ctx(ctx->get());
   return true;
 }
 
@@ -674,9 +676,9 @@ bool TestEVPOperation(FileTest *t, const KeyMap *key_map, bool copy_ctx) {
     EVP_PKEY_CTX *pctx;
     if (ctx == nullptr ||  //
         !md_op_init(ctx.get(), &pctx, digest, nullptr, key) ||
-        !MaybeReplaceWithCopy(&ctx, copy_ctx) ||
+        !MaybeReplaceWithCopy(&ctx, &pctx, copy_ctx) ||
         !SetupContext(t, key_map, pctx) ||
-        !MaybeReplaceWithCopy(&ctx, copy_ctx)) {
+        !MaybeReplaceWithCopy(&ctx, &pctx, copy_ctx)) {
       return false;
     }
 
@@ -703,10 +705,9 @@ bool TestEVPOperation(FileTest *t, const KeyMap *key_map, bool copy_ctx) {
       if (verify_ctx == nullptr ||
           !EVP_DigestVerifyInit(verify_ctx.get(), &verify_pctx, digest, nullptr,
                                 key) ||
-
-          !MaybeReplaceWithCopy(&verify_ctx, copy_ctx) ||
+          !MaybeReplaceWithCopy(&verify_ctx, &verify_pctx, copy_ctx) ||
           !SetupContext(t, key_map, verify_pctx) ||
-          !MaybeReplaceWithCopy(&verify_ctx, copy_ctx)) {
+          !MaybeReplaceWithCopy(&verify_ctx, &verify_pctx, copy_ctx)) {
         return false;
       }
       EXPECT_TRUE(EVP_DigestVerify(verify_ctx.get(), actual.data(),

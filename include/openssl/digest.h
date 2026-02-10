@@ -201,6 +201,11 @@ OPENSSL_EXPORT size_t EVP_MD_CTX_block_size(const EVP_MD_CTX *ctx);
 // |ctx|.
 OPENSSL_EXPORT int EVP_MD_CTX_type(const EVP_MD_CTX *ctx);
 
+// EVP_MD_CTX_pkey_ctx returns the |EVP_PKEY_CTX| used to configure additional
+// parameters on |ctx| if |ctx| is used for a sign or verify operation with
+// |EVP_DigestSignInit| or |EVP_DigestVerifyInit|. It returns NULL otherwise.
+OPENSSL_EXPORT EVP_PKEY_CTX *EVP_MD_CTX_pkey_ctx(const EVP_MD_CTX *ctx);
+
 
 // ASN.1 functions.
 //
