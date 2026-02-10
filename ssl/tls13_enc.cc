@@ -505,11 +505,10 @@ bool tls13_export_keying_material(const SSL *ssl, Span<uint8_t> out,
 
 static const char kTLS13LabelPSKBinder[] = "res binder";
 
-static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
-                             const SSL_SESSION *session,
-                             const SSLTranscript &transcript,
-                             Span<const uint8_t> client_hello,
-                             size_t binders_len, bool is_dtls) {
+bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
+                      size_t *out_len, const SSL_SESSION *session,
+                      const SSLTranscript &transcript,
+                      Span<const uint8_t> client_hello, size_t binders_len) {
   const EVP_MD *digest = ssl_session_get_digest(session);
 
   // Compute the binder key.
@@ -527,10 +526,10 @@ static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
       !HKDF_extract(early_secret, &early_secret_len, digest,
                     session->secret.data(), session->secret.size(), nullptr,
                     0) ||
-      !hkdf_expand_label(binder_key, digest,
-                         Span(early_secret, early_secret_len),
-                         kTLS13LabelPSKBinder,
-                         Span(binder_context, binder_context_len), is_dtls)) {
+      !hkdf_expand_label(
+          binder_key, digest, Span(early_secret, early_secret_len),
+          kTLS13LabelPSKBinder, Span(binder_context, binder_context_len),
+          SSL_is_dtls(hs->ssl))) {
     return false;
   }
 
@@ -557,36 +556,14 @@ static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
     return false;
   }
 
-  if (!tls13_verify_data(out, out_len, digest, session->ssl_version, binder_key,
-                         Span(context, context_len), is_dtls)) {
+  BSSL_CHECK(out.size() >= EVP_MD_size(digest));
+  if (!tls13_verify_data(out.data(), out_len, digest, session->ssl_version,
+                         binder_key, Span(context, context_len),
+                         SSL_is_dtls(hs->ssl))) {
     return false;
   }
 
   assert(*out_len == EVP_MD_size(digest));
-  return true;
-}
-
-bool tls13_write_psk_binder(const SSL_HANDSHAKE *hs,
-                            const SSLTranscript &transcript,
-                            Span<uint8_t> msg) {
-  const SSL *const ssl = hs->ssl;
-  const EVP_MD *digest = ssl_session_get_digest(ssl->session.get());
-  const size_t hash_len = EVP_MD_size(digest);
-  // We only offer one PSK, so the binders are a u16 and u8 length
-  // prefix, followed by the binder. The caller is assumed to have constructed
-  // |msg| with placeholder binders.
-  const size_t binders_len = 3 + hash_len;
-  uint8_t verify_data[EVP_MAX_MD_SIZE];
-  size_t verify_data_len;
-  if (!tls13_psk_binder(verify_data, &verify_data_len, ssl->session.get(),
-                        transcript, msg, binders_len, SSL_is_dtls(hs->ssl)) ||
-      verify_data_len != hash_len) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
-    return false;
-  }
-
-  auto msg_binder = msg.last(verify_data_len);
-  OPENSSL_memcpy(msg_binder.data(), verify_data, verify_data_len);
   return true;
 }
 
@@ -599,8 +576,8 @@ bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
   // The binders are computed over |msg| with |binders| and its u16 length
   // prefix removed. The caller is assumed to have parsed |msg|, extracted
   // |binders|, and verified the PSK extension is last.
-  if (!tls13_psk_binder(verify_data, &verify_data_len, session, hs->transcript,
-                        msg.body, 2 + CBS_len(binders), SSL_is_dtls(hs->ssl)) ||
+  if (!tls13_psk_binder(hs, verify_data, &verify_data_len, session,
+                        hs->transcript, msg.body, 2 + CBS_len(binders)) ||
       // We only consider the first PSK, so compare against the first binder.
       !CBS_get_u8_length_prefixed(binders, &binder)) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);

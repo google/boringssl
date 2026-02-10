@@ -1940,7 +1940,8 @@ static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
   uint32_t ticket_age = 1000 * (now.tv_sec - ssl->session->time);
   uint32_t obfuscated_ticket_age = ticket_age + ssl->session->ticket_age_add;
 
-  size_t binder_len = EVP_MD_size(ssl_session_get_digest(ssl->session.get()));
+  const size_t one_binder_len =
+      EVP_MD_size(ssl_session_get_digest(ssl->session.get()));
   const size_t len_before = CBB_len(out_extensions);
   CBB contents, identity, ticket, binders, binder;
   if (!CBB_add_u16(out_extensions, TLSEXT_TYPE_pre_shared_key) ||
@@ -1954,20 +1955,30 @@ static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
       !CBB_add_u8_length_prefixed(&binders, &binder) ||
       // Fill in a placeholder zero binder of the appropriate length. It will be
       // computed and filled in later after length prefixes are computed.
-      !CBB_add_zeros(&binder, binder_len) ||  //
+      !CBB_add_zeros(&binder, one_binder_len) ||  //
       !CBB_flush(out_extensions)) {
     return false;
   }
   // Sample the length of the PSK extension.
   *out_psk_len = CBB_len(out_extensions) - len_before;
 
-  // Close |out_extensions| and fill in the binder.
-  const auto &transcript =
-      type == ssl_client_hello_inner ? hs->inner_transcript : hs->transcript;
-  if (!CBB_flush(out_client_hello) ||
-      !tls13_write_psk_binder(hs, transcript, CBBAsSpan(out_client_hello))) {
+  // Fill in |out_extensions|'s length prefix.
+  if (!CBB_flush(out_client_hello)) {
     return false;
   }
+
+  // Fill in the binder.
+  const auto &transcript =
+      type == ssl_client_hello_inner ? hs->inner_transcript : hs->transcript;
+  auto client_hello = CBBAsSpan(out_client_hello);
+  auto binder_out = client_hello.last(one_binder_len);
+  size_t binders_len = 3 + one_binder_len;  // u16 and u8 length prefix
+  size_t actual_binder_len;
+  if (!tls13_psk_binder(hs, binder_out, &actual_binder_len, ssl->session.get(),
+                        transcript, client_hello, binders_len)) {
+    return false;
+  }
+  assert(actual_binder_len == one_binder_len);
 
   return true;
 }

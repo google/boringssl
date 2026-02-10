@@ -1212,12 +1212,15 @@ bool tls13_finished_mac(SSL_HANDSHAKE *hs, uint8_t *out, size_t *out_len,
 bool tls13_derive_session_psk(SSL_SESSION *session, Span<const uint8_t> nonce,
                               bool is_dtls);
 
-// tls13_write_psk_binder calculates the PSK binder value over |transcript| and
-// |msg|, and replaces the last bytes of |msg| with the resulting value. It
-// returns true on success, and false on failure. |msg| should contain the body
-// of a ClientHello, but not the message header.
-bool tls13_write_psk_binder(const SSL_HANDSHAKE *hs,
-                            const SSLTranscript &transcript, Span<uint8_t> msg);
+// tls13_psk_binder calculates PSK binder value for |session| over
+// |transcript| and |client_hello|. On success, it writes the result to |out|,
+// sets |*out_len| to the length, and returns true. Otherwise, it returns false.
+// |binders_len| must be the length of the binders field, covering all binders
+// and the overall length prefix, in |client_hello|.
+bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
+                      size_t *out_len, const SSL_SESSION *session,
+                      const SSLTranscript &transcript,
+                      Span<const uint8_t> client_hello, size_t binders_len);
 
 // tls13_verify_psk_binder verifies that the handshake transcript, truncated up
 // to the binders has a valid signature using the value of |session|'s
