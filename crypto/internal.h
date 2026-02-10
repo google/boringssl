@@ -1620,14 +1620,14 @@ class Cleanup {
 template <typename F>
 Cleanup(F func) -> Cleanup<F>;
 
-// IMPLEMENTING_OPAQUE_STRUCT defines a public struct |Public| with an
-// implementation struct |Impl|.
+// DECLARE_OPAQUE_STRUCT defines a public struct |public_name| with an
+// implementation struct |impl_name|.
 //
-// To prevent accidents, the |Public| struct will be neither constructable, nor
-// copyable/movable, nor deletable.
+// To prevent accidents, the |public_name| struct will be neither constructable,
+// nor copyable/movable, nor deletable.
 //
-// It must be used from inside the |bssl| namespace; however, |Public| will be
-// defined outside.
+// It must be used from inside the |bssl| namespace; however, |public_name| will
+// be defined outside.
 //
 // Usage:
 //
@@ -1648,26 +1648,22 @@ Cleanup(F func) -> Cleanup<F>;
 // to convert the public struct to the implementation struct, call
 // |FromOpaque| on it. It is explicitly allowed to call |FromOpaque| on a
 // |nullptr|.
-//
-// Note that nothing in the definition of |Public| should be a data member or
-// create linker symbols (as ensured by this macro).
-#define DECLARE_OPAQUE_STRUCT(public_name, impl_name)     \
-  BSSL_NAMESPACE_BEGIN                                    \
-                                                          \
-  class impl_name;                                        \
-                                                          \
-  BSSL_NAMESPACE_END                                      \
-                                                          \
-  struct public_name {                                    \
-    using ImplType = bssl::impl_name;                     \
-                                                          \
-   private:                                               \
-    public_name() = default;                              \
-    ~public_name() = default;                             \
-    public_name(const public_name &) = delete;            \
-    public_name &operator=(const public_name &) = delete; \
-                                                          \
-    friend class bssl::impl_name;                         \
+#define DECLARE_OPAQUE_STRUCT(public_name, impl_name)                  \
+  BSSL_NAMESPACE_BEGIN                                                 \
+  class impl_name;                                                     \
+  BSSL_NAMESPACE_END                                                   \
+                                                                       \
+  /* This is unnamespaced but assumed to not create linker symbols. */ \
+  struct public_name {                                                 \
+    using ImplType = bssl::impl_name;                                  \
+                                                                       \
+   private:                                                            \
+    public_name() = default;                                           \
+    ~public_name() = default;                                          \
+    public_name(const public_name &) = delete;                         \
+    public_name &operator=(const public_name &) = delete;              \
+                                                                       \
+    friend class bssl::impl_name;                                      \
   };
 
 template <typename Public>
