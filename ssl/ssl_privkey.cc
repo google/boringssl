@@ -26,6 +26,7 @@
 #include <openssl/mem.h>
 #include <openssl/span.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "internal.h"
 

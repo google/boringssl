@@ -21,6 +21,8 @@
 
 #include <type_traits>
 
+#include "../mem_internal.h"
+
 
 BSSL_NAMESPACE_BEGIN
 
@@ -76,6 +78,9 @@ int CBB_finish_i2d(CBB *cbb, uint8_t **outp);
 inline Span<uint8_t> CBBAsSpan(const CBB *cbb) {
   return Span(CBB_data(cbb), CBB_len(cbb));
 }
+
+// CBBFinishArray behaves like |CBB_finish| but stores the result in an Array.
+OPENSSL_EXPORT bool CBBFinishArray(CBB *cbb, Array<uint8_t> *out);
 
 // D2IFromCBS takes a functor of type |Unique<T>(CBS*)| and implements the d2i
 // calling convention. For compatibility with functions that don't tag their

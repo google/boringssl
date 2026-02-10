@@ -44,6 +44,7 @@
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "../crypto/test/file_util.h"
 #include "../crypto/test/test_util.h"

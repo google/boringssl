@@ -32,6 +32,7 @@
 #include <openssl/nid.h>
 #include <openssl/rand.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "internal.h"
 
@@ -71,17 +72,6 @@ static CRYPTO_EX_DATA_CLASS g_ex_data_class_ssl =
     CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA;
 static CRYPTO_EX_DATA_CLASS g_ex_data_class_ssl_ctx =
     CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA;
-
-bool CBBFinishArray(CBB *cbb, Array<uint8_t> *out) {
-  uint8_t *ptr;
-  size_t len;
-  if (!CBB_finish(cbb, &ptr, &len)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
-    return false;
-  }
-  out->Reset(ptr, len);
-  return true;
-}
 
 void ssl_reset_error_state(SSL *ssl) {
   // Functions which use |SSL_get_error| must reset I/O and error state on

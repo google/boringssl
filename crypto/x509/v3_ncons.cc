@@ -20,6 +20,7 @@
 #include <openssl/err.h>
 #include <openssl/mem.h>
 #include <openssl/obj.h>
+#include <openssl/span.h>
 #include <openssl/x509.h>
 
 #include "../internal.h"
@@ -320,9 +321,9 @@ static int nc_match_single(const GENERAL_NAME *gen, const GENERAL_NAME *base) {
   }
 }
 
-// directoryName name constraint matching. The canonical encoding of
-// X509_NAME makes this comparison easy. It is matched if the subtree is a
-// subset of the name.
+// directoryName name constraint matching. The canonical encoding of X509_NAME
+// makes this comparison easy. It is matched if the constraint is a prefix of
+// the name.
 
 static int nc_dn(const X509_NAME *nm, const X509_NAME *base) {
   const X509_NAME_CACHE *nm_cache = x509_name_get_cache(nm);
@@ -333,11 +334,11 @@ static int nc_dn(const X509_NAME *nm, const X509_NAME *base) {
   if (base_cache == nullptr) {
     return X509_V_ERR_OUT_OF_MEM;
   }
-  if (base_cache->canon_len > nm_cache->canon_len) {
+  if (base_cache->canon.size() > nm_cache->canon.size()) {
     return X509_V_ERR_PERMITTED_VIOLATION;
   }
-  if (OPENSSL_memcmp(base_cache->canon, nm_cache->canon,
-                     base_cache->canon_len)) {
+  if (base_cache->canon !=
+      Span(nm_cache->canon).first(base_cache->canon.size())) {
     return X509_V_ERR_PERMITTED_VIOLATION;
   }
   return X509_V_OK;

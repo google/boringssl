@@ -125,13 +125,14 @@ int X509_NAME_cmp(const X509_NAME *a, const X509_NAME *b) {
   if (b_cache == nullptr) {
     return -2;
   }
-  if (a_cache->canon_len < b_cache->canon_len) {
+  if (a_cache->canon.size() < b_cache->canon.size()) {
     return -1;
   }
-  if (a_cache->canon_len > b_cache->canon_len) {
+  if (a_cache->canon.size() > b_cache->canon.size()) {
     return 1;
   }
-  int ret = OPENSSL_memcmp(a_cache->canon, b_cache->canon, a_cache->canon_len);
+  int ret = OPENSSL_memcmp(a_cache->canon.data(), b_cache->canon.data(),
+                           a_cache->canon.size());
   // Canonicalize the return value so it is even possible to distinguish the
   // error case from a < b, though ideally we would not have an error case.
   if (ret < 0) {
@@ -149,7 +150,7 @@ uint32_t X509_NAME_hash(const X509_NAME *x) {
     return 0;
   }
   uint8_t md[SHA_DIGEST_LENGTH];
-  SHA1(cache->canon, cache->canon_len, md);
+  SHA1(cache->canon.data(), cache->canon.size(), md);
   return CRYPTO_load_u32_le(md);
 }
 
@@ -162,7 +163,7 @@ uint32_t X509_NAME_hash_old(const X509_NAME *x) {
     return 0;
   }
   uint8_t md[MD5_DIGEST_LENGTH];
-  MD5(cache->der, cache->der_len, md);
+  MD5(cache->der.data(), cache->der.size(), md);
   return CRYPTO_load_u32_le(md);
 }
 

@@ -35,6 +35,7 @@
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "../crypto/bytestring/internal.h"
 #include "internal.h"

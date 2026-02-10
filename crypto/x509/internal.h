@@ -21,6 +21,7 @@
 #include <openssl/x509.h>
 
 #include "../asn1/internal.h"
+#include "../mem_internal.h"
 #include "../internal.h"
 
 // Internal structures.
@@ -66,13 +67,12 @@ BSSL_NAMESPACE_BEGIN
 DECLARE_ASN1_ITEM(X509_NAME_ENTRY)
 
 struct X509_NAME_CACHE {
+  static constexpr bool kAllowUniquePtr = true;
   // canon contains the DER-encoded canonicalized X.509 Name, not including the
   // outermost TLV.
-  uint8_t *canon;
-  size_t canon_len;
+  Array<uint8_t> canon;
   // der contains the DER-encoded X.509 Name, including the outermost TLV.
-  uint8_t *der;
-  size_t der_len;
+  Array<uint8_t> der;
 };
 
 class X509Name : public X509_name_st {
