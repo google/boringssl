@@ -134,24 +134,21 @@ struct evp_pkey_asn1_method_st {
   void (*pkey_free)(EvpPkey *pkey);
 } /* EVP_PKEY_ASN1_METHOD */;
 
-class EvpPkey : public evp_pkey_st {
+class EvpPkey : public evp_pkey_st, public RefCounted<EvpPkey> {
  public:
-  ~EvpPkey();
-
-  bssl::CRYPTO_refcount_t references;
+  EvpPkey();
 
   // pkey contains a pointer to a structure dependent on |ameth|.
-  void *pkey;
+  void *pkey = nullptr;
 
   // ameth contains a pointer to a method table that determines the key type, or
   // nullptr if the key is empty.
-  const bssl::EVP_PKEY_ASN1_METHOD *ameth;
-} /* EVP_PKEY */;
+  const bssl::EVP_PKEY_ASN1_METHOD *ameth = nullptr;
 
-// |UniquePtr|s to EvpPkey are actually intrusive |shared_ptr|s!
-// TODO(crbug.com/481633975): find a better way for handling this.
-BORINGSSL_MAKE_DELETER(EvpPkey, EVP_PKEY_free)
-BORINGSSL_MAKE_UP_REF(EvpPkey, EVP_PKEY_up_ref)
+ private:
+  ~EvpPkey();
+  friend RefCounted;
+} /* EVP_PKEY */;
 
 #define EVP_PKEY_OP_UNDEFINED 0
 #define EVP_PKEY_OP_KEYGEN (1 << 2)

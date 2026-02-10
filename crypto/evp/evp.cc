@@ -37,22 +37,11 @@ OPENSSL_DECLARE_ERROR_REASON(EVP, NOT_XOF_OR_INVALID_LENGTH)
 // directory.
 OPENSSL_DECLARE_ERROR_REASON(EVP, EMPTY_PSK)
 
-EVP_PKEY *EVP_PKEY_new() {
-  EvpPkey *ret = NewZeroed<EvpPkey>();
-  if (ret == nullptr) {
-    return nullptr;
-  }
+EVP_PKEY *EVP_PKEY_new() { return New<EvpPkey>(); }
 
-  ret->references = 1;
-  return ret;
-}
+EvpPkey::EvpPkey() : RefCounted(CheckSubClass()) {}
 
-EvpPkey::~EvpPkey() {
-  // Refcount can be 1 if called by UniquePtr and 0 if called by EVP_PKEY_free.
-  BSSL_CHECK(references.load() <= 1);
-
-  evp_pkey_set0(this, nullptr, nullptr);
-}
+EvpPkey::~EvpPkey() { evp_pkey_set0(this, nullptr, nullptr); }
 
 void EVP_PKEY_free(EVP_PKEY *pkey) {
   if (pkey == nullptr) {
@@ -60,16 +49,12 @@ void EVP_PKEY_free(EVP_PKEY *pkey) {
   }
 
   auto *impl = FromOpaque(pkey);
-  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-    return;
-  }
-
-  Delete(impl);
+  impl->DecRefInternal();
 }
 
 int EVP_PKEY_up_ref(EVP_PKEY *pkey) {
   auto *impl = FromOpaque(pkey);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
