@@ -20,6 +20,7 @@
 #include <openssl/mem.h>
 #include <openssl/x509.h>
 
+#include "../bytestring/internal.h"
 #include "../internal.h"
 #include "../mem_internal.h"
 #include "../pkcs7/internal.h"
@@ -32,29 +33,25 @@ using namespace bssl;
 // is not.
 OPENSSL_DECLARE_ERROR_REASON(CMS, CERTIFICATE_HAS_NO_KEYID)
 
-DECLARE_OPAQUE_STRUCT(CMS_SignerInfo_st, SignerInfo)
-DECLARE_OPAQUE_STRUCT(CMS_ContentInfo_st, ContentInfo)
+DECLARE_OPAQUE_STRUCT(CMS_SignerInfo_st, CMSSignerInfo)
+DECLARE_OPAQUE_STRUCT(CMS_ContentInfo_st, CMSContentInfo)
 
 BSSL_NAMESPACE_BEGIN
 
-class SignerInfo : public CMS_SignerInfo_st {
+class CMSSignerInfo : public CMS_SignerInfo_st {
  public:
-  X509 *signcert = nullptr;
-  EVP_PKEY *pkey = nullptr;
+  UniquePtr<X509> signcert;
+  UniquePtr<EVP_PKEY> pkey;
   const EVP_MD *md = nullptr;
   bool use_key_id = false;
 };
 
-class ContentInfo : public CMS_ContentInfo_st {
+class CMSContentInfo : public CMS_ContentInfo_st {
  public:
   static constexpr bool kAllowUniquePtr = true;
-
-  ~ContentInfo();
-
   bool has_signer_info = false;
-  SignerInfo signer_info;
-  uint8_t *der = nullptr;
-  size_t der_len = 0;
+  CMSSignerInfo signer_info;
+  Array<uint8_t> der;
 };
 
 BSSL_NAMESPACE_END
@@ -68,7 +65,7 @@ CMS_ContentInfo *CMS_sign(X509 *signcert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
     return nullptr;
   }
 
-  UniquePtr<ContentInfo> cms(NewZeroed<ContentInfo>());
+  UniquePtr<CMSContentInfo> cms = MakeUnique<CMSContentInfo>();
   if (cms == nullptr) {
     return nullptr;
   }
@@ -89,12 +86,6 @@ CMS_ContentInfo *CMS_sign(X509 *signcert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
   return cms.release();
 }
 
-ContentInfo::~ContentInfo() {
-  X509_free(signer_info.signcert);
-  EVP_PKEY_free(signer_info.pkey);
-  OPENSSL_free(der);
-}
-
 void CMS_ContentInfo_free(CMS_ContentInfo *cms) { Delete(FromOpaque(cms)); }
 
 CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms, X509 *signcert,
@@ -102,7 +93,7 @@ CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms, X509 *signcert,
                                 uint32_t flags) {
   auto *impl = FromOpaque(cms);
   if (  // Already finalized.
-      impl->der_len != 0 ||
+      !impl->der.empty() ||
       // We only support one signer.
       impl->has_signer_info ||
       // We do not support configuring a signer in multiple steps. (In OpenSSL,
@@ -133,8 +124,8 @@ CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms, X509 *signcert,
 
   // Save information for later.
   impl->has_signer_info = true;
-  impl->signer_info.signcert = UpRef(signcert).release();
-  impl->signer_info.pkey = UpRef(pkey).release();
+  impl->signer_info.signcert = UpRef(signcert);
+  impl->signer_info.pkey = UpRef(pkey);
   impl->signer_info.md = md;
   impl->signer_info.use_key_id = (flags & CMS_USE_KEYID) != 0;
   return &impl->signer_info;
@@ -143,7 +134,7 @@ CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms, X509 *signcert,
 int CMS_final(CMS_ContentInfo *cms, BIO *data, BIO *dcont, uint32_t flags) {
   auto *impl = FromOpaque(cms);
   if (  // Already finalized.
-      impl->der_len != 0 ||
+      !impl->der.empty() ||
       // Require a SignerInfo. We do not support signature-less SignedDatas.
       !impl->has_signer_info ||
       // We only support the straightforward passthrough mode, without S/MIME
@@ -157,10 +148,11 @@ int CMS_final(CMS_ContentInfo *cms, BIO *data, BIO *dcont, uint32_t flags) {
 
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 2048) ||
-      !pkcs7_add_external_signature(
-          cbb.get(), impl->signer_info.signcert, impl->signer_info.pkey,
-          impl->signer_info.md, data, impl->signer_info.use_key_id) ||
-      !CBB_finish(cbb.get(), &impl->der, &impl->der_len)) {
+      !pkcs7_add_external_signature(cbb.get(), impl->signer_info.signcert.get(),
+                                    impl->signer_info.pkey.get(),
+                                    impl->signer_info.md, data,
+                                    impl->signer_info.use_key_id) ||
+      !CBBFinishArray(cbb.get(), &impl->der)) {
     return 0;
   }
 
@@ -169,23 +161,21 @@ int CMS_final(CMS_ContentInfo *cms, BIO *data, BIO *dcont, uint32_t flags) {
 
 int i2d_CMS_bio(BIO *out, CMS_ContentInfo *cms) {
   auto *impl = FromOpaque(cms);
-  if (impl->der_len == 0) {
+  if (impl->der.empty()) {
     // Not yet finalized.
     OPENSSL_PUT_ERROR(CMS, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
-  return BIO_write_all(out, impl->der, impl->der_len);
+  return BIO_write_all(out, impl->der.data(), impl->der.size());
 }
 
 int i2d_CMS_bio_stream(BIO *out, CMS_ContentInfo *cms, BIO *in, int flags) {
-  auto *impl = FromOpaque(cms);
-
   // We do not support streaming mode.
   if ((flags & CMS_STREAM) != 0 || in != nullptr) {
     OPENSSL_PUT_ERROR(CMS, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
-  return i2d_CMS_bio(out, impl);
+  return i2d_CMS_bio(out, cms);
 }
