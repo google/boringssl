@@ -48,22 +48,14 @@ static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
 
 static CRYPTO_EX_DATA_CLASS g_ex_data_class = CRYPTO_EX_DATA_CLASS_INIT;
 
-DSA *DSA_new() {
-  DSAImpl *dsa = NewZeroed<DSAImpl>();
-  if (dsa == nullptr) {
-    return nullptr;
-  }
+DSA *DSA_new() { return New<DSAImpl>(); }
 
-  dsa->references = 1;
-  CRYPTO_MUTEX_init(&dsa->method_mont_lock);
-  CRYPTO_new_ex_data(&dsa->ex_data);
-  return dsa;
+DSAImpl::DSAImpl() : RefCounted(CheckSubClass()) {
+  CRYPTO_MUTEX_init(&method_mont_lock);
+  CRYPTO_new_ex_data(&ex_data);
 }
 
 DSAImpl::~DSAImpl() {
-  // Refcount can be 1 if called by UniquePtr, and 0 if called by DSA_free.
-  BSSL_CHECK(references.load() <= 1);
-
   CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);
 
   BN_clear_free(p);
@@ -81,17 +73,12 @@ void DSA_free(DSA *dsa) {
     return;
   }
   auto *impl = FromOpaque(dsa);
-
-  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-    return;
-  }
-
-  Delete(impl);
+  impl->DecRefInternal();
 }
 
 int DSA_up_ref(DSA *dsa) {
   auto *impl = FromOpaque(dsa);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
