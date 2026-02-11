@@ -457,6 +457,14 @@ static enum ssl_hs_wait_t do_read_server_hello(SSL_HANDSHAKE *hs) {
   // The combination of ServerHello extensions determines the kind of handshake
   // that the server selected. Check for invalid combinations.
 
+  // If the server specified no alternative authentication mode, it is using
+  // certificate authentication. Check that this is acceptable.
+  if (!pake_share.present && !pre_shared_key.present &&
+      !ssl_accepts_server_certificate_auth(hs)) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_MISSING_EXTENSION);
+    ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_MISSING_EXTENSION);
+    return ssl_hs_error;
+  }
   // pake replaces key_share and may not be used with pre_shared_key.
   if (pake_share.present && (key_share.present || pre_shared_key.present)) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_UNEXPECTED_EXTENSION);

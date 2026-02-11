@@ -327,6 +327,11 @@ void ssl_done_writing_client_hello(SSL_HANDSHAKE *hs) {
   hs->pake_share_bytes.Reset();
 }
 
+bool ssl_accepts_server_certificate_auth(const SSL_HANDSHAKE *hs) {
+  // In PAKE mode, the server must respond with a PAKE.
+  return hs->pake_prover == nullptr;
+}
+
 static enum ssl_hs_wait_t do_start_connect(SSL_HANDSHAKE *hs) {
   SSL *const ssl = hs->ssl;
 
@@ -643,9 +648,9 @@ static enum ssl_hs_wait_t do_read_server_hello(SSL_HANDSHAKE *hs) {
     return ssl_hs_ok;
   }
 
-  // If this client is configured to use a PAKE, then the server must support
-  // TLS 1.3.
-  if (hs->pake_prover) {
+  // If this client only accepts non-certificate modes, then the server must
+  // support TLS 1.3.
+  if (!ssl_accepts_server_certificate_auth(hs)) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_PROTOCOL);
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_PROTOCOL_VERSION);
     return ssl_hs_error;

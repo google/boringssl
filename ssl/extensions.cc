@@ -1007,8 +1007,8 @@ static bool ext_sigalgs_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
   if (hs->max_version < TLS1_2_VERSION) {
     return true;
   }
-  // In PAKE mode, signature_algorithms is not used.
-  if (hs->pake_prover != nullptr) {
+  // Skip signature_algorithms if we wouldn't accept a certificate mode anyway.
+  if (!ssl_accepts_server_certificate_auth(hs)) {
     return true;
   }
 

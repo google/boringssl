@@ -2258,6 +2258,12 @@ const SSL_SESSION *ssl_handshake_session(const SSL_HANDSHAKE *hs);
 // by |hs|. It releases some memory that is no longer needed.
 void ssl_done_writing_client_hello(SSL_HANDSHAKE *hs);
 
+// ssl_accepts_server_certificate_auth returns whether |hs|, which must be a
+// client, accepts certificate-based authentication. If it returns false, the
+// client should not send certificate-related extensions, and should not accept
+// server responses that result in a certificate-based flow.
+bool ssl_accepts_server_certificate_auth(const SSL_HANDSHAKE *hs);
+
 
 // Flags.
 
