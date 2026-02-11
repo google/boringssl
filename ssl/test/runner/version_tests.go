@@ -230,6 +230,21 @@ func addVersionNegotiationTests() {
 		expectedError: ":UNEXPECTED_EXTENSION:",
 	})
 
+	// In TLS 1.3, the protocol version is negotiated with supported_versions. When
+	// this happens, we ignore the legacy version field and tolerate arbitrary
+	// values in there.
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "IgnoreLegacyVersion-TLS13",
+		config: Config{
+			MaxVersion: VersionTLS13,
+			Bugs: ProtocolBugs{
+				SendClientVersion: 0x1234,
+			},
+		},
+		resumeSession: true,
+	})
+
 	// Test that the maximum version is selected regardless of the
 	// client-sent order.
 	testCases = append(testCases, testCase{

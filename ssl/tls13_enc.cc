@@ -510,10 +510,6 @@ static bool tls13_psk_binder(uint8_t *out, size_t *out_len,
                              const SSLTranscript &transcript,
                              Span<const uint8_t> client_hello,
                              size_t binders_len, bool is_dtls) {
-  // |client_hello| should not include the message header and begin with a
-  // version number.
-  assert(!client_hello.empty() && (client_hello[0] == SSL3_VERSION_MAJOR ||
-                                   client_hello[0] == DTLS1_VERSION_MAJOR));
   const EVP_MD *digest = ssl_session_get_digest(session);
 
   // Compute the binder key.
