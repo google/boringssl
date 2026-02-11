@@ -714,28 +714,28 @@ typedef struct {
   EC_SCALAR scalar;
 } EC_WRAPPED_SCALAR;
 
-class ECKey : public ec_key_st {
+class ECKey : public ec_key_st, public RefCounted<ECKey> {
  public:
-  static constexpr bool kAllowUniquePtr = true;
+  explicit ECKey(const ENGINE *engine);
 
-  ~ECKey();
-
-  EC_GROUP *group;
+  EC_GROUP *group = nullptr;
 
   // Ideally |pub_key| would be an |EC_AFFINE| so serializing it does not pay an
   // inversion each time, but the |EC_KEY_get0_public_key| API implies public
   // keys are stored in an |EC_POINT|-compatible form.
-  EC_POINT *pub_key;
-  bssl::EC_WRAPPED_SCALAR *priv_key;
+  EC_POINT *pub_key = nullptr;
+  bssl::EC_WRAPPED_SCALAR *priv_key = nullptr;
 
-  unsigned int enc_flag;
-  point_conversion_form_t conv_form;
+  unsigned int enc_flag = 0;
+  point_conversion_form_t conv_form = POINT_CONVERSION_UNCOMPRESSED;
 
-  bssl::CRYPTO_refcount_t references;
+  ECDSA_METHOD *ecdsa_meth = nullptr;
 
-  ECDSA_METHOD *ecdsa_meth;
+  CRYPTO_EX_DATA ex_data = {};
 
-  CRYPTO_EX_DATA ex_data;
+ private:
+  ~ECKey();
+  friend RefCounted;
 } /* EC_KEY */;
 
 BSSL_NAMESPACE_END

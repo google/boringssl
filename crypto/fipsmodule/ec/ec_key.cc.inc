@@ -54,36 +54,29 @@ static void ec_wrapped_scalar_free(EC_WRAPPED_SCALAR *scalar) {
   Delete(scalar);
 }
 
+ECKey::ECKey(const ENGINE *engine)
+    : RefCounted(CheckSubClass()),
+      ecdsa_meth(engine ? ENGINE_get_ECDSA_method(engine) : nullptr) {
+  if (ecdsa_meth) {
+    METHOD_ref(ecdsa_meth);
+  }
+  CRYPTO_new_ex_data(&ex_data);
+}
+
 EC_KEY *EC_KEY_new() { return EC_KEY_new_method(nullptr); }
 
 EC_KEY *EC_KEY_new_method(const ENGINE *engine) {
-  ECKey *ret = NewZeroed<ECKey>();
+  UniquePtr<ECKey> ret(New<ECKey>(engine));
   if (ret == nullptr) {
     return nullptr;
   }
-
-  if (engine) {
-    ret->ecdsa_meth = ENGINE_get_ECDSA_method(engine);
-  }
-  if (ret->ecdsa_meth) {
-    METHOD_ref(ret->ecdsa_meth);
-  }
-
-  ret->conv_form = POINT_CONVERSION_UNCOMPRESSED;
-  ret->references = 1;
-
-  CRYPTO_new_ex_data(&ret->ex_data);
-
-  if (ret->ecdsa_meth && ret->ecdsa_meth->init && !ret->ecdsa_meth->init(ret)) {
-    CRYPTO_free_ex_data(g_ec_ex_data_class_bss_get(), &ret->ex_data);
-    if (ret->ecdsa_meth) {
-      METHOD_unref(ret->ecdsa_meth);
-    }
-    Delete(ret);
+  if (ret->ecdsa_meth && ret->ecdsa_meth->init &&
+      !ret->ecdsa_meth->init(ret.get())) {
+    METHOD_unref(ret->ecdsa_meth);
+    ret->ecdsa_meth = nullptr;
     return nullptr;
   }
-
-  return ret;
+  return ret.release();
 }
 
 EC_KEY *EC_KEY_new_by_curve_name(int nid) {
@@ -100,10 +93,6 @@ EC_KEY *EC_KEY_new_by_curve_name(int nid) {
 }
 
 ECKey::~ECKey() {
-  // Refcount can be 1 when called by UniquePtr, and 0 when called by
-  // EC_KEY_free.
-  BSSL_CHECK(references.load() <= 1);
-
   if (ecdsa_meth) {
     if (ecdsa_meth->finish) {
       ecdsa_meth->finish(this);
@@ -124,12 +113,7 @@ void EC_KEY_free(EC_KEY *r) {
   }
 
   auto *impl = FromOpaque(r);
-
-  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-    return;
-  }
-
-  Delete(impl);
+  impl->DecRefInternal();
 }
 
 EC_KEY *EC_KEY_dup(const EC_KEY *src) {
@@ -138,29 +122,28 @@ EC_KEY *EC_KEY_dup(const EC_KEY *src) {
     return nullptr;
   }
 
-  ECKey *ret = FromOpaque(EC_KEY_new());
+  UniquePtr<ECKey> ret(FromOpaque(EC_KEY_new()));
   if (ret == nullptr) {
     return nullptr;
   }
 
   auto *impl = FromOpaque(src);
-  if ((impl->group != nullptr && !EC_KEY_set_group(ret, impl->group)) ||
+  if ((impl->group != nullptr && !EC_KEY_set_group(ret.get(), impl->group)) ||
       (impl->pub_key != nullptr &&
-       !EC_KEY_set_public_key(ret, impl->pub_key)) ||
+       !EC_KEY_set_public_key(ret.get(), impl->pub_key)) ||
       (impl->priv_key != nullptr &&
-       !EC_KEY_set_private_key(ret, EC_KEY_get0_private_key(impl)))) {
-    EC_KEY_free(ret);
+       !EC_KEY_set_private_key(ret.get(), EC_KEY_get0_private_key(impl)))) {
     return nullptr;
   }
 
   ret->enc_flag = impl->enc_flag;
   ret->conv_form = impl->conv_form;
-  return ret;
+  return ret.release();
 }
 
 int EC_KEY_up_ref(EC_KEY *r) {
   auto *impl = FromOpaque(r);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
