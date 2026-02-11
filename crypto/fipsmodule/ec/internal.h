@@ -24,6 +24,7 @@
 #include <openssl/ec.h>
 #include <openssl/ex_data.h>
 
+#include "../../mem_internal.h"
 #include "../bn/internal.h"
 
 
@@ -607,13 +608,13 @@ struct ec_group_st {
 
 BSSL_NAMESPACE_BEGIN
 
-class ECCustomGroup : public ec_group_st {
+class ECCustomGroup : public ec_group_st, public RefCounted<ECCustomGroup> {
  public:
-  static constexpr bool kAllowUniquePtr = true;
+  explicit ECCustomGroup(const EC_METHOD *meth);
 
+ private:
   ~ECCustomGroup();
-
-  bssl::CRYPTO_refcount_t references;
+  friend RefCounted;
 };
 
 EC_GROUP *ec_group_new(const EC_METHOD *meth, const BIGNUM *p, const BIGNUM *a,

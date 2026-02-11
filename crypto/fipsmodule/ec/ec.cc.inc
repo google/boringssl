@@ -202,15 +202,10 @@ EC_GROUP *EC_GROUP_new_curve_GFp(const BIGNUM *p, const BIGNUM *a,
     return nullptr;
   }
 
-  UniquePtr<ECCustomGroup> ret(NewZeroed<ECCustomGroup>());
+  UniquePtr<ECCustomGroup> ret(New<ECCustomGroup>(EC_GFp_mont_method()));
   if (ret == nullptr) {
     return nullptr;
   }
-  ret->references = 1;
-  ret->meth = EC_GFp_mont_method();
-  bn_mont_ctx_init(&ret->field);
-  bn_mont_ctx_init(&ret->order);
-  ret->generator.group = ret.get();
   if (!ec_GFp_simple_group_set_curve(ret.get(), p, a_reduced, b_reduced, ctx)) {
     return nullptr;
   }
@@ -285,11 +280,15 @@ EC_GROUP *EC_GROUP_new_by_curve_name(int nid) {
   }
 }
 
-ECCustomGroup::~ECCustomGroup() {
-  // Refcount can be 1 when called by UniquePtr, and 0 when called by
-  // EC_GROUP_free.
-  BSSL_CHECK(references.load() <= 1);
+ECCustomGroup::ECCustomGroup(const EC_METHOD *m)
+    : ec_group_st({}), RefCounted(CheckSubClass()) {
+  meth = m;
+  bn_mont_ctx_init(&field);
+  bn_mont_ctx_init(&order);
+  generator.group = this;
+}
 
+ECCustomGroup::~ECCustomGroup() {
   bn_mont_ctx_cleanup(&order);
   bn_mont_ctx_cleanup(&field);
 }
@@ -301,12 +300,7 @@ void EC_GROUP_free(EC_GROUP *group) {
     return;
   }
   auto *custom = static_cast<ECCustomGroup *>(group);
-
-  if (!CRYPTO_refcount_dec_and_test_zero(&custom->references)) {
-    return;
-  }
-
-  Delete(custom);
+  custom->DecRefInternal();
 }
 
 EC_GROUP *EC_GROUP_dup(const EC_GROUP *a) {
@@ -320,7 +314,7 @@ EC_GROUP *EC_GROUP_dup(const EC_GROUP *a) {
   // Groups are logically immutable (but for |EC_GROUP_set_generator| which must
   // be called early on), so we simply take a reference.
   ECCustomGroup *group = const_cast<ECCustomGroup *>(custom);
-  CRYPTO_refcount_inc(&group->references);
+  group->UpRefInternal();
   return group;
 }
 
