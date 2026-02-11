@@ -128,36 +128,35 @@ static int x509_object_cmp_sk(const X509_OBJECT *const *a,
   return x509_object_cmp(*a, *b);
 }
 
+X509Store::X509Store()
+    : RefCounted(CheckSubClass()),
+      objs(sk_X509_OBJECT_new(x509_object_cmp_sk)),
+      get_cert_methods(sk_X509_LOOKUP_new_null()),
+      param(X509_VERIFY_PARAM_new()) {
+  CRYPTO_MUTEX_init(&objs_lock);
+}
+
 X509_STORE *X509_STORE_new() {
-  X509Store *ret = NewZeroed<X509Store>();
+  UniquePtr<X509Store> ret(New<X509Store>());
   if (ret == nullptr) {
     return nullptr;
   }
 
-  ret->references = 1;
-  CRYPTO_MUTEX_init(&ret->objs_lock);
-  ret->objs = sk_X509_OBJECT_new(x509_object_cmp_sk);
-  ret->get_cert_methods = sk_X509_LOOKUP_new_null();
-  ret->param = X509_VERIFY_PARAM_new();
   if (ret->objs == nullptr || ret->get_cert_methods == nullptr ||
       ret->param == nullptr) {
-    X509_STORE_free(ret);
     return nullptr;
   }
 
-  return ret;
+  return ret.release();
 }
 
 int X509_STORE_up_ref(X509_STORE *store) {
   auto *impl = FromOpaque(store);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
 X509Store::~X509Store() {
-  // Refcount is 1 if called by UniquePtr, or 0 if called by X509_STORE_free.
-  BSSL_CHECK(references.load() <= 1);
-
   CRYPTO_MUTEX_cleanup(&objs_lock);
   sk_X509_LOOKUP_pop_free(get_cert_methods, X509_LOOKUP_free);
   sk_X509_OBJECT_pop_free(objs, X509_OBJECT_free);
@@ -165,13 +164,11 @@ X509Store::~X509Store() {
 }
 
 void X509_STORE_free(X509_STORE *vfy) {
-  auto *impl = FromOpaque(vfy);
-  if (impl == nullptr ||
-      !CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
+  if (vfy == nullptr) {
     return;
   }
-
-  Delete(impl);
+  auto *impl = FromOpaque(vfy);
+  impl->DecRefInternal();
 }
 
 X509_LOOKUP *X509_STORE_add_lookup(X509_STORE *v, const X509_LOOKUP_METHOD *m) {

@@ -333,9 +333,9 @@ using StackOfX509Lookup = STACK_OF(X509_LOOKUP);
 // This is used to hold everything.  It is used for all certificate
 // validation.  Once we have a certificate chain, the 'verify'
 // function is then called to actually check the cert chain.
-class X509Store : public x509_store_st {
+class X509Store : public x509_store_st, public RefCounted<X509Store> {
  public:
-  ~X509Store();
+  X509Store();
 
   // The following is a cache of trusted certs
   STACK_OF(X509_OBJECT) *objs;  // Cache of all objects
@@ -347,9 +347,11 @@ class X509Store : public x509_store_st {
   X509_VERIFY_PARAM *param;
 
   // Callbacks for various operations
-  X509_STORE_CTX_verify_cb verify_cb;       // error callback
+  X509_STORE_CTX_verify_cb verify_cb = nullptr;  // error callback
 
-  bssl::CRYPTO_refcount_t references;
+ private:
+  friend RefCounted;
+  ~X509Store();
 } /* X509_STORE */;
 
 BSSL_NAMESPACE_END
