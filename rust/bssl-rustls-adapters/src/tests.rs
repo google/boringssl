@@ -31,32 +31,32 @@ use tracing::{Level, debug};
 // openssl req -new -nodes -key <input key> -out server.csr -subj '/CN=www.google.com'
 // ===================================================================================
 
-const CA_CERT: &'static [u8] = include_bytes!("./tests/BoringSSLCATest.crt");
+const CA_CERT: &'static [u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
 
-const RSA_SVC_CERT: &'static [u8] = include_bytes!("./tests/BoringSSLServerTest-RSA.crt");
+const RSA_SVC_CERT: &'static [u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
 
-const RSA_SVC_KEY: &'static [u8] = include_bytes!("./tests/BoringSSLServerTest-RSA.key");
+const RSA_SVC_KEY: &'static [u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
 
 const ECDSA_P256_SVC_CERT: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-ECDSA-P256.crt");
+    include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P256.crt");
 
 const ECDSA_P256_SVC_KEY: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-ECDSA-P256.key");
+    include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P256.key");
 
 const ECDSA_P384_SVC_CERT: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-ECDSA-P384.crt");
+    include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P384.crt");
 
 const ECDSA_P384_SVC_KEY: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-ECDSA-P384.key");
+    include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P384.key");
 
 const ED25519_SVC_CERT: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-Ed25519.crt");
+    include_bytes!("../../test-data/BoringSSLServerTest-Ed25519.crt");
 
 const ED25519_SVC_KEY: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-Ed25519.key");
+    include_bytes!("../../test-data/BoringSSLServerTest-Ed25519.key");
 
 const RSA_PSS_SVC_CERT: &'static [u8] =
-    include_bytes!("./tests/BoringSSLServerTest-RSA-PSS-SHA256.crt");
+    include_bytes!("../../test-data/BoringSSLServerTest-RSA-PSS-SHA256.crt");
 
 struct PipeSocket {
     tx: PipeWriter,
