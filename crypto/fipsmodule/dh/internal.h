@@ -18,28 +18,33 @@
 #include <openssl/base.h>
 
 #include "../../internal.h"
+#include "../../mem_internal.h"
 
 
 DECLARE_OPAQUE_STRUCT(dh_st, DHImpl)
 
 BSSL_NAMESPACE_BEGIN
 
-class DHImpl : public dh_st {
+class DHImpl : public dh_st, public RefCounted<DHImpl> {
  public:
-  BIGNUM *p;
-  BIGNUM *g;
-  BIGNUM *q;
-  BIGNUM *pub_key;   // g^x mod p
-  BIGNUM *priv_key;  // x
+  DHImpl();
+
+  BIGNUM *p = nullptr;
+  BIGNUM *g = nullptr;
+  BIGNUM *q = nullptr;
+  BIGNUM *pub_key = nullptr;   // g^x mod p
+  BIGNUM *priv_key = nullptr;  // x
 
   // priv_length contains the length, in bits, of the private value. If zero,
   // the private value will be the same length as |p|.
-  unsigned priv_length;
+  unsigned priv_length = 0;
 
   bssl::CRYPTO_MUTEX method_mont_p_lock;
-  BN_MONT_CTX *method_mont_p;
+  BN_MONT_CTX *method_mont_p = nullptr;
 
-  bssl::CRYPTO_refcount_t references;
+ private:
+  friend RefCounted;
+  ~DHImpl();
 };
 
 // dh_check_params_fast checks basic invariants on |dh|'s domain parameters. It

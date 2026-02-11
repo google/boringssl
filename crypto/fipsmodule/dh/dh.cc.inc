@@ -32,36 +32,28 @@
 
 using namespace bssl;
 
-DH *DH_new() {
-  DHImpl *dh = NewZeroed<DHImpl>();
-  if (dh == nullptr) {
-    return nullptr;
-  }
+DHImpl::DHImpl() : RefCounted(CheckSubClass()) {
+  CRYPTO_MUTEX_init(&method_mont_p_lock);
+}
 
-  CRYPTO_MUTEX_init(&dh->method_mont_p_lock);
-  dh->references = 1;
-  return dh;
+DH *DH_new() { return New<DHImpl>(); }
+
+DHImpl::~DHImpl() {
+  BN_MONT_CTX_free(method_mont_p);
+  BN_clear_free(p);
+  BN_clear_free(g);
+  BN_clear_free(q);
+  BN_clear_free(pub_key);
+  BN_clear_free(priv_key);
+  CRYPTO_MUTEX_cleanup(&method_mont_p_lock);
 }
 
 void DH_free(DH *dh) {
   if (dh == nullptr) {
     return;
   }
-
   auto *impl = FromOpaque(dh);
-  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-    return;
-  }
-
-  BN_MONT_CTX_free(impl->method_mont_p);
-  BN_clear_free(impl->p);
-  BN_clear_free(impl->g);
-  BN_clear_free(impl->q);
-  BN_clear_free(impl->pub_key);
-  BN_clear_free(impl->priv_key);
-  CRYPTO_MUTEX_cleanup(&impl->method_mont_p_lock);
-
-  Delete(impl);
+  impl->DecRefInternal();
 }
 
 unsigned DH_bits(const DH *dh) {
@@ -413,7 +405,7 @@ unsigned DH_num_bits(const DH *dh) {
 
 int DH_up_ref(DH *dh) {
   auto *impl = FromOpaque(dh);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
