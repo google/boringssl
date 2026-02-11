@@ -5,20 +5,52 @@ edition = "2024"
 publish = false
 license = "Apache-2.0"
 
+[dependencies]
+bitflags = "2.0"
+
 [dependencies.bssl-crypto]
 path = "../bssl-crypto"
+
+[dependencies.bssl-macros]
+path = "../bssl-macros"
 
 [dependencies.bssl-sys]
 path = "../bssl-sys"
 
+[dependencies.bssl-x509]
+path = "../bssl-x509"
+
+[dependencies.tokio]
+version = "1.0"
+optional = true
+default-features = false
+
+[dependencies.once_cell]
+version = "1"
+default-features = false
+features = ["critical-section"]
+
+[dependencies.libc]
+version = "0.2"
+optional = true
+
 [dev-dependencies]
 tracing = "0.1"
 tracing-subscriber = "0.3"
+futures = "0.3"
+
+[dev-dependencies.tokio]
+version = "1.0"
+features = ["full"]
 
 [features]
 default = ["std"]
 # `std` depends on the Rust `std` crate, but adds some useful trait impls if
 # available.
-std = ["bssl-crypto/std"]
+std = ["bssl-crypto/std", "once_cell/std", "libc"]
+# `tokio_io` enables interop with `tokio` for async I/O operations
+tokio_io = ["dep:tokio", "std"]
+# `tokio_net` enables interop with `tokio` for async network I/O operations
+tokio_net = ["tokio_io", "tokio/net", "std"]
 # `mlalgs` enables ML-KEM and ML-DSA support. This requires Rust 1.82.
 mlalgs = ["bssl-crypto/mlalgs"]

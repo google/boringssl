@@ -15,13 +15,16 @@
 #![deny(
     missing_docs,
     unsafe_op_in_unsafe_fn,
+    clippy::missing_safety_doc,
     clippy::indexing_slicing,
     clippy::unwrap_used,
     clippy::panic,
-    clippy::expect_used
+    clippy::expect_used,
+    clippy::undocumented_unsafe_blocks
 )]
 #![allow(private_bounds)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
+#![recursion_limit = "512"]
 
 //! BoringSSL TLS bindings
 //!
@@ -29,3 +32,43 @@
 
 extern crate alloc;
 extern crate core;
+
+use core::panic::AssertUnwindSafe;
+
+pub mod config;
+pub mod connection;
+pub mod context;
+pub mod credentials;
+pub mod errors;
+mod ffi;
+mod methods;
+#[macro_use]
+#[doc(hidden)]
+mod macros;
+
+#[allow(unused)]
+pub(crate) trait Methods {
+    /// Safety: `ssl` must outlive `'a` and it must be passed in from BoringSSL
+    /// through vtable calls.
+    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a mut Self>;
+}
+
+#[inline]
+fn abort_on_panic<T>(work: impl FnOnce() -> T) -> T {
+    let assert_unwind_safe = AssertUnwindSafe(work);
+    let call = move || {
+        let AssertUnwindSafe(work) = { assert_unwind_safe };
+        work()
+    };
+    #[cfg(feature = "std")]
+    let res = match std::panic::catch_unwind(call) {
+        Ok(res) => res,
+        Err(_) => {
+            eprintln!("panic about to cross language boundary");
+            std::process::abort()
+        }
+    };
+    #[cfg(not(feature = "std"))]
+    let res = call();
+    res
+}
