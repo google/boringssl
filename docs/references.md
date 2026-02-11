@@ -64,11 +64,12 @@ This document collects links to useful references. It is currently incomplete, b
 * [EMS Extension (RFC 7627)](https://www.rfc-editor.org/rfc/rfc7627.html)
 * [Renegotiation Indication Extension (RFC 5746)](https://www.rfc-editor.org/rfc/rfc5746.html)
 
-## Languages
+## Languages and Toolchains
 
 * [cppreference.com](https://cppreference.com/)
 * [Draft C++ Standard](https://eel.is/c++draft/)
 * [GNU Assembler Manual](https://sourceware.org/binutils/docs/as/)
+* [GNU Linker Manual](https://sourceware.org/binutils/docs/ld/)
 * [MASM](https://learn.microsoft.com/en-us/cpp/assembler/masm/microsoft-macro-assembler-reference)
 * [NASM](https://www.nasm.us/docs/3.01/)
 
