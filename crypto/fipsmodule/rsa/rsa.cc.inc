@@ -165,35 +165,33 @@ RSA *RSA_new_private_key_large_e(const BIGNUM *n, const BIGNUM *e,
   return rsa;
 }
 
+RSAImpl::RSAImpl(const ENGINE *engine)
+    : RefCounted(CheckSubClass()),
+      meth(engine ? ENGINE_get_RSA_method(engine) : nullptr) {
+  if (meth == nullptr) {
+    meth = (RSA_METHOD *)RSA_default_method();
+  }
+  METHOD_ref(meth);
+  flags = meth->flags;
+  CRYPTO_MUTEX_init(&lock);
+  CRYPTO_new_ex_data(&ex_data);
+}
+
 RSA *RSA_new() { return RSA_new_method(nullptr); }
 
 RSA *RSA_new_method(const ENGINE *engine) {
-  RSAImpl *rsa = NewZeroed<RSAImpl>();
+  UniquePtr<RSAImpl> rsa(New<RSAImpl>(engine));
   if (rsa == nullptr) {
     return nullptr;
   }
 
-  if (engine) {
-    rsa->meth = ENGINE_get_RSA_method(engine);
-  }
-
-  if (rsa->meth == nullptr) {
-    rsa->meth = (RSA_METHOD *)RSA_default_method();
-  }
-  METHOD_ref(rsa->meth);
-
-  rsa->references = 1;
-  rsa->flags = rsa->meth->flags;
-  CRYPTO_MUTEX_init(&rsa->lock);
-  CRYPTO_new_ex_data(&rsa->ex_data);
-
-  if (rsa->meth->init && !rsa->meth->init(rsa)) {
+  if (rsa->meth->init && !rsa->meth->init(rsa.get())) {
+    METHOD_unref(rsa->meth);
     rsa->meth = nullptr;
-    RSA_free(rsa);
     return nullptr;
   }
 
-  return rsa;
+  return rsa.release();
 }
 
 RSA *RSA_new_method_no_e(const ENGINE *engine, const BIGNUM *n) {
@@ -207,9 +205,6 @@ RSA *RSA_new_method_no_e(const ENGINE *engine, const BIGNUM *n) {
 }
 
 RSAImpl::~RSAImpl() {
-  // Refcount can be 1 if called by UniquePtr, and 0 if called by RSA_free.
-  BSSL_CHECK(references.load() <= 1);
-
   if (meth != nullptr && meth->finish != nullptr) {
     meth->finish(this);
   }
@@ -235,15 +230,12 @@ void RSA_free(RSA *rsa) {
   }
 
   auto *impl = FromOpaque(rsa);
-  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-    return;
-  }
-  Delete(impl);
+  impl->DecRefInternal();
 }
 
 int RSA_up_ref(RSA *rsa) {
   auto *impl = FromOpaque(rsa);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
