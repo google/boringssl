@@ -33,51 +33,43 @@ using namespace bssl;
 static CRYPTO_EX_DATA_CLASS g_ex_data_class =
     CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA;
 
+Bio::Bio(const BIO_METHOD *m) : RefCounted(CheckSubClass()), method(m) {
+  CRYPTO_new_ex_data(&ex_data);
+}
+
 BIO *BIO_new(const BIO_METHOD *method) {
-  Bio *ret = NewZeroed<Bio>();
+  UniquePtr<Bio> ret(New<Bio>(method));
   if (ret == nullptr) {
     return nullptr;
   }
 
-  ret->method = method;
-  ret->shutdown = 1;
-  ret->references = 1;
-  CRYPTO_new_ex_data(&ret->ex_data);
-
-  if (method->create != nullptr && !method->create(ret)) {
-    Delete(ret);
+  if (method->create != nullptr && !method->create(ret.get())) {
     return nullptr;
   }
 
-  return ret;
+  return ret.release();
+}
+
+Bio::~Bio() {
+  if (method != nullptr && method->destroy != nullptr) {
+    method->destroy(this);
+  }
+  CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);
+  BIO_free(BIO_pop(this));
 }
 
 int BIO_free(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  Bio *next_bio;
-
-  for (; impl != nullptr; impl = next_bio) {
-    if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-      return 0;
-    }
-
-    next_bio = FromOpaque(BIO_pop(impl));
-
-    if (impl->method != nullptr && impl->method->destroy != nullptr) {
-      impl->method->destroy(impl);
-    }
-
-    CRYPTO_free_ex_data(&g_ex_data_class, &impl->ex_data);
-    Delete(impl);
+  if (bio == nullptr) {
+    return 1;
   }
+  auto *impl = FromOpaque(bio);
+  impl->DecRefInternal();
   return 1;
 }
 
 int BIO_up_ref(BIO *bio) {
   auto *impl = FromOpaque(bio);
-
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 
