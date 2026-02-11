@@ -44,33 +44,23 @@ static constexpr CBS_ASN1_TAG kSubjectUIDTag = CBS_ASN1_CONTEXT_SPECIFIC | 2;
 static constexpr CBS_ASN1_TAG kExtensionsTag =
     CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 3;
 
-X509 *X509_new() {
-  UniquePtr<X509Impl> ret(NewZeroed<X509Impl>());
-  if (ret == nullptr) {
-    return nullptr;
-  }
-
-  ret->references = 1;
-  ret->ex_pathlen = -1;
-  ret->version = X509_VERSION_1;
-  asn1_string_init(&ret->serialNumber, V_ASN1_INTEGER);
-  x509_algor_init(&ret->tbs_sig_alg);
-  x509_name_init(&ret->issuer);
-  asn1_string_init(&ret->notBefore, -1);
-  asn1_string_init(&ret->notAfter, -1);
-  x509_name_init(&ret->subject);
-  x509_pubkey_init(&ret->key);
-  x509_algor_init(&ret->sig_alg);
-  asn1_string_init(&ret->signature, V_ASN1_BIT_STRING);
-  CRYPTO_new_ex_data(&ret->ex_data);
-  CRYPTO_MUTEX_init(&ret->lock);
-  return ret.release();
+X509Impl::X509Impl() : RefCounted(CheckSubClass()) {
+  asn1_string_init(&serialNumber, V_ASN1_INTEGER);
+  x509_algor_init(&tbs_sig_alg);
+  x509_name_init(&issuer);
+  asn1_string_init(&notBefore, -1);
+  asn1_string_init(&notAfter, -1);
+  x509_name_init(&subject);
+  x509_pubkey_init(&key);
+  x509_algor_init(&sig_alg);
+  asn1_string_init(&signature, V_ASN1_BIT_STRING);
+  CRYPTO_new_ex_data(&ex_data);
+  CRYPTO_MUTEX_init(&lock);
 }
 
-X509Impl::~X509Impl() {
-  // Refcount can be 1 if called by UniquePtr, and 0 if called by X509_free.
-  BSSL_CHECK(references.load() <= 1);
+X509 *X509_new() { return NewZeroed<X509Impl>(); }
 
+X509Impl::~X509Impl() {
   CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);
 
   asn1_string_cleanup(&serialNumber);
@@ -96,13 +86,11 @@ X509Impl::~X509Impl() {
 }
 
 void X509_free(X509 *x509) {
-  auto *impl = FromOpaque(x509);
-  if (impl == nullptr ||
-      !CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
+  if (x509 == nullptr) {
     return;
   }
-
-  Delete(impl);
+  auto *impl = FromOpaque(x509);
+  impl->DecRefInternal();
 }
 
 X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
@@ -368,7 +356,7 @@ X509 *X509_dup(const X509 *x509) {
 
 int X509_up_ref(X509 *x) {
   auto *impl = FromOpaque(x);
-  CRYPTO_refcount_inc(&impl->references);
+  impl->UpRefInternal();
   return 1;
 }
 

@@ -121,14 +121,12 @@ BSSL_NAMESPACE_BEGIN
 // (RFC 5280) and C type is |STACK_OF(X509_EXTENSION)*|.
 DECLARE_ASN1_ITEM(X509_EXTENSIONS)
 
-class X509Impl : public x509_st {
+class X509Impl : public x509_st, public RefCounted<X509Impl> {
  public:
-  static constexpr bool kAllowUniquePtr = true;
-
-  ~X509Impl();
+  X509Impl();
 
   // TBSCertificate fields:
-  uint8_t version;  // One of the |X509_VERSION_*| constants.
+  uint8_t version = X509_VERSION_1;  // One of the |X509_VERSION_*| constants.
   ASN1_INTEGER serialNumber;
   X509_ALGOR tbs_sig_alg;
   X509Name issuer;
@@ -147,10 +145,9 @@ class X509Impl : public x509_st {
   // TODO(davidben): Now every parsed |X509| has an underlying |CRYPTO_BUFFER|,
   // but |X509|s created peacemeal do not. Can we make this more uniform?
   CRYPTO_BUFFER *buf;
-  bssl::CRYPTO_refcount_t references;
   CRYPTO_EX_DATA ex_data;
   // These contain copies of various extension values
-  long ex_pathlen;
+  long ex_pathlen = -1;
   uint32_t ex_flags;
   uint32_t ex_kusage;
   uint32_t ex_xkusage;
@@ -162,6 +159,10 @@ class X509Impl : public x509_st {
   unsigned char cert_hash[SHA256_DIGEST_LENGTH];
   bssl::X509_CERT_AUX *aux;
   bssl::CRYPTO_MUTEX lock;
+
+ private:
+  friend RefCounted;
+  ~X509Impl();
 } /* X509 */;
 
 int x509_marshal_tbs_cert(CBB *cbb, const X509 *x509);
