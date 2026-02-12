@@ -70,36 +70,20 @@ struct Flag {
   std::function<bool(Config *config, const char *param)> set_param;
 };
 
+template <typename Config, typename T, typename U>
+Flag<Config> SetValueFlag(const char *name, T Config::*field, U value,
+                          bool skip_handshaker = false) {
+  return Flag<Config>{name, /*has_param=*/false, skip_handshaker,
+                      [=](Config *config, const char *param) -> bool {
+                        config->*field = value;
+                        return true;
+                      }};
+}
+
 template <typename Config>
 Flag<Config> BoolFlag(const char *name, bool Config::*field,
                       bool skip_handshaker = false) {
-  return Flag<Config>{name, false, skip_handshaker,
-                      [=](Config *config, const char *) -> bool {
-                        config->*field = true;
-                        return true;
-                      }};
-}
-
-template <typename Config>
-Flag<Config> OptionalBoolTrueFlag(const char *name,
-                                  std::optional<bool> Config::*field,
-                                  bool skip_handshaker = false) {
-  return Flag<Config>{name, false, skip_handshaker,
-                      [=](Config *config, const char *) -> bool {
-                        config->*field = true;
-                        return true;
-                      }};
-}
-
-template <typename Config>
-Flag<Config> OptionalBoolFalseFlag(const char *name,
-                                   std::optional<bool> Config::*field,
-                                   bool skip_handshaker = false) {
-  return Flag<Config>{name, false, skip_handshaker,
-                      [=](Config *config, const char *) -> bool {
-                        config->*field = false;
-                        return true;
-                      }};
+  return SetValueFlag(name, field, true, skip_handshaker);
 }
 
 template <typename T>
@@ -192,19 +176,6 @@ Flag<Config> OptionalIntVectorFlag(const char *name,
                           return false;
                         }
                         (config->*field)->push_back(value);
-                        return true;
-                      }};
-}
-
-// Defines a flag which resets a std::optional field to its default constructed
-// value.
-template <typename Config, typename T>
-Flag<Config> OptionalDefaultInitFlag(const char *name,
-                                     std::optional<T> Config::*field,
-                                     bool skip_handshaker = false) {
-  return Flag<Config>{name, false, skip_handshaker,
-                      [=](Config *config, const char *) -> bool {
-                        (config->*field).emplace();
                         return true;
                       }};
 }
@@ -370,7 +341,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         IntVectorFlag("-curves", &TestConfig::curves),
         IntVectorFlag("-curves-flags", &TestConfig::curves_flags),
         OptionalIntVectorFlag("-key-shares", &TestConfig::key_shares),
-        OptionalDefaultInitFlag("-no-key-shares", &TestConfig::key_shares),
+        SetValueFlag("-no-key-shares", &TestConfig::key_shares,
+                     std::vector<uint16_t>{}),
         IntVectorFlag("-server-supported-groups-hint",
                       &TestConfig::server_supported_groups_hint),
         StringFlag("-trust-cert", &TestConfig::trust_cert),
@@ -583,10 +555,10 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         BoolFlag("-fips-202205", &TestConfig::fips_202205),
         BoolFlag("-wpa-202304", &TestConfig::wpa_202304),
         BoolFlag("-cnsa-202407", &TestConfig::cnsa_202407),
-        OptionalBoolTrueFlag("-expect-peer-match-trust-anchor",
-                             &TestConfig::expect_peer_match_trust_anchor),
-        OptionalBoolFalseFlag("-expect-no-peer-match-trust-anchor",
-                              &TestConfig::expect_peer_match_trust_anchor),
+        SetValueFlag("-expect-peer-match-trust-anchor",
+                     &TestConfig::expect_peer_match_trust_anchor, true),
+        SetValueFlag("-expect-no-peer-match-trust-anchor",
+                     &TestConfig::expect_peer_match_trust_anchor, false),
         OptionalBase64Flag("-expect-peer-available-trust-anchors",
                            &TestConfig::expect_peer_available_trust_anchors),
         OptionalBase64Flag("-requested-trust-anchors",
@@ -638,10 +610,10 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         IntFlag("-private-key-delay-ms", &TestConfig::private_key_delay_ms),
         BoolFlag("-resumption-across-names-enabled",
                  &TestConfig::resumption_across_names_enabled),
-        OptionalBoolTrueFlag("-expect-resumable-across-names",
-                             &TestConfig::expect_resumable_across_names),
-        OptionalBoolFalseFlag("-expect-not-resumable-across-names",
-                              &TestConfig::expect_resumable_across_names),
+        SetValueFlag("-expect-resumable-across-names",
+                     &TestConfig::expect_resumable_across_names, true),
+        SetValueFlag("-expect-not-resumable-across-names",
+                     &TestConfig::expect_resumable_across_names, false),
         BoolFlag("-no-server-name-ack", &TestConfig::no_server_name_ack),
     };
     std::sort(ret.begin(), ret.end(), FlagNameComparator{});
