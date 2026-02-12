@@ -10,6 +10,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bssl-rustls-adapters"
+version = "0.1.0"
+dependencies = [
+ "bssl-crypto",
+ "bssl-sys",
+ "rustls",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bssl-sys"
 version = "0.1.0"
 
@@ -19,7 +30,6 @@ version = "0.1.0"
 dependencies = [
  "bssl-crypto",
  "bssl-sys",
- "rustls",
  "tracing",
  "tracing-subscriber",
 ]
