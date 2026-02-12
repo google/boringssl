@@ -22,7 +22,6 @@
 #include <openssl/err.h>
 #include <openssl/span.h>
 
-#include "../crypto/internal.h"
 #include "internal.h"
 
 
@@ -98,12 +97,9 @@ struct VersionInfo {
 };
 
 static const VersionInfo kVersionNames[] = {
-    {TLS1_3_VERSION, "TLSv1.3"},
-    {TLS1_2_VERSION, "TLSv1.2"},
-    {TLS1_1_VERSION, "TLSv1.1"},
-    {TLS1_VERSION, "TLSv1"},
-    {DTLS1_VERSION, "DTLSv1"},
-    {DTLS1_2_VERSION, "DTLSv1.2"},
+    {TLS1_3_VERSION, "TLSv1.3"},   {TLS1_2_VERSION, "TLSv1.2"},
+    {TLS1_1_VERSION, "TLSv1.1"},   {TLS1_VERSION, "TLSv1"},
+    {DTLS1_VERSION, "DTLSv1"},     {DTLS1_2_VERSION, "DTLSv1.2"},
     {DTLS1_3_VERSION, "DTLSv1.3"},
 };
 
@@ -156,10 +152,8 @@ static bool set_min_version(const SSL_PROTOCOL_METHOD *method, uint16_t *out,
 static bool set_max_version(const SSL_PROTOCOL_METHOD *method, uint16_t *out,
                             uint16_t version) {
   // Zero is interpreted as the default maximum version.
-  // TODO(crbug.com/382915276): Enable DTLS 1.3 by default, after it's
-  // successfully shipped in WebRTC.
   if (version == 0) {
-    *out = method->is_dtls ? DTLS1_2_VERSION : TLS1_3_VERSION;
+    *out = method->is_dtls ? DTLS1_3_VERSION : TLS1_3_VERSION;
     return true;
   }
 
