@@ -207,7 +207,7 @@ int i2d_re_X509_CRL_tbs(X509_CRL *crl, unsigned char **outp) {
   return i2d_X509_CRL_INFO(crl->crl, outp);
 }
 
-int i2d_X509_CRL_tbs(X509_CRL *crl, unsigned char **outp) {
+int i2d_X509_CRL_tbs(const X509_CRL *crl, unsigned char **outp) {
   return i2d_X509_CRL_INFO(crl->crl, outp);
 }
 
