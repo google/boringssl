@@ -12,6 +12,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding"
+	"fmt"
 	"hash"
 
 	"golang.org/x/crypto/cryptobyte"
@@ -125,7 +126,7 @@ func prfForVersion(version uint16, suite *cipherSuite) func(result, secret, labe
 	case VersionTLS12:
 		return prf12(suite.hash().New)
 	}
-	panic("unknown version")
+	panic(fmt.Sprintf("unknown version 0x%x", version))
 }
 
 // masterFromPreMasterSecret generates the master secret from the pre-master
@@ -176,7 +177,7 @@ func keysFromMasterSecret(version uint16, suite *cipherSuite, masterSecret, clie
 func newFinishedHash(wireVersion uint16, isDTLS bool, cipherSuite *cipherSuite) finishedHash {
 	version, ok := wireToVersion(wireVersion, isDTLS)
 	if !ok {
-		panic("unknown version")
+		panic(fmt.Sprintf("unknown version 0x%x", wireVersion))
 	}
 
 	var ret finishedHash
