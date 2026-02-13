@@ -1152,8 +1152,12 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 			c.sendAlert(alertUnknownPSKIdentity)
 			return errors.New("tls: server sent unknown PSK identity")
 		}
+		if hs.session.wireVersion != c.wireVersion {
+			c.sendAlert(alertIllegalParameter)
+			return errors.New("tls: server resumed an invalid session for the protocol version")
+		}
 		if hs.session.cipherSuite.hash() != hs.suite.hash() {
-			c.sendAlert(alertHandshakeFailure)
+			c.sendAlert(alertIllegalParameter)
 			return errors.New("tls: server resumed an invalid session for the cipher suite")
 		}
 		pskSecret = hs.session.secret
@@ -2193,6 +2197,14 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 		// resumption offer on renegotiation.
 		if c.cipherSuite != nil && c.config.Bugs.FailIfResumeOnRenego {
 			return false, errors.New("tls: server resumed session on renegotiation")
+		}
+
+		if hs.session.wireVersion != c.wireVersion {
+			return false, errors.New("tls: server resumed an invalid session for the protocol version")
+		}
+
+		if hs.session.cipherSuite.id != hs.suite.id {
+			return false, errors.New("tls: server resumed an invalid session for the cipher suite")
 		}
 
 		if hs.serverHello.extensions.sctList != nil {
