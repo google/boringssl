@@ -612,14 +612,9 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 			}
 
 			if !config.Bugs.AcceptAnySession {
-				if sessionState.vers != c.vers {
-					continue
-				}
-				if sessionState.ticketExpiration.Before(c.config.time()) {
-					continue
-				}
-				sessionCipher := cipherSuiteFromID(sessionState.cipherSuite)
-				if sessionCipher == nil || sessionCipher.hash() != hs.suite.hash() {
+				if sessionState.vers != c.vers ||
+					sessionState.ticketExpiration.Before(c.config.time()) ||
+					sessionState.cipherSuite.hash() != hs.suite.hash() {
 					continue
 				}
 			}
@@ -914,7 +909,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	// Decide whether or not to accept early data.
 	if !sendHelloRetryRequest && hs.clientHello.hasEarlyData {
 		if !config.Bugs.AlwaysRejectEarlyData && hs.sessionState != nil {
-			if hs.sessionState.cipherSuite == hs.suite.id &&
+			if hs.sessionState.cipherSuite.id == hs.suite.id &&
 				c.clientProtocol == string(hs.sessionState.earlyALPN) &&
 				c.hasApplicationSettings == hs.sessionState.hasApplicationSettings &&
 				bytes.Equal(c.localApplicationSettings, hs.sessionState.localApplicationSettings) &&
@@ -938,8 +933,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 				encryptedExtensions.extensions.applicationSettingsOld = nil
 			}
 
-			sessionCipher := cipherSuiteFromID(hs.sessionState.cipherSuite)
-			if err := c.useInTrafficSecret(uint16(encryptionEarlyData), c.wireVersion, sessionCipher, earlyTrafficSecret); err != nil {
+			if err := c.useInTrafficSecret(uint16(encryptionEarlyData), c.wireVersion, hs.sessionState.cipherSuite, earlyTrafficSecret); err != nil {
 				return err
 			}
 
@@ -1803,21 +1797,18 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 	if c.config.Bugs.AcceptAnySession {
 		// Replace the cipher suite with one known to work, to test
 		// cross-version resumption attempts.
-		hs.sessionState.cipherSuite = TLS_RSA_WITH_AES_128_CBC_SHA
+		hs.sessionState.cipherSuite = cipherSuiteFromID(TLS_RSA_WITH_AES_128_CBC_SHA)
 	} else {
-		// Never resume a session for a different SSL version.
-		if c.vers != hs.sessionState.vers {
-			return false
-		}
-
-		// Check that the client is still offering the ciphersuite in the session.
-		if !slices.Contains(hs.clientHello.cipherSuites, hs.sessionState.cipherSuite) {
+		// Never resume a session for a different SSL version, and check
+		// that the client is still offering the ciphersuite in the session.
+		if c.vers != hs.sessionState.vers ||
+			!slices.Contains(hs.clientHello.cipherSuites, hs.sessionState.cipherSuite.id) {
 			return false
 		}
 	}
 
 	// Check that we also support the ciphersuite from the session.
-	hs.suite = c.tryCipherSuite(hs.sessionState.cipherSuite, c.config.cipherSuites(), c.vers, hs.ellipticOk, hs.ecdsaOk)
+	hs.suite = c.tryCipherSuite(hs.sessionState.cipherSuite.id, c.config.cipherSuites(), c.vers, hs.ellipticOk, hs.ecdsaOk)
 
 	if hs.suite == nil {
 		return false
@@ -2178,7 +2169,7 @@ func (hs *serverHandshakeState) sendSessionTicket() error {
 	c := hs.c
 	state := sessionState{
 		vers:          c.vers,
-		cipherSuite:   hs.suite.id,
+		cipherSuite:   hs.suite,
 		secret:        hs.masterSecret,
 		certificates:  hs.certsFromClient,
 		handshakeHash: hs.finishedHash.Sum(),
@@ -2403,12 +2394,7 @@ func verifyPSKBinder(version uint16, isDTLS bool, clientHello *clientHelloMsg, s
 
 	truncatedHello := clientHello.marshal()
 	truncatedHello = truncatedHello[:len(truncatedHello)-binderLen]
-	pskCipherSuite := cipherSuiteFromID(sessionState.cipherSuite)
-	if pskCipherSuite == nil {
-		return errors.New("tls: Unknown cipher suite for PSK in session")
-	}
-
-	binder := computePSKBinder(sessionState.secret, version, isDTLS, resumptionPSKBinderLabel, pskCipherSuite.hash(), firstClientHello, helloRetryRequest, truncatedHello)
+	binder := computePSKBinder(sessionState.secret, version, isDTLS, resumptionPSKBinderLabel, sessionState.cipherSuite.hash(), firstClientHello, helloRetryRequest, truncatedHello)
 	if !bytes.Equal(binder, binderToVerify) {
 		return errors.New("tls: PSK binder does not verify")
 	}

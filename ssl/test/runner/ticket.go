@@ -21,7 +21,7 @@ import (
 // ticket in order to later resume a connection.
 type sessionState struct {
 	vers                        uint16
-	cipherSuite                 uint16
+	cipherSuite                 *cipherSuite
 	secret                      []byte
 	handshakeHash               []byte
 	certificates                [][]byte
@@ -42,7 +42,7 @@ type sessionState struct {
 func (s *sessionState) marshal() []byte {
 	msg := cryptobyte.NewBuilder(nil)
 	msg.AddUint16(s.vers)
-	msg.AddUint16(s.cipherSuite)
+	msg.AddUint16(s.cipherSuite.id)
 	addUint16LengthPrefixedBytes(msg, s.secret)
 	addUint16LengthPrefixedBytes(msg, s.handshakeHash)
 	msg.AddUint16(uint16(len(s.certificates)))
@@ -102,12 +102,17 @@ func readBool(reader *cryptobyte.String, out *bool) bool {
 
 func (s *sessionState) unmarshal(data []byte) bool {
 	reader := cryptobyte.String(data)
-	var numCerts uint16
+	var numCerts, cipherSuite uint16
 	if !reader.ReadUint16(&s.vers) ||
-		!reader.ReadUint16(&s.cipherSuite) ||
+		!reader.ReadUint16(&cipherSuite) ||
 		!readUint16LengthPrefixedBytes(&reader, &s.secret) ||
 		!readUint16LengthPrefixedBytes(&reader, &s.handshakeHash) ||
 		!reader.ReadUint16(&numCerts) {
+		return false
+	}
+
+	s.cipherSuite = cipherSuiteFromID(cipherSuite)
+	if s.cipherSuite == nil {
 		return false
 	}
 

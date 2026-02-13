@@ -2068,7 +2068,7 @@ func (c *Conn) SendNewSessionTicket(nonce []byte) error {
 
 	state := sessionState{
 		vers:                        c.vers,
-		cipherSuite:                 c.cipherSuite.id,
+		cipherSuite:                 c.cipherSuite,
 		secret:                      deriveSessionPSK(c.cipherSuite, c.wireVersion, c.resumptionSecret, nonce, c.isDTLS),
 		certificates:                peerCertificatesRaw,
 		ticketCreationTime:          c.config.time(),
