@@ -39,6 +39,7 @@ type clientHandshakeState struct {
 	keyShares      map[CurveID]kemImplementation
 	masterSecret   []byte
 	session        *ClientSessionState
+	preSharedKeys  []*preSharedKey
 	finishedBytes  []byte
 	peerPublicKey  crypto.PublicKey
 	pakeContext    *spake2plus.Context
@@ -122,6 +123,7 @@ func (c *Conn) clientHandshake() error {
 		candidateSession, ok := sessionCache.Get(cacheKey)
 		if ok {
 			ticketOk := !c.config.SessionTicketsDisabled || candidateSession.sessionTicket == nil
+			lifetimeOk := c.config.time().Before(candidateSession.ticketExpiration)
 
 			// Check that the ciphersuite/version used for the
 			// previous session are still valid.
@@ -135,11 +137,26 @@ func (c *Conn) clientHandshake() error {
 			}
 
 			_, versOk := c.config.isSupportedVersion(candidateSession.vers.wire, c.isDTLS)
-			if ticketOk && versOk && cipherSuiteOk {
+			if ticketOk && lifetimeOk && versOk && cipherSuiteOk {
 				session = candidateSession
 				hs.session = session
 			}
 		}
+	}
+
+	if session != nil && c.config.Bugs.FilterTicket != nil && len(session.sessionTicket) > 0 {
+		// Copy the ticket so FilterTicket may act in-place.
+		session.sessionTicket = slices.Clone(session.sessionTicket)
+		var err error
+		session.sessionTicket, err = c.config.Bugs.FilterTicket(session.sessionTicket)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Set up TLS 1.3 pre-shared keys.
+	if session != nil && (session.vers.protocolVersion() >= VersionTLS13 || c.config.Bugs.SendBothTickets) {
+		hs.preSharedKeys = append(hs.preSharedKeys, newClientSessionPSK(session))
 	}
 
 	// Set up ECH parameters.
@@ -750,66 +767,53 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 		hello.ticketSupported = !c.config.SessionTicketsDisabled
 	}
 
+	// ClientHelloOuter cannot offer sessions or PSKs.
 	session := hs.session
-
-	// ClientHelloOuter cannot offer sessions.
+	preSharedKeys := hs.preSharedKeys
 	if innerHello != nil && !c.config.Bugs.OfferSessionInClientHelloOuter {
 		session = nil
+		preSharedKeys = nil
 	}
 
-	if session != nil && c.config.time().Before(session.ticketExpiration) {
-		ticket := session.sessionTicket
-		if c.config.Bugs.FilterTicket != nil && len(ticket) > 0 {
-			// Copy the ticket so FilterTicket may act in-place.
-			ticket = make([]byte, len(session.sessionTicket))
-			copy(ticket, session.sessionTicket)
-
-			ticket, err = c.config.Bugs.FilterTicket(ticket)
-			if err != nil {
-				return nil, err
+	if session != nil && (session.vers.protocolVersion() < VersionTLS13 || c.config.Bugs.SendBothTickets) {
+		if ticket := session.sessionTicket; ticket != nil {
+			hello.sessionTicket = ticket
+			// A random session ID is used to detect when the
+			// server accepted the ticket and is resuming a session
+			// (see RFC 5077).
+			sessionIDLen := 16
+			if c.config.Bugs.TicketSessionIDLength != 0 {
+				sessionIDLen = c.config.Bugs.TicketSessionIDLength
 			}
+			if c.config.Bugs.EmptyTicketSessionID {
+				sessionIDLen = 0
+			}
+			hello.sessionID = make([]byte, sessionIDLen)
+			if _, err := io.ReadFull(c.config.rand(), hello.sessionID); err != nil {
+				c.sendAlert(alertInternalError)
+				return nil, errors.New("tls: short read from Rand: " + err.Error())
+			}
+		} else {
+			hello.sessionID = session.sessionID
 		}
+	}
 
-		if session.vers.protocolVersion() >= VersionTLS13 || c.config.Bugs.SendBothTickets {
-			// TODO(nharper): Support sending more
-			// than one PSK identity.
-			ticketAge := uint32(c.config.time().Sub(session.ticketCreationTime) / time.Millisecond)
-			if c.config.Bugs.SendTicketAge != 0 {
-				ticketAge = uint32(c.config.Bugs.SendTicketAge / time.Millisecond)
-			}
-			psk := pskIdentity{
-				ticket:              ticket,
-				obfuscatedTicketAge: session.ticketAgeAdd + ticketAge,
-			}
-			hello.pskIdentities = []pskIdentity{psk}
-
-			if c.config.Bugs.ExtraPSKIdentity {
-				hello.pskIdentities = append(hello.pskIdentities, psk)
-			}
+	for _, psk := range preSharedKeys {
+		var ticketAge uint32
+		if !psk.creationTime.IsZero() {
+			ticketAge = uint32(c.config.time().Sub(psk.creationTime) / time.Millisecond)
 		}
-
-		if session.vers.protocolVersion() < VersionTLS13 || c.config.Bugs.SendBothTickets {
-			if ticket != nil {
-				hello.sessionTicket = ticket
-				// A random session ID is used to detect when the
-				// server accepted the ticket and is resuming a session
-				// (see RFC 5077).
-				sessionIDLen := 16
-				if c.config.Bugs.TicketSessionIDLength != 0 {
-					sessionIDLen = c.config.Bugs.TicketSessionIDLength
-				}
-				if c.config.Bugs.EmptyTicketSessionID {
-					sessionIDLen = 0
-				}
-				hello.sessionID = make([]byte, sessionIDLen)
-				if _, err := io.ReadFull(c.config.rand(), hello.sessionID); err != nil {
-					c.sendAlert(alertInternalError)
-					return nil, errors.New("tls: short read from Rand: " + err.Error())
-				}
-			} else {
-				hello.sessionID = session.sessionID
-			}
+		if c.config.Bugs.SendTicketAge != 0 {
+			ticketAge = uint32(c.config.Bugs.SendTicketAge / time.Millisecond)
 		}
+		psk := pskIdentity{
+			ticket:              psk.identity,
+			obfuscatedTicketAge: psk.ticketAgeAdd + ticketAge,
+		}
+		hello.pskIdentities = append(hello.pskIdentities, psk)
+	}
+	if len(hello.pskIdentities) != 0 && c.config.Bugs.ExtraPSKIdentity {
+		hello.pskIdentities = append(hello.pskIdentities, hello.pskIdentities[0])
 	}
 
 	if innerHello == nil {
@@ -878,7 +882,7 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 	// expect the server to reject ECH, so we put PSK last. Note this renders
 	// ECH undecryptable.
 	if len(hello.pskIdentities) > 0 {
-		generatePSKBinders(session.vers, hello, session, nil, nil, c.config)
+		hs.generatePSKBinders(hello, nil, nil)
 	}
 
 	if c.config.Bugs.SendClientHelloWithFixes != nil {
@@ -1630,7 +1634,7 @@ func (hs *clientHandshakeState) applyHelloRetryRequest(helloRetryRequest *helloR
 	hello.raw = nil
 
 	if len(hello.pskIdentities) > 0 {
-		generatePSKBinders(c.vers, hello, hs.session, firstHelloBytes, helloRetryRequest.marshal(), c.config)
+		hs.generatePSKBinders(hello, firstHelloBytes, helloRetryRequest.marshal())
 	}
 
 	if outerHello != nil {
@@ -2459,51 +2463,58 @@ func writeIntPadded(b []byte, x *big.Int) {
 	copy(b[len(b)-len(xb):], xb)
 }
 
-func generatePSKBinders(version version, hello *clientHelloMsg, session *ClientSessionState, firstClientHello, helloRetryRequest []byte, config *Config) {
-	maybeCorruptBinder := !config.Bugs.OnlyCorruptSecondPSKBinder || len(firstClientHello) > 0
-	binderLen := session.cipherSuite.hash().Size()
-	numBinders := 1
-	if maybeCorruptBinder {
-		if config.Bugs.SendNoPSKBinder {
-			// The binders may have been set from the previous
-			// ClientHello.
-			hello.pskBinders = nil
-			return
-		}
+func (hs *clientHandshakeState) generatePSKBinders(hello *clientHelloMsg, firstClientHello, helloRetryRequest []byte) {
+	config := hs.c.config
 
-		if config.Bugs.SendShortPSKBinder {
-			binderLen--
-		}
+	applyBinderBugs := !config.Bugs.OnlyCorruptSecondPSKBinder || len(firstClientHello) > 0
+	if applyBinderBugs && config.Bugs.SendNoPSKBinder {
+		// The binders may have been set from the previous
+		// ClientHello.
+		hello.pskBinders = nil
+		return
+	}
 
-		if config.Bugs.SendExtraPSKBinder {
-			numBinders++
+	corruptBinders := func(binders [][]byte) [][]byte {
+		for i, binder := range binders {
+			if applyBinderBugs && config.Bugs.SendShortPSKBinder {
+				binder = binder[:len(binder)-1]
+			}
+			if applyBinderBugs && config.Bugs.SendInvalidPSKBinder {
+				binder = slices.Clone(binder)
+				binder[0] ^= 1
+			}
+			binders[i] = binder
 		}
+		if applyBinderBugs && config.Bugs.SendExtraPSKBinder {
+			binders = append(binders, binders[0])
+		}
+		return binders
 	}
 
 	// Fill hello.pskBinders with appropriate length arrays of zeros so the
 	// length prefixes are correct when computing the binder over the truncated
 	// ClientHello message.
-	hello.pskBinders = make([][]byte, numBinders)
-	for i := range hello.pskBinders {
-		hello.pskBinders[i] = make([]byte, binderLen)
+	hello.pskBinders = make([][]byte, len(hs.preSharedKeys))
+	for i, psk := range hs.preSharedKeys {
+		hello.pskBinders[i] = make([]byte, psk.hash.Size())
 	}
+	hello.pskBinders = corruptBinders(hello.pskBinders)
 
+	// Serialize the ClientHello with the placeholder binders truncated.
+	bindersSize := 2 // Length prefix
+	for _, binder := range hello.pskBinders {
+		bindersSize += 1 /* Length prefix */ + len(binder)
+	}
 	helloBytes := hello.marshal()
-	binderSize := len(hello.pskBinders)*(binderLen+1) + 2
-	truncatedHello := helloBytes[:len(helloBytes)-binderSize]
-	binder := computePSKBinder(session.secret, version, resumptionPSKBinderLabel, session.cipherSuite.hash(), firstClientHello, helloRetryRequest, truncatedHello)
-	if maybeCorruptBinder {
-		if config.Bugs.SendShortPSKBinder {
-			binder = binder[:binderLen]
-		}
-		if config.Bugs.SendInvalidPSKBinder {
-			binder[0] ^= 1
-		}
-	}
+	truncatedHello := helloBytes[:len(helloBytes)-bindersSize]
 
-	for i := range hello.pskBinders {
-		hello.pskBinders[i] = binder
+	// Fill in the actual binders.
+	hello.pskBinders = make([][]byte, len(hs.preSharedKeys))
+	for i, psk := range hs.preSharedKeys {
+		hello.pskBinders[i] = psk.computeBinder(firstClientHello, helloRetryRequest, truncatedHello)
 	}
+	hello.pskBinders = corruptBinders(hello.pskBinders)
 
+	// Clear the cached encoding.
 	hello.raw = nil
 }

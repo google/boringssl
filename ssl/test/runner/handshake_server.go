@@ -603,7 +603,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		replacedPSKIdentities = true
 	}
 
-	var pskIndex int
+	var psk *preSharedKey
 	foundKEMode := bytes.IndexByte(pskKEModes, pskDHEKEMode) >= 0
 	if foundKEMode && !config.SessionTicketsDisabled {
 		for i, pskIdentity := range pskIdentities {
@@ -627,9 +627,10 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 				return errors.New("tls: invalid ticket age")
 			}
 
+			psk = newServerSessionPSK(pskIdentity.ticket, sessionState)
 			if !replacedPSKIdentities {
 				binderToVerify := hs.clientHello.pskBinders[i]
-				if err := verifyPSKBinder(c.vers, hs.clientHello, sessionState, binderToVerify, []byte{}, []byte{}); err != nil {
+				if err := verifyPSKBinder(psk, hs.clientHello, binderToVerify, []byte{}, []byte{}); err != nil {
 					return err
 				}
 			}
@@ -637,7 +638,6 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 			hs.sessionState = sessionState
 			hs.hello.hasPSKIdentity = true
 			hs.hello.pskIdentity = uint16(i)
-			pskIndex = i
 			if config.Bugs.SelectPSKIdentityOnResume != 0 {
 				hs.hello.pskIdentity = config.Bugs.SelectPSKIdentityOnResume
 			}
@@ -652,8 +652,8 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	}
 
 	// Resolve PSK and compute the early secret.
-	if hs.sessionState != nil {
-		hs.finishedHash.addEntropy(hs.sessionState.secret)
+	if psk != nil {
+		hs.finishedHash.addEntropy(psk.secret)
 	} else {
 		hs.finishedHash.addEntropy(hs.finishedHash.zeroSecret())
 	}
@@ -863,21 +863,14 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 
 		// Update the index for the identity we resumed. The client may have
 		// dropped some entries.
-		if hs.sessionState != nil {
-			var found bool
-			ticket := hs.clientHello.pskIdentities[pskIndex].ticket
-			for i, identity := range newClientHello.pskIdentities {
-				if bytes.Equal(identity.ticket, ticket) {
-					found = true
-					pskIndex = i
-					break
-				}
-			}
-			if found {
-				binderToVerify := newClientHello.pskBinders[pskIndex]
-				if err := verifyPSKBinder(c.vers, newClientHello, hs.sessionState, binderToVerify, hs.clientHello.marshal(), helloRetryRequest.marshal()); err != nil {
+		if psk != nil {
+			newIndex := slices.IndexFunc(newClientHello.pskIdentities, func(id pskIdentity) bool { return bytes.Equal(id.ticket, psk.identity) })
+			if newIndex >= 0 {
+				binderToVerify := newClientHello.pskBinders[newIndex]
+				if err := verifyPSKBinder(psk, newClientHello, binderToVerify, hs.clientHello.marshal(), helloRetryRequest.marshal()); err != nil {
 					return err
 				}
+				hs.hello.pskIdentity = uint16(newIndex)
 			} else if !config.Bugs.AcceptAnySession {
 				// If AcceptAnySession is set, the client may have already noticed
 				// the selected session is incompatible with the HelloRetryRequest
@@ -2385,7 +2378,7 @@ func isGREASEValue(val uint16) bool {
 	return val&0x0f0f == 0x0a0a && val&0xff == val>>8
 }
 
-func verifyPSKBinder(version version, clientHello *clientHelloMsg, sessionState *sessionState, binderToVerify, firstClientHello, helloRetryRequest []byte) error {
+func verifyPSKBinder(psk *preSharedKey, clientHello *clientHelloMsg, binderToVerify, firstClientHello, helloRetryRequest []byte) error {
 	binderLen := 2
 	for _, binder := range clientHello.pskBinders {
 		binderLen += 1 + len(binder)
@@ -2393,7 +2386,7 @@ func verifyPSKBinder(version version, clientHello *clientHelloMsg, sessionState 
 
 	truncatedHello := clientHello.marshal()
 	truncatedHello = truncatedHello[:len(truncatedHello)-binderLen]
-	binder := computePSKBinder(sessionState.secret, version, resumptionPSKBinderLabel, sessionState.cipherSuite.hash(), firstClientHello, helloRetryRequest, truncatedHello)
+	binder := psk.computeBinder(firstClientHello, helloRetryRequest, truncatedHello)
 	if !bytes.Equal(binder, binderToVerify) {
 		return errors.New("tls: PSK binder does not verify")
 	}

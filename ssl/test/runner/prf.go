@@ -14,6 +14,7 @@ import (
 	"encoding"
 	"fmt"
 	"hash"
+	"time"
 
 	"golang.org/x/crypto/cryptobyte"
 )
@@ -464,17 +465,57 @@ func updateTrafficSecret(vers version, hash crypto.Hash, secret []byte) []byte {
 	return hkdfExpandLabel(vers, hash, secret, applicationTrafficLabel, nil, hash.Size())
 }
 
-func computePSKBinder(psk []byte, vers version, label []byte, hashAlg crypto.Hash, clientHello, helloRetryRequest, truncatedHello []byte) []byte {
-	finishedHash := newFinishedHash(vers, hashAlg)
-	finishedHash.addEntropy(psk)
-	binderKey := finishedHash.deriveSecret(label)
+type preSharedKey struct {
+	version      version
+	hash         crypto.Hash
+	identity     []byte
+	secret       []byte
+	binderKey    []byte
+	creationTime time.Time
+	ticketAgeAdd uint32
+}
+
+func newClientSessionPSK(session *ClientSessionState) *preSharedKey {
+	psk := &preSharedKey{
+		version:      session.vers,
+		hash:         session.cipherSuite.hash(),
+		identity:     session.sessionTicket,
+		secret:       session.secret,
+		creationTime: session.ticketCreationTime,
+		ticketAgeAdd: session.ticketAgeAdd,
+	}
+	psk.initBinder(resumptionPSKBinderLabel)
+	return psk
+}
+
+func newServerSessionPSK(ticket []byte, session *sessionState) *preSharedKey {
+	psk := &preSharedKey{
+		version:      session.vers,
+		hash:         session.cipherSuite.hash(),
+		identity:     ticket,
+		secret:       session.secret,
+		creationTime: session.ticketCreationTime,
+		ticketAgeAdd: session.ticketAgeAdd,
+	}
+	psk.initBinder(resumptionPSKBinderLabel)
+	return psk
+}
+
+func (psk *preSharedKey) initBinder(label []byte) {
+	finishedHash := newFinishedHash(psk.version, psk.hash)
+	finishedHash.addEntropy(psk.secret)
+	psk.binderKey = finishedHash.deriveSecret(label)
+}
+
+func (psk *preSharedKey) computeBinder(clientHello, helloRetryRequest, truncatedHello []byte) []byte {
+	finishedHash := newFinishedHash(psk.version, psk.hash)
 	finishedHash.Write(clientHello)
 	if len(helloRetryRequest) != 0 {
 		finishedHash.UpdateForHelloRetryRequest()
 	}
 	finishedHash.Write(helloRetryRequest)
 	finishedHash.Write(truncatedHello)
-	return finishedHash.clientSum(binderKey)
+	return finishedHash.clientSum(psk.binderKey)
 }
 
 func deriveSessionPSK(suite *cipherSuite, vers version, masterSecret []byte, nonce []byte) []byte {
