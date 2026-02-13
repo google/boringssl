@@ -24,7 +24,7 @@ use rustls::pki_types::{
     AlgorithmIdentifier, InvalidSignature, SignatureVerificationAlgorithm, alg_id,
 };
 
-use crate::rustls_provider::RsaSignatureDigest;
+use crate::RsaSignatureDigest;
 
 /// A PKI object with assigned Object Identifier
 pub(crate) trait PkiIdentified {

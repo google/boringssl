@@ -25,7 +25,7 @@ use rustls::{
     sign::{Signer, SigningKey},
 };
 
-use crate::rustls_provider::{RsaSignatureDigest, pki};
+use crate::{RsaSignatureDigest, pki};
 
 /// A generic `id-rsaEncryption` RSA key
 ///
