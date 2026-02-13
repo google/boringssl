@@ -202,7 +202,7 @@ func (c *Conn) readDTLS13RecordHeader(epoch *epochState, b []byte) (headerLen in
 // indicated in the header (if it contains the type). The connection's internal
 // sequence number is updated to the value from the header.
 func (c *Conn) readDTLSRecordHeader(epoch *epochState, b []byte) (headerLen int, recordLen int, typ recordType, err error) {
-	if epoch.cipher != nil && c.in.version >= VersionTLS13 {
+	if epoch.cipher != nil && c.in.version.protocolVersion() >= VersionTLS13 {
 		return c.readDTLS13RecordHeader(epoch, b)
 	}
 
@@ -223,13 +223,13 @@ func (c *Conn) readDTLSRecordHeader(epoch *epochState, b []byte) (headerLen int,
 	// the peer may not know the version yet.
 	if typ != recordTypeAlert && !c.skipRecordVersionCheck {
 		if c.haveVers {
-			wireVersion := c.wireVersion
-			if c.vers >= VersionTLS13 {
+			wireVersion := c.vers.wire
+			if c.vers.protocolVersion() >= VersionTLS13 {
 				wireVersion = VersionDTLS12
 			}
 			if vers != wireVersion {
 				c.sendAlert(alertProtocolVersion)
-				return 0, 0, 0, c.in.setErrorLocked(fmt.Errorf("dtls: received record with version %x when expecting version %x", vers, c.wireVersion))
+				return 0, 0, 0, c.in.setErrorLocked(fmt.Errorf("dtls: received record with version %x when expecting version %x", vers, c.vers.wire))
 			}
 		} else {
 			if expect := c.config.Bugs.ExpectInitialRecordVersion; expect != 0 && vers != expect {
@@ -372,7 +372,7 @@ func (c *Conn) dtlsWriteRecord(typ recordType, data []byte) (n int, err error) {
 		// Don't send ChangeCipherSpec in DTLS 1.3.
 		// TODO(crbug.com/383078468): Add an option to send them anyway and test
 		// what our implementation does with unexpected ones.
-		if c.vers >= VersionTLS13 {
+		if c.vers.protocolVersion() >= VersionTLS13 {
 			return
 		}
 		c.nextFlight = append(c.nextFlight, DTLSMessage{
@@ -492,7 +492,7 @@ func (c *Conn) dtlsACKHandshake() error {
 	if c.config.Bugs.ACKFlightDTLS != nil {
 		c.config.Bugs.ACKFlightDTLS(&controller, prev, received, records)
 	} else {
-		if c.vers >= VersionTLS13 {
+		if c.vers.protocolVersion() >= VersionTLS13 {
 			controller.WriteACK(controller.OutEpoch(), records)
 		}
 	}
@@ -552,17 +552,17 @@ func (c *Conn) dtlsPackRecord(epoch *epochState, typ recordType, data []byte, mu
 		maxLen = 1024
 	}
 
-	vers := c.wireVersion
+	vers := c.vers.wire
 	if vers == 0 {
 		// Some TLS servers fail if the record version is greater than
 		// TLS 1.0 for the initial ClientHello.
 		vers = VersionDTLS10
 	}
-	if c.vers >= VersionTLS13 || c.out.version >= VersionTLS13 {
+	if c.vers.protocolVersion() >= VersionTLS13 || c.out.version.protocolVersion() >= VersionTLS13 {
 		vers = VersionDTLS12
 	}
 
-	useDTLS13RecordHeader := c.out.version >= VersionTLS13 && epoch.cipher != nil && !c.useDTLSPlaintextHeader()
+	useDTLS13RecordHeader := c.out.version.protocolVersion() >= VersionTLS13 && epoch.cipher != nil && !c.useDTLSPlaintextHeader()
 	headerHasLength := true
 	record := make([]byte, 0, dtlsMaxRecordHeaderLen+len(data)+c.out.maxEncryptOverhead(epoch, len(data)))
 	seq := c.out.sequenceNumberForOutput(epoch)

@@ -34,7 +34,7 @@ var errServerKeyExchange = errors.New("tls: invalid ServerKeyExchange message")
 // rsaKeyAgreement implements the standard TLS key agreement where the client
 // encrypts the pre-master secret to the server's public key.
 type rsaKeyAgreement struct {
-	version       uint16
+	version       version
 	clientVersion uint16
 	exportKey     *rsa.PrivateKey
 }
@@ -64,7 +64,7 @@ func (ka *rsaKeyAgreement) generateServerKeyExchange(config *Config, cert *Crede
 	serverRSAParams = append(serverRSAParams, exponent...)
 
 	var sigAlg signatureAlgorithm
-	if ka.version >= VersionTLS12 {
+	if ka.version.protocolVersion() >= VersionTLS12 {
 		sigAlg, err = selectSignatureAlgorithm(false /* server */, ka.version, cert, config, clientHello.signatureAlgorithms)
 		if err != nil {
 			return nil, err
@@ -78,13 +78,13 @@ func (ka *rsaKeyAgreement) generateServerKeyExchange(config *Config, cert *Crede
 
 	skx := new(serverKeyExchangeMsg)
 	sigAlgsLen := 0
-	if ka.version >= VersionTLS12 {
+	if ka.version.protocolVersion() >= VersionTLS12 {
 		sigAlgsLen = 2
 	}
 	skx.key = make([]byte, len(serverRSAParams)+sigAlgsLen+2+len(sig))
 	copy(skx.key, serverRSAParams)
 	k := skx.key[len(serverRSAParams):]
-	if ka.version >= VersionTLS12 {
+	if ka.version.protocolVersion() >= VersionTLS12 {
 		k[0] = byte(sigAlg >> 8)
 		k[1] = byte(sigAlg)
 		k = k[2:]
@@ -617,7 +617,7 @@ func (ka *nilKeyAgreementAuthentication) verifyParameters(config *Config, client
 // server's private key.
 type signedKeyAgreement struct {
 	keyType                keyType
-	version                uint16
+	version                version
 	peerSignatureAlgorithm signatureAlgorithm
 }
 
@@ -630,7 +630,7 @@ func (ka *signedKeyAgreement) signParameters(config *Config, cert *Credential, c
 
 	var sigAlg signatureAlgorithm
 	var err error
-	if ka.version >= VersionTLS12 {
+	if ka.version.protocolVersion() >= VersionTLS12 {
 		sigAlg, err = selectSignatureAlgorithm(false /* server */, ka.version, cert, config, clientHello.signatureAlgorithms)
 		if err != nil {
 			return nil, err
@@ -650,13 +650,13 @@ func (ka *signedKeyAgreement) signParameters(config *Config, cert *Credential, c
 		skx.key = params
 	} else {
 		sigAlgsLen := 0
-		if ka.version >= VersionTLS12 {
+		if ka.version.protocolVersion() >= VersionTLS12 {
 			sigAlgsLen = 2
 		}
 		skx.key = make([]byte, len(params)+sigAlgsLen+2+len(sig))
 		copy(skx.key, params)
 		k := skx.key[len(params):]
-		if ka.version >= VersionTLS12 {
+		if ka.version.protocolVersion() >= VersionTLS12 {
 			k[0] = byte(sigAlg >> 8)
 			k[1] = byte(sigAlg)
 			k = k[2:]
@@ -694,7 +694,7 @@ func (ka *signedKeyAgreement) verifyParameters(config *Config, clientHello *clie
 	msg = append(msg, params...)
 
 	var sigAlg signatureAlgorithm
-	if ka.version >= VersionTLS12 {
+	if ka.version.protocolVersion() >= VersionTLS12 {
 		if len(sig) < 2 {
 			return errServerKeyExchange
 		}

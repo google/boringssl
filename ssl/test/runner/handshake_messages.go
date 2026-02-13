@@ -1359,7 +1359,7 @@ func (m *serverHelloMsg) marshal() []byte {
 		}
 		if m.versOverride != 0 {
 			hello.AddUint16(m.versOverride)
-		} else if vers >= VersionTLS13 {
+		} else if vers.protocolVersion() >= VersionTLS13 {
 			legacyVersion := uint16(VersionTLS12)
 			if m.isDTLS {
 				legacyVersion = VersionDTLS12
@@ -1375,7 +1375,7 @@ func (m *serverHelloMsg) marshal() []byte {
 		hello.AddUint8(m.compressionMethod)
 
 		hello.AddUint16LengthPrefixed(func(extensions *cryptobyte.Builder) {
-			if vers >= VersionTLS13 {
+			if vers.protocolVersion() >= VersionTLS13 {
 				if m.hasKeyShare {
 					extensions.AddUint16(extensionKeyShare)
 					extensions.AddUint16LengthPrefixed(func(keyShare *cryptobyte.Builder) {
@@ -1468,7 +1468,7 @@ func (m *serverHelloMsg) unmarshal(data []byte) bool {
 	}
 
 	// Parse out the version from supported_versions if available.
-	if vers == VersionTLS12 {
+	if vers.protocolVersion() == VersionTLS12 {
 		extensionsCopy := extensions
 		for len(extensionsCopy) > 0 {
 			var extension uint16
@@ -1489,7 +1489,7 @@ func (m *serverHelloMsg) unmarshal(data []byte) bool {
 		}
 	}
 
-	if vers >= VersionTLS13 {
+	if vers.protocolVersion() >= VersionTLS13 {
 		for len(extensions) > 0 {
 			var extension uint16
 			var body cryptobyte.String
@@ -1563,7 +1563,9 @@ func (m *encryptedExtensionsMsg) unmarshal(data []byte) bool {
 	if !reader.ReadUint16LengthPrefixed(&extensions) || len(reader) != 0 {
 		return false
 	}
-	return m.extensions.unmarshal(extensions, VersionTLS13)
+	// Extensions are not currently sensitive to the version beyond TLS 1.3, so
+	// we can just fill in VersionTLS13.
+	return m.extensions.unmarshal(extensions, version{VersionTLS13})
 }
 
 type serverExtensions struct {
@@ -1743,7 +1745,7 @@ func (m *serverExtensions) marshal(extensions *cryptobyte.Builder) {
 	}
 }
 
-func (m *serverExtensions) unmarshal(data cryptobyte.String, version uint16) bool {
+func (m *serverExtensions) unmarshal(data cryptobyte.String, version version) bool {
 	// Reset all fields.
 	*m = serverExtensions{}
 
@@ -1823,7 +1825,7 @@ func (m *serverExtensions) unmarshal(data cryptobyte.String, version uint16) boo
 			m.serverNameAck = true
 		case extensionSupportedPoints:
 			// supported_points is illegal in TLS 1.3.
-			if version >= VersionTLS13 {
+			if version.protocolVersion() >= VersionTLS13 {
 				return false
 			}
 			// http://tools.ietf.org/html/rfc4492#section-5.5.2
@@ -1832,7 +1834,7 @@ func (m *serverExtensions) unmarshal(data cryptobyte.String, version uint16) boo
 			}
 		case extensionSupportedCurves:
 			// The server can only send supported_curves in TLS 1.3.
-			if version < VersionTLS13 {
+			if version.protocolVersion() < VersionTLS13 {
 				return false
 			}
 		case extensionQUICTransportParams:
@@ -1840,7 +1842,7 @@ func (m *serverExtensions) unmarshal(data cryptobyte.String, version uint16) boo
 		case extensionQUICTransportParamsLegacy:
 			m.quicTransportParamsLegacy = body
 		case extensionEarlyData:
-			if version < VersionTLS13 || len(body) != 0 {
+			if version.protocolVersion() < VersionTLS13 || len(body) != 0 {
 				return false
 			}
 			m.hasEarlyData = true
@@ -1851,7 +1853,7 @@ func (m *serverExtensions) unmarshal(data cryptobyte.String, version uint16) boo
 			m.hasApplicationSettingsOld = true
 			m.applicationSettingsOld = body
 		case extensionEncryptedClientHello:
-			if version < VersionTLS13 {
+			if version.protocolVersion() < VersionTLS13 {
 				return false
 			}
 			m.echRetryConfigs = body
@@ -1873,7 +1875,7 @@ func (m *serverExtensions) unmarshal(data cryptobyte.String, version uint16) boo
 				return false
 			}
 		case extensionTrustAnchors:
-			if version < VersionTLS13 {
+			if version.protocolVersion() < VersionTLS13 {
 				return false
 			}
 			// The list cannot be empty here. If empty, the peer should have omitted the extension.
@@ -2500,8 +2502,7 @@ func (m *nextProtoMsg) unmarshal(data []byte) bool {
 }
 
 type certificateRequestMsg struct {
-	raw  []byte
-	vers uint16
+	raw []byte
 	// hasSignatureAlgorithm indicates whether this message includes a list
 	// of signature and hash functions. This change was introduced with TLS
 	// 1.2.
@@ -2720,8 +2721,7 @@ func (m *certificateVerifyMsg) unmarshal(data []byte) bool {
 
 type newSessionTicketMsg struct {
 	raw                         []byte
-	vers                        uint16
-	isDTLS                      bool
+	vers                        version
 	ticketLifetime              uint32
 	ticketAgeAdd                uint32
 	ticketNonce                 []byte
@@ -2738,24 +2738,19 @@ func (m *newSessionTicketMsg) marshal() []byte {
 		return m.raw
 	}
 
-	version, ok := wireToVersion(m.vers, m.isDTLS)
-	if !ok {
-		panic("unknown version")
-	}
-
 	// See http://tools.ietf.org/html/rfc5077#section-3.3
 	ticketMsg := cryptobyte.NewBuilder(nil)
 	ticketMsg.AddUint8(typeNewSessionTicket)
 	ticketMsg.AddUint24LengthPrefixed(func(body *cryptobyte.Builder) {
 		body.AddUint32(m.ticketLifetime)
-		if version >= VersionTLS13 {
+		if m.vers.protocolVersion() >= VersionTLS13 {
 			body.AddUint32(m.ticketAgeAdd)
 			addUint8LengthPrefixedBytes(body, m.ticketNonce)
 		}
 
 		addUint16LengthPrefixedBytes(body, m.ticket)
 
-		if version >= VersionTLS13 {
+		if m.vers.protocolVersion() >= VersionTLS13 {
 			body.AddUint16LengthPrefixed(func(extensions *cryptobyte.Builder) {
 				if m.maxEarlyDataSize > 0 {
 					extensions.AddUint16(extensionEarlyData)
@@ -2784,18 +2779,13 @@ func (m *newSessionTicketMsg) marshal() []byte {
 
 func (m *newSessionTicketMsg) unmarshal(data []byte) bool {
 	m.raw = data
-
-	version, ok := wireToVersion(m.vers, m.isDTLS)
-	if !ok {
-		panic("unknown version")
-	}
-
 	reader := cryptobyte.String(data[4:])
 	if !reader.ReadUint32(&m.ticketLifetime) {
 		return false
 	}
 
-	if version >= VersionTLS13 {
+	isTLS13 := m.vers.protocolVersion() >= VersionTLS13
+	if isTLS13 {
 		if !reader.ReadUint32(&m.ticketAgeAdd) ||
 			!readUint8LengthPrefixedBytes(&reader, &m.ticketNonce) {
 			return false
@@ -2803,11 +2793,11 @@ func (m *newSessionTicketMsg) unmarshal(data []byte) bool {
 	}
 
 	if !readUint16LengthPrefixedBytes(&reader, &m.ticket) ||
-		(version >= VersionTLS13 && len(m.ticket) == 0) {
+		(isTLS13 && len(m.ticket) == 0) {
 		return false
 	}
 
-	if version >= VersionTLS13 {
+	if isTLS13 {
 		var extensions cryptobyte.String
 		if !reader.ReadUint16LengthPrefixed(&extensions) || !reader.Empty() {
 			return false

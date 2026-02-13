@@ -20,7 +20,7 @@ import (
 // sessionState contains the information that is serialized into a session
 // ticket in order to later resume a connection.
 type sessionState struct {
-	vers                        uint16
+	vers                        version
 	cipherSuite                 *cipherSuite
 	secret                      []byte
 	handshakeHash               []byte
@@ -41,7 +41,7 @@ type sessionState struct {
 
 func (s *sessionState) marshal() []byte {
 	msg := cryptobyte.NewBuilder(nil)
-	msg.AddUint16(s.vers)
+	msg.AddUint16(s.vers.wire)
 	msg.AddUint16(s.cipherSuite.id)
 	addUint16LengthPrefixedBytes(msg, s.secret)
 	addUint16LengthPrefixedBytes(msg, s.handshakeHash)
@@ -56,7 +56,7 @@ func (s *sessionState) marshal() []byte {
 		msg.AddUint8(0)
 	}
 
-	if s.vers >= VersionTLS13 {
+	if s.vers.protocolVersion() >= VersionTLS13 {
 		msg.AddUint64(uint64(s.ticketCreationTime.UnixNano()))
 		msg.AddUint64(uint64(s.ticketExpiration.UnixNano()))
 		msg.AddUint32(s.ticketFlags)
@@ -102,12 +102,18 @@ func readBool(reader *cryptobyte.String, out *bool) bool {
 
 func (s *sessionState) unmarshal(data []byte) bool {
 	reader := cryptobyte.String(data)
-	var numCerts, cipherSuite uint16
-	if !reader.ReadUint16(&s.vers) ||
+	var vers, numCerts, cipherSuite uint16
+	if !reader.ReadUint16(&vers) ||
 		!reader.ReadUint16(&cipherSuite) ||
 		!readUint16LengthPrefixedBytes(&reader, &s.secret) ||
 		!readUint16LengthPrefixedBytes(&reader, &s.handshakeHash) ||
 		!reader.ReadUint16(&numCerts) {
+		return false
+	}
+
+	var ok bool
+	s.vers, ok = wireToVersionAny(vers)
+	if !ok {
 		return false
 	}
 
@@ -127,7 +133,7 @@ func (s *sessionState) unmarshal(data []byte) bool {
 		return false
 	}
 
-	if s.vers >= VersionTLS13 {
+	if s.vers.protocolVersion() >= VersionTLS13 {
 		var ticketCreationTime, ticketExpiration uint64
 		if !reader.ReadUint64(&ticketCreationTime) ||
 			!reader.ReadUint64(&ticketExpiration) ||

@@ -101,7 +101,7 @@ func createDelegatedCredential(parent *Credential, config delegatedCredentialCon
 
 	var dummyConfig Config
 	msg := delegatedCredentialSignedMessage(dc.BytesOrPanic(), config.algo, parent.Certificate[0])
-	parentSignature, err := signMessage(false /* server */, VersionTLS13, parent.PrivateKey, &dummyConfig, config.algo, msg)
+	parentSignature, err := signMessage(false /* server */, version{VersionTLS13}, parent.PrivateKey, &dummyConfig, config.algo, msg)
 	if err != nil {
 		panic(err)
 	}

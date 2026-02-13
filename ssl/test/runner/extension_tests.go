@@ -1203,7 +1203,7 @@ func addExtensionTests() {
 						testCases = append(testCases, testCase{
 							protocol:           protocol,
 							testType:           serverTest,
-							name:               fmt.Sprintf("ALPS-EarlyData-Server-ClientNoOffe-%s-%s", alpsCodePoint, suffix),
+							name:               fmt.Sprintf("ALPS-EarlyData-Server-ClientNoOffer-%s-%s", alpsCodePoint, suffix),
 							skipQUICALPNConfig: true,
 							config: Config{
 								MaxVersion:          ver.version,
