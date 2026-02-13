@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -2615,12 +2616,7 @@ var (
 )
 
 func containsGREASE(values []uint16) bool {
-	for _, v := range values {
-		if isGREASEValue(v) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(values, isGREASEValue)
 }
 
 func isAllZero(v []byte) bool {

@@ -126,12 +126,7 @@ func (c *Conn) clientHandshake() error {
 			// previous session are still valid.
 			cipherSuiteOk := false
 			if candidateSession.vers <= VersionTLS12 {
-				for _, id := range c.config.cipherSuites() {
-					if id == candidateSession.cipherSuite.id {
-						cipherSuiteOk = true
-						break
-					}
-				}
+				cipherSuiteOk = slices.Contains(c.config.cipherSuites(), candidateSession.cipherSuite.id)
 			} else {
 				// TLS 1.3 allows the cipher to change on
 				// resumption.
@@ -2070,14 +2065,7 @@ func (hs *clientHandshakeState) processServerExtensions(serverExtensions *server
 			return errors.New("tls: server selected SRTP MKI value")
 		}
 
-		found := false
-		for _, p := range c.config.SRTPProtectionProfiles {
-			if p == serverExtensions.srtpProtectionProfile {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(c.config.SRTPProtectionProfiles, serverExtensions.srtpProtectionProfile) {
 			return errors.New("tls: server advertised unsupported SRTP profile")
 		}
 

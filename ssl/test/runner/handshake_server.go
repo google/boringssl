@@ -207,14 +207,7 @@ func (hs *serverHandshakeState) readClientHello() error {
 			if candidate.ECHConfig.ConfigID != echOuter.configID {
 				continue
 			}
-			var found bool
-			for _, suite := range candidate.ECHConfig.CipherSuites {
-				if echOuter.kdfID == suite.KDF && echOuter.aeadID == suite.AEAD {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !slices.Contains(candidate.ECHConfig.CipherSuites, HPKECipherSuite{KDF: echOuter.kdfID, AEAD: echOuter.aeadID}) {
 				continue
 			}
 			info := []byte("tls ech\x00")
@@ -422,27 +415,12 @@ func (hs *serverHandshakeState) readClientHello() error {
 		return errors.New("tls: no GREASE cipher suite value found")
 	}
 
-	var greaseFound bool
-	for _, curve := range hs.clientHello.supportedCurves {
-		if isGREASEValue(uint16(curve)) {
-			greaseFound = true
-			break
-		}
-	}
-
-	if !greaseFound && config.Bugs.ExpectGREASE {
+	if config.Bugs.ExpectGREASE && !slices.ContainsFunc(hs.clientHello.supportedCurves, func(c CurveID) bool { return isGREASEValue(uint16(c)) }) {
 		return errors.New("tls: no GREASE curve value found")
 	}
 
 	if len(hs.clientHello.keyShares) > 0 {
-		greaseFound = false
-		for _, keyShare := range hs.clientHello.keyShares {
-			if isGREASEValue(uint16(keyShare.group)) {
-				greaseFound = true
-				break
-			}
-		}
-
+		greaseFound := slices.ContainsFunc(hs.clientHello.keyShares, func(ks keyShareEntry) bool { return isGREASEValue(uint16(ks.group)) })
 		if !greaseFound && config.Bugs.ExpectGREASE {
 			return errors.New("tls: no GREASE curve value found")
 		}
