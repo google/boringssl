@@ -579,7 +579,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		hs.hello.cipherSuite = c.config.Bugs.SendCipherSuite
 	}
 
-	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite)
+	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite.hash())
 	hs.finishedHash.discardHandshakeBuffer()
 	hs.writeClientHash(hs.clientHello.marshal())
 
@@ -1857,7 +1857,7 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 		hs.hello.extensions.ocspStapling = true
 	}
 
-	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite)
+	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite.hash())
 	hs.finishedHash.discardHandshakeBuffer()
 	hs.writeClientHash(hs.clientHello.marshal())
 	hs.writeServerHash(hs.hello.marshal())
@@ -1916,7 +1916,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		hs.hello.sessionID = hs.clientHello.sessionID
 	}
 
-	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite)
+	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite.hash())
 	hs.writeClientHash(hs.clientHello.marshal())
 	hs.writeServerHash(hs.hello.marshal())
 
@@ -2408,7 +2408,7 @@ func verifyPSKBinder(version uint16, isDTLS bool, clientHello *clientHelloMsg, s
 		return errors.New("tls: Unknown cipher suite for PSK in session")
 	}
 
-	binder := computePSKBinder(sessionState.secret, version, isDTLS, resumptionPSKBinderLabel, pskCipherSuite, firstClientHello, helloRetryRequest, truncatedHello)
+	binder := computePSKBinder(sessionState.secret, version, isDTLS, resumptionPSKBinderLabel, pskCipherSuite.hash(), firstClientHello, helloRetryRequest, truncatedHello)
 	if !bytes.Equal(binder, binderToVerify) {
 		return errors.New("tls: PSK binder does not verify")
 	}

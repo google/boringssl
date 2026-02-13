@@ -238,7 +238,7 @@ func (c *Conn) clientHandshake() error {
 
 	// Derive early write keys and set Conn state to allow early writes.
 	if earlyHello != nil {
-		finishedHash := newFinishedHash(session.wireVersion, c.isDTLS, session.cipherSuite)
+		finishedHash := newFinishedHash(session.wireVersion, c.isDTLS, session.cipherSuite.hash())
 		finishedHash.addEntropy(session.secret)
 		finishedHash.Write(earlyHello.marshal())
 
@@ -335,7 +335,7 @@ func (c *Conn) clientHandshake() error {
 		return fmt.Errorf("tls: server selected an unsupported cipher suite")
 	}
 
-	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite)
+	hs.finishedHash = newFinishedHash(c.wireVersion, c.isDTLS, hs.suite.hash())
 	hs.finishedHash.WriteHandshake(hs.hello.marshal(), hs.c.sendHandshakeSeq-1)
 
 	if c.vers >= VersionTLS13 {
@@ -998,7 +998,7 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 	// Determine whether the server accepted ECH and drop the unnecessary
 	// transcript.
 	if hs.innerHello != nil {
-		innerFinishedHash := newFinishedHash(c.wireVersion, c.isDTLS, hs.suite)
+		innerFinishedHash := newFinishedHash(c.wireVersion, c.isDTLS, hs.suite.hash())
 		innerFinishedHash.WriteHandshake(hs.innerHello.marshal(), hs.c.sendHandshakeSeq-1)
 		if haveHelloRetryRequest {
 			innerFinishedHash.UpdateForHelloRetryRequest()
@@ -2490,7 +2490,7 @@ func generatePSKBinders(version uint16, isDTLS bool, hello *clientHelloMsg, sess
 	helloBytes := hello.marshal()
 	binderSize := len(hello.pskBinders)*(binderLen+1) + 2
 	truncatedHello := helloBytes[:len(helloBytes)-binderSize]
-	binder := computePSKBinder(session.secret, version, isDTLS, resumptionPSKBinderLabel, session.cipherSuite, firstClientHello, helloRetryRequest, truncatedHello)
+	binder := computePSKBinder(session.secret, version, isDTLS, resumptionPSKBinderLabel, session.cipherSuite.hash(), firstClientHello, helloRetryRequest, truncatedHello)
 	if maybeCorruptBinder {
 		if config.Bugs.SendShortPSKBinder {
 			binder = binder[:binderLen]
