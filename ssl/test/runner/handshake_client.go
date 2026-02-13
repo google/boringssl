@@ -52,7 +52,8 @@ func mapClientHelloVersion(vers uint16, isDTLS bool) uint16 {
 	switch vers {
 	case VersionTLS12:
 		return VersionDTLS12
-	case VersionTLS10:
+	case VersionTLS11, VersionTLS10:
+		// There is no DTLS 1.1.
 		return VersionDTLS10
 	}
 
@@ -475,8 +476,8 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 
 	isInner := innerHello == nil && hs.echHPKEContext != nil
 
-	minVersion := c.config.minVersion(c.isDTLS)
-	maxVersion := c.config.maxVersion(c.isDTLS)
+	minVersion := c.config.minVersion()
+	maxVersion := c.config.maxVersion()
 	// The ClientHelloInner may not offer TLS 1.2 or below.
 	requireTLS13 := isInner && !c.config.Bugs.AllowTLS12InClientHelloInner
 	if requireTLS13 && minVersion < VersionTLS13 {
@@ -2166,13 +2167,13 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 	// Check for downgrade signals in the server random, per RFC 8446, section 4.1.3.
 	gotDowngrade := hs.serverHello.random[len(hs.serverHello.random)-8:]
 	if !c.config.Bugs.IgnoreTLS13DowngradeRandom {
-		if c.config.maxVersion(c.isDTLS) >= VersionTLS13 {
+		if c.config.maxVersion() >= VersionTLS13 {
 			if bytes.Equal(gotDowngrade, downgradeTLS13) {
 				c.sendAlert(alertProtocolVersion)
 				return false, errors.New("tls: downgrade from TLS 1.3 detected")
 			}
 		}
-		if c.vers <= VersionTLS11 && c.config.maxVersion(c.isDTLS) >= VersionTLS12 {
+		if c.vers <= VersionTLS11 && c.config.maxVersion() >= VersionTLS12 {
 			if bytes.Equal(gotDowngrade, downgradeTLS12) {
 				c.sendAlert(alertProtocolVersion)
 				return false, errors.New("tls: downgrade from TLS 1.2 detected")

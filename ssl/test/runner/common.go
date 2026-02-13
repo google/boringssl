@@ -2215,34 +2215,18 @@ func (c *Config) cipherSuites() []uint16 {
 	return s
 }
 
-func (c *Config) minVersion(isDTLS bool) uint16 {
+func (c *Config) minVersion() uint16 {
 	ret := uint16(minVersion)
 	if c != nil && c.MinVersion != 0 {
 		ret = c.MinVersion
 	}
-	if isDTLS {
-		// The lowest version of DTLS is 1.0. There is no DSSL 3.0.
-		if ret < VersionTLS10 {
-			return VersionTLS10
-		}
-		// There is no such thing as DTLS 1.1.
-		if ret == VersionTLS11 {
-			return VersionTLS12
-		}
-	}
 	return ret
 }
 
-func (c *Config) maxVersion(isDTLS bool) uint16 {
+func (c *Config) maxVersion() uint16 {
 	ret := uint16(maxVersion)
 	if c != nil && c.MaxVersion != 0 {
 		ret = c.MaxVersion
-	}
-	if isDTLS {
-		// There is no such thing as DTLS 1.1.
-		if ret == VersionTLS11 {
-			return VersionTLS10
-		}
 	}
 	return ret
 }
@@ -2306,7 +2290,7 @@ func wireToVersion(vers uint16, isDTLS bool) (uint16, bool) {
 // false.
 func (c *Config) isSupportedVersion(wireVers uint16, isDTLS bool) (uint16, bool) {
 	vers, ok := wireToVersion(wireVers, isDTLS)
-	if !ok || c.minVersion(isDTLS) > vers || vers > c.maxVersion(isDTLS) {
+	if !ok || c.minVersion() > vers || vers > c.maxVersion() {
 		return 0, false
 	}
 	return vers, true
