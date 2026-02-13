@@ -878,15 +878,7 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 	// expect the server to reject ECH, so we put PSK last. Note this renders
 	// ECH undecryptable.
 	if len(hello.pskIdentities) > 0 {
-		sessionVers := session.vers
-		// We may have a pre-1.3 session if SendBothTickets is set.
-		if session.vers.protocolVersion() < VersionTLS13 {
-			sessionVers = version{VersionTLS13}
-			if c.isDTLS {
-				sessionVers = version{VersionDTLS13}
-			}
-		}
-		generatePSKBinders(sessionVers, hello, session, nil, nil, c.config)
+		generatePSKBinders(session.vers, hello, session, nil, nil, c.config)
 	}
 
 	if c.config.Bugs.SendClientHelloWithFixes != nil {
