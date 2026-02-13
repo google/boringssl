@@ -62,12 +62,11 @@ const (
 type recordType uint8
 
 const (
-	recordTypeChangeCipherSpec   recordType = 20
-	recordTypeAlert              recordType = 21
-	recordTypeHandshake          recordType = 22
-	recordTypeApplicationData    recordType = 23
-	recordTypePlaintextHandshake recordType = 24
-	recordTypeACK                recordType = 26
+	recordTypeChangeCipherSpec recordType = 20
+	recordTypeAlert            recordType = 21
+	recordTypeHandshake        recordType = 22
+	recordTypeApplicationData  recordType = 23
+	recordTypeACK              recordType = 26
 )
 
 // TLS handshake message types.
