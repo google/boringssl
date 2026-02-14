@@ -556,11 +556,7 @@ func (c *Conn) dtlsPackRecord(epoch *epochState, typ recordType, data []byte, mu
 	if vers == 0 {
 		// Some TLS servers fail if the record version is greater than
 		// TLS 1.0 for the initial ClientHello.
-		if c.isDTLS {
-			vers = VersionDTLS10
-		} else {
-			vers = VersionTLS10
-		}
+		vers = VersionDTLS10
 	}
 	if c.vers >= VersionTLS13 || c.out.version >= VersionTLS13 {
 		vers = VersionDTLS12
