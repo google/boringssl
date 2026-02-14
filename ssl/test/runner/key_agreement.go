@@ -39,7 +39,7 @@ type rsaKeyAgreement struct {
 	exportKey     *rsa.PrivateKey
 }
 
-func (ka *rsaKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg, version uint16) (*serverKeyExchangeMsg, error) {
+func (ka *rsaKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg) (*serverKeyExchangeMsg, error) {
 	// Save the client version for comparison later.
 	ka.clientVersion = clientHello.vers
 
@@ -96,7 +96,7 @@ func (ka *rsaKeyAgreement) generateServerKeyExchange(config *Config, cert *Crede
 	return skx, nil
 }
 
-func (ka *rsaKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg, version uint16) ([]byte, error) {
+func (ka *rsaKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg) ([]byte, error) {
 	preMasterSecret := make([]byte, 48)
 	_, err := io.ReadFull(config.rand(), preMasterSecret[2:])
 	if err != nil {
@@ -727,11 +727,11 @@ type ecdheKeyAgreement struct {
 	peerKey []byte
 }
 
-func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg, version uint16) (*serverKeyExchangeMsg, error) {
+func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg) (*serverKeyExchangeMsg, error) {
 	var curveID CurveID
 	preferredCurves := config.curvePreferences()
 	for _, candidate := range preferredCurves {
-		if isPqGroup(candidate) && version < VersionTLS13 {
+		if isPqGroup(candidate) {
 			// Post-quantum "groups" require TLS 1.3.
 			continue
 		}
@@ -771,7 +771,7 @@ func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Cre
 	return ka.auth.signParameters(config, cert, clientHello, hello, serverECDHParams)
 }
 
-func (ka *ecdheKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg, version uint16) ([]byte, error) {
+func (ka *ecdheKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg) ([]byte, error) {
 	if len(ckx.ciphertext) == 0 || int(ckx.ciphertext[0]) != len(ckx.ciphertext)-1 {
 		return nil, errClientKeyExchange
 	}
@@ -835,11 +835,11 @@ func (ka *ecdheKeyAgreement) peerSignatureAlgorithm() signatureAlgorithm {
 // exchange.
 type nilKeyAgreement struct{}
 
-func (ka *nilKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg, version uint16) (*serverKeyExchangeMsg, error) {
+func (ka *nilKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg) (*serverKeyExchangeMsg, error) {
 	return nil, nil
 }
 
-func (ka *nilKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg, version uint16) ([]byte, error) {
+func (ka *nilKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg) ([]byte, error) {
 	if len(ckx.ciphertext) != 0 {
 		return nil, errClientKeyExchange
 	}
@@ -887,7 +887,7 @@ type pskKeyAgreement struct {
 	identityHint string
 }
 
-func (ka *pskKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg, version uint16) (*serverKeyExchangeMsg, error) {
+func (ka *pskKeyAgreement) generateServerKeyExchange(config *Config, cert *Credential, clientHello *clientHelloMsg, hello *serverHelloMsg) (*serverKeyExchangeMsg, error) {
 	// Assemble the identity hint.
 	bytes := make([]byte, 2+len(config.PreSharedKeyIdentity))
 	bytes[0] = byte(len(config.PreSharedKeyIdentity) >> 8)
@@ -896,7 +896,7 @@ func (ka *pskKeyAgreement) generateServerKeyExchange(config *Config, cert *Crede
 
 	// If there is one, append the base key agreement's
 	// ServerKeyExchange.
-	baseSkx, err := ka.base.generateServerKeyExchange(config, cert, clientHello, hello, version)
+	baseSkx, err := ka.base.generateServerKeyExchange(config, cert, clientHello, hello)
 	if err != nil {
 		return nil, err
 	}
@@ -914,7 +914,7 @@ func (ka *pskKeyAgreement) generateServerKeyExchange(config *Config, cert *Crede
 	return skx, nil
 }
 
-func (ka *pskKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg, version uint16) ([]byte, error) {
+func (ka *pskKeyAgreement) processClientKeyExchange(config *Config, cert *Credential, ckx *clientKeyExchangeMsg) ([]byte, error) {
 	// First, process the PSK identity.
 	if len(ckx.ciphertext) < 2 {
 		return nil, errClientKeyExchange
@@ -937,7 +937,7 @@ func (ka *pskKeyAgreement) processClientKeyExchange(config *Config, cert *Creden
 	// pre-master secret.
 	newCkx := new(clientKeyExchangeMsg)
 	newCkx.ciphertext = ckx.ciphertext[2+identityLen:]
-	otherSecret, err := ka.base.processClientKeyExchange(config, cert, newCkx, version)
+	otherSecret, err := ka.base.processClientKeyExchange(config, cert, newCkx)
 	if err != nil {
 		return nil, err
 	}

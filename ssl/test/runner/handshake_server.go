@@ -1945,7 +1945,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 	}
 
 	keyAgreement := hs.suite.ka(c.vers)
-	skx, err := keyAgreement.generateServerKeyExchange(config, hs.cert, hs.clientHello, hs.hello, c.vers)
+	skx, err := keyAgreement.generateServerKeyExchange(config, hs.cert, hs.clientHello, hs.hello)
 	if err != nil {
 		c.sendAlert(alertHandshakeFailure)
 		return err
@@ -2042,7 +2042,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 	}
 	hs.writeClientHash(ckx.marshal())
 
-	preMasterSecret, err := keyAgreement.processClientKeyExchange(config, hs.cert, ckx, c.vers)
+	preMasterSecret, err := keyAgreement.processClientKeyExchange(config, hs.cert, ckx)
 	if err != nil {
 		c.sendAlert(alertHandshakeFailure)
 		return err
