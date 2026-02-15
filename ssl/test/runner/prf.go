@@ -468,23 +468,27 @@ func updateTrafficSecret(vers version, hash crypto.Hash, secret []byte) []byte {
 }
 
 type preSharedKey struct {
-	version      version
-	hash         crypto.Hash
-	identity     []byte
-	secret       []byte
-	binderKey    []byte
-	creationTime time.Time
-	ticketAgeAdd uint32
+	version       version
+	hash          crypto.Hash
+	identity      []byte
+	secret        []byte
+	binderKey     []byte
+	creationTime  time.Time
+	ticketAgeAdd  uint32
+	clientSession *ClientSessionState
+	serverSession *sessionState
+	credential    *Credential
 }
 
 func newClientSessionPSK(session *ClientSessionState) *preSharedKey {
 	psk := &preSharedKey{
-		version:      session.vers,
-		hash:         session.cipherSuite.hash(),
-		identity:     session.sessionTicket,
-		secret:       session.secret,
-		creationTime: session.ticketCreationTime,
-		ticketAgeAdd: session.ticketAgeAdd,
+		version:       session.vers,
+		hash:          session.cipherSuite.hash(),
+		identity:      session.sessionTicket,
+		secret:        session.secret,
+		creationTime:  session.ticketCreationTime,
+		ticketAgeAdd:  session.ticketAgeAdd,
+		clientSession: session,
 	}
 	psk.initBinder(resumptionPSKBinderLabel)
 	return psk
@@ -492,12 +496,13 @@ func newClientSessionPSK(session *ClientSessionState) *preSharedKey {
 
 func newServerSessionPSK(ticket []byte, session *sessionState) *preSharedKey {
 	psk := &preSharedKey{
-		version:      session.vers,
-		hash:         session.cipherSuite.hash(),
-		identity:     ticket,
-		secret:       session.secret,
-		creationTime: session.ticketCreationTime,
-		ticketAgeAdd: session.ticketAgeAdd,
+		version:       session.vers,
+		hash:          session.cipherSuite.hash(),
+		identity:      ticket,
+		secret:        session.secret,
+		creationTime:  session.ticketCreationTime,
+		ticketAgeAdd:  session.ticketAgeAdd,
+		serverSession: session,
 	}
 	psk.initBinder(resumptionPSKBinderLabel)
 	return psk
@@ -532,6 +537,10 @@ func importPSK(cred *Credential, targetProtocol version, targetHash crypto.Hash)
 
 	var targetKDF uint16
 	switch targetHash {
+	case 0:
+		// We treat zero as some unrecognized hash value for testing.
+		targetKDF = 0x1234
+		targetHash = crypto.SHA256
 	case crypto.SHA256:
 		targetKDF = kdfHKDFWithSHA256
 	case crypto.SHA384:
@@ -540,13 +549,19 @@ func importPSK(cred *Credential, targetProtocol version, targetHash crypto.Hash)
 		panic("unrecogized target HKDF hash")
 	}
 
+	targetProtocolValue := targetProtocol.wire
+	if cred.ImportTargetPSKProtocol != 0 {
+		targetProtocolValue = cred.ImportTargetPSKProtocol
+	}
+
 	// See RFC 9258, Section 5.1.
 	identity := (&importedPSKIdentity{
 		externalIdentity: cred.PSKIdentity,
 		context:          cred.PSKContext,
-		targetProtocol:   targetProtocol.wire,
+		targetProtocol:   targetProtocolValue,
 		targetKDF:        targetKDF,
 	}).marshal()
+	identity = append(identity, cred.AppendToImportedPSKIdentity...)
 
 	h := cred.PSKHash.New()
 	h.Write(identity)
@@ -561,10 +576,11 @@ func importPSK(cred *Credential, targetProtocol version, targetHash crypto.Hash)
 	ipskx := hkdfExpandLabel(targetProtocol, cred.PSKHash, epskx, derivedPSKLabel, identityHash, targetHash.Size())
 
 	psk := &preSharedKey{
-		version:  targetProtocol,
-		hash:     targetHash,
-		identity: identity,
-		secret:   ipskx,
+		version:    targetProtocol,
+		hash:       targetHash,
+		identity:   identity,
+		secret:     ipskx,
+		credential: cred,
 	}
 	psk.initBinder(importedPSKBinderLabel)
 	return psk

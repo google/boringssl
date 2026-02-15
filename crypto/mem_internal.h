@@ -87,7 +87,9 @@ void Delete(T *t) {
 namespace internal {
 
 // All types with kAllowUniquePtr set may be used with UniquePtr. Other types
-// may be C structs which require a |BORINGSSL_MAKE_DELETER| registration.
+// may be C structs which require a |BORINGSSL_MAKE_DELETER| registration. Where
+// an internal type cannot be annotated (e.g. an alias of std::variant), use
+// |BORINGSSL_MAKE_DELETER(T, Delete)|.
 template <typename T>
 struct DeleterImpl<T, std::enable_if_t<T::kAllowUniquePtr>> {
   static void Free(T *t) { Delete(t); }

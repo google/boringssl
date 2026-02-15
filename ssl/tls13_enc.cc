@@ -518,6 +518,14 @@ Span<const uint8_t> ssl_pre_shared_key_identity(const SSLPreSharedKey &psk) {
   return std::get<UniquePtr<SSL_SESSION>>(psk)->ticket;
 }
 
+Span<const uint8_t> ssl_pre_shared_key_secret(const SSLPreSharedKey &psk) {
+  if (const auto *imported = std::get_if<SSLImportedPSK>(&psk);
+      imported != nullptr) {
+    return imported->ipskx;
+  }
+  return std::get<UniquePtr<SSL_SESSION>>(psk)->secret;
+}
+
 bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
                       size_t *out_len, const SSLPreSharedKey &psk,
                       const SSLTranscript &transcript,
@@ -590,36 +598,16 @@ bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
   return true;
 }
 
-bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
-                             const SSL_SESSION *session, const SSLMessage &msg,
-                             CBS *binders) {
-  uint8_t verify_data[EVP_MAX_MD_SIZE];
-  size_t verify_data_len;
-  CBS binder;
-  // The binders are computed over |msg| with |binders| and its u16 length
-  // prefix removed. The caller is assumed to have parsed |msg|, extracted
-  // |binders|, and verified the PSK extension is last.
-  if (!tls13_psk_binder(hs, verify_data, &verify_data_len,
-                        UpRef(const_cast<SSL_SESSION *>(session)),
-                        hs->transcript, msg.body, 2 + CBS_len(binders)) ||
-      // We only consider the first PSK, so compare against the first binder.
-      !CBS_get_u8_length_prefixed(binders, &binder)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
-    return false;
+static std::optional<uint16_t> hkdf_md_to_kdf_id(const EVP_MD *hkdf_md) {
+  // See Section 10 of RFC 9258.
+  switch (EVP_MD_nid(hkdf_md)) {
+    case NID_sha256:
+      return 0x0001;  // HKDF_SHA256
+    case NID_sha384:
+      return 0x0002;  // HKDF_SHA384
+    default:
+      return std::nullopt;
   }
-
-  bool binder_ok =
-      CBS_len(&binder) == verify_data_len &&
-      CRYPTO_memcmp(CBS_data(&binder), verify_data, verify_data_len) == 0;
-  if (CRYPTO_fuzzer_mode_enabled()) {
-    binder_ok = true;
-  }
-  if (!binder_ok) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_DIGEST_CHECK_FAILED);
-    return false;
-  }
-
-  return true;
 }
 
 std::optional<SSLImportedPSK> tls13_derive_imported_psk(
@@ -627,18 +615,10 @@ std::optional<SSLImportedPSK> tls13_derive_imported_psk(
     const EVP_MD *hkdf_md) {
   assert(cred->type == SSLCredentialType::kPreSharedKey);
 
-  // See Section 10 of RFC 9258.
-  uint16_t target_kdf;
-  switch (EVP_MD_nid(hkdf_md)) {
-    case NID_sha256:
-      target_kdf = 0x0001;  // HKDF_SHA256
-      break;
-    case NID_sha384:
-      target_kdf = 0x0002;  // HKDF_SHA384
-      break;
-    default:
-      OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
-      return std::nullopt;
+  std::optional<uint16_t> target_kdf = hkdf_md_to_kdf_id(hkdf_md);
+  if (!target_kdf.has_value()) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    return std::nullopt;
   }
 
   SSLImportedPSK ret;
@@ -658,7 +638,7 @@ std::optional<SSLImportedPSK> tls13_derive_imported_psk(
       !CBB_add_bytes(&context, cred->epsk_context.data(),
                      cred->epsk_context.size()) ||
       !CBB_add_u16(imported_id.get(), protocol) ||
-      !CBB_add_u16(imported_id.get(), target_kdf) ||
+      !CBB_add_u16(imported_id.get(), *target_kdf) ||
       !CBBFinishArray(imported_id.get(), &ret.imported_identity)) {
     return std::nullopt;
   }
@@ -682,6 +662,28 @@ std::optional<SSLImportedPSK> tls13_derive_imported_psk(
   }
 
   return ret;
+}
+
+bool tls13_compare_imported_psk_identity(Span<const uint8_t> id,
+                                         const SSL_CREDENTIAL *cred,
+                                         uint16_t protocol,
+                                         const EVP_MD *hkdf_md) {
+  assert(cred->type == SSLCredentialType::kPreSharedKey);
+  std::optional<uint16_t> target_kdf = hkdf_md_to_kdf_id(hkdf_md);
+  if (!target_kdf.has_value()) {
+    return false;
+  }
+
+  // See Section 5.1 of RFC 9258.
+  CBS cbs = id, external_identity, context;
+  uint16_t found_protocol, found_kdf;
+  return CBS_get_u16_length_prefixed(&cbs, &external_identity) &&
+         external_identity == Span(cred->epsk_id) &&
+         CBS_get_u16_length_prefixed(&cbs, &context) &&
+         context == Span(cred->epsk_context) &&
+         CBS_get_u16(&cbs, &found_protocol) && found_protocol == protocol &&
+         CBS_get_u16(&cbs, &found_kdf) && found_kdf == *target_kdf &&
+         CBS_len(&cbs) == 0;
 }
 
 size_t ssl_ech_confirmation_signal_hello_offset(const SSL *ssl) {

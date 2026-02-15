@@ -575,18 +575,18 @@ func addResumptionVersionTests() {
 
 	testCases = append(testCases, testCase{
 		testType:      serverTest,
-		name:          "Resume-Server-OmitPSKsOnSecondClientHello",
+		name:          "Resume-Server-OmitAllPSKsOnSecondClientHello",
 		resumeSession: true,
 		config: Config{
 			MaxVersion:    VersionTLS13,
 			DefaultCurves: []CurveID{},
 			Bugs: ProtocolBugs{
-				OmitPSKsOnSecondClientHello: true,
+				OmitAllPSKsOnSecondClientHello: true,
 			},
 		},
 		shouldFail:         true,
-		expectedLocalError: "remote error: illegal parameter",
-		expectedError:      ":INCONSISTENT_CLIENT_HELLO:",
+		expectedLocalError: "remote error: missing extension",
+		expectedError:      ":MISSING_EXTENSION:",
 	})
 }
 

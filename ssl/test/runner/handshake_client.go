@@ -158,6 +158,24 @@ func (c *Conn) clientHandshake() error {
 	if session != nil && (session.vers.protocolVersion() >= VersionTLS13 || c.config.Bugs.SendBothTickets) {
 		hs.preSharedKeys = append(hs.preSharedKeys, newClientSessionPSK(session))
 	}
+	pskCreds := c.config.PSKCredentials
+	if c.config.Credential != nil && c.config.Credential.Type == CredentialTypePreSharedKey {
+		pskCreds = append(slices.Clone(pskCreds), c.config.Credential)
+	}
+	for _, cred := range pskCreds {
+		targetProtocol := version{VersionTLS13}
+		if c.isDTLS {
+			targetProtocol = version{VersionDTLS13}
+		}
+		if len(cred.ImportTargetPSKHashes) != 0 {
+			for _, targetHash := range cred.ImportTargetPSKHashes {
+				hs.preSharedKeys = append(hs.preSharedKeys, importPSK(cred, targetProtocol, targetHash))
+			}
+		} else {
+			hs.preSharedKeys = append(hs.preSharedKeys, importPSK(cred, targetProtocol, crypto.SHA256))
+			hs.preSharedKeys = append(hs.preSharedKeys, importPSK(cred, targetProtocol, crypto.SHA384))
+		}
+	}
 
 	// Set up ECH parameters.
 	var err error
@@ -1139,30 +1157,32 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 
 	// Resolve PSK and compute the early secret.
 	zeroSecret := hs.finishedHash.zeroSecret()
-	pskSecret := zeroSecret
+	var psk *preSharedKey
 	if hs.serverHello.hasPSKIdentity {
-		// We send at most one PSK identity.
-		if hs.session == nil || hs.serverHello.pskIdentity != 0 {
+		if int(hs.serverHello.pskIdentity) >= len(hs.preSharedKeys) {
 			c.sendAlert(alertUnknownPSKIdentity)
 			return errors.New("tls: server sent unknown PSK identity")
 		}
-		if hs.session.vers != c.vers {
+		psk = hs.preSharedKeys[hs.serverHello.pskIdentity]
+		if psk.version != c.vers {
 			c.sendAlert(alertIllegalParameter)
-			return errors.New("tls: server resumed an invalid session for the protocol version")
+			return errors.New("tls: server selected an invalid PSK for the protocol version")
 		}
-		if hs.session.cipherSuite.hash() != hs.suite.hash() {
+		if psk.hash != hs.suite.hash() {
 			c.sendAlert(alertIllegalParameter)
-			return errors.New("tls: server resumed an invalid session for the cipher suite")
+			return errors.New("tls: server selected an invalid PSK for the cipher suite")
 		}
-		pskSecret = hs.session.secret
-		c.didResume = true
+		c.didResume = psk.clientSession != nil
+		c.selectedPSK = psk.credential
+		hs.finishedHash.addEntropy(psk.secret)
+	} else {
+		hs.finishedHash.addEntropy(zeroSecret)
 	}
-	hs.finishedHash.addEntropy(pskSecret)
 
 	sharedSecret := zeroSecret
 	if len(hs.serverHello.pakeMessage) != 0 {
-		if c.didResume {
-			return errors.New("server resumed and returned a PAKE extension")
+		if psk != nil {
+			return errors.New("server selected PSK and PAKE at the same time")
 		}
 		if hs.pakeContext == nil {
 			return errors.New("server selected a PAKE unexpectedly")
@@ -1240,9 +1260,7 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 		c.peerCertificates = hs.session.serverCertificates
 		c.sctList = hs.session.sctList
 		c.ocspResponse = hs.session.ocspResponse
-	} else if hs.pakeContext != nil {
-		// The PAKE authenticates the connection.
-	} else {
+	} else if hs.pakeContext == nil && psk == nil {
 		msg, err := c.readHandshake()
 		if err != nil {
 			return err
@@ -1627,14 +1645,18 @@ func (hs *clientHandshakeState) applyHelloRetryRequest(helloRetryRequest *helloR
 	}
 	// The first ClientHello may have set this due to OnlyCompressSecondClientHelloInner.
 	hello.reorderOuterExtensionsWithoutCompressing = false
-	if c.config.Bugs.OmitPSKsOnSecondClientHello {
+	hello.pskIdentities = hello.pskIdentities[c.config.Bugs.OmitPSKsOnSecondClientHello:]
+	hs.preSharedKeys = hs.preSharedKeys[c.config.Bugs.OmitPSKsOnSecondClientHello:]
+	if c.config.Bugs.OmitAllPSKsOnSecondClientHello {
 		hello.pskIdentities = nil
-		hello.pskBinders = nil
+		hs.preSharedKeys = nil
 	}
 	hello.raw = nil
 
 	if len(hello.pskIdentities) > 0 {
 		hs.generatePSKBinders(hello, firstHelloBytes, helloRetryRequest.marshal())
+	} else {
+		hello.pskBinders = nil
 	}
 
 	if outerHello != nil {

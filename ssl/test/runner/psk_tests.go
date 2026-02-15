@@ -46,6 +46,13 @@ func addPSKTests() {
 		PSKContext:   []byte("context2"),
 		PSKHash:      crypto.SHA384,
 	}
+	pskSHA256Credential2 := Credential{
+		Type:         CredentialTypePreSharedKey,
+		PreSharedKey: slices.Repeat([]byte{'I', 'J', 'K', 'L'}, 8),
+		PSKIdentity:  []byte("psk3"),
+		PSKContext:   []byte("context3"),
+		PSKHash:      crypto.SHA256,
+	}
 
 	hashToPSK := func(hash crypto.Hash) *Credential {
 		switch hash {
@@ -89,6 +96,23 @@ func addPSKTests() {
 					// Override the default behavior of expecting a peer certificate on
 					// resumption connections.
 					flags: []string{"-expect-no-peer-cert"},
+				})
+				testCases = append(testCases, testCase{
+					testType: serverTest,
+					protocol: protocol,
+					name:     fmt.Sprintf("PSK-Server-%s-%s-%s", hashToString(pskHash), hashToString(cipherHash), protocol),
+					config: Config{
+						Credential:   psk,
+						MaxVersion:   VersionTLS13,
+						CipherSuites: []uint16{cipher},
+					},
+					shimCredentials: []*Credential{psk},
+					expectations: connectionExpectations{
+						selectedPSK: psk,
+					},
+					// Also test that the resulting session can be reused.
+					resumeSession:      true,
+					resumeExpectations: &connectionExpectations{},
 				})
 
 				// Test with HelloRetryRequest to ensure the client computes
@@ -391,6 +415,486 @@ func addPSKTests() {
 			shouldFail:         true,
 			expectedError:      ":UNEXPECTED_MESSAGE:",
 			expectedLocalError: "remote error: unexpected message",
+		})
+
+		// If a server is configured to request client certificates, it should
+		// still not do so when negotiating a PSK.
+		testCases = append(testCases, testCase{
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-DoNotRequestClientCertificate-%s", protocol),
+			testType: serverTest,
+			config: Config{
+				Credential: &pskSHA256Credential,
+				MaxVersion: VersionTLS13,
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential},
+			flags:           []string{"-require-any-client-certificate"},
+		})
+
+		// The server should notice if the second binder is wrong.
+		for _, secondBinder := range []bool{false, true} {
+			binderStr := "FirstBinder"
+			var defaultCurves []CurveID
+			if secondBinder {
+				binderStr = "SecondBinder"
+				// Force a HelloRetryRequest by predicting an empty curve list.
+				defaultCurves = []CurveID{}
+			}
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     fmt.Sprintf("PSK-Server-BinderWrongLength-%s-%s", binderStr, protocol),
+				config: Config{
+					MaxVersion:    VersionTLS13,
+					Credential:    &pskSHA256Credential,
+					DefaultCurves: defaultCurves,
+					Bugs: ProtocolBugs{
+						SendShortPSKBinder:         true,
+						OnlyCorruptSecondPSKBinder: secondBinder,
+					},
+				},
+				shimCredentials:    []*Credential{&pskSHA256Credential},
+				shouldFail:         true,
+				expectedLocalError: "remote error: error decrypting message",
+				expectedError:      ":DIGEST_CHECK_FAILED:",
+			})
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     fmt.Sprintf("PSK-Server-NoPSKBinder-%s-%s", binderStr, protocol),
+				config: Config{
+					MaxVersion:    VersionTLS13,
+					Credential:    &pskSHA256Credential,
+					DefaultCurves: defaultCurves,
+					Bugs: ProtocolBugs{
+						SendNoPSKBinder:            true,
+						OnlyCorruptSecondPSKBinder: secondBinder,
+					},
+				},
+				shimCredentials:    []*Credential{&pskSHA256Credential},
+				shouldFail:         true,
+				expectedLocalError: "remote error: error decoding message",
+				expectedError:      ":DECODE_ERROR:",
+			})
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     fmt.Sprintf("PSK-Server-ExtraPSKBinder-%s-%s", binderStr, protocol),
+				config: Config{
+					MaxVersion:    VersionTLS13,
+					Credential:    &pskSHA256Credential,
+					DefaultCurves: defaultCurves,
+					Bugs: ProtocolBugs{
+						SendExtraPSKBinder:         true,
+						OnlyCorruptSecondPSKBinder: secondBinder,
+					},
+				},
+				shimCredentials:    []*Credential{&pskSHA256Credential},
+				shouldFail:         true,
+				expectedLocalError: "remote error: illegal parameter",
+				expectedError:      ":PSK_IDENTITY_BINDER_COUNT_MISMATCH:",
+			})
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     fmt.Sprintf("PSK-Server-ExtraIdentityNoBinder-%s-%s", binderStr, protocol),
+				config: Config{
+					MaxVersion:    VersionTLS13,
+					Credential:    &pskSHA256Credential,
+					DefaultCurves: defaultCurves,
+					Bugs: ProtocolBugs{
+						ExtraPSKIdentity:           true,
+						OnlyCorruptSecondPSKBinder: secondBinder,
+					},
+				},
+				shimCredentials:    []*Credential{&pskSHA256Credential},
+				shouldFail:         true,
+				expectedLocalError: "remote error: illegal parameter",
+				expectedError:      ":PSK_IDENTITY_BINDER_COUNT_MISMATCH:",
+			})
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     fmt.Sprintf("PSK-Server-InvalidPSKBinder-%s-%s", binderStr, protocol),
+				config: Config{
+					MaxVersion:    VersionTLS13,
+					Credential:    &pskSHA256Credential,
+					DefaultCurves: defaultCurves,
+					Bugs: ProtocolBugs{
+						SendInvalidPSKBinder:       true,
+						OnlyCorruptSecondPSKBinder: secondBinder,
+					},
+				},
+				shimCredentials:    []*Credential{&pskSHA256Credential},
+				shouldFail:         true,
+				expectedLocalError: "remote error: error decrypting message",
+				expectedError:      ":DIGEST_CHECK_FAILED:",
+			})
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     fmt.Sprintf("PSK-Server-PSKBinderFirstExtension-%s-%s", binderStr, protocol),
+				config: Config{
+					MaxVersion:    VersionTLS13,
+					Credential:    &pskSHA256Credential,
+					DefaultCurves: defaultCurves,
+					Bugs: ProtocolBugs{
+						PSKBinderFirst:             true,
+						OnlyCorruptSecondPSKBinder: secondBinder,
+					},
+				},
+				shimCredentials:    []*Credential{&pskSHA256Credential},
+				shouldFail:         true,
+				expectedLocalError: "remote error: illegal parameter",
+				expectedError:      ":PRE_SHARED_KEY_MUST_BE_LAST:",
+			})
+		}
+
+		// The server can defer configuring PSKs to either the early callback
+		// or the SSL_CTX_set_cert_cb callback. (-async causes the shim to defer
+		// installing credentials. -use-early-callback controls which callback
+		// installs it.)
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-CertCallback-%s", protocol),
+			config: Config{
+				MaxVersion: VersionTLS13,
+				Credential: &pskSHA256Credential,
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential},
+			flags:           []string{"-async", "-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA256Credential,
+			},
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-EarlyCallback-%s", protocol),
+			config: Config{
+				MaxVersion: VersionTLS13,
+				Credential: &pskSHA256Credential,
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential},
+			flags:           []string{"-async", "-use-early-callback", "-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA256Credential,
+			},
+		})
+
+		// If a server is configured with multiple PSKs, it selects the
+		// first common one.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-ConsiderMultiplePSKs-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential, &pskSHA384Credential},
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential2, &pskSHA384Credential},
+			flags:           []string{"-expect-selected-credential", "1"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA384Credential,
+			},
+		})
+
+		// The client and server have no PSKs in common.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-NoCommonPSKs-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential, &pskSHA384Credential},
+			},
+			shimCredentials:    []*Credential{&pskSHA256Credential2},
+			shouldFail:         true,
+			expectedError:      ":PSK_IDENTITY_NOT_FOUND:",
+			expectedLocalError: "remote error: handshake failure",
+		})
+
+		// If the server sends HelloRetryRequest, the client may filter its PSK list
+		// based on the selected cipher. The server must send its PSK index based
+		// on the second list, not the first.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-HRR-UpdateIndex-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential, &pskSHA384Credential},
+				DefaultCurves:  []CurveID{}, // Trigger HRR
+				Bugs: ProtocolBugs{
+					OmitPSKsOnSecondClientHello: 1,
+				},
+			},
+			shimCredentials: []*Credential{&pskSHA384Credential},
+			flags:           []string{"-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA384Credential,
+			},
+		})
+
+		// If the PSK is missing from the second ClientHello, the server should
+		// reject the connection.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-HRR-PSKMissing-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential, &pskSHA384Credential},
+				DefaultCurves:  []CurveID{}, // Trigger HRR
+				Bugs: ProtocolBugs{
+					OmitPSKsOnSecondClientHello: 2, // Delete both SHA-256 and SHA-384 variants.
+				},
+			},
+			shimCredentials:    []*Credential{&pskSHA256Credential},
+			shouldFail:         true,
+			expectedLocalError: "remote error: illegal parameter",
+			expectedError:      ":PSK_IDENTITY_NOT_FOUND:",
+		})
+
+		testCases = append(testCases, testCase{
+			protocol: protocol,
+			testType: serverTest,
+			name:     fmt.Sprintf("PSK-Server-OmitAllPSKsOnSecondClientHello-%s", protocol),
+			config: Config{
+				MaxVersion:    VersionTLS13,
+				Credential:    &pskSHA256Credential,
+				DefaultCurves: []CurveID{}, // Trigger HRR
+				Bugs: ProtocolBugs{
+					OmitAllPSKsOnSecondClientHello: true,
+				},
+			},
+			shimCredentials:    []*Credential{&pskSHA256Credential},
+			shouldFail:         true,
+			expectedLocalError: "remote error: missing extension",
+			expectedError:      ":MISSING_EXTENSION:",
+		})
+
+		// The imported PSK must match exactly, or it is not in common.
+		extraBytes := pskSHA256Credential
+		extraBytes.AppendToImportedPSKIdentity = []byte("extra")
+		wrongHash := pskSHA256Credential
+		wrongHash.ImportTargetPSKHashes = []crypto.Hash{0}
+		wrongProtocol := pskSHA256Credential
+		wrongProtocol.ImportTargetPSKProtocol = 0x1234
+		wrongProtocol2 := pskSHA256Credential
+		wrongProtocol2.ImportTargetPSKProtocol = VersionDTLS13
+		wrongContext := pskSHA256Credential
+		wrongContext.PSKContext = []byte("wrong context")
+		if protocol == dtls {
+			wrongProtocol2.ImportTargetPSKProtocol = VersionTLS13
+		}
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-IdentityDoesNotMatch-%s", protocol),
+			config: Config{
+				MaxVersion: VersionTLS13,
+				PSKCredentials: []*Credential{
+					&extraBytes,
+					&wrongHash,
+					&wrongProtocol,
+					&wrongProtocol2,
+					&wrongContext,
+				},
+			},
+			shimCredentials:    []*Credential{&pskSHA256Credential},
+			shouldFail:         true,
+			expectedError:      ":PSK_IDENTITY_NOT_FOUND:",
+			expectedLocalError: "remote error: handshake failure",
+		})
+
+		// If multiple PSKs match, the server's order is used.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-ServerPreferenceOrder-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA384Credential, &pskSHA256Credential},
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential, &pskSHA384Credential},
+			flags:           []string{"-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA256Credential,
+			},
+		})
+
+		// Servers can be configured with both PSKs and certificates,
+		// in which case they evaluate based on their preference order.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-PSKOrCert-PSK-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential},
+			},
+			shimCredentials: []*Credential{
+				&pskSHA256Credential,
+				&rsaCertificate,
+			},
+			// The ClientHello works for both, but the shim should
+			// pick the PSK.
+			flags: []string{"-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA256Credential,
+			},
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-PSKOrCert-Cert-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA384Credential}, // Wrong PSK
+			},
+			shimCredentials: []*Credential{
+				&pskSHA256Credential,
+				&rsaCertificate,
+			},
+			// The ClientHello is not good for the PSK, so the shim
+			// should pick the certificate.
+			flags: []string{"-expect-selected-credential", "1"},
+			expectations: connectionExpectations{
+				peerCertificate: &rsaCertificate,
+			},
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-CertOrPSK-Cert-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential},
+			},
+			shimCredentials: []*Credential{
+				&rsaCertificate,
+				&pskSHA256Credential,
+			},
+			// The ClientHello works for both, but the shim should
+			// pick the certificate.
+			flags: []string{"-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				peerCertificate: &rsaCertificate,
+			},
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-CertOrPSK-PSK-%s", protocol),
+			config: Config{
+				MaxVersion:                VersionTLS13,
+				PSKCredentials:            []*Credential{&pskSHA256Credential},
+				VerifySignatureAlgorithms: []signatureAlgorithm{}, // No common algs
+			},
+			shimCredentials: []*Credential{
+				&rsaCertificate,
+				&pskSHA256Credential,
+			},
+			// The ClientHello is not good for the certficate, so the
+			// shim should pick the PSK.
+			flags: []string{"-expect-selected-credential", "1"},
+			expectations: connectionExpectations{
+				selectedPSK: &pskSHA256Credential,
+			},
+		})
+
+		// Clients should import PSKs for each of their supported ciphers.
+		// If one does not, the server should skip any PSKs that do not
+		// work with the chosen cipher.
+		importSHA384Only := pskSHA256Credential
+		importSHA384Only.ImportTargetPSKHashes = []crypto.Hash{crypto.SHA384}
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-PartialImport-Match-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				CipherSuites:   []uint16{TLS_AES_256_GCM_SHA384},
+				PSKCredentials: []*Credential{&importSHA384Only},
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential},
+			flags:           []string{"-expect-selected-credential", "0"},
+			expectations: connectionExpectations{
+				selectedPSK: &importSHA384Only,
+			},
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-PartialImport-NoMatch-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				CipherSuites:   []uint16{TLS_AES_128_GCM_SHA256},
+				PSKCredentials: []*Credential{&importSHA384Only},
+			},
+			shimCredentials:    []*Credential{&pskSHA256Credential},
+			shouldFail:         true,
+			expectedError:      ":PSK_IDENTITY_NOT_FOUND:",
+			expectedLocalError: "remote error: handshake failure",
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-PartialImport-NoMatch-Fallback-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				CipherSuites:   []uint16{TLS_AES_128_GCM_SHA256},
+				PSKCredentials: []*Credential{&importSHA384Only},
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential, &rsaCertificate},
+			flags:           []string{"-expect-selected-credential", "1"},
+			expectations: connectionExpectations{
+				peerCertificate: &rsaCertificate,
+			},
+		})
+
+		// We only implement psk_dhe_ke. If the client does not offer it, PSKs
+		// are not eligible.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-MissingPSKMode-NoMatch-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential},
+				Bugs: ProtocolBugs{
+					SendPSKKeyExchangeModes: []byte{0x1a},
+				},
+			},
+			shimCredentials:    []*Credential{&pskSHA256Credential},
+			shouldFail:         true,
+			expectedError:      ":NO_SUPPORTED_PSK_MODE:",
+			expectedLocalError: "remote error: handshake failure",
+		})
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Server-MissingPSKMode-NoMatch-Fallback-%s", protocol),
+			config: Config{
+				MaxVersion:     VersionTLS13,
+				PSKCredentials: []*Credential{&pskSHA256Credential},
+				Bugs: ProtocolBugs{
+					SendPSKKeyExchangeModes: []byte{0x1a},
+				},
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential, &rsaCertificate},
+			flags:           []string{"-expect-selected-credential", "1"},
+			expectations: connectionExpectations{
+				peerCertificate: &rsaCertificate,
+			},
 		})
 	}
 }

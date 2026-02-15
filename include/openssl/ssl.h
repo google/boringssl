@@ -3755,9 +3755,6 @@ OPENSSL_EXPORT const SRTP_PROTECTION_PROFILE *SSL_get_selected_srtp_profile(
 // In both clients and servers, if a caller configures one or more PSK
 // credentials, and calls no certificate-related functions, the connection will
 // only accept one of those PSKs.
-//
-// TODO(crbug.com/369963041): These credentials are currently only implemented
-// as a client. Implement these as a server as well.
 OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_pre_shared_key(
     const uint8_t *key, size_t key_len, const uint8_t *id, size_t id_len,
     const EVP_MD *md, const uint8_t *context, size_t context_len);
@@ -3892,10 +3889,9 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
 // below may be used to implement this, provided the same |SSL_CREDENTIAL|
 // object is used across connections. Applications using multiple connections
 // should use the PAKE credential only once to authenticate a high-entropy
-// secret, e.g. exporting a PSK from |SSL_export_keying_material|, and use the
-// high-entropy secret for subsequent connections.
-//
-// TODO(crbug.com/369963041): Implement RFC 9258 so one can actually do that.
+// secret. For example, an application may export a PSK from a PAKE connection
+// with |SSL_export_keying_material|, and then pass the result to
+// |SSL_CREDENTIAL_new_pre_shared_key| to authenticate subsequent connections.
 //
 // WARNING: PAKE support in TLS is still experimental and may change as the
 // standard evolves. See
@@ -6820,6 +6816,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST 329
 #define SSL_R_DUPLICATE_GROUP 330
 #define SSL_R_INVALID_PSK_FOR_CONNECTION 331
+#define SSL_R_NO_SUPPORTED_PSK_MODE 332
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

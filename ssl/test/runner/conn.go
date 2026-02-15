@@ -155,6 +155,8 @@ type Conn struct {
 	// echAccepted indicates whether ECH was accepted for this connection.
 	echAccepted bool
 
+	selectedPSK *Credential
+
 	tmp [16]byte
 }
 
@@ -1925,6 +1927,7 @@ func (c *Conn) ConnectionState() ConnectionState {
 		state.HasApplicationSettingsOld = c.hasApplicationSettingsOld
 		state.PeerApplicationSettingsOld = c.peerApplicationSettingsOld
 		state.ECHAccepted = c.echAccepted
+		state.SelectedPSK = c.selectedPSK
 	}
 
 	return state

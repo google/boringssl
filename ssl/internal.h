@@ -1232,13 +1232,25 @@ std::optional<SSLImportedPSK> tls13_derive_imported_psk(const SSL_HANDSHAKE *hs,
                                                         uint16_t protocol,
                                                         const EVP_MD *hkdf_md);
 
+// tls13_compare_imported_psk_identity returns whether |id| is equal to |cred|'s
+// imported identity for the specified target protocol and target KDF. This
+// allows matching against PSK identities without deriving imported PSK keys.
+bool tls13_compare_imported_psk_identity(Span<const uint8_t> id,
+                                         const SSL_CREDENTIAL *cred,
+                                         uint16_t protocol,
+                                         const EVP_MD *hkdf_md);
+
 using SSLPreSharedKey = std::variant<SSLImportedPSK, UniquePtr<SSL_SESSION>>;
+BORINGSSL_MAKE_DELETER(SSLPreSharedKey, Delete)
 
 // ssl_pre_shared_key_hash return's |psk|'s hash.
 const EVP_MD *ssl_pre_shared_key_hash(const SSLPreSharedKey &psk);
 
 // ssl_pre_shared_key_identity return's |psk|'s identity.
 Span<const uint8_t> ssl_pre_shared_key_identity(const SSLPreSharedKey &psk);
+
+// ssl_pre_shared_key_secret return's |psk|'s secret.
+Span<const uint8_t> ssl_pre_shared_key_secret(const SSLPreSharedKey &psk);
 
 // tls13_psk_binder calculates the PSK binder value for |psk| over |transcript|
 // and |client_hello|. On success, it writes the result to |out|, sets
@@ -1249,13 +1261,6 @@ bool tls13_psk_binder(const SSL_HANDSHAKE *hs, Span<uint8_t> out,
                       size_t *out_len, const SSLPreSharedKey &psk,
                       const SSLTranscript &transcript,
                       Span<const uint8_t> client_hello, size_t binders_len);
-
-// tls13_verify_psk_binder verifies that the handshake transcript, truncated up
-// to the binders has a valid binder for |session|. It returns true on success,
-// and false on failure.
-bool tls13_verify_psk_binder(const SSL_HANDSHAKE *hs,
-                             const SSL_SESSION *session, const SSLMessage &msg,
-                             CBS *binders);
 
 
 // Encrypted ClientHello.
@@ -1770,6 +1775,13 @@ struct SSL_HANDSHAKE {
   // pre_shared_keys are the pre-shared keys to be offered by the client.
   Vector<SSLPreSharedKey> pre_shared_keys;
 
+  // pre_shared_key is the selected pre-shared key on the server.
+  UniquePtr<SSLPreSharedKey> pre_shared_key;
+
+  // selected_psk_index is the index of the selected pre-shared key on the
+  // server.
+  std::optional<uint16_t> selected_psk_index;
+
   // transcript is the current handshake transcript.
   SSLTranscript transcript;
 
@@ -2164,13 +2176,35 @@ bool ssl_ext_pake_parse_serverhello(SSL_HANDSHAKE *hs,
                                     Array<uint8_t> *out_secret,
                                     uint8_t *out_alert, CBS *contents);
 
+struct SSLOfferedPSK {
+  CBS identity, binder;
+  uint32_t obfuscated_ticket_age;
+};
+
+struct SSLOfferedPSKs {
+  CBS identities, binders;
+  std::optional<SSLOfferedPSK> Next();
+};
+
 const SSLPreSharedKey *ssl_ext_pre_shared_key_parse_serverhello(
     SSL_HANDSHAKE *hs, uint8_t *out_alert, CBS *contents);
-bool ssl_ext_pre_shared_key_parse_clienthello(
-    SSL_HANDSHAKE *hs, CBS *out_ticket, CBS *out_binders,
-    uint32_t *out_obfuscated_ticket_age, uint8_t *out_alert,
-    const SSL_CLIENT_HELLO *client_hello, CBS *contents);
+std::optional<SSLOfferedPSKs> ssl_ext_pre_shared_key_parse_clienthello(
+    SSL_HANDSHAKE *hs, uint8_t *out_alert, const SSL_CLIENT_HELLO *client_hello,
+    CBS *contents);
+
+// ssl_verify_psk_binder verifies |client_hello| has a valid binder for |psk|.
+// The binder is computed with |client_hello| and |hs|'s transcript, which
+// should not have |client_hello| in it. On success, it returns true. Otherwise,
+// it returns false and sets |*out_alert| to an alert to send.
+//
+// This function additionally saves the index where |psk| was found in |hs|. It
+// must be called before |ssl_ext_pre_shared_key_add_serverhello|.
+bool ssl_verify_psk_binder(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+                           const SSLPreSharedKey &psk,
+                           const SSL_CLIENT_HELLO &client_hello);
+
 bool ssl_ext_pre_shared_key_add_serverhello(SSL_HANDSHAKE *hs, CBB *out);
+
 
 // ssl_is_sct_list_valid does a shallow parse of the SCT list in |contents| and
 // returns whether it's valid.
@@ -3658,10 +3692,13 @@ bool ssl_parse_serverhello_tlsext(SSL_HANDSHAKE *hs, const CBS *extensions);
 //   |ssl_ticket_aead_retry|: the ticket could not be immediately decrypted.
 //       Retry later.
 //   |ssl_ticket_aead_error|: an error occurred that is fatal to the connection.
+//
+// If |save_ticket| is true, |*out_session| will have a copy of the ticket saved
+// in its |ticket| field.
 enum ssl_ticket_aead_result_t ssl_process_ticket(
     SSL_HANDSHAKE *hs, UniquePtr<SSL_SESSION> *out_session,
     bool *out_renew_ticket, Span<const uint8_t> ticket,
-    Span<const uint8_t> session_id);
+    Span<const uint8_t> session_id, bool save_ticket);
 
 // tls1_verify_channel_id processes |msg| as a Channel ID message, and verifies
 // the signature. If the key is valid, it saves the Channel ID and returns true.

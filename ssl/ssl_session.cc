@@ -599,7 +599,8 @@ enum ssl_hs_wait_t ssl_get_prev_session(SSL_HANDSHAKE *hs,
   if (tickets_supported && CBS_len(&ticket) != 0) {
     switch (ssl_process_ticket(
         hs, &session, &renew_ticket, ticket,
-        Span(client_hello->session_id, client_hello->session_id_len))) {
+        Span(client_hello->session_id, client_hello->session_id_len),
+        /*save_ticket=*/false)) {
       case ssl_ticket_aead_success:
         break;
       case ssl_ticket_aead_ignore_ticket:

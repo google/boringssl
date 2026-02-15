@@ -625,6 +625,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		}
 		hs.hello.hasPSKIdentity = true
 		hs.hello.pskIdentity = uint16(pskIndex)
+		c.selectedPSK = config.Credential
 	}
 
 	if foundKEMode && !config.SessionTicketsDisabled {

@@ -453,6 +453,9 @@ type connectionExpectations struct {
 	// serverNameAck, if not nil, is whether the server should have acknowledged
 	// the server name. This field is only checked in full handshakes.
 	serverNameAck *bool
+	// selectedPSK, if not nil, is the PSK credential that should have been
+	// negotiated.
+	selectedPSK *Credential
 }
 
 type testCase struct {
@@ -943,6 +946,13 @@ func doExchange(test *testCase, config *Config, conn net.Conn, isResume bool, tr
 		if connState.ECHAccepted {
 			return errors.New("tls: server unexpectedly accepted ECH")
 		}
+	}
+
+	if expectations.selectedPSK != nil && expectations.selectedPSK != connState.SelectedPSK {
+		if connState.SelectedPSK == nil {
+			return errors.New("tls: expected a PSK, but none was selected")
+		}
+		return errors.New("tls: connection selected a different PSK from what was expected")
 	}
 
 	if test.exportKeyingMaterial > 0 {
