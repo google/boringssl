@@ -22,6 +22,7 @@
 
 #include <sys/syscall.h>
 
+// TODO(crbug.com/446280907): Can we assume that __NR_getrandom is defined?
 #if defined(OPENSSL_X86_64)
 #define EXPECTED_NR_getrandom 318
 #elif defined(OPENSSL_X86)
@@ -34,22 +35,17 @@
 #define EXPECTED_NR_getrandom 278
 #endif
 
-#if defined(EXPECTED_NR_getrandom)
-#define USE_NR_getrandom
-
-#if defined(__NR_getrandom)
-
-#if __NR_getrandom != EXPECTED_NR_getrandom
-#error "system call number for getrandom is not the expected value"
+#if !defined(__NR_getrandom) && defined(EXPECTED_NR_getrandom)
+#define __NR_getrandom EXPECTED_NR_getrandom
 #endif
 
-#else  // __NR_getrandom
+#if !defined(__NR_getrandom)
+#error "__NR_getrandom was not defined"
+#endif
 
-#define __NR_getrandom EXPECTED_NR_getrandom
-
-#endif  // __NR_getrandom
-
-#endif  // EXPECTED_NR_getrandom
+#if defined(EXPECTED_NR_getrandom) && __NR_getrandom != EXPECTED_NR_getrandom
+#error "system call number for getrandom is not the expected value"
+#endif
 
 #if !defined(GRND_NONBLOCK)
 #define GRND_NONBLOCK 1
