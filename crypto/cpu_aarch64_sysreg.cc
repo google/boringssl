@@ -23,6 +23,10 @@
     (defined(ANDROID_BAREMETAL) || defined(OPENSSL_FREEBSD)) &&    \
     !defined(OPENSSL_NO_ASM)
 
+#include "./armv8_feature_parsing.h"
+
+BSSL_NAMESPACE_BEGIN
+
 #define ID_AA64PFR0_EL1_ADVSIMD 5
 
 #define READ_SYSREG(name)                \
@@ -32,12 +36,10 @@
     _r;                                  \
   })
 
-using namespace bssl;
-
-// We use the common get_id_field helper now, but need a signed variant
+// We use the common GetIDField helper now, but need a signed variant
 // for the NEON check using ID_AA64PFR0_EL1.
-static int get_signed_id_field(uint64_t reg, unsigned field) {
-  unsigned value = get_id_field(reg, field);
+static int GetSignedIDField(uint64_t reg, unsigned field) {
+  unsigned value = armcap::GetIDField(reg, field);
   if (value & (1 << (NBITS_ID_FIELD - 1))) {
     return (int)(value | (UINT64_MAX << NBITS_ID_FIELD));
   } else {
@@ -45,26 +47,20 @@ static int get_signed_id_field(uint64_t reg, unsigned field) {
   }
 }
 
-static uint32_t read_armcap() {
-  uint32_t armcap = ARMV7_NEON;
-
+void OPENSSL_cpuid_setup() {
   uint64_t id_aa64pfr0_el1 = READ_SYSREG("id_aa64pfr0_el1");
-
-  if (get_signed_id_field(id_aa64pfr0_el1, ID_AA64PFR0_EL1_ADVSIMD) < 0) {
+  if (GetSignedIDField(id_aa64pfr0_el1, ID_AA64PFR0_EL1_ADVSIMD) < 0) {
     // If AdvSIMD ("NEON") is missing, don't report other features either.
     // This matches OpenSSL.
-    return 0;
+    return;
   }
 
-  uint64_t id_aa64isar0_el1 = READ_SYSREG("id_aa64isar0_el1");
-
   // Use the common parsing function to check all cryptographic features.
-  armcap |= armcap::ParseISAR0Flags(id_aa64isar0_el1);
-
-  return armcap;
+  uint64_t id_aa64isar0_el1 = READ_SYSREG("id_aa64isar0_el1");
+  OPENSSL_armcap_P |= ARMV7_NEON | armcap::ParseISAR0Flags(id_aa64isar0_el1);
 }
 
-void bssl::OPENSSL_cpuid_setup() { OPENSSL_armcap_P |= read_armcap(); }
+BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_AARCH64 && !OPENSSL_STATIC_ARMCAP &&
         // (ANDROID_BAREMETAL || OPENSSL_FREEBSD)
