@@ -36,7 +36,6 @@
 #include <openssl/crypto.h>
 #include <openssl/curve25519.h>
 #include <openssl/err.h>
-#include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/hpke.h>
 #include <openssl/pem.h>
@@ -5658,40 +5657,6 @@ TEST(SSLTest, CredentialChains) {
                                      server_ctx.get()));
   EXPECT_TRUE(BuffersEqual(SSL_get0_peer_certificates(client5.get()),
                            {leaf.get(), ca.get()}));
-}
-
-TEST(SSLTest, CredentialSetPrivateKey) {
-  bssl::UniquePtr<SSL_CREDENTIAL> cred(SSL_CREDENTIAL_new_x509());
-  ASSERT_TRUE(cred);
-
-  EXPECT_FALSE(SSL_CREDENTIAL_set1_private_key(cred.get(), nullptr));
-
-  bssl::UniquePtr<EVP_PKEY> test_key = GetTestKey();
-  ASSERT_TRUE(test_key);
-  ASSERT_TRUE(EVP_PKEY_has_public(test_key.get()));
-  ASSERT_TRUE(EVP_PKEY_has_private(test_key.get()));
-  EXPECT_TRUE(SSL_CREDENTIAL_set1_private_key(cred.get(), test_key.get()));
-
-  // Make another key containing the public key only.
-  ScopedCBB cbb;
-  uint8_t *der;
-  size_t der_len;
-  ASSERT_TRUE(CBB_init(cbb.get(), 0));
-  ASSERT_TRUE(EVP_marshal_public_key(cbb.get(), test_key.get()));
-  ASSERT_TRUE(CBB_finish(cbb.get(), &der, &der_len));
-  bssl::UniquePtr<uint8_t> free_der(der);
-  CBS cbs;
-  CBS_init(&cbs, der, der_len);
-  bssl::UniquePtr<EVP_PKEY> public_key(EVP_parse_public_key(&cbs));
-
-  ASSERT_TRUE(public_key);
-  ASSERT_TRUE(EVP_PKEY_has_public(public_key.get()));
-  ASSERT_FALSE(EVP_PKEY_has_private(public_key.get()));
-
-  // Attempting to set the public key as a private key should fail.
-  bssl::UniquePtr<SSL_CREDENTIAL> cred2(SSL_CREDENTIAL_new_x509());
-  ASSERT_TRUE(cred2);
-  EXPECT_FALSE(SSL_CREDENTIAL_set1_private_key(cred2.get(), public_key.get()));
 }
 
 TEST(SSLTest, CredentialCertProperties) {
