@@ -323,6 +323,37 @@ func addPSKTests() {
 			})
 		}
 
+		// When a client is configured with PSKs or certificates, the server picks certificates,
+		// and the server sends CertificateRequests, it must be possible for the client to
+		// proceed without sending any client certificate, even if the credential list has a
+		// PSK credential.
+		testCases = append(testCases, testCase{
+			protocol: protocol,
+			name:     fmt.Sprintf("PSK-Client-PSKOrCert-CertRequest-NoClientCert-%s", protocol),
+			testType: clientTest,
+			config: Config{
+				MaxVersion: VersionTLS13,
+				Credential: &rsaCertificate,
+				ClientAuth: RequestClientCert,
+			},
+			shimCredentials: []*Credential{&pskSHA256Credential},
+			flags:           []string{"-verify-peer"},
+		})
+		if protocol != quic {
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				name:     fmt.Sprintf("PSK-Client-PSKOrCert-CertRequest-NoClientCert-TLS12-%s", protocol),
+				testType: clientTest,
+				config: Config{
+					MaxVersion: VersionTLS12,
+					Credential: &rsaCertificate,
+					ClientAuth: RequestClientCert,
+				},
+				shimCredentials: []*Credential{&pskSHA256Credential},
+				flags:           []string{"-verify-peer"},
+			})
+		}
+
 		// The client should reject CertificateRequest messages on PSK connections.
 		testCases = append(testCases, testCase{
 			protocol: protocol,

@@ -1317,29 +1317,37 @@ static enum ssl_hs_wait_t do_send_client_certificate(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
-  // TODO(crbug.com/369963041): It is currently impossible for a client that
-  // accepts PSKs or server certs to then decline to send a client cert.
-  if (creds.empty()) {
-    // If there were no credentials, proceed without a client certificate. In
-    // this case, the handshake buffer may be released early.
-    hs->transcript.FreeBuffer();
-  } else {
-    // Select the credential to use.
-    for (SSL_CREDENTIAL *cred : creds) {
-      ERR_clear_error();
-      uint16_t sigalg;
-      if (check_credential(hs, cred, &sigalg)) {
-        hs->credential = UpRef(cred);
-        hs->signature_algorithm = sigalg;
-        break;
-      }
+  // Select the credential, if any, to use.
+  bool may_proceed_anonymously = true;
+  for (SSL_CREDENTIAL *cred : creds) {
+    if (!cred->UsesPrivateKey()) {
+      // Non-certificate credentials (e.g. PSKs) do not participate in deciding
+      // whether to error or proceed anonymously.
+      continue;
     }
-    if (hs->credential == nullptr) {
+
+    ERR_clear_error();
+    may_proceed_anonymously = false;
+    uint16_t sigalg;
+    if (check_credential(hs, cred, &sigalg)) {
+      hs->credential = UpRef(cred);
+      hs->signature_algorithm = sigalg;
+      break;
+    }
+  }
+
+  // Fail the connection if no credentials matched, but only if the caller
+  // configured at least one certificate credential. If there were no
+  // candidates, proceed anonymously.
+  if (hs->credential == nullptr) {
+    if (!may_proceed_anonymously) {
       // The error from the last attempt is in the error queue.
       assert(ERR_peek_error() != 0);
       ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);
       return ssl_hs_error;
     }
+    // Without CertificateVerify, we can release the handshake buffer.
+    hs->transcript.FreeBuffer();
   }
 
   if (!ssl_send_tls12_certificate(hs)) {
