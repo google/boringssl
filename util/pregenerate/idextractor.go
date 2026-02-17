@@ -81,7 +81,6 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 			"/Zs",
 			"-Xclang", "-ast-dump=json",
 			"/I", "include",
-			"/D", "BORINGSSL_ALL_PUBLIC_SYMBOLS",
 			"-",
 		}
 	} else {
@@ -92,7 +91,6 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 			"-fsyntax-only",
 			"-Xclang", "-ast-dump=json",
 			"-Iinclude",
-			"-DBORINGSSL_ALL_PUBLIC_SYMBOLS",
 			"-",
 		}
 	}
