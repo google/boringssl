@@ -1462,7 +1462,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	// testing.
 	if !c.config.SessionTicketsDisabled && foundKEMode {
 		ticketCount := 2
-		for i := 0; i < ticketCount; i++ {
+		for i := range ticketCount {
 			c.SendNewSessionTicket([]byte{byte(i)})
 		}
 		if err := c.flushHandshake(); err != nil {
@@ -1810,15 +1810,8 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 			return false
 		}
 
-		cipherSuiteOk := false
 		// Check that the client is still offering the ciphersuite in the session.
-		for _, id := range hs.clientHello.cipherSuites {
-			if id == hs.sessionState.cipherSuite {
-				cipherSuiteOk = true
-				break
-			}
-		}
-		if !cipherSuiteOk {
+		if !slices.Contains(hs.clientHello.cipherSuites, hs.sessionState.cipherSuite) {
 			return false
 		}
 	}
@@ -2316,14 +2309,7 @@ func (hs *serverHandshakeState) processCertsFromClient(certificates [][]byte) (c
 			return nil, errors.New("tls: failed to verify client's certificate: " + err.Error())
 		}
 
-		ok := false
-		for _, ku := range certs[0].ExtKeyUsage {
-			if ku == x509.ExtKeyUsageClientAuth {
-				ok = true
-				break
-			}
-		}
-		if !ok {
+		if !slices.Contains(certs[0].ExtKeyUsage, x509.ExtKeyUsageClientAuth) {
 			c.sendAlert(alertHandshakeFailure)
 			return nil, errors.New("tls: client's certificate's extended key usage doesn't permit it to be used for client authentication")
 		}

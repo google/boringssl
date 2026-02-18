@@ -1788,7 +1788,7 @@ read alert 1 0
 
 	// Test that very large messages can be received.
 	cert := rsaCertificate
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		cert.Certificate = append(cert.Certificate, cert.Certificate[0])
 	}
 	testCases = append(testCases, testCase{

@@ -345,15 +345,15 @@ func recordVersionToWire(vers uint16, protocol protocol) uint16 {
 
 // encodeDERValues encodes a series of bytestrings in comma-separated-hex form.
 func encodeDERValues(values [][]byte) string {
-	var ret string
+	var ret strings.Builder
 	for i, v := range values {
 		if i > 0 {
-			ret += ","
+			ret.WriteString(",")
 		}
-		ret += hex.EncodeToString(v)
+		ret.WriteString(hex.EncodeToString(v))
 	}
 
-	return ret
+	return ret.String()
 }
 
 func decodeHexOrPanic(in string) []byte {
@@ -1210,12 +1210,12 @@ func rrOf(path string, args ...string) *exec.Cmd {
 }
 
 func removeFirstLineIfSuffix(s, suffix string) string {
-	idx := strings.IndexByte(s, '\n')
-	if idx < 0 {
+	before, after, ok := strings.Cut(s, "\n")
+	if !ok {
 		return s
 	}
-	if strings.HasSuffix(s[:idx], suffix) {
-		return s[idx+1:]
+	if strings.HasSuffix(before, suffix) {
+		return after
 	}
 	return s
 }
@@ -1335,7 +1335,7 @@ func doExchanges(test *testCase, shim *shimProcess, resumeCount int, transcripts
 	}
 
 	nextTicketKey := config.SessionTicketKey
-	for i := 0; i < resumeCount; i++ {
+	for i := range resumeCount {
 		var resumeConfig Config
 		if test.resumeConfig != nil {
 			resumeConfig = *test.resumeConfig
@@ -2051,11 +2051,11 @@ func statusPrinter(doneChan chan *testresult.Results, statusChan chan statusMsg,
 	for msg := range statusChan {
 		if !*pipe {
 			// Erase the previous status line.
-			var erase string
-			for i := 0; i < lineLen; i++ {
-				erase += "\b \b"
+			var erase strings.Builder
+			for range lineLen {
+				erase.WriteString("\b \b")
 			}
-			fmt.Print(erase)
+			fmt.Print(erase.String())
 		}
 
 		if msg.statusType == statusStarted {
@@ -2154,12 +2154,7 @@ func checkTests() {
 					found = found || test.resumeExpectations.version == ver.version
 				}
 				shimFlag := ver.shimFlag(test.protocol)
-				for _, flag := range test.flags {
-					if flag == shimFlag {
-						found = true
-						break
-					}
-				}
+				found = found || slices.Contains(test.flags, shimFlag)
 				if !found {
 					panic(fmt.Sprintf("The name of test %q suggests that it's version specific, but the test does not reference %s", test.name, ver.name))
 				}

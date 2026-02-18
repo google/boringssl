@@ -440,7 +440,7 @@ var (
 func (h *finishedHash) certificateVerifyInput(context []byte) []byte {
 	const paddingLen = 64
 	b := make([]byte, paddingLen, paddingLen+len(context)+1+2*h.hash.Size())
-	for i := 0; i < paddingLen; i++ {
+	for i := range paddingLen {
 		b[i] = 32
 	}
 	b = append(b, context...)

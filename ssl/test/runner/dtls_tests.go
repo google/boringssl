@@ -191,7 +191,7 @@ func addDTLSRetransmitTests() {
 				// In DTLS 1.2, the final flight is retransmitted on receipt of
 				// the previous flight. Test the peer is willing to retransmit
 				// it several times.
-				for i := 0; i < 5; i++ {
+				for range 5 {
 					c.WriteFlight(prev)
 					c.ReadRetransmit()
 				}

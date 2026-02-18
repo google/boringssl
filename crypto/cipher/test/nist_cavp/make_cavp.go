@@ -99,8 +99,8 @@ func (t *Test) generate(r io.Reader, cmdLineLabelStr string) {
 	// Auxiliary labels passed as a flag.
 	cmdLineLabels := make(map[string]string)
 	if cmdLineLabelStr != "" {
-		pairs := strings.Split(cmdLineLabelStr, ",")
-		for _, p := range pairs {
+		pairs := strings.SplitSeq(cmdLineLabelStr, ",")
+		for p := range pairs {
 			key, value := t.parseKeyValue(p)
 			cmdLineLabels[key] = value
 		}
