@@ -6,7 +6,7 @@ toolchain go1.24.8
 
 require (
 	cloud.google.com/go/storage v1.59.2
-	filippo.io/edwards25519 v1.1.0
+	filippo.io/edwards25519 v1.2.0
 	github.com/hexops/gotextdiff v1.0.3
 	golang.org/x/crypto v0.43.0
 	golang.org/x/net v0.46.0
