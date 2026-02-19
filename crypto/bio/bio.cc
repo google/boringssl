@@ -54,12 +54,14 @@ BIO *BIO_new(const BIO_METHOD *method) {
 
 int BIO_free(BIO *bio) {
   auto *impl = FromOpaque(bio);
-
+  bool is_input = true;
   Bio *next_bio;
-
   for (; impl != nullptr; impl = next_bio) {
     if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-      return 0;
+      // |impl| was shared. If |impl| was the input, report to the caller
+      // that the object was shared. If it was a downstream reference, the input
+      // was unshared and we continue to return that |bio| was freed.
+      return !is_input;
     }
 
     next_bio = FromOpaque(BIO_pop(impl));
@@ -70,6 +72,7 @@ int BIO_free(BIO *bio) {
 
     CRYPTO_free_ex_data(&g_ex_data_class, &impl->ex_data);
     Delete(impl);
+    is_input = false;
   }
   return 1;
 }

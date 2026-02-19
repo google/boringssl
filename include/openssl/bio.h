@@ -48,10 +48,6 @@ OPENSSL_EXPORT BIO *BIO_new(const BIO_METHOD *method);
 // It returns one if |bio| was NULL or freed. It returns zero if |bio| was
 // shared and some other owner still owns a reference count to it.
 //
-// TODO(crbug.com/485657226): Currently, if any |BIO| in the chain is shared,
-// this function will also return zero. It should only return zero when the
-// input |BIO| is shared.
-//
 // WARNING: Do not use the return value. Returning zero is not a sign of an
 // error, nor an indication to retry the operation. |BIO| is a reference-counted
 // type. A given |BIO| object may be shared between multiple parts of an

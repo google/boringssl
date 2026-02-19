@@ -949,9 +949,9 @@ TEST(BIOTest, BIOFreeReturnValueChain) {
   BIO_push(bio1.get(), UpRef(bio2).release());
 
   // |bio1| now owns a copy of |bio2|, but it is still shared with the |bio2|
-  // pointer. This causes |BIO_free| to return zero.
-  // TODO(crbug.com/485657226): It should return one.
-  EXPECT_EQ(0, BIO_free(bio1.release()));
+  // pointer. |BIO_free| should still return one because the input object was
+  // freed.
+  EXPECT_EQ(1, BIO_free(bio1.release()));
 }
 
 }  // namespace
