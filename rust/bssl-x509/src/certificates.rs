@@ -318,6 +318,10 @@ impl<'a> SerialNumber<'a> {
 #[repr(transparent)]
 pub struct X509Certificate(NonNull<bssl_sys::X509>);
 
+// Safety: X509 objects are reference counted and thread-safe.
+unsafe impl Send for X509Certificate {}
+unsafe impl Sync for X509Certificate {}
+
 impl Clone for X509Certificate {
     fn clone(&self) -> Self {
         unsafe {
