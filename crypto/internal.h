@@ -1014,10 +1014,15 @@ void BORINGSSL_FIPS_abort() __attribute__((noreturn));
 // Call |BORINGSSL_self_test| to run every self test.
 int boringssl_self_test_startup();
 
-// boringssl_ensure_rsa_self_test checks whether the RSA self-test has been run
-// in this address space. If not, it runs it and crashes the address space if
-// unsuccessful.
-void boringssl_ensure_rsa_self_test();
+// boringssl_ensure_rsa_sign_self_test checks whether the RSA signing self-test
+// has been run in this address space. If not, it runs it and crashes the
+// address space if unsuccessful.
+void boringssl_ensure_rsa_sign_self_test();
+
+// boringssl_ensure_rsa_verify_self_test checks whether the RSA verification
+// self-test has been run in this address space. If not, it runs it and crashes
+// the address space if unsuccessful.
+void boringssl_ensure_rsa_verify_self_test();
 
 // boringssl_ensure_ecc_self_test checks whether the ECDSA and ECDH self-test
 // has been run in this address space. If not, it runs it and crashes the
@@ -1033,7 +1038,8 @@ void boringssl_ensure_ffdh_self_test();
 
 // Outside of FIPS mode, the lazy tests are no-ops.
 
-inline void boringssl_ensure_rsa_self_test() {}
+inline void boringssl_ensure_rsa_sign_self_test() {}
+inline void boringssl_ensure_rsa_verify_self_test() {}
 inline void boringssl_ensure_ecc_self_test() {}
 inline void boringssl_ensure_ffdh_self_test() {}
 
