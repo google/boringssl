@@ -923,5 +923,36 @@ TEST_P(BIOPairTest, TestPair) {
 
 INSTANTIATE_TEST_SUITE_P(All, BIOPairTest, testing::Values(false, true));
 
+// |BIO_free| returns whether the input |BIO| was shared.
+TEST(BIOTest, BIOFreeReturnValue) {
+  BIO *bio = BIO_new_mem_buf(nullptr, 0);
+  ASSERT_TRUE(bio);
+  BIO_up_ref(bio);
+  BIO_up_ref(bio);
+
+  // |BIO_free| should return one when the last reference is dropped.
+  EXPECT_EQ(0, BIO_free(bio));
+  EXPECT_EQ(0, BIO_free(bio));
+  EXPECT_EQ(1, BIO_free(bio));
+
+  // |BIO_free| of nullptr vacuously returns one.
+  EXPECT_EQ(1, BIO_free(nullptr));
+}
+
+TEST(BIOTest, BIOFreeReturnValueChain) {
+  // We have no built-in filter BIOs, but |BIO_push| works with any |BIO|, so
+  // just chain memory |BIO|s, even though it does nothing.
+  UniquePtr<BIO> bio1(BIO_new_mem_buf(nullptr, 0));
+  ASSERT_TRUE(bio1);
+  UniquePtr<BIO> bio2(BIO_new_mem_buf(nullptr, 0));
+  ASSERT_TRUE(bio2);
+  BIO_push(bio1.get(), UpRef(bio2).release());
+
+  // |bio1| now owns a copy of |bio2|, but it is still shared with the |bio2|
+  // pointer. This causes |BIO_free| to return zero.
+  // TODO(crbug.com/485657226): It should return one.
+  EXPECT_EQ(0, BIO_free(bio1.release()));
+}
+
 }  // namespace
 BSSL_NAMESPACE_END

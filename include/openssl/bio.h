@@ -42,10 +42,22 @@ OPENSSL_EXPORT BIO *BIO_new(const BIO_METHOD *method);
 
 // BIO_free decrements the reference count of |bio|. If the reference count
 // drops to zero, it calls the destroy callback, if present, on the method and
-// frees |bio| itself. It then repeats that for the next BIO in the chain, if
-// any.
+// frees |bio| itself. If |bio| is part of a chain (see |BIO_push|), this will
+// also free the next |BIO| in the chain, and so on.
 //
-// It returns one on success or zero otherwise.
+// It returns one if |bio| was NULL or freed. It returns zero if |bio| was
+// shared and some other owner still owns a reference count to it.
+//
+// TODO(crbug.com/485657226): Currently, if any |BIO| in the chain is shared,
+// this function will also return zero. It should only return zero when the
+// input |BIO| is shared.
+//
+// WARNING: Do not use the return value. Returning zero is not a sign of an
+// error, nor an indication to retry the operation. |BIO| is a reference-counted
+// type. A given |BIO| object may be shared between multiple parts of an
+// application. To correctly track the reference count, without leaks or
+// use-after-free, each part of the application must release only the reference
+// counts it owns.
 OPENSSL_EXPORT int BIO_free(BIO *bio);
 
 // BIO_vfree performs the same actions as |BIO_free|, but has a void return
@@ -237,11 +249,6 @@ OPENSSL_EXPORT BIO *BIO_pop(BIO *bio);
 // BIO_next returns the next BIO in the chain after |bio|, or NULL if there is
 // no such BIO.
 OPENSSL_EXPORT BIO *BIO_next(BIO *bio);
-
-// BIO_free_all calls |BIO_free|.
-//
-// TODO(fork): update callers and remove.
-OPENSSL_EXPORT void BIO_free_all(BIO *bio);
 
 // BIO_find_type walks a chain of BIOs and returns the first that matches
 // |type|, which is one of the |BIO_TYPE_*| values.
@@ -777,6 +784,10 @@ OPENSSL_EXPORT void *BIO_get_ex_data(const BIO *bio, int idx);
 
 
 // Deprecated functions.
+
+// BIO_free_all calls |BIO_free|. Code that targets BoringSSL does not need to
+// call a separate free function for |BIO|s that are part of a chain.
+OPENSSL_EXPORT void BIO_free_all(BIO *bio);
 
 typedef BIO_info_cb bio_info_cb;
 
