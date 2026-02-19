@@ -219,18 +219,18 @@ pub mod internal {
 
 /// Supported KDF algorithms with values detailed in §7.2 of [RFC 9180].
 ///
-/// [RFC 9180]: https://datatracker.ietf.org/doc/html/rfc9180#section-7.2
+/// [RFC 9180]: <https://datatracker.ietf.org/doc/html/rfc9180#section-7.2>
 #[derive(Clone, Copy)]
 #[repr(u16)]
 pub enum Kdf {
     /// HKDF-SHA256 as defined in [RFC 5869]
-    /// [RFC 5869]: https://datatracker.ietf.org/doc/html/rfc5869
+    /// [RFC 5869]: <https://datatracker.ietf.org/doc/html/rfc5869>
     HkdfSha256 = 1,
 }
 
 /// Supported AEAD algorithms with values detailed in §7.3 of [RFC 9180].
 ///
-/// [RFC 9180]: https://datatracker.ietf.org/doc/html/rfc9180#section-7.3
+/// [RFC 9180]: <https://datatracker.ietf.org/doc/html/rfc9180#section-7.3>
 #[derive(Clone, Copy)]
 pub enum Aead {
     /// AES-GCM-128 defined by [NIST](https://doi.org/10.6028/nist.sp.800-38d)
