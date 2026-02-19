@@ -18,6 +18,7 @@
 #include <openssl/base.h>
 #include <openssl/crypto.h>
 #include <openssl/ex_data.h>
+#include <openssl/span.h>
 #include <openssl/stack.h>
 
 #include <assert.h>
@@ -1045,11 +1046,11 @@ inline void boringssl_ensure_ffdh_self_test() {}
 
 #endif  // FIPS
 
-// BORINGSSL_check_test memcmp's two values of equal length. It returns 1 on
-// success and, on failure, it prints an error message that includes the
-// hexdumps the two values and returns 0.
-int BORINGSSL_check_test(const void *expected, const void *actual,
-                         size_t expected_len, const char *name);
+// BORINGSSL_check_test checks that |expected| and |actual| are equal. It
+// returns 1 on success and, on failure, it prints an error message that
+// includes the hexdumps the two values and returns 0.
+int BORINGSSL_check_test(Span<const uint8_t> expected,
+                         Span<const uint8_t> actual, const char *name);
 
 // boringssl_self_test_sha256 performs a SHA-256 KAT.
 int boringssl_self_test_sha256();

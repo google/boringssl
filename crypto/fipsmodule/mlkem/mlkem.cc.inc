@@ -972,12 +972,10 @@ static int keygen_self_test() {
   constexpr size_t kMarshaledPrivateKeySize = 2400;
   uint8_t priv_bytes[kMarshaledPrivateKeySize];
   CBB_init_fixed(&cbb, priv_bytes, sizeof(priv_bytes));
-  static_assert(sizeof(kExpectedPrivateKeyBytes) == kMarshaledPrivateKeySize);
-  static_assert(sizeof(kExpectedPublicKeyBytes) == sizeof(pub_key));
   if (!mlkem_marshal_private_key(&cbb, &priv) ||
       !BORINGSSL_check_test(kExpectedPrivateKeyBytes, priv_bytes,
-                            sizeof(priv_bytes), "ML-KEM keygen private key") ||
-      !BORINGSSL_check_test(kExpectedPublicKeyBytes, pub_key, sizeof(pub_key),
+                            "ML-KEM keygen private key") ||
+      !BORINGSSL_check_test(kExpectedPublicKeyBytes, pub_key,
                             "ML-KEM keygen public key")) {
     return 0;
   }
@@ -996,10 +994,9 @@ static int encap_self_test() {
   static_assert(sizeof(kTestEntropy) >= BCM_MLKEM_ENCAP_ENTROPY);
   mlkem_encap_external_entropy_no_self_test(ciphertext, shared_secret, &pub,
                                             kTestEntropy);
-  if (!BORINGSSL_check_test(ciphertext, kExpectedCiphertext, sizeof(ciphertext),
+  if (!BORINGSSL_check_test(ciphertext, kExpectedCiphertext,
                             "ML-KEM encap ciphertext") ||
       !BORINGSSL_check_test(kExpectedSharedSecret, shared_secret,
-                            sizeof(kExpectedSharedSecret),
                             "ML-KEM encap shared secret")) {
     return 0;
   }
@@ -1015,9 +1012,7 @@ static int decap_self_test() {
   }
   uint8_t shared_secret[MLKEM_SHARED_SECRET_BYTES];
   mlkem_decap_no_self_test(shared_secret, kExpectedCiphertext, &priv);
-  static_assert(sizeof(kExpectedSharedSecret) == sizeof(shared_secret));
   if (!BORINGSSL_check_test(kExpectedSharedSecret, shared_secret,
-                            sizeof(shared_secret),
                             "ML-KEM decap shared secret")) {
     return 0;
   }
@@ -1027,11 +1022,8 @@ static int decap_self_test() {
                 sizeof(kExpectedCiphertext));
   mlkem_decap_no_self_test(implicit_rejection_shared_secret,
                            kExpectedPrivateKeyBytes, &priv);
-  static_assert(sizeof(kExpectedImplicitRejectionSharedSecret) ==
-                sizeof(implicit_rejection_shared_secret));
   if (!BORINGSSL_check_test(kExpectedImplicitRejectionSharedSecret,
                             implicit_rejection_shared_secret,
-                            sizeof(implicit_rejection_shared_secret),
                             "ML-KEM decap implicit rejection shared secret")) {
     return 0;
   }

@@ -234,12 +234,8 @@ static int keygen_self_test() {
   uint8_t priv[BCM_SLHDSA_SHA2_128S_PRIVATE_KEY_BYTES];
   generate_key_from_seed_no_self_test(&kSLHDSAConfigSHA2_128s, pub, priv, seed);
 
-  static_assert(sizeof(kExpectedPublicKey) == sizeof(pub));
-  static_assert(sizeof(kExpectedPrivateKey) == sizeof(priv));
-  if (!BORINGSSL_check_test(kExpectedPublicKey, pub, sizeof(pub),
-                            "SLH-DSA public key") ||
-      !BORINGSSL_check_test(kExpectedPrivateKey, priv, sizeof(priv),
-                            "SLH-DSA private key")) {
+  if (!BORINGSSL_check_test(kExpectedPublicKey, pub, "SLH-DSA public key") ||
+      !BORINGSSL_check_test(kExpectedPrivateKey, priv, "SLH-DSA private key")) {
     return 0;
   }
 
@@ -255,8 +251,7 @@ static int sign_self_test() {
   uint8_t digest[32];
   SHA256(sig, sizeof(sig), digest);
 
-  static_assert(sizeof(kExpectedSignatureSHA256) == sizeof(digest));
-  if (!BORINGSSL_check_test(kExpectedSignatureSHA256, digest, sizeof(digest),
+  if (!BORINGSSL_check_test(kExpectedSignatureSHA256, digest,
                             "SLH-DSA signature")) {
     return 0;
   }

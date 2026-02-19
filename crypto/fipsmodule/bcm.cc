@@ -134,7 +134,7 @@ using namespace bssl;
 // the location of the integrity hash, respectively.
 extern const uint8_t BORINGSSL_bcm_text_start[];
 extern const uint8_t BORINGSSL_bcm_text_end[];
-extern const uint8_t BORINGSSL_bcm_text_hash[];
+extern const uint8_t BORINGSSL_bcm_text_hash[SHA256_DIGEST_LENGTH];
 #if defined(BORINGSSL_SHARED_LIBRARY)
 extern const uint8_t BORINGSSL_bcm_rodata_start[];
 extern const uint8_t BORINGSSL_bcm_rodata_end[];
@@ -229,7 +229,6 @@ int BORINGSSL_integrity_test() {
   assert_within(rodata_start, kPKCS1SigPrefixes, rodata_end);
 
   uint8_t result[SHA256_DIGEST_LENGTH];
-  const EVP_MD *const kHashFunction = EVP_sha256();
   if (!boringssl_self_test_sha256() || !boringssl_self_test_hmac_sha256()) {
     return 0;
   }
@@ -238,7 +237,7 @@ int BORINGSSL_integrity_test() {
   unsigned result_len;
   HMAC_CTX hmac_ctx;
   HMAC_CTX_init(&hmac_ctx);
-  if (!HMAC_Init_ex(&hmac_ctx, kHMACKey, sizeof(kHMACKey), kHashFunction,
+  if (!HMAC_Init_ex(&hmac_ctx, kHMACKey, sizeof(kHMACKey), EVP_sha256(),
                     nullptr /* no ENGINE */)) {
     fprintf(CRYPTO_get_stderr(), "HMAC_Init_ex failed.\n");
     return 0;
@@ -258,16 +257,13 @@ int BORINGSSL_integrity_test() {
 #endif
   BORINGSSL_maybe_set_module_text_permissions(PROT_EXEC);
 
-  if (!HMAC_Final(&hmac_ctx, result, &result_len) ||
-      result_len != sizeof(result)) {
+  if (!HMAC_Final(&hmac_ctx, result, &result_len)) {
     fprintf(CRYPTO_get_stderr(), "HMAC failed.\n");
     return 0;
   }
   HMAC_CTX_cleanse(&hmac_ctx);  // FIPS 140-3, AS05.10.
 
-  const uint8_t *expected = BORINGSSL_bcm_text_hash;
-
-  if (!BORINGSSL_check_test(expected, result, sizeof(result),
+  if (!BORINGSSL_check_test(BORINGSSL_bcm_text_hash, Span(result, result_len),
                             "FIPS integrity test")) {
 #if !defined(BORINGSSL_FIPS_BREAK_TESTS)
     return 0;

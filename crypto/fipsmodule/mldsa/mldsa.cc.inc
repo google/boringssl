@@ -2140,13 +2140,9 @@ static int keygen_self_test() {
     return 0;
   }
 
-  static_assert(sizeof(values->pub_bytes) == sizeof(kExpectedPublicKey));
-  static_assert(sizeof(values->priv_bytes) == sizeof(kExpectedPrivateKey));
   if (!BORINGSSL_check_test(kExpectedPublicKey, values->pub_bytes,
-                            sizeof(values->pub_bytes),
                             "ML-DSA keygen public key") ||
       !BORINGSSL_check_test(kExpectedPrivateKey, values->priv_bytes,
-                            sizeof(values->priv_bytes),
                             "ML-DSA keygen private key")) {
     return 0;
   }
@@ -2177,9 +2173,8 @@ static int sign_self_test() {
                                         randomizer)) {
     return 0;
   }
-  static_assert(sizeof(kExpectedCase1Signature) == sizeof(values->sig));
   if (!BORINGSSL_check_test(kExpectedCase1Signature, values->sig,
-                            sizeof(values->sig), "ML-DSA sign case 1")) {
+                            "ML-DSA sign case 1")) {
     return 0;
   }
 
@@ -2190,9 +2185,8 @@ static int sign_self_test() {
                                         randomizer)) {
     return 0;
   }
-  static_assert(sizeof(kExpectedCase2Signature) == sizeof(values->sig));
   if (!BORINGSSL_check_test(kExpectedCase2Signature, values->sig,
-                            sizeof(values->sig), "ML-DSA sign case 2")) {
+                            "ML-DSA sign case 2")) {
     return 0;
   }
 
