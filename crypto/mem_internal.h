@@ -139,14 +139,17 @@ class RefCounted {
 
   // These methods are intentionally named differently from `bssl::UpRef` to
   // avoid a collision. Only the implementations of `FOO_up_ref` and `FOO_free`
-  // should call these.
+  // should call these. |DecRefInternal| returns true if the object was freed
+  // and false if there are still references.
   void UpRefInternal() { CRYPTO_refcount_inc(&references_); }
-  void DecRefInternal() {
+  bool DecRefInternal() {
     if (CRYPTO_refcount_dec_and_test_zero(&references_)) {
       Derived *d = static_cast<Derived *>(this);
       d->~Derived();
       OPENSSL_free(d);
+      return true;
     }
+    return false;
   }
 
  protected:
