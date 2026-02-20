@@ -36,3 +36,7 @@ alias_to_local_label = .LLocal_label
 
 	# When rewritten, AVX-512 tokens are preserved.
 	vpcmpneqq .Llabel(%rip){1to8}, %zmm1, %k0
+
+.Ltmp0:
+# The first operand (the "place") of a .reloc should be rewritten.
+	.reloc .Ltmp0, R_AARCH64_PATCHINST, ds

@@ -264,6 +264,20 @@ func (d *delocation) processDirective(statement, directive *node32) (*node32, er
 			return d.handleBSS(statement)
 		}
 
+	case "reloc":
+		// The .reloc directive is used to emit custom relocations into the object
+		// file. R_AARCH64_PATCHINST is a special relocation type used to implement
+		// deactivation symbols, which are associated with LLVM's pointer field
+		// protection feature. Because deactivation symbols are only defined in
+		// special cases which don't apply to BoringSSL, we pass them through and
+		// let the integrity check fail in the unexpected case that a symbol was
+		// defined.
+		if args[1] != "R_AARCH64_PATCHINST" {
+			return nil, errors.New("unexpected .reloc directive")
+		}
+		args[0] = d.mapLocalSymbol(args[0])
+		d.output.WriteString(".reloc " + strings.Join(args, ", ") + "\n")
+
 	default:
 		d.writeNode(statement)
 	}

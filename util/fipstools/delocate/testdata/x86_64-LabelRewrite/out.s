@@ -161,6 +161,11 @@ bar:
 	# When rewritten, AVX-512 tokens are preserved.
 # WAS vpcmpneqq .Llabel(%rip){1to8}, %zmm1, %k0
 	vpcmpneqq	.Llabel_BCM_1(%rip){1to8}, %zmm1, %k0
+
+.Ltmp0_BCM_1:
+
+# The first operand (the "place") of a .reloc should be rewritten.
+.reloc .Ltmp0_BCM_1, R_AARCH64_PATCHINST, ds
 .text
 .loc 1 2 0
 .globl BORINGSSL_bcm_text_end
