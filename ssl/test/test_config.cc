@@ -637,6 +637,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
                       &TestConfig::available_client_cert_types),
         OptionalIntFlag("-expect-peer-certificate-type",
                         &TestConfig::expect_peer_certificate_type),
+        Base64Flag("-expect-peer-rpk-sha256",
+                   &TestConfig::expect_peer_rpk_sha256),
     };
     std::sort(ret.begin(), ret.end(), FlagNameComparator{});
     return ret;
@@ -2298,6 +2300,30 @@ static ssl_verify_result_t CustomVerifyCallback(SSL *ssl, uint8_t *out_alert) {
   return ssl_verify_ok;
 }
 
+static ssl_verify_result_t VerifyRawPublicKeyCallback(SSL *ssl,
+                                                      uint8_t *out_alert) {
+  const TestConfig *config = GetTestConfig(ssl);
+  const EVP_PKEY *peer_rpk = SSL_get0_peer_rpk(ssl);
+  if (peer_rpk == nullptr) {
+    fprintf(stderr, "Expected peer RPK but found none.\n");
+    return ssl_verify_invalid;
+  }
+  ScopedCBB spki_cbb;
+  uint8_t peer_rpk_sha256[SHA256_DIGEST_LENGTH];
+  if (!CBB_init(spki_cbb.get(), 0) ||
+      !EVP_marshal_public_key(spki_cbb.get(), peer_rpk) ||
+      !SHA256(CBB_data(spki_cbb.get()), CBB_len(spki_cbb.get()),
+              peer_rpk_sha256)) {
+    fprintf(stderr, "Error computing sha256 hash of peer RPK.\n");
+    return ssl_verify_invalid;
+  }
+  if (Span(peer_rpk_sha256) != Span(config->expect_peer_rpk_sha256)) {
+    fprintf(stderr, "sha256 hash of peer RPK does not match expectation.\n");
+    return ssl_verify_invalid;
+  }
+  return ssl_verify_ok;
+}
+
 static int CertCallback(SSL *ssl, void *arg) {
   const TestConfig *config = GetTestConfig(ssl);
 
@@ -2360,7 +2386,16 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
   if (verify_peer) {
     mode = SSL_VERIFY_PEER;
   }
-  if (use_custom_verify_callback) {
+  if (!expect_peer_rpk_sha256.empty()) {
+    if (expect_peer_rpk_sha256.size() != SHA256_DIGEST_LENGTH) {
+      fprintf(stderr,
+              "Invalid -expect-peer-rpk-sha256 length: %d (should be %d).\n",
+              static_cast<int>(expect_peer_rpk_sha256.size()),
+              SHA256_DIGEST_LENGTH);
+      return nullptr;
+    }
+    SSL_set_custom_verify(ssl.get(), mode, VerifyRawPublicKeyCallback);
+  } else if (use_custom_verify_callback) {
     SSL_set_custom_verify(ssl.get(), mode, CustomVerifyCallback);
   } else if (mode != SSL_VERIFY_NONE) {
     SSL_set_verify(ssl.get(), mode, nullptr);

@@ -312,10 +312,24 @@ func initRawPublicKeyCredentials() {
 		{&ecdsaP384Key, &rpkEcdsaP384},
 		{&rsa2048Key, &rpkRsa},
 	} {
+		var publicKey crypto.PublicKey
+		switch def.key.(type) {
+		case *rsa.PrivateKey:
+			publicKey = def.key.(*rsa.PrivateKey).Public()
+		case *ecdsa.PrivateKey:
+			publicKey = def.key.(*ecdsa.PrivateKey).Public()
+		default:
+			panic("credential has unsupported key type")
+		}
+		rpkData, err := x509.MarshalPKIXPublicKey(publicKey)
+		if err != nil {
+			panic(err)
+		}
 		*def.out = Credential{
-			Type:       CredentialTypeRawPublicKey,
-			PrivateKey: def.key,
-			KeyPath:    writeTempKeyFile(def.key),
+			Type:        CredentialTypeRawPublicKey,
+			PrivateKey:  def.key,
+			KeyPath:     writeTempKeyFile(def.key),
+			Certificate: [][]byte{rpkData},
 		}
 	}
 }
@@ -935,13 +949,17 @@ func doExchange(test *testCase, config *Config, conn net.Conn, isResume bool, tr
 	}
 
 	if expected := expectations.peerCertificate; expected != nil {
-		if len(connState.PeerCertificates) != len(expected.Certificate) {
-			return fmt.Errorf("expected peer to send %d certificates, but got %d", len(connState.PeerCertificates), len(expected.Certificate))
-		}
-		for i, cert := range connState.PeerCertificates {
-			if !bytes.Equal(cert.Raw, expected.Certificate[i]) {
-				return fmt.Errorf("peer certificate %d did not match", i+1)
+		var peerCerts [][]byte
+		switch expected.Type.CertificateType() {
+		case certTypeX509:
+			for _, cert := range connState.PeerCertificates {
+				peerCerts = append(peerCerts, cert.Raw)
 			}
+		case certTypeRawPublicKey:
+			peerCerts = [][]byte{connState.PeerRawPublicKey}
+		}
+		if !slices.EqualFunc(peerCerts, expected.Certificate, slices.Equal) {
+			return fmt.Errorf("peer certificate did not match expectations (got %v, expected %v)", peerCerts, expected.Certificate)
 		}
 
 		if !bytes.Equal(connState.OCSPResponse, expected.OCSPStaple) {

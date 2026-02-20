@@ -453,6 +453,7 @@ type ClientSessionState struct {
 	localApplicationSettingsOld []byte
 	peerApplicationSettingsOld  []byte
 	resumptionAcrossNames       bool
+	serverRawPublicKey          []byte
 }
 
 // ClientSessionCache is a cache of ClientSessionState objects that can be used
@@ -1531,8 +1532,9 @@ type ProtocolBugs struct {
 	// advertise all configured cipher suite values.
 	AdvertiseAllConfiguredCiphers bool
 
-	// EmptyCertificateList, if true, causes the server to send an empty
-	// certificate list in the Certificate message.
+	// EmptyCertificateList, if true, causes the server or client to send an empty
+	// certificate list in the Certificate message. For a TLS 1.2 RawPublicKey
+	// Certificate (RFC 7250), this causes the SubjectPublicKeyInfo to be empty.
 	EmptyCertificateList bool
 
 	// ExpectNewTicket, if true, causes the client to abort if it does not
@@ -2406,11 +2408,24 @@ const (
 	CredentialTypeRawPublicKey
 )
 
+func (c CredentialType) CertificateType() CertificateType {
+	switch c {
+	case CredentialTypeX509, CredentialTypeDelegated:
+		return certTypeX509
+	case CredentialTypeRawPublicKey:
+		return certTypeRawPublicKey
+	default:
+		panic("Unexpected credential type")
+	}
+}
+
 // A Credential is a certificate chain and private key that a TLS endpoint may
 // use to authenticate.
 type Credential struct {
 	Type CredentialType
 	// Certificate is a chain of one or more certificates, leaf first.
+	// For a RawPublicKey credential, this contains exactly one element, which
+	// holds the SubjectPublicKeyInfo data of the raw public key.
 	Certificate [][]byte
 	// RootCertificate is the certificate that issued this chain.
 	RootCertificate []byte

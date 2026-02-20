@@ -1648,6 +1648,7 @@ func (c *Conn) processTLS13NewSessionTicket(newSessionTicket *newSessionTicketMs
 		localApplicationSettingsOld: c.localApplicationSettingsOld,
 		peerApplicationSettingsOld:  c.peerApplicationSettingsOld,
 		resumptionAcrossNames:       newSessionTicket.flags.hasFlag(flagResumptionAcrossNames),
+		serverRawPublicKey:          c.peerRawPublicKey,
 	}
 
 	if c.config.Bugs.ExpectGREASE && !newSessionTicket.hasGREASEExtension {
@@ -2093,6 +2094,7 @@ func (c *Conn) SendNewSessionTicket(nonce []byte) error {
 		hasApplicationSettingsOld:   c.hasApplicationSettingsOld,
 		localApplicationSettingsOld: c.localApplicationSettingsOld,
 		peerApplicationSettingsOld:  c.peerApplicationSettingsOld,
+		peerRawPublicKey:            c.peerRawPublicKey,
 	}
 
 	if !c.config.Bugs.SendEmptySessionTicket {

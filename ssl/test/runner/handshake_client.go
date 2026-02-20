@@ -408,6 +408,11 @@ func (c *Conn) clientHandshake() error {
 			return err
 		}
 
+		err = hs.processServerExtensionsAfterResume(&hs.serverHello.extensions, isResume)
+		if err != nil {
+			return err
+		}
+
 		if isResume {
 			if c.config.Bugs.EarlyChangeCipherSpec == 0 {
 				if err := hs.establishKeys(); err != nil {
@@ -1255,6 +1260,11 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 		return err
 	}
 
+	err = hs.processServerExtensionsAfterResume(&encryptedExtensions.extensions, c.didResume)
+	if err != nil {
+		return err
+	}
+
 	var credential *Credential
 	var certReq *certificateRequestMsg
 	if c.didResume {
@@ -1262,6 +1272,7 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 		c.peerCertificates = hs.session.serverCertificates
 		c.sctList = hs.session.sctList
 		c.ocspResponse = hs.session.ocspResponse
+		c.peerRawPublicKey = hs.session.serverRawPublicKey
 	} else if hs.pakeContext == nil && psk == nil {
 		msg, err := c.readHandshake()
 		if err != nil {
@@ -1496,11 +1507,14 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 			requestContext:    certReq.requestContext,
 		}
 		if credential != nil {
-			for _, certData := range credential.Certificate {
-				certMsg.certificates = append(certMsg.certificates, certificateEntry{
-					data:           certData,
-					extraExtension: c.config.Bugs.SendExtensionOnCertificate,
-				})
+			certMsg.certificateType = credential.Type.CertificateType()
+			if !c.config.Bugs.EmptyCertificateList {
+				for _, certData := range credential.Certificate {
+					certMsg.certificates = append(certMsg.certificates, certificateEntry{
+						data:           certData,
+						extraExtension: c.config.Bugs.SendExtensionOnCertificate,
+					})
+				}
 			}
 		}
 		hs.writeClientHash(certMsg.marshal())
@@ -1779,10 +1793,13 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	if certRequested && !c.config.Bugs.SkipClientCertificate {
 		certMsg := new(certificateMsg)
 		if credential != nil {
-			for _, certData := range credential.Certificate {
-				certMsg.certificates = append(certMsg.certificates, certificateEntry{
-					data: certData,
-				})
+			certMsg.certificateType = credential.Type.CertificateType()
+			if !c.config.Bugs.EmptyCertificateList {
+				for _, certData := range credential.Certificate {
+					certMsg.certificates = append(certMsg.certificates, certificateEntry{
+						data: certData,
+					})
+				}
 			}
 		}
 		hs.writeClientHash(certMsg.marshal())
@@ -2190,18 +2207,6 @@ func (hs *clientHandshakeState) processServerExtensions(serverExtensions *server
 		c.peerApplicationSettingsOld = hs.session.peerApplicationSettingsOld
 	}
 
-	if expected := c.config.Bugs.ExpectClientCertificateTypes; expected != nil {
-		if len(expected) > 1 {
-			panic("Expected client_certificate_type must not contain more than 1 value.")
-		}
-		var found []CertificateType
-		if serverExtensions.clientCertificateType != nil {
-			found = []CertificateType{*serverExtensions.clientCertificateType}
-		}
-		if !slices.Equal(found, expected) {
-			return fmt.Errorf("tls: server sent client certificate type %v, but expected %v", found, expected)
-		}
-	}
 	if expected := c.config.Bugs.ExpectServerCertificateTypes; expected != nil {
 		if len(expected) > 1 {
 			panic("Expected server_certificate_type must not contain more than 1 value.")
@@ -2214,8 +2219,31 @@ func (hs *clientHandshakeState) processServerExtensions(serverExtensions *server
 			return fmt.Errorf("tls: server sent server certificate type %v, but expected %v", found, expected)
 		}
 	}
-	c.clientCertificateType = serverExtensions.clientCertificateType
 	c.serverCertificateType = serverExtensions.serverCertificateType
+
+	return nil
+}
+
+func (hs *clientHandshakeState) processServerExtensionsAfterResume(serverExtensions *serverExtensions, isResume bool) error {
+	c := hs.c
+
+	if expected := c.config.Bugs.ExpectClientCertificateTypes; expected != nil {
+		if len(expected) > 1 {
+			panic("Expected client_certificate_type must not contain more than 1 value.")
+		}
+		var found []CertificateType
+		if serverExtensions.clientCertificateType != nil {
+			found = []CertificateType{*serverExtensions.clientCertificateType}
+		}
+		// The server should not request a client cert if resuming.
+		if isResume && len(found) > 0 {
+			return errors.New("tls: server sent client_certificate_type on resumption")
+		}
+		if !isResume && !slices.Equal(found, expected) {
+			return fmt.Errorf("tls: server sent client certificate type %v, but expected %v", found, expected)
+		}
+	}
+	c.clientCertificateType = serverExtensions.clientCertificateType
 
 	return nil
 }
@@ -2293,6 +2321,7 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 		c.extendedMasterSecret = hs.session.extendedMasterSecret
 		c.sctList = hs.session.sctList
 		c.ocspResponse = hs.session.ocspResponse
+		c.peerRawPublicKey = hs.session.serverRawPublicKey
 		hs.finishedHash.discardHandshakeBuffer()
 		return true, nil
 	}
@@ -2346,6 +2375,7 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 		sctList:                   c.sctList,
 		ocspResponse:              c.ocspResponse,
 		ticketExpiration:          c.config.time().Add(time.Duration(7 * 24 * time.Hour)),
+		serverRawPublicKey:        c.peerRawPublicKey,
 	}
 
 	if !hs.serverHello.extensions.ticketSupported {

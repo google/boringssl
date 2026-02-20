@@ -670,7 +670,7 @@ static bool CheckHandshakeProperties(SSL *ssl, bool is_resume,
   }
 
   if (config->expect_no_peer_cert || !config->psk.empty() || IsTLS13PSK(ssl) ||
-      IsPAKE(ssl)) {
+      IsPAKE(ssl) || !config->expect_peer_rpk_sha256.empty()) {
     if (SSL_get_peer_cert_chain(ssl) != nullptr) {
       fprintf(stderr, "Received unexpected peer certificate.\n");
       return false;

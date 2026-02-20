@@ -42,6 +42,7 @@ type serverHandshakeState struct {
 	finishedBytes   []byte
 	echHPKEContext  *hpke.Context
 	echConfigID     uint8
+	rpkFromClient   []byte
 }
 
 // serverHandshake performs a TLS handshake as a server.
@@ -1282,6 +1283,12 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 			if _, err := hs.processCertsFromClient(hs.sessionState.certificates); err != nil {
 				return err
 			}
+		} else if len(hs.sessionState.peerRawPublicKey) > 0 {
+			if _, err := hs.processRawPublicKeyFromClient([]certificateEntry{
+				{data: hs.sessionState.peerRawPublicKey},
+			}); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1805,6 +1812,17 @@ func (hs *serverHandshakeState) processClientExtensions(serverExtensions *server
 			c.clientCertificateType = serverExtensions.clientCertificateType
 		}
 	}
+	if sendServerCertType := c.config.Bugs.SendServerCertificateTypes; sendServerCertType != nil {
+		if len(sendServerCertType) > 1 {
+			panic("tls: server_certificate_type must not contain more than 1 value.")
+		}
+		if len(sendServerCertType) == 0 {
+			serverExtensions.serverCertificateType = nil
+		} else {
+			serverExtensions.serverCertificateType = ptrTo(sendServerCertType[0])
+			c.serverCertificateType = serverExtensions.serverCertificateType
+		}
+	}
 
 	return nil
 }
@@ -1858,7 +1876,7 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 		return false
 	}
 
-	sessionHasClientCerts := len(hs.sessionState.certificates) != 0
+	sessionHasClientCerts := len(hs.sessionState.certificates) != 0 || len(hs.sessionState.peerRawPublicKey) != 0
 	needClientCerts := c.config.ClientAuth == RequireAnyClientCert || c.config.ClientAuth == RequireAndVerifyClientCert
 	if needClientCerts && !sessionHasClientCerts {
 		return false
@@ -1901,6 +1919,14 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 
 	if len(hs.sessionState.certificates) > 0 {
 		if _, err := hs.processCertsFromClient(hs.sessionState.certificates); err != nil {
+			return err
+		}
+	}
+
+	if len(hs.sessionState.peerRawPublicKey) > 0 {
+		if _, err := hs.processRawPublicKeyFromClient([]certificateEntry{
+			{data: hs.sessionState.peerRawPublicKey},
+		}); err != nil {
 			return err
 		}
 	}
@@ -1963,6 +1989,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 
 	if !isPSK {
 		certMsg := new(certificateMsg)
+		certMsg.certificateType = hs.cert.Type.CertificateType()
 		if !config.Bugs.EmptyCertificateList {
 			for _, certData := range hs.cert.Certificate {
 				certMsg.certificates = append(certMsg.certificates, certificateEntry{
@@ -2217,11 +2244,12 @@ func (hs *serverHandshakeState) readFinished(out []byte, isResume bool) error {
 func (hs *serverHandshakeState) sendSessionTicket() error {
 	c := hs.c
 	state := sessionState{
-		vers:          c.vers,
-		cipherSuite:   hs.suite,
-		secret:        hs.masterSecret,
-		certificates:  hs.certsFromClient,
-		handshakeHash: hs.finishedHash.Sum(),
+		vers:             c.vers,
+		cipherSuite:      hs.suite,
+		secret:           hs.masterSecret,
+		certificates:     hs.certsFromClient,
+		handshakeHash:    hs.finishedHash.Sum(),
+		peerRawPublicKey: hs.rpkFromClient,
 	}
 
 	if !hs.hello.extensions.ticketSupported || hs.c.config.Bugs.SkipNewSessionTicket {
@@ -2371,8 +2399,9 @@ func (hs *serverHandshakeState) processCertsFromClient(certificates [][]byte) (c
 	return nil, nil
 }
 
-// processRawPublicKeyFromClient takes the list of certificates from the Certificate message,
-// which for a RPK should contain exactly 1 entry, and parses it to return the raw public key.
+// processRawPublicKeyFromClient takes the list of certificates from the session
+// state or a Certificate message, which for a RPK should contain exactly 1
+// entry, and parses it to return the raw public key.
 func (hs *serverHandshakeState) processRawPublicKeyFromClient(certificates []certificateEntry) (crypto.PublicKey, error) {
 	c := hs.c
 
@@ -2386,6 +2415,7 @@ func (hs *serverHandshakeState) processRawPublicKeyFromClient(certificates []cer
 	}
 
 	c.peerRawPublicKey = certificates[0].data
+	hs.rpkFromClient = certificates[0].data
 
 	rawPublicKey, err := x509.ParsePKIXPublicKey(c.peerRawPublicKey)
 	if err != nil {

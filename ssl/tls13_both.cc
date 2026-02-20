@@ -180,6 +180,7 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
     return false;
   }
 
+  // Only used for X.509 certificates.
   UniquePtr<STACK_OF(CRYPTO_BUFFER)> certs(sk_CRYPTO_BUFFER_new_null());
   if (!certs) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
@@ -190,56 +191,80 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
       ssl->server && hs->config->retain_only_sha256_of_client_certs;
   UniquePtr<EVP_PKEY> pkey;
   while (CBS_len(&certificate_list) > 0) {
-    CBS certificate, extensions;
+    CBS certificate;  // For an RPK, this is the subjectPublicKeyInfo.
+    CBS extensions;
     if (!CBS_get_u24_length_prefixed(&certificate_list, &certificate) ||
         !CBS_get_u16_length_prefixed(&certificate_list, &extensions) ||
         CBS_len(&certificate) == 0) {
       ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
-      OPENSSL_PUT_ERROR(SSL, SSL_R_CERT_LENGTH_MISMATCH);
+      OPENSSL_PUT_ERROR(SSL, hs->peer_cert_type == TLSEXT_cert_type_rpk
+                                 ? SSL_R_INVALID_RAW_PUBLIC_KEY
+                                 : SSL_R_CERT_LENGTH_MISMATCH);
       return false;
     }
+    const bool is_first_entry = pkey == nullptr;
+    if (is_first_entry) {
+      if (hs->peer_cert_type == TLSEXT_cert_type_rpk) {
+        // Only one CertificateEntry is allowed for RawPublicKey cert type.
+        if (CBS_len(&certificate_list) != 0) {
+          ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_ILLEGAL_PARAMETER);
+          OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_RAW_PUBLIC_KEY);
+          return false;
+        }
+        pkey = ssl_parse_peer_subject_public_key_info(certificate);
+      } else {
+        assert(hs->peer_cert_type == TLSEXT_cert_type_x509);
+        bool is_leaf_cert = sk_CRYPTO_BUFFER_num(certs.get()) == 0;
+        if (is_leaf_cert) {
+          pkey = ssl_cert_parse_pubkey(&certificate);
+        }
+      }
 
-    const bool is_leaf = sk_CRYPTO_BUFFER_num(certs.get()) == 0;
-    if (is_leaf) {
-      pkey = ssl_cert_parse_pubkey(&certificate);
       if (!pkey) {
         ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
         OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
         return false;
       }
       // TLS 1.3 always uses certificate keys for signing thus the correct
-      // keyUsage is enforced.
-      if (!ssl_cert_check_key_usage(&certificate,
+      // keyUsage is enforced. (RPKs have no keyUsage to enforce.)
+      if (hs->peer_cert_type == TLSEXT_cert_type_x509 &&
+          !ssl_cert_check_key_usage(&certificate,
                                     key_usage_digital_signature)) {
         ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_ILLEGAL_PARAMETER);
         return false;
       }
 
       if (retain_sha256) {
-        // Retain the hash of the leaf certificate if requested.
+        // Retain the hash of the leaf certificate or RPK if requested.
         SHA256(CBS_data(&certificate), CBS_len(&certificate),
                hs->new_session->peer_sha256);
       }
     }
 
-    UniquePtr<CRYPTO_BUFFER> buf(
-        CRYPTO_BUFFER_new_from_CBS(&certificate, ssl->ctx->pool));
-    if (!buf ||  //
-        !PushToStack(certs.get(), std::move(buf))) {
-      ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
-      return false;
+    if (hs->peer_cert_type == TLSEXT_cert_type_x509) {
+      UniquePtr<CRYPTO_BUFFER> buf(
+          CRYPTO_BUFFER_new_from_CBS(&certificate, ssl->ctx->pool));
+      if (!buf ||  //
+          !PushToStack(certs.get(), std::move(buf))) {
+        ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
+        return false;
+      }
     }
 
+    // Extensions are not supported with RPKs.
+    const bool cert_extensions_allowed =
+        hs->peer_cert_type == TLSEXT_cert_type_x509;
+
     // Parse out the extensions.
-    SSLExtension status_request(
-        TLSEXT_TYPE_status_request,
-        !ssl->server && hs->config->ocsp_stapling_enabled);
-    SSLExtension sct(
-        TLSEXT_TYPE_certificate_timestamp,
-        !ssl->server && hs->config->signed_cert_timestamps_enabled);
+    SSLExtension status_request(TLSEXT_TYPE_status_request,
+                                cert_extensions_allowed && !ssl->server &&
+                                    hs->config->ocsp_stapling_enabled);
+    SSLExtension sct(TLSEXT_TYPE_certificate_timestamp,
+                     cert_extensions_allowed && !ssl->server &&
+                         hs->config->signed_cert_timestamps_enabled);
     SSLExtension trust_anchors(
         TLSEXT_TYPE_trust_anchors,
-        !ssl->server && is_leaf &&
+        cert_extensions_allowed && !ssl->server && is_first_entry &&
             hs->config->requested_trust_anchors.has_value());
     uint8_t alert = SSL_AD_DECODE_ERROR;
     if (!ssl_parse_extensions(&extensions, &alert,
@@ -300,16 +325,16 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
     }
   }
 
-  // Store a null certificate list rather than an empty one if the peer didn't
-  // send certificates.
-  if (sk_CRYPTO_BUFFER_num(certs.get()) == 0) {
-    certs.reset();
+  if (pkey != nullptr) {
+    hs->new_session->peer_cert_type = hs->peer_cert_type;
+    hs->peer_pubkey = std::move(pkey);
+    if (hs->peer_cert_type == TLSEXT_cert_type_rpk) {
+      hs->new_session->peer_raw_public_key = UpRef(hs->peer_pubkey);
+    } else {
+      assert(hs->peer_cert_type == TLSEXT_cert_type_x509);
+      hs->new_session->certs = std::move(certs);
+    }
   }
-
-  hs->peer_pubkey = std::move(pkey);
-  hs->new_session->certs = std::move(certs);
-  // TODO(crbug.com/467663225): Parse RPKs and set appropriate session fields.
-  hs->new_session->peer_cert_type = hs->peer_cert_type;
 
   if (!ssl->ctx->x509_method->session_cache_objects(hs->new_session.get())) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);

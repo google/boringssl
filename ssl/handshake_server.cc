@@ -1235,11 +1235,25 @@ static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
 
   CBS certificate_msg = msg.body;
   uint8_t alert = SSL_AD_DECODE_ERROR;
-  if (!ssl_parse_cert_chain(&alert, &hs->new_session->certs, &hs->peer_pubkey,
-                            hs->config->retain_only_sha256_of_client_certs
-                                ? hs->new_session->peer_sha256
-                                : nullptr,
-                            &certificate_msg, ssl->ctx->pool)) {
+
+  bool parse_ok;
+  uint8_t *const out_sha256 = hs->config->retain_only_sha256_of_client_certs
+                                  ? hs->new_session->peer_sha256
+                                  : nullptr;
+  if (hs->peer_cert_type == TLSEXT_cert_type_rpk) {
+    hs->new_session->peer_cert_type = TLSEXT_cert_type_rpk;
+    parse_ok =
+        ssl_parse_rpk_cert(&alert, &hs->new_session->peer_raw_public_key,
+                           &hs->peer_pubkey, out_sha256, &certificate_msg);
+  } else {
+    assert(hs->peer_cert_type == TLSEXT_cert_type_x509);
+    hs->new_session->peer_cert_type = TLSEXT_cert_type_x509;
+    parse_ok =
+        ssl_parse_cert_chain(&alert, &hs->new_session->certs, &hs->peer_pubkey,
+                             out_sha256, &certificate_msg, ssl->ctx->pool);
+  }
+
+  if (!parse_ok) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
     return ssl_hs_error;
   }
@@ -1276,7 +1290,7 @@ static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_verify_client_certificate(SSL_HANDSHAKE *hs) {
-  if (sk_CRYPTO_BUFFER_num(hs->new_session->certs.get()) > 0) {
+  if (ssl_session_has_peer_cred(hs->new_session.get())) {
     switch (ssl_verify_peer_cert(hs)) {
       case ssl_verify_ok:
         break;
@@ -1526,13 +1540,16 @@ static enum ssl_hs_wait_t do_read_client_certificate_verify(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
-  // The peer certificate must be valid for signing.
-  const CRYPTO_BUFFER *leaf =
-      sk_CRYPTO_BUFFER_value(hs->new_session->certs.get(), 0);
-  CBS leaf_cbs;
-  CRYPTO_BUFFER_init_CBS(leaf, &leaf_cbs);
-  if (!ssl_cert_check_key_usage(&leaf_cbs, key_usage_digital_signature)) {
-    return ssl_hs_error;
+  // The X.509 peer certificate must be valid for signing. (RPKs have no
+  // keyUsage to enforce.)
+  if (hs->new_session->peer_cert_type == TLSEXT_cert_type_x509) {
+    const CRYPTO_BUFFER *leaf =
+        sk_CRYPTO_BUFFER_value(hs->new_session->certs.get(), 0);
+    CBS leaf_cbs;
+    CRYPTO_BUFFER_init_CBS(leaf, &leaf_cbs);
+    if (!ssl_cert_check_key_usage(&leaf_cbs, key_usage_digital_signature)) {
+      return ssl_hs_error;
+    }
   }
 
   CBS certificate_verify = msg.body, signature;

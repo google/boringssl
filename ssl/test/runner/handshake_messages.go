@@ -2233,13 +2233,19 @@ func (m *certificateMsg) marshal() (x []byte) {
 	if m.raw != nil {
 		return m.raw
 	}
+	if m.certificateType == certTypeRawPublicKey && len(m.certificates) > 1 {
+		panic("Expected at most 1 certificateEntry for RawPublicKey")
+	}
 
 	certMsg := cryptobyte.NewBuilder(nil)
 	certMsg.AddUint8(typeCertificate)
-	// TODO(crbug.com/467663225): Serialize RawPublicKey Certificates.
 	certMsg.AddUint24LengthPrefixed(func(certificate *cryptobyte.Builder) {
 		if m.hasRequestContext {
 			addUint8LengthPrefixedBytes(certificate, m.requestContext)
+		} else if m.certificateType == certTypeRawPublicKey && len(m.certificates) == 1 {
+			// TLS 1.2 RawPublicKey format.
+			addUint24LengthPrefixedBytes(certificate, m.certificates[0].data)
+			return
 		}
 		certificate.AddUint24LengthPrefixed(func(certificateList *cryptobyte.Builder) {
 			for i, cert := range m.certificates {

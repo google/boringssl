@@ -3897,9 +3897,10 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
 // When raw public keys are in use, the client_certificate_type and
 // server_certificate_type extensions are sent in the handshake to indicate to
 // the peer which type(s) of certificate(s) can be exchanged.
-
-// TODO(crbug.com/467663225): Implementation is not yet complete. The values
-// configured via functions in this section may not currently be used.
+//
+// To verify a received raw public key, the caller must set a custom
+// verification callback (see |SSL_CTX_set_custom_verify|). If no callback is
+// configured, raw public keys will be rejected by default.
 
 // TLSEXT_cert_type_* are certificate types with values taken from the "TLS
 // Certificate Types" subregistry of the TLS Extensions registry.
@@ -3983,6 +3984,9 @@ OPENSSL_EXPORT int SSL_set1_available_client_cert_types(SSL *ssl,
 // |TLSEXT_cert_type_x509|.
 OPENSSL_EXPORT int SSL_get_peer_cert_type(const SSL *ssl);
 
+// SSL_get0_peer_rpk returns the peer's raw public key from |ssl|, if the peer
+// has sent one in the handshake. It returns nullptr otherwise.
+OPENSSL_EXPORT EVP_PKEY *SSL_get0_peer_rpk(const SSL *ssl);
 
 // Password Authenticated Key Exchange (PAKE).
 //
@@ -6957,6 +6961,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_INVALID_CERT_TYPES_LIST 333
 #define SSL_R_UNSUPPORTED_CERTIFICATE 334
 #define SSL_R_MISSING_KEY 335
+#define SSL_R_INVALID_RAW_PUBLIC_KEY 336
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

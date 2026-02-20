@@ -183,6 +183,40 @@ bool ssl_parse_cert_chain(uint8_t *out_alert,
   return true;
 }
 
+bool ssl_parse_rpk_cert(uint8_t *out_alert,
+                        UniquePtr<EVP_PKEY> *out_raw_public_key,
+                        UniquePtr<EVP_PKEY> *out_pubkey,
+                        uint8_t *out_rpk_sha256, CBS *cbs) {
+  out_raw_public_key->reset();
+  out_pubkey->reset();
+  CBS spki;
+  if (!CBS_get_u24_length_prefixed(cbs, &spki) ||  //
+      CBS_len(cbs) != 0) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_RAW_PUBLIC_KEY);
+    *out_alert = SSL_AD_DECODE_ERROR;
+    return false;
+  }
+  // The TLS 1.2 Certificate format for Raw Public Keys in RFC 7250 does not
+  // permit the peer to decline to send a Certificate, which is possible to do
+  // with X.509 Certificates, but we allow a client to do this by sending an
+  // empty RPK SPKI.
+  if (CBS_len(&spki) == 0) {
+    return true;
+  }
+  *out_raw_public_key = ssl_parse_peer_subject_public_key_info(spki);
+  if (*out_raw_public_key == nullptr) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_RAW_PUBLIC_KEY);
+    *out_alert = SSL_AD_DECODE_ERROR;
+    return false;
+  }
+  // Retain the hash of the leaf certificate if requested.
+  if (out_rpk_sha256 != nullptr) {
+    SHA256(CBS_data(&spki), CBS_len(&spki), out_rpk_sha256);
+  }
+  *out_pubkey = UpRef(*out_raw_public_key);
+  return true;
+}
+
 // ssl_cert_skip_to_spki parses a DER-encoded, X.509 certificate from |in| and
 // positions |*out_tbs_cert| to cover the TBSCertificate, starting at the
 // subjectPublicKeyInfo.

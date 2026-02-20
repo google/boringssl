@@ -37,6 +37,7 @@ type sessionState struct {
 	hasApplicationSettingsOld   bool
 	localApplicationSettingsOld []byte
 	peerApplicationSettingsOld  []byte
+	peerRawPublicKey            []byte
 }
 
 func (s *sessionState) marshal() []byte {
@@ -80,6 +81,8 @@ func (s *sessionState) marshal() []byte {
 	} else {
 		msg.AddUint8(0)
 	}
+
+	addUint24LengthPrefixedBytes(msg, s.peerRawPublicKey)
 
 	return msg.BytesOrPanic()
 }
@@ -166,6 +169,10 @@ func (s *sessionState) unmarshal(data []byte) bool {
 			!readUint16LengthPrefixedBytes(&reader, &s.peerApplicationSettingsOld) {
 			return false
 		}
+	}
+
+	if !readUint24LengthPrefixedBytes(&reader, &s.peerRawPublicKey) {
+		return false
 	}
 
 	if len(reader) > 0 {

@@ -1090,6 +1090,18 @@ bool ssl_parse_cert_chain(uint8_t *out_alert,
                           uint8_t *out_leaf_sha256, CBS *cbs,
                           CRYPTO_BUFFER_POOL *pool);
 
+// ssl_parse_rpk_cert parses a RawPublicKey certificate from |cbs| in the format
+// used by a TLS 1.2 Certificate message (RFC 7250). On success, it advances
+// |cbs| and returns true, and sets |*out_raw_public_key| to the parsed key, and
+// sets |*out_pubkey| to the same key by incrementing the reference count, and
+// if |out_rpk_sha256| is non-NULL, it writes the SHA-256 hash of the RPK to
+// |out_rpk_sha256|. Otherwise, it returns false and sets |*out_alert| to an
+// alert to send to the peer.
+bool ssl_parse_rpk_cert(uint8_t *out_alert,
+                        UniquePtr<EVP_PKEY> *out_raw_public_key,
+                        UniquePtr<EVP_PKEY> *out_pubkey,
+                        uint8_t *out_rpk_sha256, CBS *cbs);
+
 enum ssl_key_usage_t {
   key_usage_digital_signature = 0,
   key_usage_encipherment = 2,
@@ -4408,7 +4420,6 @@ struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
 
   // peer_raw_public_key, if non-null, is the raw public key received from the
   // peer. This must be null if `certs` is non-null.
-  // TODO(crbug.com/467663225): Populate this field.
   bssl::UniquePtr<EVP_PKEY> peer_raw_public_key;
 
  private:

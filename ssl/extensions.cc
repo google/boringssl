@@ -3901,7 +3901,22 @@ static bool ext_server_cert_type_add_clienthello(const SSL_HANDSHAKE *hs,
 static bool ext_server_cert_type_parse_serverhello(SSL_HANDSHAKE *hs,
                                                    uint8_t *out_alert,
                                                    CBS *contents) {
-  // TODO(crbug.com/467663225): Implement this.
+  assert(!hs->config->accepted_peer_cert_types.empty());
+  // Absence of an extension from the server implies the default, X.509.
+  uint8_t cert_type = kDefaultCertType;
+  if (contents != nullptr &&
+      (!CBS_get_u8(contents, &cert_type) || CBS_len(contents) != 0)) {
+    return false;
+  }
+  // Check that the server's chosen type is among the types we accept.
+  if (std::find(hs->config->accepted_peer_cert_types.begin(),
+                hs->config->accepted_peer_cert_types.end(),
+                cert_type) == hs->config->accepted_peer_cert_types.end()) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_CERTIFICATE);
+    *out_alert = SSL_AD_UNSUPPORTED_CERTIFICATE;
+    return false;
+  }
+  hs->peer_cert_type = cert_type;
   return true;
 }
 
