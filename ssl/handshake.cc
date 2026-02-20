@@ -228,6 +228,42 @@ bool ssl_parse_extensions(const CBS *cbs, uint8_t *out_alert,
   return true;
 }
 
+static bool peer_certificates_equal(const SSL_SESSION *session,
+                                    const SSL_SESSION *prev_session) {
+  const uint8_t prev_cert_type = prev_session->peer_cert_type;
+  if (session->peer_cert_type != prev_cert_type) {
+    return false;
+  }
+  if (ssl_session_has_peer_cred(session) !=
+      ssl_session_has_peer_cred(prev_session)) {
+    return false;
+  }
+  if (prev_cert_type == TLSEXT_cert_type_x509) {
+    if (sk_CRYPTO_BUFFER_num(prev_session->certs.get()) !=
+        sk_CRYPTO_BUFFER_num(session->certs.get())) {
+      return false;
+    }
+    for (size_t i = 0; i < sk_CRYPTO_BUFFER_num(session->certs.get());
+          i++) {
+      const CRYPTO_BUFFER *old_cert =
+          sk_CRYPTO_BUFFER_value(prev_session->certs.get(), i);
+      const CRYPTO_BUFFER *new_cert =
+          sk_CRYPTO_BUFFER_value(session->certs.get(), i);
+      if (Span(CRYPTO_BUFFER_data(old_cert), CRYPTO_BUFFER_len(old_cert)) !=
+          Span(CRYPTO_BUFFER_data(new_cert), CRYPTO_BUFFER_len(new_cert))) {
+        return false;
+      }
+    }
+  } else {
+    assert(prev_cert_type == TLSEXT_cert_type_rpk);
+    if (EVP_PKEY_eq(prev_session->peer_raw_public_key.get(),
+                    session->peer_raw_public_key.get()) != 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
 enum ssl_verify_result_t ssl_verify_peer_cert(SSL_HANDSHAKE *hs) {
   SSL *const ssl = hs->ssl;
   const SSL_SESSION *prev_session = ssl->s3->established_session.get();
@@ -237,25 +273,10 @@ enum ssl_verify_result_t ssl_verify_peer_cert(SSL_HANDSHAKE *hs) {
     // so this check is sufficient to ensure the reported peer certificate never
     // changes on renegotiation.
     assert(!ssl->server);
-    if (sk_CRYPTO_BUFFER_num(prev_session->certs.get()) !=
-        sk_CRYPTO_BUFFER_num(hs->new_session->certs.get())) {
+    if (!peer_certificates_equal(hs->new_session.get(), prev_session)) {
       OPENSSL_PUT_ERROR(SSL, SSL_R_SERVER_CERT_CHANGED);
       ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_ILLEGAL_PARAMETER);
       return ssl_verify_invalid;
-    }
-
-    for (size_t i = 0; i < sk_CRYPTO_BUFFER_num(hs->new_session->certs.get());
-         i++) {
-      const CRYPTO_BUFFER *old_cert =
-          sk_CRYPTO_BUFFER_value(prev_session->certs.get(), i);
-      const CRYPTO_BUFFER *new_cert =
-          sk_CRYPTO_BUFFER_value(hs->new_session->certs.get(), i);
-      if (Span(CRYPTO_BUFFER_data(old_cert), CRYPTO_BUFFER_len(old_cert)) !=
-          Span(CRYPTO_BUFFER_data(new_cert), CRYPTO_BUFFER_len(new_cert))) {
-        OPENSSL_PUT_ERROR(SSL, SSL_R_SERVER_CERT_CHANGED);
-        ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_ILLEGAL_PARAMETER);
-        return ssl_verify_invalid;
-      }
     }
 
     // The certificate is identical, so we may skip re-verifying the

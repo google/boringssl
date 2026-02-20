@@ -308,6 +308,8 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
 
   hs->peer_pubkey = std::move(pkey);
   hs->new_session->certs = std::move(certs);
+  // TODO(crbug.com/467663225): Parse RPKs and set appropriate session fields.
+  hs->new_session->peer_cert_type = hs->peer_cert_type;
 
   if (!ssl->ctx->x509_method->session_cache_objects(hs->new_session.get())) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
@@ -315,7 +317,7 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
     return false;
   }
 
-  if (sk_CRYPTO_BUFFER_num(hs->new_session->certs.get()) == 0) {
+  if (!ssl_session_has_peer_cred(hs->new_session.get())) {
     if (!allow_anonymous) {
       OPENSSL_PUT_ERROR(SSL, SSL_R_PEER_DID_NOT_RETURN_A_CERTIFICATE);
       ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_CERTIFICATE_REQUIRED);

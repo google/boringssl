@@ -3730,10 +3730,9 @@ int SSL_set1_available_client_cert_types(SSL *ssl, const uint8_t *values,
                          Span(values, num_values));
 }
 
-int SSL_get_negotiated_client_cert_type(const SSL *ssl) {
-  return ssl->s3->client_cert_type.value_or(kDefaultCertType);
-}
-
-int SSL_get_negotiated_server_cert_type(const SSL *ssl) {
-  return ssl->s3->server_cert_type.value_or(kDefaultCertType);
+int SSL_get_peer_cert_type(const SSL *ssl) {
+  if (const SSL_SESSION *session = SSL_get_session(ssl); session != nullptr) {
+    return session->peer_cert_type;
+  }
+  return kDefaultCertType;
 }

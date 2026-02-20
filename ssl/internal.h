@@ -1594,13 +1594,13 @@ std::optional<uint8_t> ssl_credential_type_to_cert_type(
 // that the server responded with a valid value.
 void ssl_setup_client_certificate_type(SSL_HANDSHAKE *hs);
 
-// ssl_negotiate_client_certificate_type negotiates the client_certificate_type
-// extension, if applicable. It sets `hs->ssl->s3->client_cert_type` iff a value
-// was successfully negotiated. If a certificate request will be sent to the
-// client, a value must be negotiated. It returns true if successful, or returns
-// false and sets `*out_alert` to an alert on error.
+// ssl_negotiate_client_certificate_type, for a server, negotiates the
+// client_certificate_type extension, if applicable. It updates
+// `hs->peer_cert_type` appropriately and returns true if negotiation was
+// successful or not necessary (i.e. if we are not requesting a cert from the
+// client), or it returns false and sets `*out_alert` to an alert on error.
 bool ssl_negotiate_client_certificate_type(
-    const SSL_HANDSHAKE *hs, uint8_t *out_alert,
+    SSL_HANDSHAKE *hs, uint8_t *out_alert,
     const SSL_CLIENT_HELLO *client_hello);
 
 // ssl_get_allowed_server_cert_types, for a server, returns the cert types that
@@ -2118,6 +2118,19 @@ struct SSL_HANDSHAKE {
   // types (`TLSEXT_cert_type_*` values) that were sent in the
   // client_certificate_type extension in the ClientHello.
   InplaceVector<uint8_t, kNumCertTypes> offered_client_cert_types;
+
+  // peer_cert_type, is the cert type expected from the peer in this handshake,
+  // negotiated based on server_certificate_type extensions (for a client) or
+  // client_certificate_type extensions (for a server), or set to X.509
+  // certificates by default (if the peer didn't send the extension).
+  // This is not used in resumption.
+  uint8_t peer_cert_type = kDefaultCertType;
+
+  // client_cert_type, for a client, is the cert type for this side of the
+  // handshake to present to the peer (server) in a Certificate message,
+  // negotiated based on client_certificate_type extensions.
+  // This is not used in resumption.
+  uint8_t client_cert_type = kDefaultCertType;
 };
 
 // kMaxTickets is the maximum number of tickets to send immediately after the
@@ -2971,16 +2984,6 @@ struct SSL3_STATE {
   // srtp_profile is the selected SRTP protection profile for
   // DTLS-SRTP.
   const SRTP_PROTECTION_PROFILE *srtp_profile = nullptr;
-
-  // client_cert_type, if non-nullopt, is the negotiated client cert type for
-  // the connection. If this is nullopt, the peer did not send the
-  // client_certificate_type extension, or no suitable value was negotiated.
-  std::optional<uint8_t> client_cert_type;
-
-  // server_cert_type, if non-nullopt, is the negotiated server cert type for
-  // the connection. If this is nullopt, the peer did not send the
-  // server_certificate_type extension, or no suitable value was negotiated.
-  std::optional<uint8_t> server_cert_type;
 };
 
 // lengths of messages
@@ -3582,6 +3585,11 @@ uint16_t ssl_session_protocol_version(const SSL_SESSION *session);
 
 // ssl_session_get_digest returns the digest used in |session|.
 const EVP_MD *ssl_session_get_digest(const SSL_SESSION *session);
+
+// ssl_session_has_peer_cred returns whether `session` contains the peer's
+// (non-PSK) credentials (either X.509 cert chain or raw public key, depending
+// on the peer's certificate type) or a valid SHA-256 hash thereof.
+bool ssl_session_has_peer_cred(const SSL_SESSION *session);
 
 void ssl_set_session(SSL *ssl, SSL_SESSION *session);
 
@@ -4274,24 +4282,27 @@ struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
   bssl::UniquePtr<char> psk_identity;
 
   // certs contains the certificate chain from the peer, starting with the leaf
-  // certificate.
+  // certificate. This must be null if `peer_raw_public_key` is non-null.
   bssl::UniquePtr<STACK_OF(CRYPTO_BUFFER)> certs;
 
   const bssl::SSL_X509_METHOD *x509_method = nullptr;
 
-  // x509_peer is the peer's certificate.
+  // x509_peer is the peer's certificate. This must be null if
+  // `peer_raw_public_key` is non-null.
   X509 *x509_peer = nullptr;
 
   // x509_chain is the certificate chain sent by the peer. NOTE: for historical
   // reasons, when a client (so the peer is a server), the chain includes
-  // |peer|, but when a server it does not.
+  // |peer|, but when a server it does not. This must be null if
+  // `peer_raw_public_key` is non-null.
   STACK_OF(X509) *x509_chain = nullptr;
 
   // x509_chain_without_leaf is a lazily constructed copy of |x509_chain| that
   // omits the leaf certificate. This exists because OpenSSL, historically,
   // didn't include the leaf certificate in the chain for a server, but did for
   // a client. The |x509_chain| always includes it and, if an API call requires
-  // a chain without, it is stored here.
+  // a chain without, it is stored here. This must be null if
+  // `peer_raw_public_key` is non-null.
   STACK_OF(X509) *x509_chain_without_leaf = nullptr;
 
   // verify_result is the result of certificate verification in the case of
@@ -4325,8 +4336,9 @@ struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
   // The OCSP response that came with the session.
   bssl::UniquePtr<CRYPTO_BUFFER> ocsp_response;
 
-  // peer_sha256 contains the SHA-256 hash of the peer's certificate if
-  // |peer_sha256_valid| is true.
+  // peer_sha256 contains the SHA-256 hash of the peer's X.509 certificate or
+  // raw public key if |peer_sha256_valid| is true. (`peer_cert_type` indicates
+  // which type of credential is hashed here.)
   uint8_t peer_sha256[SHA256_DIGEST_LENGTH] = {0};
 
   // original_handshake_hash contains the handshake hash (either SHA-1+MD5 or
@@ -4387,6 +4399,17 @@ struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
   // quic_early_data_context is used to determine whether early data must be
   // rejected when performing a QUIC handshake.
   bssl::Array<uint8_t> quic_early_data_context;
+
+  // peer_cert_type is the peer's cert type (`TLSEXT_cert_type_*` value), which
+  // determines the type of Certificate the peer used for this session: which of
+  // `certs` xor `peer_raw_public_key` is populated for an authenticated
+  // session.
+  uint8_t peer_cert_type = bssl::kDefaultCertType;
+
+  // peer_raw_public_key, if non-null, is the raw public key received from the
+  // peer. This must be null if `certs` is non-null.
+  // TODO(crbug.com/467663225): Populate this field.
+  bssl::UniquePtr<EVP_PKEY> peer_raw_public_key;
 
  private:
   friend RefCounted;

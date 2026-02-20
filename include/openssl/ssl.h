@@ -1981,6 +1981,11 @@ OPENSSL_EXPORT X509 *SSL_SESSION_get0_peer(const SSL_SESSION *session);
 OPENSSL_EXPORT const STACK_OF(CRYPTO_BUFFER) *
 SSL_SESSION_get0_peer_certificates(const SSL_SESSION *session);
 
+// SSL_SESSION_get0_peer_rpk returns the peer raw public key stored in
+// |session|, or NULL if the peer did not send a raw public key.
+OPENSSL_EXPORT const EVP_PKEY *SSL_SESSION_get0_peer_rpk(
+    const SSL_SESSION *session);
+
 // SSL_SESSION_get0_signed_cert_timestamp_list sets |*out| and |*out_len| to
 // point to |*out_len| bytes of SCT information stored in |session|. This is
 // only valid for client sessions. The SCT information is a
@@ -3972,15 +3977,11 @@ OPENSSL_EXPORT int SSL_set1_available_client_cert_types(SSL *ssl,
                                                         const uint8_t *values,
                                                         size_t num_values);
 
-// SSL_get_negotiated_client_cert_type returns the connection's negotiated value
-// of client_certificate_type. If no type has been negotiated explicitly, it
-// returns |TLSEXT_cert_type_x509| by default.
-OPENSSL_EXPORT int SSL_get_negotiated_client_cert_type(const SSL *ssl);
-
-// SSL_get_negotiated_server_cert_type returns the connection's negotiated value
-// of server_certificate_type. If no type has been negotiated explicitly, it
-// returns |TLSEXT_cert_type_x509| by default.
-OPENSSL_EXPORT int SSL_get_negotiated_server_cert_type(const SSL *ssl);
+// SSL_get_peer_cert_type returns a |TLSEXT_cert_type_*| value describing the
+// type of the peer's certificate.  If the peer has no certificate, or it is too
+// early in the handshake to receive one, this function returns
+// |TLSEXT_cert_type_x509|.
+OPENSSL_EXPORT int SSL_get_peer_cert_type(const SSL *ssl);
 
 
 // Password Authenticated Key Exchange (PAKE).

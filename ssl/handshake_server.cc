@@ -768,8 +768,6 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
                              has_ecdhe_group);
       if (params.ok()) {
         hs->credential = UpRef(cred);
-        hs->ssl->s3->server_cert_type =
-            ssl_credential_type_to_cert_type(hs->credential->type);
         break;
       }
     }
@@ -861,11 +859,10 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
       // classed by them as a bug, but it's assumed by at least NGINX.
       hs->new_session->verify_result = X509_V_OK;
     }
-  }
-
-  if (!ssl_negotiate_client_certificate_type(hs, &alert, &client_hello)) {
-    ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
-    return ssl_hs_error;
+    if (!ssl_negotiate_client_certificate_type(hs, &alert, &client_hello)) {
+      ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
+      return ssl_hs_error;
+    }
   }
 
   // HTTP/2 negotiation depends on the cipher suite, so ALPN negotiation was
@@ -1254,7 +1251,7 @@ static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
-  if (sk_CRYPTO_BUFFER_num(hs->new_session->certs.get()) == 0) {
+  if (!ssl_session_has_peer_cred(hs->new_session.get())) {
     // No client certificate so the handshake buffer may be discarded.
     hs->transcript.FreeBuffer();
 

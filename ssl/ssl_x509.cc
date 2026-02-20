@@ -201,6 +201,9 @@ static void ssl_crypto_x509_session_clear(SSL_SESSION *session) {
 static bool ssl_crypto_x509_session_verify_cert_chain(SSL_SESSION *session,
                                                       SSL_HANDSHAKE *hs,
                                                       uint8_t *out_alert) {
+  if (session->peer_cert_type != TLSEXT_cert_type_x509) {
+    return false;
+  }
   *out_alert = SSL_AD_INTERNAL_ERROR;
   STACK_OF(X509) *const cert_chain = session->x509_chain;
   if (cert_chain == nullptr || sk_X509_num(cert_chain) == 0) {

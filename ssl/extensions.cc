@@ -3728,8 +3728,8 @@ static std::optional<Span<const uint8_t>> parse_clienthello_cert_types_list(
 }
 
 void ssl_setup_client_certificate_type(SSL_HANDSHAKE *hs) {
+  assert(!hs->ssl->server);
   hs->offered_client_cert_types.clear();
-  hs->ssl->s3->client_cert_type.reset();
   InplaceVector<uint8_t, kNumCertTypes> available_cert_types;
   if (!hs->ssl->config->available_client_cert_types.empty()) {
     available_cert_types.CopyFrom(hs->ssl->config->available_client_cert_types);
@@ -3759,11 +3759,10 @@ void ssl_setup_client_certificate_type(SSL_HANDSHAKE *hs) {
 }
 
 bool ssl_negotiate_client_certificate_type(
-    const SSL_HANDSHAKE *hs, uint8_t *out_alert,
+    SSL_HANDSHAKE *hs, uint8_t *out_alert,
     const SSL_CLIENT_HELLO *client_hello) {
+  assert(hs->ssl->server);
   assert(!hs->config->accepted_peer_cert_types.empty());
-  const SSL *const ssl = hs->ssl;
-  ssl->s3->client_cert_type.reset();
   CBS contents;
   Span<const uint8_t> peer_available_client_cert_types;
   if (ssl_client_hello_get_extension(client_hello, &contents,
@@ -3774,6 +3773,9 @@ bool ssl_negotiate_client_certificate_type(
       return false;
     }
     peer_available_client_cert_types = *client_hello_client_cert_types;
+  }
+  if (!hs->cert_request) {
+    return true;
   }
   // If the client didn't send the extension, assume the client supports X.509
   // only by default.
@@ -3787,15 +3789,12 @@ bool ssl_negotiate_client_certificate_type(
                   cert_type) == peer_available_client_cert_types.end()) {
       continue;
     }
-    ssl->s3->client_cert_type.emplace(cert_type);
-    break;
+    hs->peer_cert_type = cert_type;
+    return true;
   }
-  if (hs->cert_request && !ssl->s3->client_cert_type.has_value()) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_CERTIFICATE);
-    *out_alert = SSL_AD_UNSUPPORTED_CERTIFICATE;
-    return false;
-  }
-  return true;
+  OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_CERTIFICATE);
+  *out_alert = SSL_AD_UNSUPPORTED_CERTIFICATE;
+  return false;
 }
 
 static bool ext_client_cert_type_add_clienthello(const SSL_HANDSHAKE *hs,
@@ -3838,7 +3837,7 @@ static bool ext_client_cert_type_parse_serverhello(SSL_HANDSHAKE *hs,
     *out_alert = SSL_AD_UNSUPPORTED_CERTIFICATE;
     return false;
   }
-  hs->ssl->s3->client_cert_type.emplace(cert_type);
+  hs->client_cert_type = cert_type;
   return true;
 }
 
@@ -3847,13 +3846,10 @@ static bool ext_client_cert_type_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
   if (!hs->cert_request) {
     return true;
   }
-  // If no client_certificate_type value was negotiated, we would have failed
-  // earlier.
-  assert(hs->ssl->s3->client_cert_type.has_value());
   CBB contents;
   if (!CBB_add_u16(out, TLSEXT_TYPE_client_cert_type) ||
       !CBB_add_u16_length_prefixed(out, &contents) ||
-      !CBB_add_u8(&contents, *hs->ssl->s3->client_cert_type) ||  //
+      !CBB_add_u8(&contents, hs->peer_cert_type) ||  //
       !CBB_flush(out)) {
     return false;
   }
@@ -3863,6 +3859,7 @@ static bool ext_client_cert_type_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
 std::optional<Span<const uint8_t>> ssl_get_allowed_server_cert_types(
     const SSL_HANDSHAKE *hs, const SSL_CLIENT_HELLO *client_hello,
     uint8_t *out_alert) {
+  assert(hs->ssl->server);
   std::optional<Span<const uint8_t>> clienthello_server_cert_types;
   CBS server_cert_types_ext;
   if (ssl_client_hello_get_extension(client_hello, &server_cert_types_ext,
@@ -3909,14 +3906,17 @@ static bool ext_server_cert_type_parse_serverhello(SSL_HANDSHAKE *hs,
 }
 
 static bool ext_server_cert_type_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
-  // Only send the extension if a value was negotiated.
-  if (!hs->ssl->s3->server_cert_type.has_value()) {
+  if (hs->credential == nullptr) {
+    return true;
+  }
+  const auto cert_type = ssl_credential_type_to_cert_type(hs->credential->type);
+  if (!cert_type.has_value()) {
     return true;
   }
   CBB contents;
   if (!CBB_add_u16(out, TLSEXT_TYPE_server_cert_type) ||
       !CBB_add_u16_length_prefixed(out, &contents) ||
-      !CBB_add_u8(&contents, *hs->ssl->s3->server_cert_type) ||  //
+      !CBB_add_u8(&contents, *cert_type) ||  //
       !CBB_flush(out)) {
     return false;
   }

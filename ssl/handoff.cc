@@ -554,6 +554,12 @@ bool SSL_apply_handback(SSL *ssl, Span<const uint8_t> handback) {
     session = ssl->session.get();
   }
 
+  // Split handshakes only support X.509 certificates.
+  if (session != nullptr && session->peer_cert_type != kDefaultCertType) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_CERTIFICATE);
+    return false;
+  }
+
   if (!session || !CBS_get_asn1(&seq, &next_proto, CBS_ASN1_OCTETSTRING) ||
       !CBS_get_asn1(&seq, &alpn, CBS_ASN1_OCTETSTRING) ||
       !CBS_get_asn1(&seq, &hostname, CBS_ASN1_OCTETSTRING) ||

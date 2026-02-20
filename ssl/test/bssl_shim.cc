@@ -715,20 +715,11 @@ static bool CheckHandshakeProperties(SSL *ssl, bool is_resume,
     return false;
   }
 
-  if (const auto &expected = config->expect_client_certificate_type;
+  if (const auto &expected = config->expect_peer_certificate_type;
       expected.has_value()) {
-    const uint8_t negotiated = SSL_get_negotiated_client_cert_type(ssl);
+    const uint8_t negotiated = SSL_get_peer_cert_type(ssl);
     if (*expected != negotiated) {
-      fprintf(stderr, "Negotiated client_certificate_type %d, but wanted %d.\n",
-              negotiated, *expected);
-      return false;
-    }
-  }
-  if (const auto &expected = config->expect_server_certificate_type;
-      expected.has_value()) {
-    const uint8_t negotiated = SSL_get_negotiated_server_cert_type(ssl);
-    if (*expected != negotiated) {
-      fprintf(stderr, "Negotiated server_certificate_type %d, but wanted %d.\n",
+      fprintf(stderr, "Negotiated peer cert type %d, but wanted %d.\n",
               negotiated, *expected);
       return false;
     }

@@ -23,6 +23,7 @@
 
 #include <openssl/cipher.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/mem.h>
 #include <openssl/rand.h>
@@ -89,6 +90,7 @@ UniquePtr<SSL_SESSION> SSL_SESSION_dup(const SSL_SESSION *session,
       return nullptr;
     }
   }
+  new_session->peer_cert_type = session->peer_cert_type;
   if (session->certs != nullptr) {
     auto buf_up_ref = [](const CRYPTO_BUFFER *buf) {
       CRYPTO_BUFFER_up_ref(const_cast<CRYPTO_BUFFER *>(buf));
@@ -99,6 +101,9 @@ UniquePtr<SSL_SESSION> SSL_SESSION_dup(const SSL_SESSION *session,
     if (new_session->certs == nullptr) {
       return nullptr;
     }
+  }
+  if (session->peer_raw_public_key != nullptr) {
+    new_session->peer_raw_public_key = UpRef(session->peer_raw_public_key);
   }
 
   if (!session->x509_method->session_dup(new_session.get(), session)) {
@@ -500,11 +505,10 @@ bool ssl_session_is_resumable(const SSL_HANDSHAKE *hs,
          // simplicity. If loosening this, the 0-RTT accept logic must be
          // updated to check the cipher.
          hs->new_cipher == session->cipher &&
-         // If the session contains a client certificate (either the full
-         // certificate or just the hash) then require that the form of the
-         // certificate matches the current configuration.
-         ((sk_CRYPTO_BUFFER_num(session->certs.get()) == 0 &&
-           !session->peer_sha256_valid) ||
+         // If the session contains a client certificate/RPK (either the full
+         // certificate/RPK or just the hash) then require that the form of the
+         // certificate/RPK matches the current configuration.
+         (!ssl_session_has_peer_cred(session) ||
           session->peer_sha256_valid ==
               hs->config->retain_only_sha256_of_client_certs) &&
          // Only resume if the underlying transport protocol hasn't changed.
@@ -805,6 +809,13 @@ void ssl_update_cache(SSL *ssl) {
   }
 }
 
+bool ssl_session_has_peer_cred(const SSL_SESSION *session) {
+  return sk_CRYPTO_BUFFER_num(SSL_SESSION_get0_peer_certificates(session)) >
+             0 ||
+         SSL_SESSION_get0_peer_rpk(session) != nullptr ||
+         session->peer_sha256_valid;
+}
+
 BSSL_NAMESPACE_END
 
 using namespace bssl;
@@ -882,6 +893,10 @@ X509 *SSL_SESSION_get0_peer(const SSL_SESSION *session) {
 const STACK_OF(CRYPTO_BUFFER) *SSL_SESSION_get0_peer_certificates(
     const SSL_SESSION *session) {
   return session->certs.get();
+}
+
+const EVP_PKEY *SSL_SESSION_get0_peer_rpk(const SSL_SESSION *session) {
+  return session->peer_raw_public_key.get();
 }
 
 void SSL_SESSION_get0_signed_cert_timestamp_list(const SSL_SESSION *session,

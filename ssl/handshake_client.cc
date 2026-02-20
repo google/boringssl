@@ -866,7 +866,7 @@ static enum ssl_hs_wait_t do_read_server_certificate(SSL_HANDSHAKE *hs) {
     return ssl_hs_error;
   }
 
-  if (sk_CRYPTO_BUFFER_num(hs->new_session->certs.get()) == 0 ||
+  if (!ssl_session_has_peer_cred(hs->new_session.get()) ||
       CBS_len(&body) != 0 ||
       !ssl->ctx->x509_method->session_cache_objects(hs->new_session.get())) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
@@ -1253,12 +1253,10 @@ static enum ssl_hs_wait_t do_read_server_hello_done(SSL_HANDSHAKE *hs) {
 
 static bool check_credential(SSL_HANDSHAKE *hs, const SSL_CREDENTIAL *cred,
                              uint16_t *out_sigalg) {
-  const uint8_t allowed_cert_type =
-      SSL_get_negotiated_client_cert_type(hs->ssl);
   bool cert_type_ok = false;
-  if (allowed_cert_type == TLSEXT_cert_type_x509) {
+  if (hs->client_cert_type == TLSEXT_cert_type_x509) {
     cert_type_ok = cred->type == SSLCredentialType::kX509;
-  } else if (allowed_cert_type == TLSEXT_cert_type_rpk) {
+  } else if (hs->client_cert_type == TLSEXT_cert_type_rpk) {
     cert_type_ok = cred->type == SSLCredentialType::kRawPublicKey;
   }
   if (!cert_type_ok) {

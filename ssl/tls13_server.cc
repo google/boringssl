@@ -459,8 +459,6 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);
     return ssl_hs_error;
   }
-  ssl->s3->server_cert_type =
-      ssl_credential_type_to_cert_type(hs->credential->type);
 
   // HTTP/2 negotiation depends on the cipher suite, so ALPN negotiation was
   // deferred. Complete it now.
@@ -657,10 +655,10 @@ static enum ssl_hs_wait_t do_select_session(SSL_HANDSHAKE *hs) {
   if (using_certificate(hs)) {
     // Determine whether to request a client certificate.
     hs->cert_request = !!(hs->config->verify_mode & SSL_VERIFY_PEER);
-  }
-  if (!ssl_negotiate_client_certificate_type(hs, &alert, &client_hello)) {
-    ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
-    return ssl_hs_error;
+    if (!ssl_negotiate_client_certificate_type(hs, &alert, &client_hello)) {
+      ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
+      return ssl_hs_error;
+    }
   }
 
   // Record connection properties in the new session.
@@ -1373,7 +1371,7 @@ static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
 
 static enum ssl_hs_wait_t do_read_client_certificate_verify(SSL_HANDSHAKE *hs) {
   SSL *const ssl = hs->ssl;
-  if (sk_CRYPTO_BUFFER_num(hs->new_session->certs.get()) == 0) {
+  if (!ssl_session_has_peer_cred(hs->new_session.get())) {
     // Skip this state.
     hs->tls13_state = state13_read_channel_id;
     return ssl_hs_ok;

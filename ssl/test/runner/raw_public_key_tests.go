@@ -74,6 +74,9 @@ func addServerCertTypeTests() {
 					},
 				},
 				flags: flagCertTypes("-accepted-peer-cert-types", test.serverCertTypesAccepted),
+				// TODO(crbug.com/467663225): Test resumption. It doesn't yet work
+				// because the RPK isn't parsed and stored in the session yet.
+				resumeSession: false,
 			})
 		}
 		// Tests that server can receive a server_certificate_type extension from
@@ -81,115 +84,102 @@ func addServerCertTypeTests() {
 		// on configured server credentials, and test that server sends credential
 		// matching the selected cert type if appropriate.
 		for _, test := range []struct {
-			name                         string
-			serverCertTypesRequested     []CertificateType
-			serverCredentialsConfigured  []*Credential
-			expectedServerHelloExtension []CertificateType
-			expectedNegotiated           CertificateType
-			expectedCredentialIndex      int
+			name                        string
+			serverCertTypesRequested    []CertificateType
+			serverCredentialsConfigured []*Credential
+			expectedNegotiated          CertificateType
+			expectedCredentialIndex     int
 		}{
 			{
-				name:                         "RPKRequested-RPKAvailable",
-				serverCertTypesRequested:     certTypesListRPKOnly,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "RPKRequested-RPKAvailable",
+				serverCertTypesRequested:    certTypesListRPKOnly,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
 				// The first matching credential is picked, in the absence of other
 				// criteria. (See also: Server-RawPublicKey-* tests in
 				// certificate_selection_tests.go.)
-				name:                         "RPKRequested-MultipleRPKsAvailable",
-				serverCertTypesRequested:     certTypesListRPKOnly,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &rpkRsa},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "RPKRequested-MultipleRPKsAvailable",
+				serverCertTypesRequested:    certTypesListRPKOnly,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256, &rpkRsa},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "RPKX509Requested-RPKAvailable",
-				serverCertTypesRequested:     certTypesListRPKX509,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "RPKX509Requested-RPKAvailable",
+				serverCertTypesRequested:    certTypesListRPKX509,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "X509RPKRequested-RPKAvailable",
-				serverCertTypesRequested:     certTypesListX509RPK,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "X509RPKRequested-RPKAvailable",
+				serverCertTypesRequested:    certTypesListX509RPK,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "RPKRequested-RPKX509Available",
-				serverCertTypesRequested:     certTypesListRPKOnly,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "RPKRequested-RPKX509Available",
+				serverCertTypesRequested:    certTypesListRPKOnly,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "RPKX509Requested-RPKX509Available",
-				serverCertTypesRequested:     certTypesListRPKX509,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "RPKX509Requested-RPKX509Available",
+				serverCertTypesRequested:    certTypesListRPKX509,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "X509RPKRequested-RPKX509Available",
-				serverCertTypesRequested:     certTypesListX509RPK,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      0,
+				name:                        "X509RPKRequested-RPKX509Available",
+				serverCertTypesRequested:    certTypesListX509RPK,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "RPKRequested-X509RPKAvailable",
-				serverCertTypesRequested:     certTypesListRPKOnly,
-				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      1,
+				name:                        "RPKRequested-X509RPKAvailable",
+				serverCertTypesRequested:    certTypesListRPKOnly,
+				serverCredentialsConfigured: []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     1,
 			},
 			{
-				name:                         "RPKX509Requested-X509RPKAvailable",
-				serverCertTypesRequested:     certTypesListRPKX509,
-				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
-				expectedCredentialIndex:      0,
+				name:                        "RPKX509Requested-X509RPKAvailable",
+				serverCertTypesRequested:    certTypesListRPKX509,
+				serverCredentialsConfigured: []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedNegotiated:          certTypeX509,
+				expectedCredentialIndex:     0,
 			},
 			{
-				name:                         "X509RPKRequested-X509RPKAvailable",
-				serverCertTypesRequested:     certTypesListX509RPK,
-				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
-				expectedCredentialIndex:      0,
+				name:                        "X509RPKRequested-X509RPKAvailable",
+				serverCertTypesRequested:    certTypesListX509RPK,
+				serverCredentialsConfigured: []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedNegotiated:          certTypeX509,
+				expectedCredentialIndex:     0,
 			},
 			{
 				// The server should ignore any values from the client that are unknown,
 				// and use the remaining values in the list.
-				name:                         "RPKUnknownRequested-X509RPKAvailable",
-				serverCertTypesRequested:     certTypesListRPKUnknown,
-				serverCredentialsConfigured:  []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
-				expectedServerHelloExtension: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
-				expectedCredentialIndex:      1,
+				name:                        "RPKUnknownRequested-X509RPKAvailable",
+				serverCertTypesRequested:    certTypesListRPKUnknown,
+				serverCredentialsConfigured: []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
+				expectedNegotiated:          certTypeRawPublicKey,
+				expectedCredentialIndex:     1,
 			},
 			{
 				// If the only known value in the list received from the client is the
 				// default X.509, it's still valid if it wasn't the only value.
-				name:                         "UnknownX509Requested-X509RPKAvailable",
-				serverCertTypesRequested:     certTypesListUnknownX509,
-				serverCredentialsConfigured:  []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
-				expectedServerHelloExtension: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
-				expectedCredentialIndex:      1,
+				name:                        "UnknownX509Requested-X509RPKAvailable",
+				serverCertTypesRequested:    certTypesListUnknownX509,
+				serverCredentialsConfigured: []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
+				expectedNegotiated:          certTypeX509,
+				expectedCredentialIndex:     1,
 			},
 		} {
 			var expectedServerCredential *Credential
@@ -204,17 +194,20 @@ func addServerCertTypeTests() {
 					MaxVersion: ver.version,
 					Bugs: ProtocolBugs{
 						SendServerCertificateTypes:   test.serverCertTypesRequested,
-						ExpectServerCertificateTypes: test.expectedServerHelloExtension,
+						ExpectServerCertificateTypes: []CertificateType{test.expectedNegotiated},
 					},
 				},
 				flags: []string{
-					"-expect-server-certificate-type", strconv.Itoa(int(test.expectedNegotiated)),
 					"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex),
 				},
 				expectations: connectionExpectations{
 					peerCertificate: expectedServerCredential,
 				},
 				shimCredentials: test.serverCredentialsConfigured,
+				// TODO(crbug.com/467663225): Test resumption. It doesn't yet work
+				// because the RPK isn't parsed and stored in the session yet.
+				resumeSession:      false,
+				skipSplitHandshake: true,
 			}
 			// Test that the server can defer configuring credentials to the cert
 			// callback.
@@ -264,7 +257,6 @@ func addClientCertTypeTests() {
 			expectedClientHelloExtension []CertificateType
 			serverSelectedClientCertType []CertificateType
 			skipCertificateRequest       bool
-			expectedNegotiated           CertificateType
 			expectedCredentialIndex      int
 			expectedFailure              string
 		}{
@@ -273,7 +265,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -299,7 +290,6 @@ func addClientCertTypeTests() {
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: []CertificateType{},
 				skipCertificateRequest:       true,
-				expectedNegotiated:           certTypeX509,
 				expectedCredentialIndex:      -1,
 			},
 			{
@@ -307,7 +297,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &rpkRsa},
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -315,7 +304,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListRPKX509,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -323,7 +311,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListRPKX509,
 				serverSelectedClientCertType: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
 				expectedCredentialIndex:      1,
 			},
 			{
@@ -331,7 +318,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListRPKX509,
 				serverSelectedClientCertType: []CertificateType{},
-				expectedNegotiated:           certTypeX509,
 				expectedCredentialIndex:      1,
 			},
 			{
@@ -339,7 +325,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListX509RPK,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      1,
 			},
 			{
@@ -347,7 +332,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListX509RPK,
 				serverSelectedClientCertType: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -380,7 +364,6 @@ func addClientCertTypeTests() {
 				},
 				shimCredentials: test.clientCredentials,
 				flags: []string{
-					"-expect-client-certificate-type", strconv.Itoa(int(test.expectedNegotiated)),
 					"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex),
 				},
 				expectations: connectionExpectations{
@@ -388,6 +371,9 @@ func addClientCertTypeTests() {
 				},
 				shouldFail:    test.expectedFailure != "",
 				expectedError: test.expectedFailure,
+				// TODO(crbug.com/467663225): Test resumption. It doesn't yet work
+				// because the RPK isn't parsed and stored in the session yet.
+				resumeSession: false,
 			})
 		}
 		// Tests that overriding the default client_certificate_type logic works, and
@@ -401,7 +387,6 @@ func addClientCertTypeTests() {
 			expectedClientHelloExtension []CertificateType
 			serverSelectedClientCertType []CertificateType
 			skipCertificateRequest       bool
-			expectedNegotiated           CertificateType
 			expectedCredentialIndex      int
 			expectedFailure              string
 		}{
@@ -411,7 +396,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -428,7 +412,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -445,7 +428,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      1,
 			},
 			{
@@ -462,7 +444,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKX509,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      1,
 			},
 			{
@@ -471,7 +452,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: certTypesListRPKX509,
 				serverSelectedClientCertType: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -480,7 +460,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListX509RPK,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      0,
 			},
 			{
@@ -489,7 +468,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&rpkEcdsaP256, &ecdsaP256Certificate},
 				expectedClientHelloExtension: certTypesListX509RPK,
 				serverSelectedClientCertType: certTypesListX509Only,
-				expectedNegotiated:           certTypeX509,
 				expectedCredentialIndex:      1,
 			},
 			{
@@ -514,7 +492,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{&ecdsaP256Certificate, &rpkEcdsaP256},
 				expectedClientHelloExtension: []CertificateType{},
 				serverSelectedClientCertType: []CertificateType{},
-				expectedNegotiated:           certTypeX509, // Default.
 				expectedCredentialIndex:      0,
 			},
 			// The client falsely advertises an RPK and the server selects it. There
@@ -526,7 +503,6 @@ func addClientCertTypeTests() {
 				clientCredentials:            []*Credential{},
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: certTypesListRPKOnly,
-				expectedNegotiated:           certTypeRawPublicKey,
 				expectedCredentialIndex:      -1,
 			},
 			{
@@ -547,7 +523,6 @@ func addClientCertTypeTests() {
 				expectedClientHelloExtension: certTypesListRPKOnly,
 				serverSelectedClientCertType: []CertificateType{},
 				skipCertificateRequest:       true,
-				expectedNegotiated:           certTypeX509, // Default
 				expectedCredentialIndex:      -1,
 			},
 		} {
@@ -572,8 +547,7 @@ func addClientCertTypeTests() {
 					},
 				},
 				flags: append(
-					[]string{"-expect-client-certificate-type", strconv.Itoa(int(test.expectedNegotiated)),
-						"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex)},
+					[]string{"-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex)},
 					flagCertTypes("-available-client-cert-types", test.configuredClientCertTypes)...),
 				shimCredentials: test.clientCredentials,
 				expectations: connectionExpectations{
@@ -581,6 +555,9 @@ func addClientCertTypeTests() {
 				},
 				shouldFail:    test.expectedFailure != "",
 				expectedError: test.expectedFailure,
+				// TODO(crbug.com/467663225): Test resumption. It doesn't yet work
+				// because the RPK isn't parsed and stored in the session yet.
+				resumeSession: false,
 			}
 			// Test that the client can defer configuring credentials to the cert
 			// callback.
@@ -733,7 +710,7 @@ func addClientCertTypeTests() {
 				expectedLocalError = test.expectedLocalError
 			} else {
 				flags = append(flags,
-					"-expect-client-certificate-type", strconv.Itoa(int(test.expectedNegotiated)))
+					"-expect-peer-certificate-type", strconv.Itoa(int(test.expectedNegotiated)))
 			}
 			testCases = append(testCases, testCase{
 				testType: serverTest,
@@ -750,6 +727,10 @@ func addClientCertTypeTests() {
 				shouldFail:         shouldFail,
 				expectedError:      expectedError,
 				expectedLocalError: expectedLocalError,
+				// TODO(crbug.com/467663225): Test resumption. It doesn't yet work
+				// because the RPK isn't parsed and stored in the session yet.
+				resumeSession:      false,
+				skipSplitHandshake: true,
 			})
 		}
 	}
