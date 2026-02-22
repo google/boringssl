@@ -25,12 +25,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/random.h>
 #include <stdio.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
 #include "../internal.h"
-#include "getrandom_fillin.h"
 
 
 using namespace bssl;

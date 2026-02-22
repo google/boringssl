@@ -671,7 +671,6 @@ boringssl_crypto_internal_headers := \
   crypto/pkcs8/internal.h \
   crypto/poly1305/internal.h \
   crypto/pool/internal.h \
-  crypto/rand/getrandom_fillin.h \
   crypto/rand/internal.h \
   crypto/rsa/internal.h \
   crypto/spake2plus/internal.h \
