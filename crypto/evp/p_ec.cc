@@ -45,6 +45,7 @@ struct EVP_PKEY_ALG_EC : public EVP_PKEY_ALG {
 };
 
 extern const EVP_PKEY_ASN1_METHOD ec_asn1_meth;
+extern const EVP_PKEY_CTX_METHOD ec_pkey_meth;
 
 static int eckey_pub_encode(CBB *out, const EvpPkey *key) {
   const EC_KEY *ec_key = reinterpret_cast<const EC_KEY *>(key->pkey);
@@ -73,10 +74,15 @@ static int eckey_pub_encode(CBB *out, const EvpPkey *key) {
 static bssl::evp_decode_result_t eckey_pub_decode(const EVP_PKEY_ALG *alg,
                                                   EvpPkey *out, CBS *params,
                                                   CBS *key) {
+  const auto *ec_alg = static_cast<const EVP_PKEY_ALG_EC *>(alg);
+  if (ec_alg->ec_group == nullptr) {
+    return evp_decode_unsupported;
+  }
+
   // See RFC 5480, section 2.
 
   // Check that |params| matches |alg|. Only the namedCurve form is allowed.
-  const EC_GROUP *group = static_cast<const EVP_PKEY_ALG_EC*>(alg)->ec_group();
+  const EC_GROUP *group = ec_alg->ec_group();
   if (ec_key_parse_curve_name(params, Span(&group, 1)) == nullptr) {
     if (ERR_equals(ERR_peek_last_error(), ERR_LIB_EC, EC_R_UNKNOWN_GROUP)) {
       ERR_clear_error();
@@ -113,8 +119,13 @@ static bool eckey_pub_equal(const EvpPkey *a, const EvpPkey *b) {
 static bssl::evp_decode_result_t eckey_priv_decode(const EVP_PKEY_ALG *alg,
                                                    EvpPkey *out, CBS *params,
                                                    CBS *key) {
+  const auto *ec_alg = static_cast<const EVP_PKEY_ALG_EC *>(alg);
+  if (ec_alg->ec_group == nullptr) {
+    return evp_decode_unsupported;
+  }
+
   // See RFC 5915.
-  const EC_GROUP *group = static_cast<const EVP_PKEY_ALG_EC *>(alg)->ec_group();
+  const EC_GROUP *group = ec_alg->ec_group();
   if (ec_key_parse_parameters(params, Span(&group, 1)) == nullptr) {
     if (ERR_equals(ERR_peek_last_error(), ERR_LIB_EC, EC_R_UNKNOWN_GROUP)) {
       ERR_clear_error();
@@ -301,80 +312,6 @@ const EVP_PKEY_ASN1_METHOD ec_asn1_meth = {
     int_ec_free,
 };
 
-}  // namespace
-
-const EVP_PKEY_ALG *EVP_pkey_ec_p224() {
-  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth}, &EC_group_p224};
-  return &kAlg;
-}
-
-const EVP_PKEY_ALG *EVP_pkey_ec_p256() {
-  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth}, &EC_group_p256};
-  return &kAlg;
-}
-
-const EVP_PKEY_ALG *EVP_pkey_ec_p384() {
-  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth}, &EC_group_p384};
-  return &kAlg;
-}
-
-const EVP_PKEY_ALG *EVP_pkey_ec_p521() {
-  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth}, &EC_group_p521};
-  return &kAlg;
-}
-
-int EVP_PKEY_set1_EC_KEY(EVP_PKEY *pkey, EC_KEY *key) {
-  if (EVP_PKEY_assign_EC_KEY(pkey, key)) {
-    EC_KEY_up_ref(key);
-    return 1;
-  }
-  return 0;
-}
-
-int EVP_PKEY_assign_EC_KEY(EVP_PKEY *pkey, EC_KEY *key) {
-  if (key == nullptr) {
-    return 0;
-  }
-  evp_pkey_set0(FromOpaque(pkey), &ec_asn1_meth, key);
-  return 1;
-}
-
-EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey) {
-  if (EVP_PKEY_id(pkey) != EVP_PKEY_EC) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_EXPECTING_A_EC_KEY);
-    return nullptr;
-  }
-  return reinterpret_cast<EC_KEY *>(FromOpaque(pkey)->pkey);
-}
-
-EC_KEY *EVP_PKEY_get1_EC_KEY(const EVP_PKEY *pkey) {
-  EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
-  if (ec_key != nullptr) {
-    EC_KEY_up_ref(ec_key);
-  }
-  return ec_key;
-}
-
-int EVP_PKEY_get_ec_curve_nid(const EVP_PKEY *pkey) {
-  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
-  if (ec_key == nullptr) {
-    return NID_undef;
-  }
-  const EC_GROUP *group = EC_KEY_get0_group(ec_key);
-  if (group == nullptr) {
-    return NID_undef;
-  }
-  return EC_GROUP_get_curve_name(group);
-}
-
-int EVP_PKEY_get_ec_point_conv_form(const EVP_PKEY *pkey) {
-  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
-  if (ec_key == nullptr) {
-    return 0;
-  }
-  return EC_KEY_get_conv_form(ec_key);
-}
-
 typedef struct {
   // message digest
   const EVP_MD *md;
@@ -536,7 +473,7 @@ static int pkey_ec_paramgen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
   return 1;
 }
 
-const EVP_PKEY_CTX_METHOD bssl::ec_pkey_meth = {
+const EVP_PKEY_CTX_METHOD ec_pkey_meth = {
     EVP_PKEY_EC,
     pkey_ec_init,
     pkey_ec_copy,
@@ -553,6 +490,89 @@ const EVP_PKEY_CTX_METHOD bssl::ec_pkey_meth = {
     pkey_ec_paramgen,
     pkey_ec_ctrl,
 };
+
+}  // namespace
+
+const EVP_PKEY_ALG *EVP_pkey_ec_p224() {
+  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth, &ec_pkey_meth},
+                                       &EC_group_p224};
+  return &kAlg;
+}
+
+const EVP_PKEY_ALG *EVP_pkey_ec_p256() {
+  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth, &ec_pkey_meth},
+                                       &EC_group_p256};
+  return &kAlg;
+}
+
+const EVP_PKEY_ALG *EVP_pkey_ec_p384() {
+  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth, &ec_pkey_meth},
+                                       &EC_group_p384};
+  return &kAlg;
+}
+
+const EVP_PKEY_ALG *EVP_pkey_ec_p521() {
+  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth, &ec_pkey_meth},
+                                       &EC_group_p521};
+  return &kAlg;
+}
+
+const EVP_PKEY_ALG *bssl::evp_pkey_ec_no_curve() {
+  static const EVP_PKEY_ALG_EC kAlg = {{&ec_asn1_meth, &ec_pkey_meth}, nullptr};
+  return &kAlg;
+}
+
+int EVP_PKEY_set1_EC_KEY(EVP_PKEY *pkey, EC_KEY *key) {
+  if (EVP_PKEY_assign_EC_KEY(pkey, key)) {
+    EC_KEY_up_ref(key);
+    return 1;
+  }
+  return 0;
+}
+
+int EVP_PKEY_assign_EC_KEY(EVP_PKEY *pkey, EC_KEY *key) {
+  if (key == nullptr) {
+    return 0;
+  }
+  evp_pkey_set0(FromOpaque(pkey), &ec_asn1_meth, key);
+  return 1;
+}
+
+EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey) {
+  if (EVP_PKEY_id(pkey) != EVP_PKEY_EC) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_EXPECTING_A_EC_KEY);
+    return nullptr;
+  }
+  return reinterpret_cast<EC_KEY *>(FromOpaque(pkey)->pkey);
+}
+
+EC_KEY *EVP_PKEY_get1_EC_KEY(const EVP_PKEY *pkey) {
+  EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
+  if (ec_key != nullptr) {
+    EC_KEY_up_ref(ec_key);
+  }
+  return ec_key;
+}
+
+int EVP_PKEY_get_ec_curve_nid(const EVP_PKEY *pkey) {
+  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
+  if (ec_key == nullptr) {
+    return NID_undef;
+  }
+  const EC_GROUP *group = EC_KEY_get0_group(ec_key);
+  if (group == nullptr) {
+    return NID_undef;
+  }
+  return EC_GROUP_get_curve_name(group);
+}
+
+int EVP_PKEY_get_ec_point_conv_form(const EVP_PKEY *pkey) {
+  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
+  if (ec_key == nullptr) {
+    return 0;
+  }
+  return EC_KEY_get_conv_form(ec_key);
+}
 
 int EVP_PKEY_CTX_set_ec_paramgen_curve_nid(EVP_PKEY_CTX *ctx, int nid) {
   const EC_GROUP *group = EC_GROUP_new_by_curve_name(nid);

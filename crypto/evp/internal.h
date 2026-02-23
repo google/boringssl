@@ -36,8 +36,9 @@ typedef struct evp_pkey_ctx_method_st EVP_PKEY_CTX_METHOD;
 BSSL_NAMESPACE_END
 
 struct evp_pkey_alg_st {
-  // method implements operations for this |EVP_PKEY_ALG|.
+  // method and pkey_method implement operations for this |EVP_PKEY_ALG|.
   const bssl::EVP_PKEY_ASN1_METHOD *method;
+  const bssl::EVP_PKEY_CTX_METHOD *pkey_method;
 };
 
 BSSL_NAMESPACE_BEGIN
@@ -281,13 +282,13 @@ struct evp_pkey_ctx_method_st {
   int (*ctrl)(EvpPkeyCtx *ctx, int type, int p1, void *p2);
 } /* EVP_PKEY_CTX_METHOD */;
 
-extern const EVP_PKEY_CTX_METHOD rsa_pkey_meth;
-extern const EVP_PKEY_CTX_METHOD rsa_pss_pkey_meth;
-extern const EVP_PKEY_CTX_METHOD ec_pkey_meth;
-extern const EVP_PKEY_CTX_METHOD ed25519_pkey_meth;
-extern const EVP_PKEY_CTX_METHOD x25519_pkey_meth;
-extern const EVP_PKEY_CTX_METHOD hkdf_pkey_meth;
-extern const EVP_PKEY_CTX_METHOD dh_pkey_meth;
+// evp_pkey_ec_no_curve returns an internal curveless EC |EVP_PKEY_ALG|. This
+// cannot be used to parse anything and is only useful for key generation.
+const EVP_PKEY_ALG *evp_pkey_ec_no_curve();
+
+// evp_pkey_hkdf returns an internal |EVP_PKEY_ALG| used to implement
+// |EVP_PKEY_HKDF|. It has no associated key type.
+const EVP_PKEY_ALG *evp_pkey_hkdf();
 
 // evp_pkey_set0 sets |pkey|'s method to |method| and data to |pkey_data|,
 // freeing any key that may previously have been configured. This function takes

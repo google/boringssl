@@ -37,6 +37,7 @@ struct ED25519_KEY {
 };
 
 extern const EVP_PKEY_ASN1_METHOD ed25519_asn1_meth;
+extern const EVP_PKEY_CTX_METHOD ed25519_pkey_meth;
 
 #define ED25519_PUBLIC_KEY_OFFSET 32
 
@@ -314,9 +315,7 @@ static int pkey_ed25519_verify_message(EvpPkeyCtx *ctx, const uint8_t *sig,
   return 1;
 }
 
-}  // namespace
-
-const EVP_PKEY_CTX_METHOD bssl::ed25519_pkey_meth = {
+const EVP_PKEY_CTX_METHOD ed25519_pkey_meth = {
     /*pkey_id=*/EVP_PKEY_ED25519,
     /*init=*/nullptr,
     /*copy=*/pkey_ed25519_copy,
@@ -334,7 +333,9 @@ const EVP_PKEY_CTX_METHOD bssl::ed25519_pkey_meth = {
     /*ctrl=*/nullptr,
 };
 
+}  // namespace
+
 const EVP_PKEY_ALG *EVP_pkey_ed25519() {
-  static const EVP_PKEY_ALG kAlg = {&ed25519_asn1_meth};
+  static const EVP_PKEY_ALG kAlg = {&ed25519_asn1_meth, &ed25519_pkey_meth};
   return &kAlg;
 }

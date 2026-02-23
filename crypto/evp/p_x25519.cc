@@ -35,6 +35,7 @@ struct X25519_KEY {
 };
 
 extern const EVP_PKEY_ASN1_METHOD x25519_asn1_meth;
+extern const EVP_PKEY_CTX_METHOD x25519_pkey_meth;
 
 static void x25519_free(EvpPkey *pkey) {
   X25519_KEY *key = reinterpret_cast<X25519_KEY *>(pkey->pkey);
@@ -265,13 +266,6 @@ const EVP_PKEY_ASN1_METHOD x25519_asn1_meth = {
     x25519_free,
 };
 
-}  // namespace
-
-const EVP_PKEY_ALG *EVP_pkey_x25519() {
-  static const EVP_PKEY_ALG kAlg = {&x25519_asn1_meth};
-  return &kAlg;
-}
-
 // X25519 has no parameters to copy.
 static int pkey_x25519_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
@@ -335,7 +329,7 @@ static int pkey_x25519_ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
   }
 }
 
-const EVP_PKEY_CTX_METHOD bssl::x25519_pkey_meth = {
+const EVP_PKEY_CTX_METHOD x25519_pkey_meth = {
     /*pkey_id=*/EVP_PKEY_X25519,
     /*init=*/nullptr,
     /*copy=*/pkey_x25519_copy,
@@ -352,3 +346,10 @@ const EVP_PKEY_CTX_METHOD bssl::x25519_pkey_meth = {
     /*paramgen=*/nullptr,
     /*ctrl=*/pkey_x25519_ctrl,
 };
+
+}  // namespace
+
+const EVP_PKEY_ALG *EVP_pkey_x25519() {
+  static const EVP_PKEY_ALG kAlg = {&x25519_asn1_meth, &x25519_pkey_meth};
+  return &kAlg;
+}

@@ -43,6 +43,8 @@ struct EVP_PKEY_ALG_RSA_PSS : public EVP_PKEY_ALG {
 
 extern const EVP_PKEY_ASN1_METHOD rsa_asn1_meth;
 extern const EVP_PKEY_ASN1_METHOD rsa_pss_asn1_meth;
+extern const EVP_PKEY_CTX_METHOD rsa_pkey_meth;
+extern const EVP_PKEY_CTX_METHOD rsa_pss_pkey_meth;
 
 static int rsa_pub_encode(CBB *out, const EvpPkey *key) {
   // See RFC 3279, section 2.3.1.
@@ -821,28 +823,70 @@ static int pkey_rsa_keygen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
   return 1;
 }
 
+const EVP_PKEY_CTX_METHOD rsa_pkey_meth = {
+    EVP_PKEY_RSA,
+    pkey_rsa_init,
+    pkey_rsa_copy,
+    pkey_rsa_cleanup,
+    pkey_rsa_keygen,
+    pkey_rsa_sign,
+    /*sign_message=*/nullptr,
+    pkey_rsa_verify,
+    /*verify_message=*/nullptr,
+    pkey_rsa_verify_recover,
+    pkey_rsa_encrypt,
+    pkey_rsa_decrypt,
+    /*derive=*/nullptr,
+    /*paramgen=*/nullptr,
+    pkey_rsa_ctrl,
+};
+
+const EVP_PKEY_CTX_METHOD rsa_pss_pkey_meth = {
+    EVP_PKEY_RSA_PSS,
+    pkey_rsa_init,
+    pkey_rsa_copy,
+    pkey_rsa_cleanup,
+    // In OpenSSL, |EVP_PKEY_RSA_PSS| supports key generation and fills in PSS
+    // parameters based on a separate set of keygen-targetted setters:
+    // |EVP_PKEY_CTX_set_rsa_pss_keygen_saltlen|,
+    // |EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md|, and
+    // |EVP_PKEY_CTX_rsa_pss_key_digest|. We do not currently implement this
+    // because we only support one parameter set.
+    /*keygen=*/nullptr,
+    pkey_rsa_sign,
+    /*sign_message=*/nullptr,
+    pkey_rsa_verify,
+    /*verify_message=*/nullptr,
+    /*verify_recover=*/nullptr,
+    /*encrypt=*/nullptr,
+    /*decrypt=*/nullptr,
+    /*derive=*/nullptr,
+    /*paramgen=*/nullptr,
+    pkey_rsa_ctrl,
+};
+
 }  // namespace
 
 const EVP_PKEY_ALG *EVP_pkey_rsa() {
-  static const EVP_PKEY_ALG kAlg = {&rsa_asn1_meth};
+  static const EVP_PKEY_ALG kAlg = {&rsa_asn1_meth, &rsa_pkey_meth};
   return &kAlg;
 }
 
 const EVP_PKEY_ALG *EVP_pkey_rsa_pss_sha256() {
-  static const EVP_PKEY_ALG_RSA_PSS kAlg = {{&rsa_pss_asn1_meth},
-                                            rsa_pss_sha256};
+  static const EVP_PKEY_ALG_RSA_PSS kAlg = {
+      {&rsa_pss_asn1_meth, &rsa_pss_pkey_meth}, rsa_pss_sha256};
   return &kAlg;
 }
 
 const EVP_PKEY_ALG *EVP_pkey_rsa_pss_sha384() {
-  static const EVP_PKEY_ALG_RSA_PSS kAlg = {{&rsa_pss_asn1_meth},
-                                            rsa_pss_sha384};
+  static const EVP_PKEY_ALG_RSA_PSS kAlg = {
+      {&rsa_pss_asn1_meth, &rsa_pss_pkey_meth}, rsa_pss_sha384};
   return &kAlg;
 }
 
 const EVP_PKEY_ALG *EVP_pkey_rsa_pss_sha512() {
-  static const EVP_PKEY_ALG_RSA_PSS kAlg = {{&rsa_pss_asn1_meth},
-                                            rsa_pss_sha512};
+  static const EVP_PKEY_ALG_RSA_PSS kAlg = {
+      {&rsa_pss_asn1_meth, &rsa_pss_pkey_meth}, rsa_pss_sha512};
   return &kAlg;
 }
 
@@ -878,48 +922,6 @@ RSA *EVP_PKEY_get1_RSA(const EVP_PKEY *pkey) {
   }
   return rsa;
 }
-
-const EVP_PKEY_CTX_METHOD bssl::rsa_pkey_meth = {
-    EVP_PKEY_RSA,
-    pkey_rsa_init,
-    pkey_rsa_copy,
-    pkey_rsa_cleanup,
-    pkey_rsa_keygen,
-    pkey_rsa_sign,
-    /*sign_message=*/nullptr,
-    pkey_rsa_verify,
-    /*verify_message=*/nullptr,
-    pkey_rsa_verify_recover,
-    pkey_rsa_encrypt,
-    pkey_rsa_decrypt,
-    /*derive=*/nullptr,
-    /*paramgen=*/nullptr,
-    pkey_rsa_ctrl,
-};
-
-const EVP_PKEY_CTX_METHOD bssl::rsa_pss_pkey_meth = {
-    EVP_PKEY_RSA_PSS,
-    pkey_rsa_init,
-    pkey_rsa_copy,
-    pkey_rsa_cleanup,
-    // In OpenSSL, |EVP_PKEY_RSA_PSS| supports key generation and fills in PSS
-    // parameters based on a separate set of keygen-targetted setters:
-    // |EVP_PKEY_CTX_set_rsa_pss_keygen_saltlen|,
-    // |EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md|, and
-    // |EVP_PKEY_CTX_rsa_pss_key_digest|. We do not currently implement this
-    // because we only support one parameter set.
-    /*keygen=*/nullptr,
-    pkey_rsa_sign,
-    /*sign_message=*/nullptr,
-    pkey_rsa_verify,
-    /*verify_message=*/nullptr,
-    /*verify_recover=*/nullptr,
-    /*encrypt=*/nullptr,
-    /*decrypt=*/nullptr,
-    /*derive=*/nullptr,
-    /*paramgen=*/nullptr,
-    pkey_rsa_ctrl,
-};
 
 static int rsa_or_rsa_pss_ctrl(EvpPkeyCtx *ctx, int optype, int cmd, int p1,
                                void *p2) {

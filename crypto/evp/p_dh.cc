@@ -30,6 +30,10 @@
 
 using namespace bssl;
 
+namespace {
+
+extern const EVP_PKEY_CTX_METHOD dh_pkey_meth;
+
 static void dh_free(EvpPkey *pkey) {
   DH_free(reinterpret_cast<DH *>(pkey->pkey));
   pkey->pkey = nullptr;
@@ -133,46 +137,12 @@ static const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
     /*pkey_free=*/dh_free,
 };
 
-int EVP_PKEY_set1_DH(EVP_PKEY *pkey, DH *key) {
-  if (EVP_PKEY_assign_DH(pkey, key)) {
-    DH_up_ref(key);
-    return 1;
-  }
-  return 0;
-}
-
-int EVP_PKEY_assign_DH(EVP_PKEY *pkey, DH *key) {
-  if (key == nullptr) {
-    return 0;
-  }
-  evp_pkey_set0(FromOpaque(pkey), &dh_asn1_meth, key);
-  return 1;
-}
-
-DH *EVP_PKEY_get0_DH(const EVP_PKEY *pkey) {
-  if (EVP_PKEY_id(pkey) != EVP_PKEY_DH) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_EXPECTING_A_DH_KEY);
-    return nullptr;
-  }
-  return reinterpret_cast<DH *>(const_cast<EvpPkey *>(FromOpaque(pkey))->pkey);
-}
-
-DH *EVP_PKEY_get1_DH(const EVP_PKEY *pkey) {
-  DH *dh = EVP_PKEY_get0_DH(pkey);
-  if (dh != nullptr) {
-    DH_up_ref(dh);
-  }
-  return dh;
-}
-
-namespace {
-typedef struct dh_pkey_ctx_st {
-  int pad;
-} DH_PKEY_CTX;
-}  // namespace
+struct DH_PKEY_CTX {
+  int pad = 0;
+};
 
 static int pkey_dh_init(EvpPkeyCtx *ctx) {
-  DH_PKEY_CTX *dctx = NewZeroed<DH_PKEY_CTX>();
+  DH_PKEY_CTX *dctx = New<DH_PKEY_CTX>();
   if (dctx == nullptr) {
     return 0;
   }
@@ -272,7 +242,7 @@ static int pkey_dh_ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
   }
 }
 
-const EVP_PKEY_CTX_METHOD bssl::dh_pkey_meth = {
+const EVP_PKEY_CTX_METHOD dh_pkey_meth = {
     /*pkey_id=*/EVP_PKEY_DH,
     /*init=*/pkey_dh_init,
     /*copy=*/pkey_dh_copy,
@@ -289,6 +259,40 @@ const EVP_PKEY_CTX_METHOD bssl::dh_pkey_meth = {
     /*paramgen=*/nullptr,
     /*ctrl=*/pkey_dh_ctrl,
 };
+
+}  // namespace
+
+int EVP_PKEY_set1_DH(EVP_PKEY *pkey, DH *key) {
+  if (EVP_PKEY_assign_DH(pkey, key)) {
+    DH_up_ref(key);
+    return 1;
+  }
+  return 0;
+}
+
+int EVP_PKEY_assign_DH(EVP_PKEY *pkey, DH *key) {
+  if (key == nullptr) {
+    return 0;
+  }
+  evp_pkey_set0(FromOpaque(pkey), &dh_asn1_meth, key);
+  return 1;
+}
+
+DH *EVP_PKEY_get0_DH(const EVP_PKEY *pkey) {
+  if (EVP_PKEY_id(pkey) != EVP_PKEY_DH) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_EXPECTING_A_DH_KEY);
+    return nullptr;
+  }
+  return reinterpret_cast<DH *>(const_cast<EvpPkey *>(FromOpaque(pkey))->pkey);
+}
+
+DH *EVP_PKEY_get1_DH(const EVP_PKEY *pkey) {
+  DH *dh = EVP_PKEY_get0_DH(pkey);
+  if (dh != nullptr) {
+    DH_up_ref(dh);
+  }
+  return dh;
+}
 
 int EVP_PKEY_CTX_set_dh_pad(EVP_PKEY_CTX *ctx, int pad) {
   return EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_DH, EVP_PKEY_OP_DERIVE,

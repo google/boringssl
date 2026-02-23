@@ -258,7 +258,7 @@ const EVP_PKEY_ASN1_METHOD dsa_asn1_meth = {
 }  // namespace
 
 const EVP_PKEY_ALG *EVP_pkey_dsa() {
-  static const EVP_PKEY_ALG kAlg = {&dsa_asn1_meth};
+  static const EVP_PKEY_ALG kAlg = {&dsa_asn1_meth, nullptr};
   return &kAlg;
 }
 

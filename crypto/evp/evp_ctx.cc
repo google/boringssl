@@ -27,24 +27,6 @@
 
 using namespace bssl;
 
-// |EVP_PKEY_RSA_PSS| is intentionally omitted from this list. These are types
-// that can be created without an |EVP_PKEY|, and we do not support
-// |EVP_PKEY_RSA_PSS| keygen.
-static const EVP_PKEY_CTX_METHOD *const evp_methods[] = {
-    &rsa_pkey_meth,    &ec_pkey_meth,   &ed25519_pkey_meth,
-    &x25519_pkey_meth, &hkdf_pkey_meth,
-};
-
-static const EVP_PKEY_CTX_METHOD *evp_pkey_meth_find(int type) {
-  for (auto method : evp_methods) {
-    if (method->pkey_id == type) {
-      return method;
-    }
-  }
-
-  return nullptr;
-}
-
 static EvpPkeyCtx *evp_pkey_ctx_new(EvpPkey *pkey,
                                     const EVP_PKEY_CTX_METHOD *pmeth) {
   UniquePtr<EvpPkeyCtx> ret = MakeUnique<EvpPkeyCtx>();
@@ -86,14 +68,34 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e) {
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
-  const EVP_PKEY_CTX_METHOD *pkey_method = evp_pkey_meth_find(id);
-  if (pkey_method == nullptr) {
+  // |EVP_PKEY_RSA_PSS| is intentionally omitted from this list. These are types
+  // that can be created without an |EVP_PKEY|, and we do not support
+  // |EVP_PKEY_RSA_PSS| keygen.
+  const EVP_PKEY_ALG *alg = nullptr;
+  switch (id) {
+    case EVP_PKEY_RSA:
+      alg = EVP_pkey_rsa();
+      break;
+    case EVP_PKEY_EC:
+      alg = evp_pkey_ec_no_curve();
+      break;
+    case EVP_PKEY_ED25519:
+      alg = EVP_pkey_ed25519();
+      break;
+    case EVP_PKEY_X25519:
+      alg = EVP_pkey_x25519();
+      break;
+    case EVP_PKEY_HKDF:
+      alg = evp_pkey_hkdf();
+      break;
+  }
+  if (alg == nullptr || alg->pkey_method == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     ERR_add_error_dataf("algorithm %d", id);
     return nullptr;
   }
 
-  return evp_pkey_ctx_new(nullptr, pkey_method);
+  return evp_pkey_ctx_new(nullptr, alg->pkey_method);
 }
 
 EvpPkeyCtx::~EvpPkeyCtx() {

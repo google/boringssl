@@ -497,7 +497,7 @@ struct MLDSAImplementation {
   }
 
   static constexpr EVP_PKEY_ASN1_METHOD asn1_method = BuildASN1Method();
-  static constexpr EVP_PKEY_ALG pkey_alg = {&asn1_method};
+  static constexpr EVP_PKEY_ALG pkey_alg = {&asn1_method, &pkey_method};
 };
 
 }  // namespace
