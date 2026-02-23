@@ -23,7 +23,6 @@ import (
 	"debug/elf"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 func checkImportedLibraries(path string) bool {
@@ -40,7 +39,9 @@ func checkImportedLibraries(path string) bool {
 		return false
 	}
 
-	allowCpp := filepath.Base(path) == "libssl.so"
+	// TODO(crbug.com/486922845): If the change to allow a C++ runtime
+	// dependency sticks, remove this checker.
+	allowCpp := true
 	for _, lib := range libs {
 		if lib == "libc.so.6" || lib == "libcrypto.so" || lib == "libpthread.so.0" || lib == "libgcc_s.so.1" {
 			continue
