@@ -50,6 +50,7 @@ constexpr int kMaxContextLength = 255;
     static constexpr Span<const uint8_t> kOID = kMLDSA##kl##OID;              \
     static constexpr auto PrivateKeyFromSeed =                                \
         &MLDSA##kl##_private_key_from_seed;                                   \
+    static constexpr auto GenerateKey = &MLDSA##kl##_generate_key;            \
     static constexpr auto Sign = &MLDSA##kl##_sign;                           \
     static constexpr auto ParsePublicKey = &MLDSA##kl##_parse_public_key;     \
     static constexpr auto PublicOfPrivate =                                   \
@@ -377,6 +378,19 @@ struct MLDSAImplementation {
     return 1;
   }
 
+  static int KeyGen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
+    auto priv = MakeUnique<PrivateKeyData<Traits>>();
+    if (priv == nullptr) {
+      return 0;
+    }
+    uint8_t unused_public[Traits::kPublicKeyBytes];
+    if (!Traits::GenerateKey(unused_public, priv->seed, &priv->priv)) {
+      return 0;
+    }
+    evp_pkey_set0(pkey, &asn1_method, priv.release());
+    return 1;
+  }
+
   static int SignMessage(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
                          const uint8_t *tbs, size_t tbslen) {
     const auto *priv_data = GetKeyData(ctx->pkey.get())->AsPrivateKeyData();
@@ -437,8 +451,7 @@ struct MLDSAImplementation {
       &Init,
       &CopyContext,
       &Cleanup,
-      // TODO(crbug.com/449751916): Add keygen support.
-      /*keygen=*/nullptr,
+      &KeyGen,
       /*sign=*/nullptr,
       &SignMessage,
       /*verify=*/nullptr,

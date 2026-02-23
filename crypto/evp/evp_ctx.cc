@@ -89,6 +89,15 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
     case EVP_PKEY_HKDF:
       alg = evp_pkey_hkdf();
       break;
+    case EVP_PKEY_ML_DSA_44:
+      alg = EVP_pkey_ml_dsa_44();
+      break;
+    case EVP_PKEY_ML_DSA_65:
+      alg = EVP_pkey_ml_dsa_65();
+      break;
+    case EVP_PKEY_ML_DSA_87:
+      alg = EVP_pkey_ml_dsa_87();
+      break;
   }
   if (alg == nullptr || alg->pkey_method == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
