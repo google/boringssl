@@ -6178,9 +6178,9 @@ OPENSSL_EXPORT enum ssl_compliance_policy_t SSL_get_compliance_policy(
 #define SSL_CTRL_SESS_NUMBER doesnt_exist
 #define SSL_CTRL_SET_CURVES doesnt_exist
 #define SSL_CTRL_SET_CURVES_LIST doesnt_exist
+#define SSL_CTRL_SET_ECDH_AUTO doesnt_exist
 #define SSL_CTRL_SET_GROUPS doesnt_exist
 #define SSL_CTRL_SET_GROUPS_LIST doesnt_exist
-#define SSL_CTRL_SET_ECDH_AUTO doesnt_exist
 #define SSL_CTRL_SET_MAX_CERT_LIST doesnt_exist
 #define SSL_CTRL_SET_MAX_SEND_FRAGMENT doesnt_exist
 #define SSL_CTRL_SET_MSG_CALLBACK doesnt_exist
@@ -6201,83 +6201,218 @@ OPENSSL_EXPORT enum ssl_compliance_policy_t SSL_get_compliance_policy(
 #define SSL_CTRL_SET_TMP_RSA doesnt_exist
 #define SSL_CTRL_SET_TMP_RSA_CB doesnt_exist
 
-// |BORINGSSL_PREFIX| already makes each of these symbols into macros, so there
-// is no need to define conflicting macros.
-#if !defined(BORINGSSL_PREFIX)
-
+// |BORINGSSL_PREFIX| already makes some of these symbols into macros, so there
+// is no need to define conflicting macros; however it is compiler specific
+// which ones become macros.
+#if !defined(DTLSv1_get_timeout)
 #define DTLSv1_get_timeout DTLSv1_get_timeout
+#endif
+#if !defined(DTLSv1_handle_timeout)
 #define DTLSv1_handle_timeout DTLSv1_handle_timeout
+#endif
+#if !defined(SSL_CTX_add0_chain_cert)
 #define SSL_CTX_add0_chain_cert SSL_CTX_add0_chain_cert
+#endif
+#if !defined(SSL_CTX_add1_chain_cert)
 #define SSL_CTX_add1_chain_cert SSL_CTX_add1_chain_cert
+#endif
+#if !defined(SSL_CTX_add_extra_chain_cert)
 #define SSL_CTX_add_extra_chain_cert SSL_CTX_add_extra_chain_cert
-#define SSL_CTX_clear_extra_chain_certs SSL_CTX_clear_extra_chain_certs
+#endif
+#if !defined(SSL_CTX_clear_chain_certs)
 #define SSL_CTX_clear_chain_certs SSL_CTX_clear_chain_certs
+#endif
+#if !defined(SSL_CTX_clear_extra_chain_certs)
+#define SSL_CTX_clear_extra_chain_certs SSL_CTX_clear_extra_chain_certs
+#endif
+#if !defined(SSL_CTX_clear_mode)
 #define SSL_CTX_clear_mode SSL_CTX_clear_mode
+#endif
+#if !defined(SSL_CTX_clear_options)
 #define SSL_CTX_clear_options SSL_CTX_clear_options
+#endif
+#if !defined(SSL_CTX_get0_chain_certs)
 #define SSL_CTX_get0_chain_certs SSL_CTX_get0_chain_certs
+#endif
+#if !defined(SSL_CTX_get_extra_chain_certs)
 #define SSL_CTX_get_extra_chain_certs SSL_CTX_get_extra_chain_certs
+#endif
+#if !defined(SSL_CTX_get_max_cert_list)
 #define SSL_CTX_get_max_cert_list SSL_CTX_get_max_cert_list
+#endif
+#if !defined(SSL_CTX_get_mode)
 #define SSL_CTX_get_mode SSL_CTX_get_mode
+#endif
+#if !defined(SSL_CTX_get_options)
 #define SSL_CTX_get_options SSL_CTX_get_options
+#endif
+#if !defined(SSL_CTX_get_read_ahead)
 #define SSL_CTX_get_read_ahead SSL_CTX_get_read_ahead
+#endif
+#if !defined(SSL_CTX_get_session_cache_mode)
 #define SSL_CTX_get_session_cache_mode SSL_CTX_get_session_cache_mode
+#endif
+#if !defined(SSL_CTX_get_tlsext_ticket_keys)
 #define SSL_CTX_get_tlsext_ticket_keys SSL_CTX_get_tlsext_ticket_keys
+#endif
+#if !defined(SSL_CTX_need_tmp_RSA)
 #define SSL_CTX_need_tmp_RSA SSL_CTX_need_tmp_RSA
+#endif
+#if !defined(SSL_CTX_sess_get_cache_size)
 #define SSL_CTX_sess_get_cache_size SSL_CTX_sess_get_cache_size
+#endif
+#if !defined(SSL_CTX_sess_number)
 #define SSL_CTX_sess_number SSL_CTX_sess_number
+#endif
+#if !defined(SSL_CTX_sess_set_cache_size)
 #define SSL_CTX_sess_set_cache_size SSL_CTX_sess_set_cache_size
+#endif
+#if !defined(SSL_CTX_set0_chain)
 #define SSL_CTX_set0_chain SSL_CTX_set0_chain
+#endif
+#if !defined(SSL_CTX_set1_chain)
 #define SSL_CTX_set1_chain SSL_CTX_set1_chain
+#endif
+#if !defined(SSL_CTX_set1_curves)
 #define SSL_CTX_set1_curves SSL_CTX_set1_curves
+#endif
+#if !defined(SSL_CTX_set1_groups)
 #define SSL_CTX_set1_groups SSL_CTX_set1_groups
+#endif
+#if !defined(SSL_CTX_set_max_cert_list)
 #define SSL_CTX_set_max_cert_list SSL_CTX_set_max_cert_list
+#endif
+#if !defined(SSL_CTX_set_max_send_fragment)
 #define SSL_CTX_set_max_send_fragment SSL_CTX_set_max_send_fragment
+#endif
+#if !defined(SSL_CTX_set_mode)
 #define SSL_CTX_set_mode SSL_CTX_set_mode
+#endif
+#if !defined(SSL_CTX_set_msg_callback_arg)
 #define SSL_CTX_set_msg_callback_arg SSL_CTX_set_msg_callback_arg
+#endif
+#if !defined(SSL_CTX_set_options)
 #define SSL_CTX_set_options SSL_CTX_set_options
+#endif
+#if !defined(SSL_CTX_set_read_ahead)
 #define SSL_CTX_set_read_ahead SSL_CTX_set_read_ahead
+#endif
+#if !defined(SSL_CTX_set_session_cache_mode)
 #define SSL_CTX_set_session_cache_mode SSL_CTX_set_session_cache_mode
+#endif
+#if !defined(SSL_CTX_set_tlsext_servername_arg)
 #define SSL_CTX_set_tlsext_servername_arg SSL_CTX_set_tlsext_servername_arg
+#endif
+#if !defined(SSL_CTX_set_tlsext_servername_callback)
 #define SSL_CTX_set_tlsext_servername_callback \
   SSL_CTX_set_tlsext_servername_callback
+#endif
+#if !defined(SSL_CTX_set_tlsext_ticket_key_cb)
 #define SSL_CTX_set_tlsext_ticket_key_cb SSL_CTX_set_tlsext_ticket_key_cb
+#endif
+#if !defined(SSL_CTX_set_tlsext_ticket_keys)
 #define SSL_CTX_set_tlsext_ticket_keys SSL_CTX_set_tlsext_ticket_keys
+#endif
+#if !defined(SSL_CTX_set_tmp_dh)
 #define SSL_CTX_set_tmp_dh SSL_CTX_set_tmp_dh
+#endif
+#if !defined(SSL_CTX_set_tmp_ecdh)
 #define SSL_CTX_set_tmp_ecdh SSL_CTX_set_tmp_ecdh
+#endif
+#if !defined(SSL_CTX_set_tmp_rsa)
 #define SSL_CTX_set_tmp_rsa SSL_CTX_set_tmp_rsa
+#endif
+#if !defined(SSL_add0_chain_cert)
 #define SSL_add0_chain_cert SSL_add0_chain_cert
+#endif
+#if !defined(SSL_add1_chain_cert)
 #define SSL_add1_chain_cert SSL_add1_chain_cert
+#endif
+#if !defined(SSL_clear_chain_certs)
 #define SSL_clear_chain_certs SSL_clear_chain_certs
+#endif
+#if !defined(SSL_clear_mode)
 #define SSL_clear_mode SSL_clear_mode
+#endif
+#if !defined(SSL_clear_options)
 #define SSL_clear_options SSL_clear_options
+#endif
+#if !defined(SSL_get0_certificate_types)
 #define SSL_get0_certificate_types SSL_get0_certificate_types
+#endif
+#if !defined(SSL_get0_chain_certs)
 #define SSL_get0_chain_certs SSL_get0_chain_certs
+#endif
+#if !defined(SSL_get_max_cert_list)
 #define SSL_get_max_cert_list SSL_get_max_cert_list
+#endif
+#if !defined(SSL_get_mode)
 #define SSL_get_mode SSL_get_mode
+#endif
+#if !defined(SSL_get_negotiated_group)
 #define SSL_get_negotiated_group SSL_get_negotiated_group
+#endif
+#if !defined(SSL_get_options)
 #define SSL_get_options SSL_get_options
+#endif
+#if !defined(SSL_get_secure_renegotiation_support)
 #define SSL_get_secure_renegotiation_support \
   SSL_get_secure_renegotiation_support
+#endif
+#if !defined(SSL_need_tmp_RSA)
 #define SSL_need_tmp_RSA SSL_need_tmp_RSA
+#endif
+#if !defined(SSL_num_renegotiations)
 #define SSL_num_renegotiations SSL_num_renegotiations
+#endif
+#if !defined(SSL_session_reused)
 #define SSL_session_reused SSL_session_reused
+#endif
+#if !defined(SSL_set0_chain)
 #define SSL_set0_chain SSL_set0_chain
+#endif
+#if !defined(SSL_set1_chain)
 #define SSL_set1_chain SSL_set1_chain
+#endif
+#if !defined(SSL_set1_curves)
 #define SSL_set1_curves SSL_set1_curves
+#endif
+#if !defined(SSL_set1_groups)
 #define SSL_set1_groups SSL_set1_groups
+#endif
+#if !defined(SSL_set_max_cert_list)
 #define SSL_set_max_cert_list SSL_set_max_cert_list
+#endif
+#if !defined(SSL_set_max_send_fragment)
 #define SSL_set_max_send_fragment SSL_set_max_send_fragment
+#endif
+#if !defined(SSL_set_mode)
 #define SSL_set_mode SSL_set_mode
+#endif
+#if !defined(SSL_set_msg_callback_arg)
 #define SSL_set_msg_callback_arg SSL_set_msg_callback_arg
+#endif
+#if !defined(SSL_set_mtu)
 #define SSL_set_mtu SSL_set_mtu
+#endif
+#if !defined(SSL_set_options)
 #define SSL_set_options SSL_set_options
+#endif
+#if !defined(SSL_set_tlsext_host_name)
 #define SSL_set_tlsext_host_name SSL_set_tlsext_host_name
+#endif
+#if !defined(SSL_set_tmp_dh)
 #define SSL_set_tmp_dh SSL_set_tmp_dh
+#endif
+#if !defined(SSL_set_tmp_ecdh)
 #define SSL_set_tmp_ecdh SSL_set_tmp_ecdh
+#endif
+#if !defined(SSL_set_tmp_rsa)
 #define SSL_set_tmp_rsa SSL_set_tmp_rsa
+#endif
+#if !defined(SSL_total_renegotiations)
 #define SSL_total_renegotiations SSL_total_renegotiations
-
-#endif  // !defined(BORINGSSL_PREFIX)
+#endif
 
 
 #if defined(__cplusplus)
