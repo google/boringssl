@@ -6154,6 +6154,8 @@
 
 #endif  // __PRAGMA_REDEFINE_EXTNAME
 
+#if !defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
+
 #define CBS_data BORINGSSL_ADD_PREFIX(CBS_data)
 #define CBS_init BORINGSSL_ADD_PREFIX(CBS_init)
 #define CBS_len BORINGSSL_ADD_PREFIX(CBS_len)
@@ -6911,5 +6913,7 @@
 #define sk_void_sort BORINGSSL_ADD_PREFIX(sk_void_sort)
 #define sk_void_value BORINGSSL_ADD_PREFIX(sk_void_value)
 #define sk_void_zero BORINGSSL_ADD_PREFIX(sk_void_zero)
+
+#endif  // !BORINGSSL_ALWAYS_USE_STATIC_INLINE
 
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_H

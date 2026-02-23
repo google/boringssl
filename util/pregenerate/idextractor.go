@@ -52,13 +52,19 @@ func isClangCL(clang string) (bool, error) {
 	return strings.TrimSuffix(strings.ToLower(filepath.Base(clang)), ".exe") == "clang-cl", nil
 }
 
-// BuildCRenamingHeader calls Clang to extract the AST of the headers, then processes them to extract the symbols.
+// cSymbolData is data for generating the C renaming includes.
+type cSymbolData struct {
+	inlineDefinitions  map[string]struct{}
+	externDeclarations map[string]struct{}
+}
+
+// CollectCSymbols calls Clang to extract the AST of the headers, then processes them to extract the symbols.
 //
-// It returns a header for C and a matching one for Rust's bindgen.
-func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []byte, err error) {
+// It returns data for generating C and Rust includes.
+func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 	cmd := *clangPath
 	if cmd == "" {
-		return nil, nil, fmt.Errorf("%w: clang has been disabled by flag", TaskSkipped)
+		return cSymbolData{}, fmt.Errorf("%w: clang has been disabled by flag", TaskSkipped)
 	}
 
 	defer func() {
@@ -69,7 +75,7 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 
 	isCL, err := isClangCL(cmd)
 	if err != nil {
-		return nil, nil, err
+		return cSymbolData{}, err
 	}
 
 	var args []string
@@ -106,23 +112,23 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 
 	stdout, err := c.StdoutPipe()
 	if err != nil {
-		return nil, nil, err
+		return cSymbolData{}, err
 	}
 	defer stdout.Close()
 
 	err = c.Start()
 	if err != nil {
-		return nil, nil, err
+		return cSymbolData{}, err
 	}
 
-	var viaRedefineExtname = map[string]struct{}{}
+	syms.externDeclarations = map[string]struct{}{}
 	for _, sym := range platformDependentRedefineExtnameSymbols {
-		viaRedefineExtname[sym] = struct{}{}
+		syms.externDeclarations[sym] = struct{}{}
 	}
 
-	var viaMacro = map[string]struct{}{}
+	syms.inlineDefinitions = map[string]struct{}{}
 	for _, sym := range platformDependentMacroSymbols {
-		viaMacro[sym] = struct{}{}
+		syms.inlineDefinitions[sym] = struct{}{}
 	}
 
 	report := func(id idextractor.IdentifierInfo) error {
@@ -136,7 +142,7 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 			// Already in a namespace.
 			return nil
 		}
-		canRedefineExtname := true
+		var isInline bool
 		switch id.Linkage {
 		case "", "static", "static inline":
 			// Definitely not linked.
@@ -144,9 +150,10 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 		case `extern "C" inline`, `extern "C++" inline`:
 			// Sorry, can't redefine_extname inline functions:
 			// error: #pragma redefine_extname is applicable to external C declarations only; not applied to function
-			canRedefineExtname = false
+			isInline = true
 		case `extern "C"`:
 			// Link those.
+			isInline = false
 		default:
 			return fmt.Errorf("unexpected linkage: %q", id.Linkage)
 		}
@@ -159,10 +166,10 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 			// however cannot be namespaced as known callers forward declare them.
 			return nil
 		case "function", "var":
-			if canRedefineExtname {
-				viaRedefineExtname[id.Symbol] = struct{}{}
+			if isInline {
+				syms.inlineDefinitions[id.Symbol] = struct{}{}
 			} else {
-				viaMacro[id.Symbol] = struct{}{}
+				syms.externDeclarations[id.Symbol] = struct{}{}
 			}
 			return nil
 		default:
@@ -170,26 +177,30 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 		}
 	}
 
-	for sym := range viaMacro {
-		if _, found := viaRedefineExtname[sym]; found {
-			return nil, nil, fmt.Errorf("symbol %q both marked for macro and redefine_extname renaming; please fix", sym)
+	for sym := range syms.inlineDefinitions {
+		if _, found := syms.externDeclarations[sym]; found {
+			return cSymbolData{}, fmt.Errorf("symbol %q both marked as extern and inline type symbol renaming; please fix", sym)
 		}
 	}
 
 	err = idextractor.New(report, idextractor.Options{Language: "C++"}).Parse(stdout)
 	if err != nil {
 		c.Process.Kill()
-		return nil, nil, err
+		return cSymbolData{}, err
 	}
 
 	err = c.Wait()
 	if err != nil {
-		return nil, nil, err
+		return cSymbolData{}, err
 	}
 
-	var cOutput bytes.Buffer
-	writeHeader(&cOutput, "//")
-	cOutput.WriteString(`
+	return syms, nil
+}
+
+func BuildCRenamingInclude(syms cSymbolData) []byte {
+	var output bytes.Buffer
+	writeHeader(&output, "//")
+	output.WriteString(`
 #ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_H
 #define OPENSSL_HEADER_PREFIX_SYMBOLS_H
 
@@ -207,33 +218,40 @@ func BuildCRenamingIncludes(headers []string) (cHeader []byte, bindgenInclude []
 #endif  // __APPLE__
 
 `)
-	cOutput.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME)\n")
-	cOutput.WriteString("\n")
-	for _, sym := range slices.Sorted(maps.Keys(viaRedefineExtname)) {
-		fmt.Fprintf(&cOutput, "#pragma redefine_extname %s BORINGSSL_SYMBOL(BORINGSSL_ADD_PREFIX(%s))\n", sym, sym)
+	output.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME)\n")
+	output.WriteString("\n")
+	for _, sym := range slices.Sorted(maps.Keys(syms.externDeclarations)) {
+		fmt.Fprintf(&output, "#pragma redefine_extname %s BORINGSSL_SYMBOL(BORINGSSL_ADD_PREFIX(%s))\n", sym, sym)
 	}
-	cOutput.WriteString("\n")
-	cOutput.WriteString("#else  // __PRAGMA_REDEFINE_EXTNAME\n")
-	cOutput.WriteString("\n")
-	for _, sym := range slices.Sorted(maps.Keys(viaRedefineExtname)) {
-		fmt.Fprintf(&cOutput, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
+	output.WriteString("\n")
+	output.WriteString("#else  // __PRAGMA_REDEFINE_EXTNAME\n")
+	output.WriteString("\n")
+	for _, sym := range slices.Sorted(maps.Keys(syms.externDeclarations)) {
+		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
-	cOutput.WriteString("\n")
-	cOutput.WriteString("#endif  // __PRAGMA_REDEFINE_EXTNAME\n")
-	cOutput.WriteString("\n")
-	for _, sym := range slices.Sorted(maps.Keys(viaMacro)) {
-		fmt.Fprintf(&cOutput, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
+	output.WriteString("\n")
+	output.WriteString("#endif  // __PRAGMA_REDEFINE_EXTNAME\n")
+	output.WriteString("\n")
+	output.WriteString("#if !defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)\n")
+	output.WriteString("\n")
+	for _, sym := range slices.Sorted(maps.Keys(syms.inlineDefinitions)) {
+		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
-	cOutput.WriteString(`
+	output.WriteString("\n")
+	output.WriteString("#endif  // !BORINGSSL_ALWAYS_USE_STATIC_INLINE\n")
+	output.WriteString(`
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_H
 `)
+	return output.Bytes()
+}
 
-	var bindgenOutput bytes.Buffer
-	writeHeader(&bindgenOutput, "//")
-	bindgenOutput.WriteString("\n")
-	for _, sym := range slices.Sorted(maps.Keys(viaMacro)) {
-		fmt.Fprintf(&bindgenOutput, "pub use ${BORINGSSL_PREFIX}_%s as %s;\n", sym, sym)
+func BuildBindgenRenamingInclude(syms cSymbolData) []byte {
+	var output bytes.Buffer
+	writeHeader(&output, "//")
+	output.WriteString("\n")
+	for _, sym := range slices.Sorted(maps.Keys(syms.inlineDefinitions)) {
+		fmt.Fprintf(&output, "pub use ${BORINGSSL_PREFIX}_%s as %s;\n", sym, sym)
 	}
 
-	return cOutput.Bytes(), bindgenOutput.Bytes(), nil
+	return output.Bytes()
 }
