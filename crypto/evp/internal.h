@@ -224,7 +224,10 @@ class EvpPkeyCtx : public evp_pkey_ctx_st {
  public:
   static constexpr bool kAllowUniquePtr = true;
 
-  ~EvpPkeyCtx();
+  // TODO(crbug.com/487376811): This destructor is virtual to confirm that we
+  // can emit vtables in libcrypto. Later we should replace |pmeth| with virtual
+  // methods and subclassing.
+  virtual ~EvpPkeyCtx();
 
   // Method associated with this operation
   const bssl::EVP_PKEY_CTX_METHOD *pmeth = nullptr;
@@ -235,9 +238,9 @@ class EvpPkeyCtx : public evp_pkey_ctx_st {
   // operation contains one of the |EVP_PKEY_OP_*| values.
   int operation = EVP_PKEY_OP_UNDEFINED;
   // Algorithm specific data.
-  // TODO(davidben): Since a |EVP_PKEY_CTX| never has its type change after
-  // creation, this should instead be a base class, with the algorithm-specific
-  // data on the subclass, coming from the same allocation.
+  // TODO(crbug.com/487376811): Since a |EVP_PKEY_CTX| never has its type change
+  // after creation, this should instead be a base class, with the
+  // algorithm-specific data on the subclass, coming from the same allocation.
   void *data = nullptr;
 };
 
