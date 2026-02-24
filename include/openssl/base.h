@@ -41,6 +41,12 @@
 #include <openssl/opensslconf.h>
 #include <openssl/target.h>  // IWYU pragma: export
 
+// Define |BORINGSSL_ALWAYS_USE_STATIC_INLINE| early so |prefix_symbols.h| has
+// access to it. See comment at |OPENSSL_INLINE| for what it does.
+#if !defined(__cplusplus) && !defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
+#define BORINGSSL_ALWAYS_USE_STATIC_INLINE
+#endif
+
 #if defined(BORINGSSL_PREFIX)
 #include <openssl/prefix_symbols.h>
 #endif  // BORINGSSL_PREFIX
@@ -200,10 +206,6 @@ extern "C" {
 // not used much in practice, extern inline is tedious, and there are conflicts
 // with the old gnu89 model:
 // https://stackoverflow.com/questions/216510/extern-inline
-#if !defined(__cplusplus) && !defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
-#define BORINGSSL_ALWAYS_USE_STATIC_INLINE
-#endif
-
 #if defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
 // Add OPENSSL_UNUSED so that, should an inline function be emitted via macro
 // (e.g. a |STACK_OF(T)| implementation) in a source file without tripping
