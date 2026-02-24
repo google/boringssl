@@ -85,6 +85,7 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^fprintf$`),                                     // fprintf()
 	regexp.MustCompile(`^snprintf$`),                                    // snprintf()
 	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
+	regexp.MustCompile(`^\?\?_R[0-4].*$`),                               // RTTI
 
 	// Symbols in the FIPS module.
 	// They are provided for tooling only and should not be read internally.
