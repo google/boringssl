@@ -1,3 +1,5 @@
+#define BORINGSSL_ALWAYS_USE_STATIC_INLINE
+
 #include <openssl/aes.h>
 #include <openssl/asn1.h>
 #include <openssl/asn1t.h>

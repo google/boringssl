@@ -126,9 +126,6 @@ should specify the prefix to add to all symbols. In other words, `cmake -B build
 -DBORINGSSL_PREFIX=MY_CUSTOM_PREFIX` will configure the build to add
 the prefix `MY_CUSTOM_PREFIX` to all of the symbols defined by the library.
 
-In case you want to also build the Rust crate, run `export
-BORINGSSL_PREFIX=MY_CUSTOM_PREFIX` prior to running `cargo`.
-
 Note that symbol prefixing cannot be used with the combination of FIPS and
 static libraries.
 

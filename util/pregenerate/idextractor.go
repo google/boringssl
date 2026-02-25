@@ -244,14 +244,3 @@ func BuildCRenamingInclude(syms cSymbolData) []byte {
 `)
 	return output.Bytes()
 }
-
-func BuildBindgenRenamingInclude(syms cSymbolData) []byte {
-	var output bytes.Buffer
-	writeHeader(&output, "//")
-	output.WriteString("\n")
-	for _, sym := range slices.Sorted(maps.Keys(syms.inlineDefinitions)) {
-		fmt.Fprintf(&output, "pub use ${BORINGSSL_PREFIX}_%s as %s;\n", sym, sym)
-	}
-
-	return output.Bytes()
-}

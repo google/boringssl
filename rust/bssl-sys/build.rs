@@ -104,41 +104,12 @@ fn main() {
     // Find the bindgen generated target platform bindings file and put it into
     // OUT_DIR/bindgen.rs.
     let bindgen_source_file = bssl_sys_build_dir.join(format!("wrapper_{}.rs", target));
-    let prefix_inc_source_file = Path::new("boringssl_prefix_symbols_bindgen.rs.in");
-    let bindgen_source = std::fs::read_to_string(&bindgen_source_file).expect(&format!(
-        "Could not read bindings from '{}'",
+    std::fs::copy(&bindgen_source_file, &bindgen_out_file).expect(&format!(
+        "Could not copy bindings from '{}' to '{}'",
         bindgen_source_file.display(),
-    ));
-    println!("cargo:rerun-if-changed={}", bindgen_source_file.display());
-    let prefix_source = match env::var("BORINGSSL_PREFIX") {
-        Ok(prefix) => {
-            // Preprocess the file to insert the prefix.
-            std::fs::read_to_string(&prefix_inc_source_file)
-                .expect(&format!(
-                    "Could not read prefixing data from '{}'",
-                    prefix_inc_source_file.display(),
-                ))
-                .replace("${BORINGSSL_PREFIX}", prefix.as_str())
-        }
-        Err(env::VarError::NotPresent) => {
-            // Just don't append anything.
-            "".to_string()
-        }
-        Err(e) => panic!("failed to read BORINGSSL_PREFIX variable: {}", e),
-    };
-    std::fs::write(
-        &bindgen_out_file,
-        format!("{}{}", bindgen_source, prefix_source),
-    )
-    .expect(&format!(
-        "Could not write bindings to '{}'",
         bindgen_out_file.display()
     ));
-    println!(
-        "cargo:rerun-if-changed={}",
-        prefix_inc_source_file.display()
-    );
-    println!("cargo:rerun-if-env-changed=BORINGSSL_PREFIX");
+    println!("cargo:rerun-if-changed={}", bindgen_source_file.display());
 
     // Statically link libraries.
     println!(
