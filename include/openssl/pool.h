@@ -26,9 +26,22 @@ extern "C" {
 
 // Buffers and buffer pools.
 //
-// |CRYPTO_BUFFER|s are simply reference-counted blobs. A |CRYPTO_BUFFER_POOL|
-// is an intern table for |CRYPTO_BUFFER|s. This allows for a single copy of a
-// given blob to be kept in memory and referenced from multiple places.
+// |CRYPTO_BUFFER|s are simply reference-counted, immutable byte string. A
+// single |CRYPTO_BUFFER| can be referenced from multiple parts of an
+// application without storing multiple copies of the underlying data in
+// memory.
+//
+// A |CRYPTO_BUFFER_POOL| can be used to additionally deduplicate
+// |CRYPTO_BUFFER|s on construction. It maintains weak references to associated
+// |CRYPTO_BUFFER|s and returns an existing |CRYPTO_BUFFER| if matching ones
+// already exist.
+//
+// Without a |CRYPTO_BUFFER_POOL|, if two parts of application construct an
+// identical |CRYPTO_BUFFER| (e.g. if two TLS connections received the same
+// certificate), there will be two copies of the buffer in memory. A
+// |CRYPTO_BUFFER_POOL| allows two parts of an application that construct
+// |CRYPTO_BUFFER|s to deduplicate their contents, at the cost of more thread
+// contention.
 
 
 DEFINE_STACK_OF(CRYPTO_BUFFER)
@@ -45,6 +58,10 @@ OPENSSL_EXPORT void CRYPTO_BUFFER_POOL_free(CRYPTO_BUFFER_POOL *pool);
 // reference to a previously existing |CRYPTO_BUFFER| that contained the same
 // data. Otherwise, the returned, fresh |CRYPTO_BUFFER| will be added to the
 // pool.
+//
+// There is no requirement that |pool| outlive the |CRYPTO_BUFFER|, or vice
+// versa. If the |CRYPTO_BUFFER| is released first, it will be removed from
+// |pool|. If |pool| is released first, the |CRYPTO_BUFFER| remains valid.
 OPENSSL_EXPORT CRYPTO_BUFFER *CRYPTO_BUFFER_new(const uint8_t *data, size_t len,
                                                 CRYPTO_BUFFER_POOL *pool);
 

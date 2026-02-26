@@ -30,13 +30,15 @@
 using namespace bssl;
 
 static uint32_t CRYPTO_BUFFER_hash(const CryptoBuffer *buf) {
-  return buf->pool_->Hash(buf->span());
+  // This function must be called while there is a read or write lock on the
+  // pool, so it is safe to read |pool_|.
+  return buf->pool_handle_->pool_->Hash(buf->span());
 }
 
 static int CRYPTO_BUFFER_cmp(const CryptoBuffer *a, const CryptoBuffer *b) {
   // Only |CRYPTO_BUFFER|s from the same pool have compatible hashes.
-  assert(a->pool_ != nullptr);
-  assert(a->pool_ == b->pool_);
+  assert(a->pool_handle_ != nullptr);
+  assert(a->pool_handle_ == b->pool_handle_);
   return a->span() == b->span() ? 0 : 1;
 }
 
@@ -45,11 +47,10 @@ CryptoBufferPool::CryptoBufferPool() {
 }
 
 CryptoBufferPool::~CryptoBufferPool() {
-#if !defined(NDEBUG)
-  lock_.LockWrite();
-  assert(lh_CryptoBuffer_num_items(bufs_) == 0);
-  lock_.UnlockWrite();
-#endif
+  if (handle_) {
+    MutexWriteLock lock(&handle_->lock_);
+    handle_->pool_ = nullptr;
+  }
   lh_CryptoBuffer_free(bufs_);
 }
 
@@ -75,7 +76,8 @@ CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_new() {
   }
 
   pool->bufs_ = lh_CryptoBuffer_new(CRYPTO_BUFFER_hash, CRYPTO_BUFFER_cmp);
-  if (pool->bufs_ == nullptr) {
+  pool->handle_ = MakeUnique<CryptoBufferPoolHandle>(pool.get());
+  if (pool->bufs_ == nullptr || pool->handle_ == nullptr) {
     return nullptr;
   }
 
@@ -98,29 +100,32 @@ void CryptoBuffer::UpRefInternal() {
 
 void CryptoBuffer::DecRefInternal() {
   // If there is a pool, decrementing the refcount must synchronize with it.
-  if (pool_ == nullptr) {
+  if (pool_handle_ == nullptr) {
     if (!CRYPTO_refcount_dec_and_test_zero(&references_)) {
       return;
     }
   } else {
-    MutexWriteLock lock(&pool_->lock_);
+    MutexWriteLock lock(&pool_handle_->lock_);
     if (!CRYPTO_refcount_dec_and_test_zero(&references_)) {
       return;
     }
 
-    // We have an exclusive lock on the pool, therefore no concurrent lookups
-    // can find this buffer and increment the reference count. Thus, if the
-    // count is zero there are and can never be any more references and thus we
-    // can free this buffer.
+    // We have an exclusive lock on the pool handle, therefore no concurrent
+    // lookups can find this buffer and increment the reference count. Thus, if
+    // the count is zero there are and can never be any more references and thus
+    // we can free this buffer. It is possible the pool was already destroyed,
+    // but it cannot be destroyed concurrently.
     //
     // Note it is possible |buf| is no longer in the pool, if it was replaced by
     // a static version. If that static version was since removed, it is even
     // possible for |found| to be NULL.
-    CryptoBuffer *found = lh_CryptoBuffer_retrieve(pool_->bufs_, this);
-    if (found == this) {
-      found = lh_CryptoBuffer_delete(pool_->bufs_, this);
-      assert(found == this);
-      (void)found;
+    if (CryptoBufferPool *pool = pool_handle_->pool_; pool != nullptr) {
+      CryptoBuffer *found = lh_CryptoBuffer_retrieve(pool->bufs_, this);
+      if (found == this) {
+        found = lh_CryptoBuffer_delete(pool->bufs_, this);
+        assert(found == this);
+        (void)found;
+      }
     }
   }
 
@@ -165,7 +170,7 @@ static UniquePtr<CryptoBuffer> crypto_buffer_new_with_pool(
   const uint32_t hash = pool->Hash(data);
   {
     // Look for a matching buffer in the pool.
-    MutexReadLock lock(&pool->lock_);
+    MutexReadLock lock(&pool->handle_->lock_);
     CryptoBuffer *duplicate = pool->FindBufferLocked(hash, data);
     if (data_is_static && duplicate != nullptr && !duplicate->data_is_static_) {
       // If the new |CRYPTO_BUFFER| would have static data, but the duplicate
@@ -182,7 +187,7 @@ static UniquePtr<CryptoBuffer> crypto_buffer_new_with_pool(
     return nullptr;
   }
 
-  MutexWriteLock lock(&pool->lock_);
+  MutexWriteLock lock(&pool->handle_->lock_);
   CryptoBuffer *duplicate = pool->FindBufferLocked(hash, data);
   if (data_is_static && duplicate != nullptr && !duplicate->data_is_static_) {
     // If the new |CRYPTO_BUFFER| would have static data, but the duplicate does
@@ -196,10 +201,10 @@ static UniquePtr<CryptoBuffer> crypto_buffer_new_with_pool(
   // Insert |buf| into the pool. Note |old| may be non-NULL if a match was found
   // but ignored. |pool->bufs_| does not increment refcounts, so there is no
   // need to clean up after the replacement.
-  buf->pool_ = pool;
+  buf->pool_handle_ = UpRef(pool->handle_);
   CryptoBuffer *old = nullptr;
   if (!lh_CryptoBuffer_insert(pool->bufs_, &old, buf.get())) {
-    buf->pool_ = nullptr;  // No need to synchronize with the pool.
+    buf->pool_handle_ = nullptr;  // No need to synchronize with the pool.
     return nullptr;
   }
   return buf;

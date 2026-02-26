@@ -127,6 +127,32 @@ TEST(PoolTest, Pooled) {
   EXPECT_EQ(buf7.get(), buf6.get());
 }
 
+// Buffers are allowed to outlive pools.
+TEST(PoolTest, BufferOutlivesPool) {
+  UniquePtr<CRYPTO_BUFFER_POOL> pool(CRYPTO_BUFFER_POOL_new());
+  ASSERT_TRUE(pool);
+
+  static const uint8_t kData1[4] = {1, 2, 3, 4};
+  UniquePtr<CRYPTO_BUFFER> buf(
+      CRYPTO_BUFFER_new(kData1, sizeof(kData1), pool.get()));
+  ASSERT_TRUE(buf);
+  EXPECT_EQ(Bytes(kData1),
+            Bytes(CRYPTO_BUFFER_data(buf.get()), CRYPTO_BUFFER_len(buf.get())));
+
+  UniquePtr<CRYPTO_BUFFER> buf2(
+      CRYPTO_BUFFER_new(kData1, sizeof(kData1), pool.get()));
+  ASSERT_TRUE(buf2);
+  EXPECT_EQ(buf.get(), buf2.get()) << "CRYPTO_BUFFER_POOL did not dedup data.";
+
+  // Destroy the pool.
+  pool = nullptr;
+
+  // The buffer is still valid. It can be inspected and copied around.
+  EXPECT_EQ(Bytes(kData1),
+            Bytes(CRYPTO_BUFFER_data(buf.get()), CRYPTO_BUFFER_len(buf.get())));
+  UniquePtr<CRYPTO_BUFFER> buf3 = UpRef(buf);
+}
+
 #if defined(OPENSSL_THREADS)
 TEST(PoolTest, Threads) {
   UniquePtr<CRYPTO_BUFFER_POOL> pool(CRYPTO_BUFFER_POOL_new());
@@ -207,9 +233,11 @@ TEST(PoolTest, Threads) {
     buf2 = UpRef(buf);
     std::thread thread([&] { buf.reset(); });
     std::thread thread2([&] { buf3.reset(); });
+    std::thread thread3([&] { pool.reset(); });
     buf2.reset();
     thread.join();
     thread2.join();
+    thread3.join();
   }
 }
 #endif

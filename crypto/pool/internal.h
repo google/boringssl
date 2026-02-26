@@ -17,12 +17,30 @@
 
 #include "../internal.h"
 #include "../lhash/internal.h"
+#include "../mem_internal.h"
 
 
 DECLARE_OPAQUE_STRUCT(crypto_buffer_st, CryptoBuffer)
 DECLARE_OPAQUE_STRUCT(crypto_buffer_pool_st, CryptoBufferPool)
 
 BSSL_NAMESPACE_BEGIN
+
+// A CryptoBufferPoolHandle is the portion of the pool that lasts as long as any
+// live buffer or pool. This allows buffers to outlive the pool. (The pool is
+// only needed as long as callers wish to create new buffers.)
+class CryptoBufferPoolHandle : public RefCounted<CryptoBufferPoolHandle> {
+ public:
+  explicit CryptoBufferPoolHandle(CryptoBufferPool *pool)
+      : RefCounted(CheckSubClass()), pool_(pool) {}
+
+  // pool_ is protected by lock_.
+  Mutex lock_;
+  CryptoBufferPool *pool_ = nullptr;
+
+ private:
+  friend RefCounted;
+  ~CryptoBufferPoolHandle() = default;
+};
 
 class CryptoBuffer : public crypto_buffer_st {
  public:
@@ -38,7 +56,7 @@ class CryptoBuffer : public crypto_buffer_st {
   void UpRefInternal();
   void DecRefInternal();
 
-  CryptoBufferPool *pool_ = nullptr;
+  UniquePtr<CryptoBufferPoolHandle> pool_handle_;
   uint8_t *data_ = nullptr;
   size_t len_ = 0;
   CRYPTO_refcount_t references_ = 1;
@@ -64,8 +82,8 @@ class CryptoBufferPool : public crypto_buffer_pool_st {
   // locked for reading or writing before calling this.
   CryptoBuffer *FindBufferLocked(uint32_t hash, Span<const uint8_t> data);
 
+  UniquePtr<CryptoBufferPoolHandle> handle_;
   LHASH_OF(CryptoBuffer) *bufs_ = nullptr;
-  Mutex lock_;
   uint64_t hash_key_[2];
 };
 
