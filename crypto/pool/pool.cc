@@ -29,9 +29,15 @@
 
 using namespace bssl;
 
+static uint32_t hash_data(const CRYPTO_BUFFER_POOL *pool,
+                          Span<const uint8_t> in) {
+  return static_cast<uint32_t>(
+      SIPHASH_24(pool->hash_key, in.data(), in.size()));
+}
+
 static uint32_t CRYPTO_BUFFER_hash(const CRYPTO_BUFFER *buf) {
   const auto *impl = FromOpaque(buf);
-  return (uint32_t)SIPHASH_24(impl->pool->hash_key, impl->data, impl->len);
+  return hash_data(impl->pool, Span(impl->data, impl->len));
 }
 
 static int CRYPTO_BUFFER_cmp(const CRYPTO_BUFFER *a, const CRYPTO_BUFFER *b) {
@@ -87,17 +93,20 @@ static void crypto_buffer_free_object(CryptoBuffer *buf) {
   Delete(buf);
 }
 
-static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
-                                        int data_is_static,
-                                        CRYPTO_BUFFER_POOL *pool) {
+static CRYPTO_BUFFER *crypto_buffer_new(
+    Span<const uint8_t> data, bool data_is_static, CRYPTO_BUFFER_POOL *pool) {
   if (pool != nullptr) {
-    CryptoBuffer tmp;
-    tmp.data = (uint8_t *)data;
-    tmp.len = len;
-    tmp.pool = pool;
-
+    // Look for a matching buffer in the pool.
+    uint32_t hash = hash_data(pool, data);
     CRYPTO_MUTEX_lock_read(&pool->lock);
-    CRYPTO_BUFFER *duplicate = lh_CRYPTO_BUFFER_retrieve(pool->bufs, &tmp);
+    CRYPTO_BUFFER *duplicate = lh_CRYPTO_BUFFER_retrieve_key(
+        pool->bufs, &data, hash,
+        [](const void *key_v, const CRYPTO_BUFFER *buf) -> int {
+          Span<const uint8_t> key =
+              *static_cast<const Span<const uint8_t> *>(key_v);
+          auto *buf_impl = FromOpaque(buf);
+          return key == Span(buf_impl->data, buf_impl->len) ? 0 : 1;
+        });
     if (data_is_static && duplicate != nullptr &&
         !FromOpaque(duplicate)->data_is_static) {
       // If the new |CRYPTO_BUFFER| would have static data, but the duplicate
@@ -120,17 +129,18 @@ static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
   }
 
   if (data_is_static) {
-    buf->data = (uint8_t *)data;
+    buf->data = const_cast<uint8_t *>(data.data());
     buf->data_is_static = 1;
   } else {
-    buf->data = reinterpret_cast<uint8_t *>(OPENSSL_memdup(data, len));
-    if (len != 0 && buf->data == nullptr) {
+    buf->data =
+        static_cast<uint8_t *>(OPENSSL_memdup(data.data(), data.size()));
+    if (!data.empty() && buf->data == nullptr) {
       Delete(buf);
       return nullptr;
     }
   }
 
-  buf->len = len;
+  buf->len = data.size();
   buf->references = 1;
 
   if (pool == nullptr) {
@@ -171,7 +181,7 @@ static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_new(const uint8_t *data, size_t len,
                                  CRYPTO_BUFFER_POOL *pool) {
-  return crypto_buffer_new(data, len, /*data_is_static=*/0, pool);
+  return crypto_buffer_new(Span(data, len), /*data_is_static=*/false, pool);
 }
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_alloc(uint8_t **out_data, size_t len) {
@@ -199,7 +209,7 @@ CRYPTO_BUFFER *CRYPTO_BUFFER_new_from_CBS(const CBS *cbs,
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_new_from_static_data_unsafe(
     const uint8_t *data, size_t len, CRYPTO_BUFFER_POOL *pool) {
-  return crypto_buffer_new(data, len, /*data_is_static=*/1, pool);
+  return crypto_buffer_new(Span(data, len), /*data_is_static=*/true, pool);
 }
 
 void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
