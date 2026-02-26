@@ -342,6 +342,10 @@ void SSL_CREDENTIAL_free(SSL_CREDENTIAL *cred) {
   }
 }
 
+int SSL_CREDENTIAL_is_complete(const SSL_CREDENTIAL *cred) {
+  return cred->IsComplete();
+}
+
 int SSL_CREDENTIAL_set1_private_key(SSL_CREDENTIAL *cred, EVP_PKEY *key) {
   if (!cred->UsesPrivateKey()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);

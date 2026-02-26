@@ -17,7 +17,7 @@
 #ifndef OPENSSL_HEADER_SSL_H
 #define OPENSSL_HEADER_SSL_H
 
-#include <openssl/base.h>   // IWYU pragma: export
+#include <openssl/base.h>  // IWYU pragma: export
 
 #include <openssl/bio.h>
 #include <openssl/buf.h>
@@ -801,6 +801,14 @@ OPENSSL_EXPORT void SSL_CREDENTIAL_up_ref(SSL_CREDENTIAL *cred);
 // SSL_CREDENTIAL_free decrements the reference count of |cred|. If it reaches
 // zero, all data referenced by |cred| and |cred| itself are released.
 OPENSSL_EXPORT void SSL_CREDENTIAL_free(SSL_CREDENTIAL *cred);
+
+// SSL_CREDENTIAL_is_complete returns one if the returns one if |cred| has all
+// required properties configured, and zero otherwise.
+//
+// This includes checks on whether the public key is present in a X.509
+// credential and whether a private key or private key method has been set up
+// for such.
+OPENSSL_EXPORT int SSL_CREDENTIAL_is_complete(const SSL_CREDENTIAL *cred);
 
 // SSL_CREDENTIAL_set1_private_key sets |cred|'s private key to |cred|. It
 // returns one on success and zero on failure.
