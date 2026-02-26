@@ -16,14 +16,14 @@ name: Check Branch Time
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */12 * * *'  # Run every 12 hours.
   workflow_dispatch: # Allows you to run the check manually from the UI
 
 env:
   UPSTREAM_URL: 'https://boringssl.googlesource.com/boringssl'
   BRANCH_NAME: 'main'
 
-  MAX_TIME_LAG_SECONDS: 604800  # 1 week
+  MAX_TIME_LAG_SECONDS: 86400  # 24 hours
 
 jobs:
   check-mirror:
