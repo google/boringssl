@@ -29,36 +29,33 @@
 
 using namespace bssl;
 
-static uint32_t hash_data(const CRYPTO_BUFFER_POOL *pool,
+static uint32_t hash_data(const CryptoBufferPool *pool,
                           Span<const uint8_t> in) {
   return static_cast<uint32_t>(
       SIPHASH_24(pool->hash_key, in.data(), in.size()));
 }
 
-static uint32_t CRYPTO_BUFFER_hash(const CRYPTO_BUFFER *buf) {
-  const auto *impl = FromOpaque(buf);
-  return hash_data(impl->pool, Span(impl->data, impl->len));
+static uint32_t CRYPTO_BUFFER_hash(const CryptoBuffer *buf) {
+  return hash_data(buf->pool, Span(buf->data, buf->len));
 }
 
-static int CRYPTO_BUFFER_cmp(const CRYPTO_BUFFER *a, const CRYPTO_BUFFER *b) {
-  const auto *a_impl = FromOpaque(a);
-  const auto *b_impl = FromOpaque(b);
+static int CRYPTO_BUFFER_cmp(const CryptoBuffer *a, const CryptoBuffer *b) {
   // Only |CRYPTO_BUFFER|s from the same pool have compatible hashes.
-  assert(a_impl->pool != nullptr);
-  assert(a_impl->pool == b_impl->pool);
-  if (a_impl->len != b_impl->len) {
+  assert(a->pool != nullptr);
+  assert(a->pool == b->pool);
+  if (a->len != b->len) {
     return 1;
   }
-  return OPENSSL_memcmp(a_impl->data, b_impl->data, a_impl->len);
+  return OPENSSL_memcmp(a->data, b->data, a->len);
 }
 
 CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_new() {
-  CRYPTO_BUFFER_POOL *pool = NewZeroed<CRYPTO_BUFFER_POOL>();
+  CryptoBufferPool *pool = NewZeroed<CryptoBufferPool>();
   if (pool == nullptr) {
     return nullptr;
   }
 
-  pool->bufs = lh_CRYPTO_BUFFER_new(CRYPTO_BUFFER_hash, CRYPTO_BUFFER_cmp);
+  pool->bufs = lh_CryptoBuffer_new(CRYPTO_BUFFER_hash, CRYPTO_BUFFER_cmp);
   if (pool->bufs == nullptr) {
     Delete(pool);
     return nullptr;
@@ -71,19 +68,20 @@ CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_new() {
 }
 
 void CRYPTO_BUFFER_POOL_free(CRYPTO_BUFFER_POOL *pool) {
-  if (pool == nullptr) {
+  auto *impl = FromOpaque(pool);
+  if (impl == nullptr) {
     return;
   }
 
 #if !defined(NDEBUG)
-  CRYPTO_MUTEX_lock_write(&pool->lock);
-  assert(lh_CRYPTO_BUFFER_num_items(pool->bufs) == 0);
-  CRYPTO_MUTEX_unlock_write(&pool->lock);
+  CRYPTO_MUTEX_lock_write(&impl->lock);
+  assert(lh_CryptoBuffer_num_items(impl->bufs) == 0);
+  CRYPTO_MUTEX_unlock_write(&impl->lock);
 #endif
 
-  lh_CRYPTO_BUFFER_free(pool->bufs);
-  CRYPTO_MUTEX_cleanup(&pool->lock);
-  Delete(pool);
+  lh_CryptoBuffer_free(impl->bufs);
+  CRYPTO_MUTEX_cleanup(&impl->lock);
+  Delete(impl);
 }
 
 static void crypto_buffer_free_object(CryptoBuffer *buf) {
@@ -93,28 +91,27 @@ static void crypto_buffer_free_object(CryptoBuffer *buf) {
   Delete(buf);
 }
 
-static CRYPTO_BUFFER *crypto_buffer_new(
-    Span<const uint8_t> data, bool data_is_static, CRYPTO_BUFFER_POOL *pool) {
+static CryptoBuffer *crypto_buffer_new(Span<const uint8_t> data,
+                                       bool data_is_static,
+                                       CryptoBufferPool *pool) {
   if (pool != nullptr) {
     // Look for a matching buffer in the pool.
     uint32_t hash = hash_data(pool, data);
     CRYPTO_MUTEX_lock_read(&pool->lock);
-    CRYPTO_BUFFER *duplicate = lh_CRYPTO_BUFFER_retrieve_key(
+    CryptoBuffer *duplicate = lh_CryptoBuffer_retrieve_key(
         pool->bufs, &data, hash,
-        [](const void *key_v, const CRYPTO_BUFFER *buf) -> int {
+        [](const void *key_v, const CryptoBuffer *buf) -> int {
           Span<const uint8_t> key =
               *static_cast<const Span<const uint8_t> *>(key_v);
-          auto *buf_impl = FromOpaque(buf);
-          return key == Span(buf_impl->data, buf_impl->len) ? 0 : 1;
+          return key == Span(buf->data, buf->len) ? 0 : 1;
         });
-    if (data_is_static && duplicate != nullptr &&
-        !FromOpaque(duplicate)->data_is_static) {
+    if (data_is_static && duplicate != nullptr && !duplicate->data_is_static) {
       // If the new |CRYPTO_BUFFER| would have static data, but the duplicate
       // does not, we replace the old one with the new static version.
       duplicate = nullptr;
     }
     if (duplicate != nullptr) {
-      CRYPTO_refcount_inc(&FromOpaque(duplicate)->references);
+      CRYPTO_refcount_inc(&duplicate->references);
     }
     CRYPTO_MUTEX_unlock_read(&pool->lock);
 
@@ -150,22 +147,21 @@ static CRYPTO_BUFFER *crypto_buffer_new(
   buf->pool = pool;
 
   CRYPTO_MUTEX_lock_write(&pool->lock);
-  CRYPTO_BUFFER *duplicate = lh_CRYPTO_BUFFER_retrieve(pool->bufs, buf);
-  if (data_is_static && duplicate != nullptr &&
-      !FromOpaque(duplicate)->data_is_static) {
+  CryptoBuffer *duplicate = lh_CryptoBuffer_retrieve(pool->bufs, buf);
+  if (data_is_static && duplicate != nullptr && !duplicate->data_is_static) {
     // If the new |CRYPTO_BUFFER| would have static data, but the duplicate does
     // not, we replace the old one with the new static version.
     duplicate = nullptr;
   }
   int inserted = 0;
   if (duplicate == nullptr) {
-    CRYPTO_BUFFER *old = nullptr;
-    inserted = lh_CRYPTO_BUFFER_insert(pool->bufs, &old, buf);
+    CryptoBuffer *old = nullptr;
+    inserted = lh_CryptoBuffer_insert(pool->bufs, &old, buf);
     // |old| may be non-NULL if a match was found but ignored. |pool->bufs| does
     // not increment refcounts, so there is no need to clean up after the
     // replacement.
   } else {
-    CRYPTO_refcount_inc(&FromOpaque(duplicate)->references);
+    CRYPTO_refcount_inc(&duplicate->references);
   }
   CRYPTO_MUTEX_unlock_write(&pool->lock);
 
@@ -181,7 +177,8 @@ static CRYPTO_BUFFER *crypto_buffer_new(
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_new(const uint8_t *data, size_t len,
                                  CRYPTO_BUFFER_POOL *pool) {
-  return crypto_buffer_new(Span(data, len), /*data_is_static=*/false, pool);
+  return crypto_buffer_new(Span(data, len), /*data_is_static=*/false,
+                           FromOpaque(pool));
 }
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_alloc(uint8_t **out_data, size_t len) {
@@ -209,7 +206,8 @@ CRYPTO_BUFFER *CRYPTO_BUFFER_new_from_CBS(const CBS *cbs,
 
 CRYPTO_BUFFER *CRYPTO_BUFFER_new_from_static_data_unsafe(
     const uint8_t *data, size_t len, CRYPTO_BUFFER_POOL *pool) {
-  return crypto_buffer_new(Span(data, len), /*data_is_static=*/true, pool);
+  return crypto_buffer_new(Span(data, len), /*data_is_static=*/true,
+                           FromOpaque(pool));
 }
 
 void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
@@ -218,7 +216,7 @@ void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
   }
   auto *impl = FromOpaque(buf);
 
-  CRYPTO_BUFFER_POOL *const pool = impl->pool;
+  CryptoBufferPool *const pool = impl->pool;
   if (pool == nullptr) {
     if (CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
       // If a reference count of zero is observed, there cannot be a reference
@@ -244,9 +242,9 @@ void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
   // Note it is possible |buf| is no longer in the pool, if it was replaced by a
   // static version. If that static version was since removed, it is even
   // possible for |found| to be NULL.
-  CRYPTO_BUFFER *found = lh_CRYPTO_BUFFER_retrieve(pool->bufs, impl);
+  CryptoBuffer *found = lh_CryptoBuffer_retrieve(pool->bufs, impl);
   if (found == impl) {
-    found = lh_CRYPTO_BUFFER_delete(pool->bufs, impl);
+    found = lh_CryptoBuffer_delete(pool->bufs, impl);
     assert(found == impl);
     (void)found;
   }

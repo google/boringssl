@@ -20,26 +20,28 @@
 
 
 DECLARE_OPAQUE_STRUCT(crypto_buffer_st, CryptoBuffer)
+DECLARE_OPAQUE_STRUCT(crypto_buffer_pool_st, CryptoBufferPool)
 
 BSSL_NAMESPACE_BEGIN
 
-DEFINE_LHASH_OF(CRYPTO_BUFFER)
-
 class CryptoBuffer : public crypto_buffer_st {
  public:
-  CRYPTO_BUFFER_POOL *pool;
+  CryptoBufferPool *pool;
   uint8_t *data;
   size_t len;
   bssl::CRYPTO_refcount_t references;
   int data_is_static;
 };
 
-BSSL_NAMESPACE_END
+DEFINE_LHASH_OF(CryptoBuffer)
 
-struct crypto_buffer_pool_st {
-  LHASH_OF(CRYPTO_BUFFER) *bufs;
+class CryptoBufferPool : public crypto_buffer_pool_st {
+ public:
+  LHASH_OF(CryptoBuffer) *bufs;
   bssl::CRYPTO_MUTEX lock;
   uint64_t hash_key[2];
 };
+
+BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_HEADER_CRYPTO_POOL_INTERNAL_H
