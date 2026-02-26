@@ -169,11 +169,10 @@ RSAImpl::RSAImpl(const ENGINE *engine)
     : RefCounted(CheckSubClass()),
       meth(engine ? ENGINE_get_RSA_method(engine) : nullptr) {
   if (meth == nullptr) {
-    meth = (RSA_METHOD *)RSA_default_method();
+    meth = const_cast<RSA_METHOD *>(RSA_default_method());
   }
   METHOD_ref(meth);
   flags = meth->flags;
-  CRYPTO_MUTEX_init(&lock);
   CRYPTO_new_ex_data(&ex_data);
 }
 
@@ -221,7 +220,6 @@ RSAImpl::~RSAImpl() {
   BN_free(dmq1);
   BN_free(iqmp);
   rsa_invalidate_key(this);
-  CRYPTO_MUTEX_cleanup(&lock);
 }
 
 void RSA_free(RSA *rsa) {

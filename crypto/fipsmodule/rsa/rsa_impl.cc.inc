@@ -128,24 +128,22 @@ static int ensure_fixed_copy(BIGNUM **out, const BIGNUM *in, int width) {
 // because |RSA| is a public struct and, additionally, OpenSSL 1.1.0 opaquified
 // it wrong (see https://github.com/openssl/openssl/issues/5158).
 static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
-  CRYPTO_MUTEX_lock_read(&rsa->lock);
+  rsa->lock.LockRead();
   int frozen = rsa->private_key_frozen;
-  CRYPTO_MUTEX_unlock_read(&rsa->lock);
+  rsa->lock.UnlockRead();
   if (frozen) {
     return 1;
   }
 
-  int ret = 0;
   const BIGNUM *n_fixed;
-  CRYPTO_MUTEX_lock_write(&rsa->lock);
+  MutexWriteLock lock(&rsa->lock);
   if (rsa->private_key_frozen) {
-    ret = 1;
-    goto err;
+    return 1;
   }
 
   // Check the public components are within DoS bounds.
   if (!rsa_check_public_key(rsa)) {
-    goto err;
+    return 0;
   }
 
   // Pre-compute various intermediate values, as well as copies of private
@@ -157,7 +155,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
   if (rsa->mont_n == nullptr) {
     rsa->mont_n = BN_MONT_CTX_new_for_modulus(rsa->n, ctx);
     if (rsa->mont_n == nullptr) {
-      goto err;
+      return 0;
     }
   }
   n_fixed = &rsa->mont_n->N;
@@ -168,7 +166,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
   // operation.
   if (rsa->d != nullptr &&
       !ensure_fixed_copy(&rsa->d_fixed, rsa->d, n_fixed->width)) {
-    goto err;
+    return 0;
   }
 
   if (rsa->e != nullptr && rsa->p != nullptr && rsa->q != nullptr) {
@@ -180,14 +178,14 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
     if (rsa->mont_p == nullptr) {
       rsa->mont_p = BN_MONT_CTX_new_consttime(rsa->p, ctx);
       if (rsa->mont_p == nullptr) {
-        goto err;
+        return 0;
       }
     }
 
     if (rsa->mont_q == nullptr) {
       rsa->mont_q = BN_MONT_CTX_new_consttime(rsa->q, ctx);
       if (rsa->mont_q == nullptr) {
-        goto err;
+        return 0;
       }
     }
 
@@ -198,7 +196,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
       const BIGNUM *q_fixed = &rsa->mont_q->N;
       if (!ensure_fixed_copy(&rsa->dmp1_fixed, rsa->dmp1, p_fixed->width) ||
           !ensure_fixed_copy(&rsa->dmq1_fixed, rsa->dmq1, q_fixed->width)) {
-        goto err;
+        return 0;
       }
 
       // Compute |iqmp_mont|, which is |iqmp| in Montgomery form and with the
@@ -208,7 +206,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
         if (iqmp_mont == nullptr ||
             !BN_to_montgomery(iqmp_mont, rsa->iqmp, rsa->mont_p, ctx)) {
           BN_free(iqmp_mont);
-          goto err;
+          return 0;
         }
         rsa->iqmp_mont = iqmp_mont;
         bn_secret(rsa->iqmp_mont);
@@ -217,11 +215,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
   }
 
   rsa->private_key_frozen = 1;
-  ret = 1;
-
-err:
-  CRYPTO_MUTEX_unlock_write(&rsa->lock);
-  return ret;
+  return 1;
 }
 
 void bssl::rsa_invalidate_key(RSA *rsa) {

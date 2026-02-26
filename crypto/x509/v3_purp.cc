@@ -188,17 +188,16 @@ int bssl::x509v3_cache_extensions(X509 *x) {
   int j;
 
   auto *impl = FromOpaque(x);
-  CRYPTO_MUTEX_lock_read(&impl->lock);
+  impl->lock.LockRead();
   const int is_set = impl->ex_flags & EXFLAG_SET;
-  CRYPTO_MUTEX_unlock_read(&impl->lock);
+  impl->lock.UnlockRead();
 
   if (is_set) {
     return (impl->ex_flags & EXFLAG_INVALID) == 0;
   }
 
-  CRYPTO_MUTEX_lock_write(&impl->lock);
+  MutexWriteLock lock(&impl->lock);
   if (impl->ex_flags & EXFLAG_SET) {
-    CRYPTO_MUTEX_unlock_write(&impl->lock);
     return (impl->ex_flags & EXFLAG_INVALID) == 0;
   }
 
@@ -345,7 +344,6 @@ int bssl::x509v3_cache_extensions(X509 *x) {
   }
   impl->ex_flags |= EXFLAG_SET;
 
-  CRYPTO_MUTEX_unlock_write(&impl->lock);
   return (impl->ex_flags & EXFLAG_INVALID) == 0;
 }
 

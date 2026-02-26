@@ -700,8 +700,8 @@ int bn_mod_inverse_secret_prime(BIGNUM *out, const BIGNUM *a, const BIGNUM *p,
 // this function assumes |mod| is public.
 //
 // If |*pmont| is already non-NULL then it does nothing and returns one.
-int BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, CRYPTO_MUTEX *lock,
-                           const BIGNUM *mod, BN_CTX *bn_ctx);
+int BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, Mutex *lock, const BIGNUM *mod,
+                           BN_CTX *bn_ctx);
 
 
 // Low-level operations for small numbers.

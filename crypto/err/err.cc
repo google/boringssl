@@ -110,7 +110,7 @@ static int global_next_library = ERR_NUM_LIBS;
 
 // global_next_library_mutex protects |global_next_library| from concurrent
 // updates.
-static CRYPTO_MUTEX global_next_library_mutex = CRYPTO_MUTEX_INIT;
+static StaticMutex global_next_library_mutex;
 
 static void err_state_free(void *statep) {
   ERR_STATE *state = reinterpret_cast<ERR_STATE *>(statep);
@@ -289,13 +289,8 @@ void ERR_remove_thread_state(const CRYPTO_THREADID *tid) {
 }
 
 int ERR_get_next_error_library() {
-  int ret;
-
-  CRYPTO_MUTEX_lock_write(&global_next_library_mutex);
-  ret = global_next_library++;
-  CRYPTO_MUTEX_unlock_write(&global_next_library_mutex);
-
-  return ret;
+  MutexWriteLock lock(&global_next_library_mutex);
+  return global_next_library++;
 }
 
 void ERR_remove_state(unsigned long pid) { ERR_clear_error(); }

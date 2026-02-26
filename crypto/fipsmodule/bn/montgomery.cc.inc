@@ -165,23 +165,21 @@ BN_MONT_CTX *BN_MONT_CTX_new_consttime(const BIGNUM *mod, BN_CTX *ctx) {
   return mont;
 }
 
-int bssl::BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, CRYPTO_MUTEX *lock,
+int bssl::BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, Mutex *lock,
                                  const BIGNUM *mod, BN_CTX *bn_ctx) {
-  CRYPTO_MUTEX_lock_read(lock);
+  lock->LockRead();
   BN_MONT_CTX *ctx = *pmont;
-  CRYPTO_MUTEX_unlock_read(lock);
+  lock->UnlockRead();
 
   if (ctx) {
     return 1;
   }
 
-  CRYPTO_MUTEX_lock_write(lock);
+  MutexWriteLock write_lock(lock);
   if (*pmont == nullptr) {
     *pmont = BN_MONT_CTX_new_for_modulus(mod, bn_ctx);
   }
-  const int ok = *pmont != nullptr;
-  CRYPTO_MUTEX_unlock_write(lock);
-  return ok;
+  return *pmont != nullptr;
 }
 
 int BN_to_montgomery(BIGNUM *ret, const BIGNUM *a, const BN_MONT_CTX *mont,

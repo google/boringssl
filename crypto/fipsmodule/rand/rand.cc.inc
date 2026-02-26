@@ -81,7 +81,7 @@ struct rand_thread_state {
   // clear_drbg_lock synchronizes between uses of |drbg| and
   // |rand_thread_state_clear_all| clearing it. This lock should be uncontended
   // in the common case, except on shutdown.
-  CRYPTO_MUTEX clear_drbg_lock;
+  Mutex clear_drbg_lock;
 #endif
 };
 }  // namespace
@@ -96,10 +96,10 @@ DEFINE_STATIC_MUTEX(thread_states_list_lock)
 
 static void rand_thread_state_clear_all() __attribute__((destructor));
 static void rand_thread_state_clear_all() {
-  CRYPTO_MUTEX_lock_write(thread_states_list_lock_bss_get());
+  thread_states_list_lock_bss_get()->LockWrite();
   for (struct rand_thread_state *cur = *thread_states_list_bss_get();
        cur != nullptr; cur = cur->next) {
-    CRYPTO_MUTEX_lock_write(&cur->clear_drbg_lock);
+    cur->clear_drbg_lock.LockWrite();
     CTR_DRBG_clear(&cur->drbg);
   }
   // The locks are deliberately left locked so that any threads that are still
@@ -120,7 +120,7 @@ static void rand_thread_state_free(void *state_in) {
   }
 
 #if defined(BORINGSSL_FIPS)
-  CRYPTO_MUTEX_lock_write(thread_states_list_lock_bss_get());
+  thread_states_list_lock_bss_get()->LockWrite();
 
   if (state->prev != nullptr) {
     state->prev->next = state->next;
@@ -135,7 +135,7 @@ static void rand_thread_state_free(void *state_in) {
     state->next->prev = state->prev;
   }
 
-  CRYPTO_MUTEX_unlock_write(thread_states_list_lock_bss_get());
+  thread_states_list_lock_bss_get()->UnlockWrite();
 
   CTR_DRBG_clear(&state->drbg);
 #endif
@@ -209,7 +209,7 @@ bcm_infallible bssl::BCM_rand_load_entropy(const uint8_t *entropy,
                                            int want_additional_input) {
   struct entropy_buffer *const buffer = entropy_buffer_bss_get();
 
-  CRYPTO_MUTEX_lock_write(entropy_buffer_lock_bss_get());
+  MutexWriteLock lock(entropy_buffer_lock_bss_get());
   const size_t space = sizeof(buffer->bytes) - buffer->bytes_valid;
   if (entropy_len > space) {
     entropy_len = space;
@@ -218,7 +218,6 @@ bcm_infallible bssl::BCM_rand_load_entropy(const uint8_t *entropy,
   OPENSSL_memcpy(&buffer->bytes[buffer->bytes_valid], entropy, entropy_len);
   buffer->bytes_valid += entropy_len;
   buffer->want_additional_input |= want_additional_input && (entropy_len != 0);
-  CRYPTO_MUTEX_unlock_write(entropy_buffer_lock_bss_get());
   return bcm_infallible::not_approved;
 }
 
@@ -231,11 +230,10 @@ static void get_seed_entropy(uint8_t *out_entropy, size_t out_entropy_len,
     abort();
   }
 
-  CRYPTO_MUTEX_lock_write(entropy_buffer_lock_bss_get());
+  MutexWriteLock lock(entropy_buffer_lock_bss_get());
   while (buffer->bytes_valid < out_entropy_len) {
-    CRYPTO_MUTEX_unlock_write(entropy_buffer_lock_bss_get());
+    MutexWriteUnlock unlock(entropy_buffer_lock_bss_get());
     RAND_need_entropy(out_entropy_len - buffer->bytes_valid);
-    CRYPTO_MUTEX_lock_write(entropy_buffer_lock_bss_get());
   }
 
   *out_want_additional_input = buffer->want_additional_input;
@@ -246,8 +244,6 @@ static void get_seed_entropy(uint8_t *out_entropy, size_t out_entropy_len,
   if (buffer->bytes_valid == 0) {
     buffer->want_additional_input = 0;
   }
-
-  CRYPTO_MUTEX_unlock_write(entropy_buffer_lock_bss_get());
 }
 
 // rand_get_seed fills |seed| with entropy. In some cases, it will additionally
@@ -396,9 +392,8 @@ bcm_infallible bssl::BCM_rand_bytes_with_additional_data(
     state->fork_unsafe_buffering = fork_unsafe_buffering;
 
 #if defined(BORINGSSL_FIPS)
-    CRYPTO_MUTEX_init(&state->clear_drbg_lock);
     if (state != &stack_state) {
-      CRYPTO_MUTEX_lock_write(thread_states_list_lock_bss_get());
+      MutexWriteLock lock(thread_states_list_lock_bss_get());
       struct rand_thread_state **states_list = thread_states_list_bss_get();
       state->next = *states_list;
       if (state->next != nullptr) {
@@ -406,7 +401,6 @@ bcm_infallible bssl::BCM_rand_bytes_with_additional_data(
       }
       state->prev = nullptr;
       *states_list = state;
-      CRYPTO_MUTEX_unlock_write(thread_states_list_lock_bss_get());
     }
 #endif
   }
@@ -429,7 +423,7 @@ bcm_infallible bssl::BCM_rand_bytes_with_additional_data(
     // Take a read lock around accesses to |state->drbg|. This is needed to
     // avoid returning bad entropy if we race with
     // |rand_thread_state_clear_all|.
-    CRYPTO_MUTEX_lock_read(&state->clear_drbg_lock);
+    state->clear_drbg_lock.LockRead();
 #endif
     if (!CTR_DRBG_reseed_ex(&state->drbg, seed, sizeof(seed),
                             reseed_additional_data,
@@ -441,7 +435,7 @@ bcm_infallible bssl::BCM_rand_bytes_with_additional_data(
     state->fork_unsafe_buffering = fork_unsafe_buffering;
   } else {
 #if defined(BORINGSSL_FIPS)
-    CRYPTO_MUTEX_lock_read(&state->clear_drbg_lock);
+    state->clear_drbg_lock.LockRead();
 #endif
   }
 
@@ -470,7 +464,7 @@ bcm_infallible bssl::BCM_rand_bytes_with_additional_data(
   }
 
 #if defined(BORINGSSL_FIPS)
-  CRYPTO_MUTEX_unlock_read(&state->clear_drbg_lock);
+  state->clear_drbg_lock.UnlockRead();
 #endif
   return bcm_infallible::approved;
 }

@@ -50,7 +50,7 @@
 #define DEFINE_STATIC_ONCE(name) \
   DEFINE_BSS_GET(bssl::CRYPTO_once_t, name, = CRYPTO_ONCE_INIT)
 #define DEFINE_STATIC_MUTEX(name) \
-  DEFINE_BSS_GET(bssl::CRYPTO_MUTEX, name, = CRYPTO_MUTEX_INIT)
+  DEFINE_BSS_GET(bssl::StaticMutex, name, /* default ctor */)
 #define DEFINE_STATIC_EX_DATA_CLASS(name) \
   DEFINE_BSS_GET(bssl::ExDataClass, name, /* default ctor */)
 

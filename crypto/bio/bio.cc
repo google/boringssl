@@ -633,14 +633,13 @@ void BIO_set_retry_special(BIO *bio) {
 
 int BIO_set_write_buffer_size(BIO *bio, int buffer_size) { return 0; }
 
-static CRYPTO_MUTEX g_index_lock = CRYPTO_MUTEX_INIT;
+static StaticMutex g_index_lock;
 static int g_index = BIO_TYPE_START;
 
 int BIO_get_new_index() {
-  CRYPTO_MUTEX_lock_write(&g_index_lock);
+  MutexWriteLock lock(&g_index_lock);
   // If |g_index| exceeds 255, it will collide with the flags bits.
   int ret = g_index > 255 ? -1 : g_index++;
-  CRYPTO_MUTEX_unlock_write(&g_index_lock);
   return ret;
 }
 

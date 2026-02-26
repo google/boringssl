@@ -51,7 +51,6 @@ static ExDataClass g_ex_data_class;
 DSA *DSA_new() { return New<DSAImpl>(); }
 
 DSAImpl::DSAImpl() : RefCounted(CheckSubClass()) {
-  CRYPTO_MUTEX_init(&method_mont_lock);
   CRYPTO_new_ex_data(&ex_data);
 }
 
@@ -65,7 +64,6 @@ DSAImpl::~DSAImpl() {
   BN_clear_free(priv_key);
   BN_MONT_CTX_free(method_mont_p);
   BN_MONT_CTX_free(method_mont_q);
-  CRYPTO_MUTEX_cleanup(&method_mont_lock);
 }
 
 void DSA_free(DSA *dsa) {
@@ -707,11 +705,9 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
       goto err;
     }
 
-    if (!BN_MONT_CTX_set_locked((BN_MONT_CTX **)&impl->method_mont_p,
-                                (CRYPTO_MUTEX *)&impl->method_mont_lock,
+    if (!BN_MONT_CTX_set_locked(&impl->method_mont_p, &impl->method_mont_lock,
                                 impl->p, ctx) ||
-        !BN_MONT_CTX_set_locked((BN_MONT_CTX **)&impl->method_mont_q,
-                                (CRYPTO_MUTEX *)&impl->method_mont_lock,
+        !BN_MONT_CTX_set_locked(&impl->method_mont_q, &impl->method_mont_lock,
                                 impl->q, ctx)) {
       goto err;
     }
@@ -884,12 +880,10 @@ static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx, BIGNUM **out_kinv,
   if (r == nullptr || kinv == nullptr ||
       // Get random k
       !BN_rand_range_ex(&k, 1, dsa->q) ||
-      !BN_MONT_CTX_set_locked((BN_MONT_CTX **)&dsa->method_mont_p,
-                              (CRYPTO_MUTEX *)&dsa->method_mont_lock, dsa->p,
-                              ctx) ||
-      !BN_MONT_CTX_set_locked((BN_MONT_CTX **)&dsa->method_mont_q,
-                              (CRYPTO_MUTEX *)&dsa->method_mont_lock, dsa->q,
-                              ctx) ||
+      !BN_MONT_CTX_set_locked(&dsa->method_mont_p, &dsa->method_mont_lock,
+                              dsa->p, ctx) ||
+      !BN_MONT_CTX_set_locked(&dsa->method_mont_q, &dsa->method_mont_lock,
+                              dsa->q, ctx) ||
       // Compute r = (g^k mod p) mod q
       !BN_mod_exp_mont_consttime(r, dsa->g, &k, dsa->p, ctx,
                                  dsa->method_mont_p)) {

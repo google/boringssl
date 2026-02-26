@@ -24,7 +24,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-using namespace bssl;
+
+BSSL_NAMESPACE_BEGIN
 
 static BOOL CALLBACK call_once_init(INIT_ONCE *once, void *arg, void **out) {
   void (**init)() = (void (**)())arg;
@@ -32,38 +33,20 @@ static BOOL CALLBACK call_once_init(INIT_ONCE *once, void *arg, void **out) {
   return TRUE;
 }
 
-void bssl::CRYPTO_once(CRYPTO_once_t *once, void (*init)()) {
-  if (!InitOnceExecuteOnce(once, call_once_init, &init, nullptr)) {
-    abort();
-  }
+void CRYPTO_once(CRYPTO_once_t *once, void (*init)()) {
+  BSSL_CHECK(InitOnceExecuteOnce(once, call_once_init, &init, nullptr));
 }
 
-void bssl::CRYPTO_MUTEX_init(CRYPTO_MUTEX *lock) { InitializeSRWLock(lock); }
-
-void bssl::CRYPTO_MUTEX_lock_read(CRYPTO_MUTEX *lock) {
-  AcquireSRWLockShared(lock);
-}
-
-void bssl::CRYPTO_MUTEX_lock_write(CRYPTO_MUTEX *lock) {
-  AcquireSRWLockExclusive(lock);
-}
-
-void bssl::CRYPTO_MUTEX_unlock_read(CRYPTO_MUTEX *lock) {
-  ReleaseSRWLockShared(lock);
-}
-
-void bssl::CRYPTO_MUTEX_unlock_write(CRYPTO_MUTEX *lock) {
-  ReleaseSRWLockExclusive(lock);
-}
-
-void bssl::CRYPTO_MUTEX_cleanup(CRYPTO_MUTEX *lock) {
-  // SRWLOCKs require no cleanup.
-}
+void StaticMutex::LockRead() { AcquireSRWLockShared(&lock_); }
+void StaticMutex::UnlockRead() { ReleaseSRWLockShared(&lock_); }
+void StaticMutex::LockWrite() { AcquireSRWLockExclusive(&lock_); }
+void StaticMutex::UnlockWrite() { ReleaseSRWLockExclusive(&lock_); }
+Mutex::~Mutex() { /* SRWLOCKs require no cleanup. */ }
 
 static SRWLOCK g_destructors_lock = SRWLOCK_INIT;
 static thread_local_destructor_t g_destructors[NUM_OPENSSL_THREAD_LOCALS];
 
-static bssl::CRYPTO_once_t g_thread_local_init_once = CRYPTO_ONCE_INIT;
+static CRYPTO_once_t g_thread_local_init_once = CRYPTO_ONCE_INIT;
 static DWORD g_thread_local_key;
 static int g_thread_local_failed;
 
@@ -194,7 +177,7 @@ static void **get_thread_locals() {
   return ret;
 }
 
-void *bssl::CRYPTO_get_thread_local(thread_local_data_t index) {
+void *CRYPTO_get_thread_local(thread_local_data_t index) {
   CRYPTO_once(&g_thread_local_init_once, thread_local_init);
   if (g_thread_local_failed) {
     return nullptr;
@@ -207,8 +190,8 @@ void *bssl::CRYPTO_get_thread_local(thread_local_data_t index) {
   return pointers[index];
 }
 
-int bssl::CRYPTO_set_thread_local(thread_local_data_t index, void *value,
-                                  thread_local_destructor_t destructor) {
+int CRYPTO_set_thread_local(thread_local_data_t index, void *value,
+                            thread_local_destructor_t destructor) {
   CRYPTO_once(&g_thread_local_init_once, thread_local_init);
   if (g_thread_local_failed) {
     destructor(value);
@@ -238,5 +221,7 @@ int bssl::CRYPTO_set_thread_local(thread_local_data_t index, void *value,
   pointers[index] = value;
   return 1;
 }
+
+BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_WINDOWS_THREADS

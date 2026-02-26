@@ -618,67 +618,74 @@ OPENSSL_EXPORT int CRYPTO_refcount_dec_and_test_zero(CRYPTO_refcount_t *count);
 
 // Locks.
 
+// A Mutex is a read/write lock. It can be constant-initialized, but has a
+// destructor. To allocate a global one, use StaticMutex, which skips the
+// destructor.
+class OPENSSL_EXPORT StaticMutex {
+ public:
+  constexpr StaticMutex() = default;
+  StaticMutex(const StaticMutex &) = delete;
+  StaticMutex &operator=(const StaticMutex &) = delete;
+
+  // LockRead locks the mutex such that other threads may also have a read lock,
+  // but none may have a write lock.
+  void LockRead();
+  // UnlockRead releases a read lock.
+  void UnlockRead();
+
+  // LockWrite locks the mutex such that no other thread has any type of lock on
+  // it.
+  void LockWrite();
+  // UnlockWrite releases a write lock.
+  void UnlockWrite();
+
+protected:
 #if !defined(OPENSSL_THREADS)
-typedef struct crypto_mutex_st {
-  char padding;  // Empty structs have different sizes in C and C++.
-} CRYPTO_MUTEX;
-#define CRYPTO_MUTEX_INIT {0}
+  // Nothing.
 #elif defined(OPENSSL_WINDOWS_THREADS)
-typedef SRWLOCK CRYPTO_MUTEX;
-#define CRYPTO_MUTEX_INIT SRWLOCK_INIT
+  SRWLOCK lock_ = SRWLOCK_INIT;
 #elif defined(OPENSSL_PTHREADS)
-typedef pthread_rwlock_t CRYPTO_MUTEX;
-#define CRYPTO_MUTEX_INIT PTHREAD_RWLOCK_INITIALIZER
+  pthread_rwlock_t lock_ = PTHREAD_RWLOCK_INITIALIZER;
 #else
 #error "Unknown threading library"
 #endif
+};
 
-// CRYPTO_MUTEX_init initialises |lock|. If |lock| is a static variable, use a
-// |CRYPTO_MUTEX_INIT|.
-OPENSSL_EXPORT void CRYPTO_MUTEX_init(CRYPTO_MUTEX *lock);
-
-// CRYPTO_MUTEX_lock_read locks |lock| such that other threads may also have a
-// read lock, but none may have a write lock.
-OPENSSL_EXPORT void CRYPTO_MUTEX_lock_read(CRYPTO_MUTEX *lock);
-
-// CRYPTO_MUTEX_lock_write locks |lock| such that no other thread has any type
-// of lock on it.
-OPENSSL_EXPORT void CRYPTO_MUTEX_lock_write(CRYPTO_MUTEX *lock);
-
-// CRYPTO_MUTEX_unlock_read unlocks |lock| for reading.
-OPENSSL_EXPORT void CRYPTO_MUTEX_unlock_read(CRYPTO_MUTEX *lock);
-
-// CRYPTO_MUTEX_unlock_write unlocks |lock| for writing.
-OPENSSL_EXPORT void CRYPTO_MUTEX_unlock_write(CRYPTO_MUTEX *lock);
-
-// CRYPTO_MUTEX_cleanup releases all resources held by |lock|.
-OPENSSL_EXPORT void CRYPTO_MUTEX_cleanup(CRYPTO_MUTEX *lock);
+class OPENSSL_EXPORT Mutex  : public StaticMutex {
+ public:
+  constexpr Mutex() = default;
+  ~Mutex();
+};
 
 namespace internal {
 
-// MutexLockBase is a RAII helper for CRYPTO_MUTEX locking.
-template <void (*LockFunc)(CRYPTO_MUTEX *), void (*ReleaseFunc)(CRYPTO_MUTEX *)>
+// MutexLockBase is a RAII helper for Mutex locking.
+template <void (StaticMutex::*LockMethod)(),
+          void (StaticMutex::*ReleaseMethod)()>
 class MutexLockBase {
  public:
-  explicit MutexLockBase(CRYPTO_MUTEX *mu) : mu_(mu) {
+  explicit MutexLockBase(StaticMutex *mu) : mu_(mu) {
     assert(mu_ != nullptr);
-    LockFunc(mu_);
+    (mu_->*LockMethod)();
   }
-  ~MutexLockBase() { ReleaseFunc(mu_); }
-  MutexLockBase(const MutexLockBase<LockFunc, ReleaseFunc> &) = delete;
-  MutexLockBase &operator=(const MutexLockBase<LockFunc, ReleaseFunc> &) =
-      delete;
+  ~MutexLockBase() { (mu_->*ReleaseMethod)(); }
+  MutexLockBase(const MutexLockBase &) = delete;
+  MutexLockBase &operator=(const MutexLockBase &) = delete;
 
  private:
-  CRYPTO_MUTEX *const mu_;
+  StaticMutex *const mu_;
 };
 
 }  // namespace internal
 
 using MutexWriteLock =
-    internal::MutexLockBase<CRYPTO_MUTEX_lock_write, CRYPTO_MUTEX_unlock_write>;
+    internal::MutexLockBase<&StaticMutex::LockWrite, &StaticMutex::UnlockWrite>;
 using MutexReadLock =
-    internal::MutexLockBase<CRYPTO_MUTEX_lock_read, CRYPTO_MUTEX_unlock_read>;
+    internal::MutexLockBase<&StaticMutex::LockRead, &StaticMutex::UnlockRead>;
+using MutexWriteUnlock =
+    internal::MutexLockBase<&StaticMutex::UnlockWrite, &StaticMutex::LockWrite>;
+using MutexReadUnlock =
+    internal::MutexLockBase<&StaticMutex::UnlockRead, &StaticMutex::LockRead>;
 
 
 // Thread local storage.
@@ -740,7 +747,7 @@ struct ExDataClass {
   explicit constexpr ExDataClass(bool with_app_data = false)
       : num_reserved(with_app_data ? 1 : 0) {}
 
-  CRYPTO_MUTEX lock = CRYPTO_MUTEX_INIT;
+  StaticMutex lock;
   // funcs is a linked list of |ExDataFuncs| structures. It may be traversed
   // without serialization only up to |num_funcs|. last points to the final
   // entry of |funcs|, or nullptr if empty.

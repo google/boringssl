@@ -39,8 +39,8 @@ class DHImpl : public dh_st, public RefCounted<DHImpl> {
   // the private value will be the same length as |p|.
   unsigned priv_length = 0;
 
-  bssl::CRYPTO_MUTEX method_mont_p_lock;
-  BN_MONT_CTX *method_mont_p = nullptr;
+  mutable Mutex method_mont_p_lock;
+  mutable BN_MONT_CTX *method_mont_p = nullptr;
 
  private:
   friend RefCounted;

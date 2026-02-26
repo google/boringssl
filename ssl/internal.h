@@ -3687,7 +3687,7 @@ struct ssl_ctx_st : public bssl::RefCounted<ssl_ctx_st> {
   const bssl::SSL_X509_METHOD *x509_method = nullptr;
 
   // lock is used to protect various operations on this object.
-  bssl::CRYPTO_MUTEX lock;
+  mutable bssl::Mutex lock;
 
   // conf_max_version is the maximum acceptable protocol version configured by
   // |SSL_CTX_set_max_proto_version|. Note this version is normalized in DTLS

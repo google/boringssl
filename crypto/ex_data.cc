@@ -50,13 +50,12 @@ int CRYPTO_get_ex_new_index_ex(ExDataClass *ex_data_class, long argl,
   funcs->free_func = free_func;
   funcs->next = nullptr;
 
-  CRYPTO_MUTEX_lock_write(&ex_data_class->lock);
+  MutexWriteLock lock(&ex_data_class->lock);
 
   uint32_t num_funcs = ex_data_class->num_funcs.load();
   // The index must fit in |int|.
   if (num_funcs > (size_t)(INT_MAX - ex_data_class->num_reserved)) {
     OPENSSL_PUT_ERROR(CRYPTO, ERR_R_OVERFLOW);
-    CRYPTO_MUTEX_unlock_write(&ex_data_class->lock);
     return -1;
   }
 
@@ -71,7 +70,6 @@ int CRYPTO_get_ex_new_index_ex(ExDataClass *ex_data_class, long argl,
   }
 
   ex_data_class->num_funcs.store(num_funcs + 1);
-  CRYPTO_MUTEX_unlock_write(&ex_data_class->lock);
   return (int)num_funcs + ex_data_class->num_reserved;
 }
 

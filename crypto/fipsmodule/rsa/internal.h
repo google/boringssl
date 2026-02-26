@@ -64,7 +64,7 @@ class RSAImpl : public rsa_st, public RefCounted<RSAImpl> {
   CRYPTO_EX_DATA ex_data = {};
   int flags;
 
-  bssl::CRYPTO_MUTEX lock;
+  Mutex lock;
 
   // Used to cache montgomery values. The creation of these values is protected
   // by |lock|.

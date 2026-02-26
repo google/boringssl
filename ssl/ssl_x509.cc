@@ -630,7 +630,7 @@ X509 *SSL_get_certificate(const SSL *ssl) {
 
 X509 *SSL_CTX_get0_certificate(const SSL_CTX *ctx) {
   check_ssl_ctx_x509_method(ctx);
-  MutexWriteLock lock(const_cast<CRYPTO_MUTEX *>(&ctx->lock));
+  MutexWriteLock lock(&ctx->lock);
   return ssl_cert_get0_leaf(ctx->cert.get());
 }
 
@@ -768,7 +768,7 @@ static int ssl_cert_cache_chain_certs(CERT *cert) {
 
 int SSL_CTX_get0_chain_certs(const SSL_CTX *ctx, STACK_OF(X509) **out_chain) {
   check_ssl_ctx_x509_method(ctx);
-  MutexWriteLock lock(const_cast<CRYPTO_MUTEX *>(&ctx->lock));
+  MutexWriteLock lock(&ctx->lock);
   if (!ssl_cert_cache_chain_certs(ctx->cert.get())) {
     *out_chain = nullptr;
     return 0;
@@ -936,7 +936,7 @@ STACK_OF(X509_NAME) *SSL_CTX_get_client_CA_list(const SSL_CTX *ctx) {
   check_ssl_ctx_x509_method(ctx);
   // This is a logically const operation that may be called on multiple threads,
   // so it needs to lock around updating |cached_x509_client_CA|.
-  MutexWriteLock lock(const_cast<CRYPTO_MUTEX *>(&ctx->lock));
+  MutexWriteLock lock(&ctx->lock);
   return buffer_names_to_x509(
       ctx->client_CA.get(),
       const_cast<STACK_OF(X509_NAME) **>(&ctx->cached_x509_client_CA));

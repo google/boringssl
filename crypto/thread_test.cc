@@ -58,7 +58,7 @@ TEST(ThreadTest, Once) {
 }
 
 static CRYPTO_once_t once_init_value = CRYPTO_ONCE_INIT;
-static CRYPTO_MUTEX mutex_init_value = CRYPTO_MUTEX_INIT;
+static Mutex mutex_init_value;
 static ExDataClass ex_data_class_value;
 
 template <typename T>

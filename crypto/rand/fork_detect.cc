@@ -42,7 +42,7 @@ static_assert(MADV_WIPEONFORK == 18);
 static int g_force_madv_wipeonfork;
 static int g_force_madv_wipeonfork_enabled;
 static CRYPTO_once_t g_fork_detect_once = CRYPTO_ONCE_INIT;
-static CRYPTO_MUTEX g_fork_detect_lock = CRYPTO_MUTEX_INIT;
+static StaticMutex g_fork_detect_lock;
 static Atomic<uint32_t> *g_fork_detect_addr;
 static uint64_t g_fork_generation;
 
@@ -124,8 +124,7 @@ uint64_t bssl::CRYPTO_get_fork_generation() {
   // The flag was zero. The generation number must be incremented, but other
   // threads may have concurrently observed the zero, so take a lock before
   // incrementing.
-  CRYPTO_MUTEX *const lock = &g_fork_detect_lock;
-  CRYPTO_MUTEX_lock_write(lock);
+  MutexWriteLock lock(&g_fork_detect_lock);
   uint64_t current_generation = *generation_ptr;
   if (flag_ptr->load() == 0) {
     // A fork has occurred.
@@ -140,7 +139,6 @@ uint64_t bssl::CRYPTO_get_fork_generation() {
     *generation_ptr = current_generation;
     flag_ptr->store(1);
   }
-  CRYPTO_MUTEX_unlock_write(lock);
 
   return current_generation;
 }

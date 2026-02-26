@@ -37,9 +37,9 @@ class DSAImpl : public dsa_st, public RefCounted<DSAImpl> {
   BIGNUM *priv_key = nullptr;
 
   // Normally used to cache montgomery values
-  bssl::CRYPTO_MUTEX method_mont_lock;
-  BN_MONT_CTX *method_mont_p = nullptr;
-  BN_MONT_CTX *method_mont_q = nullptr;
+  mutable Mutex method_mont_lock;
+  mutable BN_MONT_CTX *method_mont_p = nullptr;
+  mutable BN_MONT_CTX *method_mont_q = nullptr;
   CRYPTO_EX_DATA ex_data;
 
  private:

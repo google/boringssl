@@ -61,9 +61,7 @@ CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_new() {
     return nullptr;
   }
 
-  CRYPTO_MUTEX_init(&pool->lock);
   RAND_bytes((uint8_t *)&pool->hash_key, sizeof(pool->hash_key));
-
   return pool;
 }
 
@@ -74,13 +72,12 @@ void CRYPTO_BUFFER_POOL_free(CRYPTO_BUFFER_POOL *pool) {
   }
 
 #if !defined(NDEBUG)
-  CRYPTO_MUTEX_lock_write(&impl->lock);
+  impl->lock.LockWrite();
   assert(lh_CryptoBuffer_num_items(impl->bufs) == 0);
-  CRYPTO_MUTEX_unlock_write(&impl->lock);
+  impl->lock.UnlockWrite();
 #endif
 
   lh_CryptoBuffer_free(impl->bufs);
-  CRYPTO_MUTEX_cleanup(&impl->lock);
   Delete(impl);
 }
 
@@ -97,7 +94,7 @@ static CryptoBuffer *crypto_buffer_new(Span<const uint8_t> data,
   if (pool != nullptr) {
     // Look for a matching buffer in the pool.
     uint32_t hash = hash_data(pool, data);
-    CRYPTO_MUTEX_lock_read(&pool->lock);
+    MutexReadLock lock(&pool->lock);
     CryptoBuffer *duplicate = lh_CryptoBuffer_retrieve_key(
         pool->bufs, &data, hash,
         [](const void *key_v, const CryptoBuffer *buf) -> int {
@@ -112,10 +109,6 @@ static CryptoBuffer *crypto_buffer_new(Span<const uint8_t> data,
     }
     if (duplicate != nullptr) {
       CRYPTO_refcount_inc(&duplicate->references);
-    }
-    CRYPTO_MUTEX_unlock_read(&pool->lock);
-
-    if (duplicate != nullptr) {
       return duplicate;
     }
   }
@@ -146,7 +139,7 @@ static CryptoBuffer *crypto_buffer_new(Span<const uint8_t> data,
 
   buf->pool = pool;
 
-  CRYPTO_MUTEX_lock_write(&pool->lock);
+  pool->lock.LockWrite();
   CryptoBuffer *duplicate = lh_CryptoBuffer_retrieve(pool->bufs, buf);
   if (data_is_static && duplicate != nullptr && !duplicate->data_is_static) {
     // If the new |CRYPTO_BUFFER| would have static data, but the duplicate does
@@ -163,7 +156,7 @@ static CryptoBuffer *crypto_buffer_new(Span<const uint8_t> data,
   } else {
     CRYPTO_refcount_inc(&duplicate->references);
   }
-  CRYPTO_MUTEX_unlock_write(&pool->lock);
+  pool->lock.UnlockWrite();
 
   if (!inserted) {
     // We raced to insert |buf| into the pool and lost, or else there was an
@@ -228,28 +221,28 @@ void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
     return;
   }
 
-  CRYPTO_MUTEX_lock_write(&pool->lock);
-  if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
-    CRYPTO_MUTEX_unlock_write(&impl->pool->lock);
-    return;
+  {
+    MutexWriteLock lock(&pool->lock);
+    if (!CRYPTO_refcount_dec_and_test_zero(&impl->references)) {
+      return;
+    }
+
+    // We have an exclusive lock on the pool, therefore no concurrent lookups
+    // can find this buffer and increment the reference count. Thus, if the
+    // count is zero there are and can never be any more references and thus we
+    // can free this buffer.
+    //
+    // Note it is possible |buf| is no longer in the pool, if it was replaced by
+    // a static version. If that static version was since removed, it is even
+    // possible for |found| to be NULL.
+    CryptoBuffer *found = lh_CryptoBuffer_retrieve(pool->bufs, impl);
+    if (found == impl) {
+      found = lh_CryptoBuffer_delete(pool->bufs, impl);
+      assert(found == impl);
+      (void)found;
+    }
   }
 
-  // We have an exclusive lock on the pool, therefore no concurrent lookups can
-  // find this buffer and increment the reference count. Thus, if the count is
-  // zero there are and can never be any more references and thus we can free
-  // this buffer.
-  //
-  // Note it is possible |buf| is no longer in the pool, if it was replaced by a
-  // static version. If that static version was since removed, it is even
-  // possible for |found| to be NULL.
-  CryptoBuffer *found = lh_CryptoBuffer_retrieve(pool->bufs, impl);
-  if (found == impl) {
-    found = lh_CryptoBuffer_delete(pool->bufs, impl);
-    assert(found == impl);
-    (void)found;
-  }
-
-  CRYPTO_MUTEX_unlock_write(&impl->pool->lock);
   crypto_buffer_free_object(impl);
 }
 

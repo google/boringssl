@@ -632,7 +632,7 @@ static bool remove_session(SSL_CTX *ctx, SSL_SESSION *session, bool lock) {
   }
 
   if (lock) {
-    CRYPTO_MUTEX_lock_write(&ctx->lock);
+    ctx->lock.LockWrite();
   }
 
   SSL_SESSION *found_session = lh_SSL_SESSION_retrieve(ctx->sessions, session);
@@ -643,7 +643,7 @@ static bool remove_session(SSL_CTX *ctx, SSL_SESSION *session, bool lock) {
   }
 
   if (lock) {
-    CRYPTO_MUTEX_unlock_write(&ctx->lock);
+    ctx->lock.UnlockWrite();
   }
 
   if (found) {

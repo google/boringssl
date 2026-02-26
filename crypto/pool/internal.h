@@ -29,7 +29,7 @@ class CryptoBuffer : public crypto_buffer_st {
   CryptoBufferPool *pool;
   uint8_t *data;
   size_t len;
-  bssl::CRYPTO_refcount_t references;
+  CRYPTO_refcount_t references;
   int data_is_static;
 };
 
@@ -38,7 +38,7 @@ DEFINE_LHASH_OF(CryptoBuffer)
 class CryptoBufferPool : public crypto_buffer_pool_st {
  public:
   LHASH_OF(CryptoBuffer) *bufs;
-  bssl::CRYPTO_MUTEX lock;
+  Mutex lock;
   uint64_t hash_key[2];
 };
 

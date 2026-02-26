@@ -331,7 +331,7 @@ static int crl_revoked_issuer_match(const X509_CRL *crl, const X509_NAME *nm,
   return nm == nullptr || X509_NAME_cmp(nm, X509_CRL_get_issuer(crl)) == 0;
 }
 
-static CRYPTO_MUTEX g_crl_sort_lock = CRYPTO_MUTEX_INIT;
+static StaticMutex g_crl_sort_lock;
 
 static int crl_lookup(X509_CRL *crl, X509_REVOKED **ret,
                       const ASN1_INTEGER *serial, const X509_NAME *issuer) {
@@ -344,16 +344,15 @@ static int crl_lookup(X509_CRL *crl, X509_REVOKED **ret,
   // Sort revoked into serial number order if not already sorted. Do this
   // under a lock to avoid race condition.
 
-  CRYPTO_MUTEX_lock_read(&g_crl_sort_lock);
+  g_crl_sort_lock.LockRead();
   const int is_sorted = sk_X509_REVOKED_is_sorted(crl->crl->revoked);
-  CRYPTO_MUTEX_unlock_read(&g_crl_sort_lock);
+  g_crl_sort_lock.UnlockRead();
 
   if (!is_sorted) {
-    CRYPTO_MUTEX_lock_write(&g_crl_sort_lock);
+    MutexWriteLock lock(&g_crl_sort_lock);
     if (!sk_X509_REVOKED_is_sorted(crl->crl->revoked)) {
       sk_X509_REVOKED_sort(crl->crl->revoked);
     }
-    CRYPTO_MUTEX_unlock_write(&g_crl_sort_lock);
   }
 
   if (!sk_X509_REVOKED_find(crl->crl->revoked, &idx, &rtmp)) {

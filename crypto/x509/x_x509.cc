@@ -55,7 +55,6 @@ X509Impl::X509Impl() : RefCounted(CheckSubClass()) {
   x509_algor_init(&sig_alg);
   asn1_string_init(&signature, V_ASN1_BIT_STRING);
   CRYPTO_new_ex_data(&ex_data);
-  CRYPTO_MUTEX_init(&lock);
 }
 
 X509 *X509_new() { return NewZeroed<X509Impl>(); }
@@ -82,7 +81,6 @@ X509Impl::~X509Impl() {
   GENERAL_NAMES_free(altname);
   NAME_CONSTRAINTS_free(nc);
   X509_CERT_AUX_free(aux);
-  CRYPTO_MUTEX_cleanup(&lock);
 }
 
 void X509_free(X509 *x509) {

@@ -19,17 +19,11 @@
 
 using namespace bssl;
 
-void bssl::CRYPTO_MUTEX_init(CRYPTO_MUTEX *lock) {}
-
-void bssl::CRYPTO_MUTEX_lock_read(CRYPTO_MUTEX *lock) {}
-
-void bssl::CRYPTO_MUTEX_lock_write(CRYPTO_MUTEX *lock) {}
-
-void bssl::CRYPTO_MUTEX_unlock_read(CRYPTO_MUTEX *lock) {}
-
-void bssl::CRYPTO_MUTEX_unlock_write(CRYPTO_MUTEX *lock) {}
-
-void bssl::CRYPTO_MUTEX_cleanup(CRYPTO_MUTEX *lock) {}
+void StaticMutex::LockRead() {}
+void StaticMutex::UnlockRead() {}
+void StaticMutex::LockWrite() {}
+void StaticMutex::UnlockWrite() {}
+Mutex::~Mutex() {}
 
 void bssl::CRYPTO_once(CRYPTO_once_t *once, void (*init)()) {
   if (*once) {

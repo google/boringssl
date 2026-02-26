@@ -158,7 +158,7 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
   NAME_CONSTRAINTS *nc;
   unsigned char cert_hash[SHA256_DIGEST_LENGTH];
   bssl::X509_CERT_AUX *aux;
-  bssl::CRYPTO_MUTEX lock;
+  Mutex lock;
 
  private:
   friend RefCounted;
@@ -340,10 +340,10 @@ class X509Store : public x509_store_st, public RefCounted<X509Store> {
 
   // The following is a cache of trusted certs
   STACK_OF(X509_OBJECT) *objs;  // Cache of all objects
-  bssl::CRYPTO_MUTEX objs_lock;
+  Mutex objs_lock;
 
   // These are external lookup methods
-  bssl::StackOfX509Lookup *get_cert_methods;
+  StackOfX509Lookup *get_cert_methods;
 
   X509_VERIFY_PARAM *param;
 

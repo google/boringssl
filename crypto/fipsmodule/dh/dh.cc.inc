@@ -32,9 +32,7 @@
 
 using namespace bssl;
 
-DHImpl::DHImpl() : RefCounted(CheckSubClass()) {
-  CRYPTO_MUTEX_init(&method_mont_p_lock);
-}
+DHImpl::DHImpl() : RefCounted(CheckSubClass()) {}
 
 DH *DH_new() { return New<DHImpl>(); }
 
@@ -45,7 +43,6 @@ DHImpl::~DHImpl() {
   BN_clear_free(q);
   BN_clear_free(pub_key);
   BN_clear_free(priv_key);
-  CRYPTO_MUTEX_cleanup(&method_mont_p_lock);
 }
 
 void DH_free(DH *dh) {
