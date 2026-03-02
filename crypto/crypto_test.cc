@@ -175,6 +175,17 @@ TEST(CryptoTest, DeprecatedFunction) {
 }
 OPENSSL_END_ALLOW_DEPRECATED
 
+TEST(CryptoTest, Cleanup) {
+  bool cleaned_up = false;
+  {
+    Cleanup cleanup = [&] {
+      EXPECT_FALSE(cleaned_up);  // Cleanup should run exactly once.
+      cleaned_up = true;
+    };
+    EXPECT_FALSE(cleaned_up);  // Cleanup should not run yet.
+  }
+  EXPECT_TRUE(cleaned_up);  // Cleanup should have run.
+}
 
 #if (defined(OPENSSL_X86) || defined(OPENSSL_X86_64)) && \
     !defined(OPENSSL_NO_ASM) && !defined(BORINGSSL_SHARED_LIBRARY)
