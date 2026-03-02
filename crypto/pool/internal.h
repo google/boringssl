@@ -26,20 +26,47 @@ BSSL_NAMESPACE_BEGIN
 
 class CryptoBuffer : public crypto_buffer_st {
  public:
-  CryptoBufferPool *pool;
-  uint8_t *data;
-  size_t len;
-  CRYPTO_refcount_t references;
-  int data_is_static;
+  CryptoBuffer() = default;
+  CryptoBuffer(const CryptoBuffer &) = delete;
+  CryptoBuffer &operator=(const CryptoBuffer &) = delete;
+
+  Span<const uint8_t> span() const { return Span(data_, len_); }
+
+  // Instead of subclassing RefCounted<T>, implement refcounting by hand.
+  // CryptoBuffer's refcounting must synchronize with CryptoBufferPool.
+  static constexpr bool kAllowRefCountedUniquePtr = true;
+  void UpRefInternal();
+  void DecRefInternal();
+
+  CryptoBufferPool *pool_ = nullptr;
+  uint8_t *data_ = nullptr;
+  size_t len_ = 0;
+  CRYPTO_refcount_t references_ = 1;
+  bool data_is_static_ = false;
+
+ private:
+  ~CryptoBuffer();
 };
 
 DEFINE_LHASH_OF(CryptoBuffer)
 
 class CryptoBufferPool : public crypto_buffer_pool_st {
  public:
-  LHASH_OF(CryptoBuffer) *bufs;
-  Mutex lock;
-  uint64_t hash_key[2];
+  static constexpr bool kAllowUniquePtr = true;
+  CryptoBufferPool();
+  ~CryptoBufferPool();
+
+  // Hash returns the hash of |data|.
+  uint32_t Hash(Span<const uint8_t> data) const;
+
+  // FindBufferLocked looks for a buffer with hash |hash| and contents |data|.
+  // It returns it if found and nullptr otherwise. |handle_->lock_| must be
+  // locked for reading or writing before calling this.
+  CryptoBuffer *FindBufferLocked(uint32_t hash, Span<const uint8_t> data);
+
+  LHASH_OF(CryptoBuffer) *bufs_ = nullptr;
+  Mutex lock_;
+  uint64_t hash_key_[2];
 };
 
 BSSL_NAMESPACE_END

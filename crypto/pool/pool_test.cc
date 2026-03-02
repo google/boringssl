@@ -94,7 +94,7 @@ TEST(PoolTest, Pooled) {
 
   // When the last refcount on |buf3| is dropped, it is removed from the pool.
   buf3 = nullptr;
-  EXPECT_EQ(1u, lh_CryptoBuffer_num_items(FromOpaque(pool.get())->bufs));
+  EXPECT_EQ(1u, lh_CryptoBuffer_num_items(FromOpaque(pool.get())->bufs_));
 
   // Static buffers participate in pooling.
   buf3.reset(CRYPTO_BUFFER_new_from_static_data_unsafe(kData2, sizeof(kData2),
