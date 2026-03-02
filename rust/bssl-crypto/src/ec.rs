@@ -387,7 +387,9 @@ impl Key {
         }
     }
 
-    /// Parses an ECPrivateKey structure (from RFC 5915).
+    /// Parses an ECPrivateKey structure from [RFC 5915].
+    ///
+    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
     pub fn from_der_ec_private_key(group: Group, der: &[u8]) -> Option<Self> {
         let key = parse_with_cbs(
             der,
@@ -401,19 +403,39 @@ impl Key {
         Some(Self(key))
     }
 
-    /// Serializes this private key as an ECPrivateKey structure from RFC 5915.
+    /// Parses an ECPrivateKey structure from [RFC 5915], whose curve is specified by
+    /// the `ECParameters`.
+    ///
+    /// Unless the curve group is one of the variants of [`Group`], this method returns [`None`].
+    ///
+    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
+    pub fn from_der_ec_private_key_with_curve_names(der: &[u8]) -> Option<Self> {
+        let key = parse_with_cbs(
+            der,
+            // Safety: in this context, `key` is the non-null result of
+            // `EC_KEY_parse_private_key`.
+            |key| unsafe { bssl_sys::EC_KEY_free(key) },
+            // Safety: `cbs` is valid per `parse_with_cbs`.
+            |cbs| unsafe { bssl_sys::EC_KEY_parse_private_key(cbs, null()) },
+        )?;
+        let key = Self(key);
+        if key.get_group().is_none() {
+            None
+        } else {
+            Some(key)
+        }
+    }
+
+    /// Serializes this private key as an ECPrivateKey structure from [RFC 5915].
+    ///
+    /// This method also **serialise** known curve names as `ECParameters`.
+    ///
+    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
     pub fn to_der_ec_private_key(&self) -> Buffer {
         cbb_to_buffer(64, |cbb| unsafe {
             // Safety: the `EC_KEY` is always valid so `EC_KEY_marshal_private_key`
             // should only fail if out of memory, which this crate doesn't handle.
-            assert_eq!(
-                1,
-                bssl_sys::EC_KEY_marshal_private_key(
-                    cbb,
-                    self.0,
-                    bssl_sys::EC_PKEY_NO_PARAMETERS as u32
-                )
-            );
+            assert_eq!(1, bssl_sys::EC_KEY_marshal_private_key(cbb, self.0, 0));
         })
     }
 
@@ -720,12 +742,13 @@ mod test {
         );
     }
 
-    fn test_key_format<Serialize, Parse>(serialize_func: Serialize, parse_func: Parse)
+    fn test_key_format<Serialize, Parse>(group: Group, serialize_func: Serialize, parse_func: Parse)
     where
         Serialize: FnOnce(&Key) -> Buffer,
         Parse: Fn(&[u8]) -> Option<Key>,
     {
-        let key = Key::generate(Group::P256);
+        let key = Key::generate(group);
+        assert_eq!(key.get_group().unwrap(), group);
 
         let vec = serialize_func(&key).as_ref().to_vec();
         let key2 = parse_func(vec.as_slice()).unwrap();
@@ -733,6 +756,7 @@ mod test {
             key.to_x962_uncompressed().as_ref(),
             key2.to_x962_uncompressed().as_ref()
         );
+        assert_eq!(key.get_group(), key2.get_group());
 
         assert!(parse_func(&vec.as_slice()[0..16]).is_none());
         assert!(parse_func(b"").is_none());
@@ -740,25 +764,39 @@ mod test {
 
     #[test]
     fn der_ec_private_key() {
-        test_key_format(
-            |key| key.to_der_ec_private_key(),
-            |buf| Key::from_der_ec_private_key(Group::P256, buf),
-        );
+        for group in [Group::P256, Group::P384] {
+            test_key_format(
+                group,
+                |key| key.to_der_ec_private_key(),
+                |buf| Key::from_der_ec_private_key(group, buf),
+            );
+            test_key_format(
+                group,
+                |key| key.to_der_ec_private_key(),
+                |buf| Key::from_der_ec_private_key_with_curve_names(buf),
+            );
+        }
     }
 
     #[test]
     fn der_private_key_info() {
-        test_key_format(
-            |key| key.to_der_private_key_info(),
-            |buf| Key::from_der_private_key_info(Group::P256, buf),
-        );
+        for group in [Group::P256, Group::P384] {
+            test_key_format(
+                group,
+                |key| key.to_der_private_key_info(),
+                |buf| Key::from_der_private_key_info(group, buf),
+            );
+        }
     }
 
     #[test]
     fn big_endian() {
-        test_key_format(
-            |key| key.to_big_endian(),
-            |buf| Key::from_big_endian(Group::P256, buf),
-        );
+        for group in [Group::P256, Group::P384] {
+            test_key_format(
+                group,
+                |key| key.to_big_endian(),
+                |buf| Key::from_big_endian(group, buf),
+            );
+        }
     }
 }
