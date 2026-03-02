@@ -89,24 +89,24 @@ void CRYPTO_BUFFER_POOL_free(CRYPTO_BUFFER_POOL *pool) {
 }
 
 void CryptoBuffer::UpRefInternal() {
-  // This is safe in the case that |buf->pool| is NULL because it's just
-  // standard reference counting in that case.
-  //
-  // This is also safe if |buf->pool| is non-NULL because, if it were racing
-  // with |CRYPTO_BUFFER_free| then the two callers must have independent
-  // references already and so the reference count will never hit zero.
+  // Note that, unlike standard ref-counting, it is possible that |references_|
+  // is zero and this function increases the reference count to one. See
+  // DecRefInternal below.
   CRYPTO_refcount_inc(&references_);
 }
 
 void CryptoBuffer::DecRefInternal() {
-  // If there is a pool, decrementing the refcount must synchronize with it.
-  if (pool_handle_ == nullptr) {
-    if (!CRYPTO_refcount_dec_and_test_zero(&references_)) {
-      return;
-    }
-  } else {
+  if (!CRYPTO_refcount_dec_and_test_zero(&references_)) {
+    return;
+  }
+
+  if (pool_handle_ != nullptr) {
+    // Although the reference count is zero, there is still a weak reference
+    // from the pool. Some other thread may concurrently upgrade the weak
+    // reference to a strong reference. Synchronize with the pool and see if
+    // this has happened.
     MutexWriteLock lock(&pool_handle_->lock_);
-    if (!CRYPTO_refcount_dec_and_test_zero(&references_)) {
+    if (references_.load() != 0) {
       return;
     }
 
@@ -127,6 +127,10 @@ void CryptoBuffer::DecRefInternal() {
         (void)found;
       }
     }
+
+    // The weak reference is now removed. When we unlock the pool handle,
+    // another thread cannot upgrade to a strong reference, so we can free the
+    // buffer.
   }
 
   this->~CryptoBuffer();
@@ -178,6 +182,8 @@ static UniquePtr<CryptoBuffer> crypto_buffer_new_with_pool(
       duplicate = nullptr;
     }
     if (duplicate != nullptr) {
+      // UpRef must be called under the lock. This converts the pool's weak
+      // reference to a strong reference. See CryptoBuffer::DecRefInternal.
       return UpRef(duplicate);
     }
   }
@@ -195,6 +201,8 @@ static UniquePtr<CryptoBuffer> crypto_buffer_new_with_pool(
     duplicate = nullptr;
   }
   if (duplicate != nullptr) {
+    // UpRef must be called under the lock. This converts the pool's weak
+    // reference to a strong reference. See CryptoBuffer::DecRefInternal.
     return UpRef(duplicate);
   }
 
