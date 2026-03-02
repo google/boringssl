@@ -68,10 +68,8 @@ static_assert(SSL_R_TLSV1_ALERT_NO_RENEGOTIATION ==
 // kMaxHandshakeSize is the maximum size, in bytes, of a handshake message.
 static const size_t kMaxHandshakeSize = (1u << 24) - 1;
 
-static CRYPTO_EX_DATA_CLASS g_ex_data_class_ssl =
-    CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA;
-static CRYPTO_EX_DATA_CLASS g_ex_data_class_ssl_ctx =
-    CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA;
+static ExDataClass g_ex_data_class_ssl(/*with_app_data=*/true);
+static ExDataClass g_ex_data_class_ssl_ctx(/*with_app_data=*/true);
 
 void ssl_reset_error_state(SSL *ssl) {
   // Functions which use |SSL_get_error| must reset I/O and error state on

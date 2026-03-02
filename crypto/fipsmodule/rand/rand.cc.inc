@@ -91,7 +91,7 @@ struct rand_thread_state {
 // objects in the process, one per thread. This is needed because FIPS requires
 // that they be zeroed on process exit, but thread-local destructors aren't
 // called when the whole process is exiting.
-DEFINE_BSS_GET(struct rand_thread_state *, thread_states_list, nullptr)
+DEFINE_BSS_GET(struct rand_thread_state *, thread_states_list, = nullptr)
 DEFINE_STATIC_MUTEX(thread_states_list_lock)
 
 static void rand_thread_state_clear_all() __attribute__((destructor));
@@ -201,7 +201,7 @@ struct entropy_buffer {
   int want_additional_input;
 };
 
-DEFINE_BSS_GET(struct entropy_buffer, entropy_buffer, {})
+DEFINE_BSS_GET(struct entropy_buffer, entropy_buffer, = {})
 DEFINE_STATIC_MUTEX(entropy_buffer_lock)
 
 bcm_infallible bssl::BCM_rand_load_entropy(const uint8_t *entropy,

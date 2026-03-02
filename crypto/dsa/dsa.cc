@@ -46,7 +46,7 @@ static_assert(OPENSSL_DSA_MAX_MODULUS_BITS <=
 static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
                           BIGNUM **out_r);
 
-static CRYPTO_EX_DATA_CLASS g_ex_data_class = CRYPTO_EX_DATA_CLASS_INIT;
+static ExDataClass g_ex_data_class;
 
 DSA *DSA_new() { return New<DSAImpl>(); }
 

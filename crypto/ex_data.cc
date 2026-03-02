@@ -29,18 +29,18 @@
 
 BSSL_NAMESPACE_BEGIN
 
-struct crypto_ex_data_func_st {
+struct ExDataFuncs {
   long argl;   // Arbitrary long
   void *argp;  // Arbitrary void pointer
   CRYPTO_EX_free *free_func;
-  // next points to the next |CRYPTO_EX_DATA_FUNCS| or NULL if this is the last
+  // next points to the next |ExDataFuncs| or NULL if this is the last
   // one. It may only be read if synchronized with a read from |num_funcs|.
-  CRYPTO_EX_DATA_FUNCS *next;
+  ExDataFuncs *next;
 };
 
-int CRYPTO_get_ex_new_index_ex(CRYPTO_EX_DATA_CLASS *ex_data_class, long argl,
+int CRYPTO_get_ex_new_index_ex(ExDataClass *ex_data_class, long argl,
                                void *argp, CRYPTO_EX_free *free_func) {
-  CRYPTO_EX_DATA_FUNCS *funcs = New<CRYPTO_EX_DATA_FUNCS>();
+  ExDataFuncs *funcs = New<ExDataFuncs>();
   if (funcs == nullptr) {
     return -1;
   }
@@ -110,8 +110,7 @@ void *CRYPTO_get_ex_data(const CRYPTO_EX_DATA *ad, int idx) {
 
 void CRYPTO_new_ex_data(CRYPTO_EX_DATA *ad) { ad->sk = nullptr; }
 
-void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class,
-                         CRYPTO_EX_DATA *ad) {
+void CRYPTO_free_ex_data(ExDataClass *ex_data_class, CRYPTO_EX_DATA *ad) {
   if (ad->sk == nullptr) {
     // Nothing to do.
     return;
@@ -123,7 +122,7 @@ void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class,
 
   // Defer dereferencing |ex_data_class->funcs| and |funcs->next|. It must come
   // after the |num_funcs| comparison to be correctly synchronized.
-  CRYPTO_EX_DATA_FUNCS *const *funcs = &ex_data_class->funcs;
+  ExDataFuncs *const *funcs = &ex_data_class->funcs;
   for (uint32_t i = 0; i < num_funcs; i++) {
     if ((*funcs)->free_func != nullptr) {
       int index = (int)i + ex_data_class->num_reserved;

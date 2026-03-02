@@ -28,11 +28,11 @@
 
 #if !defined(BORINGSSL_SHARED_LIBRARY) && defined(BORINGSSL_FIPS) && \
     !defined(OPENSSL_ASAN) && !defined(OPENSSL_MSAN)
-#define DEFINE_BSS_GET(type, name, init_value)                                 \
+#define DEFINE_BSS_GET(type, name, init_expr)                                  \
   /* delocate needs C linkage and for |name| to be unique across BCM. */       \
   extern "C" {                                                                 \
   extern type BCM_ADD_PREFIX(name);                                            \
-  type BCM_ADD_PREFIX(name) = init_value;                                      \
+  type BCM_ADD_PREFIX(name) init_expr;                                         \
   type *BCM_ADD_PREFIX(name##_bss_get)() __attribute__((const));               \
   } /* extern "C" */                                                           \
                                                                                \
@@ -41,18 +41,18 @@
    * a short name, while the symbol itself is prefixed. */                     \
   static type *name##_bss_get() { return BCM_ADD_PREFIX(name##_bss_get)(); }
 #else
-#define DEFINE_BSS_GET(type, name, init_value) \
-  static type name = init_value;               \
+#define DEFINE_BSS_GET(type, name, init_expr) \
+  static type name init_expr;                 \
   static type *name##_bss_get() { return &name; }
 #endif
 
 // For FIPS builds we require each of these objects be all zero.
 #define DEFINE_STATIC_ONCE(name) \
-  DEFINE_BSS_GET(bssl::CRYPTO_once_t, name, CRYPTO_ONCE_INIT)
+  DEFINE_BSS_GET(bssl::CRYPTO_once_t, name, = CRYPTO_ONCE_INIT)
 #define DEFINE_STATIC_MUTEX(name) \
-  DEFINE_BSS_GET(bssl::CRYPTO_MUTEX, name, CRYPTO_MUTEX_INIT)
+  DEFINE_BSS_GET(bssl::CRYPTO_MUTEX, name, = CRYPTO_MUTEX_INIT)
 #define DEFINE_STATIC_EX_DATA_CLASS(name) \
-  DEFINE_BSS_GET(bssl::CRYPTO_EX_DATA_CLASS, name, CRYPTO_EX_DATA_CLASS_INIT)
+  DEFINE_BSS_GET(bssl::ExDataClass, name, /* default ctor */)
 
 #define DEFINE_DATA(type, name, accessor_decorations)                     \
   DEFINE_BSS_GET(type, name##_storage, {})                                \

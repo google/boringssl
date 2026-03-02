@@ -731,33 +731,32 @@ struct crypto_ex_data_st {
 
 BSSL_NAMESPACE_BEGIN
 
-typedef struct crypto_ex_data_func_st CRYPTO_EX_DATA_FUNCS;
+struct ExDataFuncs;
 
-// CRYPTO_EX_DATA_CLASS tracks the ex_indices registered for a type which
+// ExDataClass tracks the ex_indices registered for a type which
 // supports ex_data. It should defined as a static global within the module
 // which defines that type.
-typedef struct {
-  CRYPTO_MUTEX lock;
-  // funcs is a linked list of |CRYPTO_EX_DATA_FUNCS| structures. It may be
-  // traversed without serialization only up to |num_funcs|. last points to the
-  // final entry of |funcs|, or NULL if empty.
-  CRYPTO_EX_DATA_FUNCS *funcs, *last;
+struct ExDataClass {
+  explicit constexpr ExDataClass(bool with_app_data = false)
+      : num_reserved(with_app_data ? 1 : 0) {}
+
+  CRYPTO_MUTEX lock = CRYPTO_MUTEX_INIT;
+  // funcs is a linked list of |ExDataFuncs| structures. It may be traversed
+  // without serialization only up to |num_funcs|. last points to the final
+  // entry of |funcs|, or nullptr if empty.
+  ExDataFuncs *funcs = nullptr, *last = nullptr;
   // num_funcs is the number of entries in |funcs|.
-  Atomic<uint32_t> num_funcs;
+  Atomic<uint32_t> num_funcs = 0;
   // num_reserved is one if the ex_data index zero is reserved for legacy
   // |TYPE_get_app_data| functions.
-  uint8_t num_reserved;
-} CRYPTO_EX_DATA_CLASS;
-
-#define CRYPTO_EX_DATA_CLASS_INIT {CRYPTO_MUTEX_INIT, nullptr, nullptr, {}, 0}
-#define CRYPTO_EX_DATA_CLASS_INIT_WITH_APP_DATA \
-  {CRYPTO_MUTEX_INIT, nullptr, nullptr, {}, 1}
+  uint8_t num_reserved = 0;
+};
 
 // CRYPTO_get_ex_new_index_ex allocates a new index for |ex_data_class|. Each
 // class of object should provide a wrapper function that uses the correct
-// |CRYPTO_EX_DATA_CLASS|. It returns the new index on success and -1 on error.
+// |ExDataClass|. It returns the new index on success and -1 on error.
 OPENSSL_EXPORT int CRYPTO_get_ex_new_index_ex(
-    CRYPTO_EX_DATA_CLASS *ex_data_class, long argl, void *argp,
+    ExDataClass *ex_data_class, long argl, void *argp,
     CRYPTO_EX_free *free_func);
 
 // CRYPTO_set_ex_data sets an extra data pointer on a given object. Each class
@@ -773,7 +772,7 @@ OPENSSL_EXPORT void *CRYPTO_get_ex_data(const CRYPTO_EX_DATA *ad, int index);
 OPENSSL_EXPORT void CRYPTO_new_ex_data(CRYPTO_EX_DATA *ad);
 
 // CRYPTO_free_ex_data frees |ad|, which is an object of the given class.
-OPENSSL_EXPORT void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class,
+OPENSSL_EXPORT void CRYPTO_free_ex_data(ExDataClass *ex_data_class,
                                         CRYPTO_EX_DATA *ad);
 
 

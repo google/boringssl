@@ -105,7 +105,7 @@ BSSL_NAMESPACE_END
 
 using namespace bssl;
 
-static CRYPTO_EX_DATA_CLASS g_ex_data_class = CRYPTO_EX_DATA_CLASS_INIT;
+static ExDataClass g_ex_data_class;
 
 ssl_credential_st::ssl_credential_st(SSLCredentialType type_arg)
     : RefCounted(CheckSubClass()), type(type_arg) {
