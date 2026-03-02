@@ -2191,151 +2191,208 @@ TEST(X509Test, NameConstraints) {
     int type;
     std::string name;
     std::string constraint;
-    int result;
+    int permit_result;
+    int exclude_result;
   } kTests[] = {
       // Empty string matches everything.
-      {GEN_DNS, "foo.example.com", "", X509_V_OK},
+      {GEN_DNS, "foo.example.com", "", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       // Name constraints match the entire subtree.
-      {GEN_DNS, "foo.example.com", "example.com", X509_V_OK},
-      {GEN_DNS, "foo.example.com", "EXAMPLE.COM", X509_V_OK},
-      {GEN_DNS, "foo.example.com", "xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+      {GEN_DNS, "foo.example.com", "example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "foo.example.com", "EXAMPLE.COM", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "foo.example.com", "xample.com", X509_V_ERR_PERMITTED_VIOLATION,
+       X509_V_OK},
       {GEN_DNS, "foo.example.com", "unrelated.much.longer.name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       // A leading dot means at least one component must be added.
-      {GEN_DNS, "foo.example.com", ".example.com", X509_V_OK},
-      {GEN_DNS, "foo.example.com", "foo.example.com", X509_V_OK},
+      {GEN_DNS, "foo.example.com", ".example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "foo.example.com", "foo.example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_DNS, "foo.example.com", ".foo.example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_DNS, "foo.example.com", ".xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_DNS, "foo.example.com", ".unrelated.much.longer.name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
+      // Trailing dot is ignored.
+      {GEN_DNS, "foo.example.com.", "example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "foo.example.com", "example.com.", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       // NUL bytes, if not rejected, should not confuse the matching logic.
       {GEN_DNS, std::string({'a', '\0', 'a'}), std::string({'a', '\0', 'b'}),
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
+
+      // Wildcard CN matching.
+      {GEN_DNS, "*.com", "foo.example.com", X509_V_ERR_PERMITTED_VIOLATION,
+       X509_V_OK},
+      // A foo.example.com permitted subtree does not permit *.example.com.
+      // However, a foo.example.com excluded subtree does exclude *.example.com
+      // because there is a partial overlap between the two.
+      {GEN_DNS, "*.example.com", "foo.example.com",
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "*.foo.example.com", "foo.example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "*.sub.foo.example.com", "foo.example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_DNS, "*.bar.example.com", "foo.example.com",
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
+      {GEN_DNS, "*.example.com", "net", X509_V_ERR_PERMITTED_VIOLATION,
+       X509_V_OK},
+      {GEN_DNS, "*.example.com", "com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
 
       // Names must be emails.
       {GEN_EMAIL, "not-an-email.example", "not-an-email.example",
-       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
+       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX, X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
       // A leading dot matches all local names and all subdomains
-      {GEN_EMAIL, "foo@bar.example.com", ".example.com", X509_V_OK},
-      {GEN_EMAIL, "foo@bar.example.com", ".EXAMPLE.COM", X509_V_OK},
+      {GEN_EMAIL, "foo@bar.example.com", ".example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_EMAIL, "foo@bar.example.com", ".EXAMPLE.COM", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_EMAIL, "foo@bar.example.com", ".bar.example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       // Without a leading dot, the host must match exactly.
-      {GEN_EMAIL, "foo@example.com", "example.com", X509_V_OK},
-      {GEN_EMAIL, "foo@example.com", "EXAMPLE.COM", X509_V_OK},
+      {GEN_EMAIL, "foo@example.com", "example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_EMAIL, "foo@example.com", "EXAMPLE.COM", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_EMAIL, "foo@bar.example.com", "example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       // If the constraint specifies a mailbox, it specifies the whole thing.
       // The halves are compared insensitively.
-      {GEN_EMAIL, "foo@example.com", "foo@example.com", X509_V_OK},
-      {GEN_EMAIL, "foo@example.com", "foo@EXAMPLE.COM", X509_V_OK},
+      {GEN_EMAIL, "foo@example.com", "foo@example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_EMAIL, "foo@example.com", "foo@EXAMPLE.COM", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_EMAIL, "foo@example.com", "FOO@example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_EMAIL, "foo@example.com", "bar@example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       // OpenSSL ignores a stray leading @.
-      {GEN_EMAIL, "foo@example.com", "@example.com", X509_V_OK},
-      {GEN_EMAIL, "foo@example.com", "@EXAMPLE.COM", X509_V_OK},
+      {GEN_EMAIL, "foo@example.com", "@example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_EMAIL, "foo@example.com", "@EXAMPLE.COM", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_EMAIL, "foo@bar.example.com", "@example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
 
       // Basic syntax check.
-      {GEN_URI, "not-a-url", "not-a-url", X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
+      {GEN_URI, "not-a-url", "not-a-url", X509_V_ERR_UNSUPPORTED_NAME_SYNTAX,
+       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
       {GEN_URI, "foo:not-a-url", "not-a-url",
-       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
+       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX, X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
       {GEN_URI, "foo:/not-a-url", "not-a-url",
-       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
+       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX, X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
       {GEN_URI, "foo:///not-a-url", "not-a-url",
-       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
+       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX, X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
       {GEN_URI, "foo://:not-a-url", "not-a-url",
+       X509_V_ERR_UNSUPPORTED_NAME_SYNTAX, X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
+      {GEN_URI, "foo://", "not-a-url", X509_V_ERR_UNSUPPORTED_NAME_SYNTAX,
        X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
-      {GEN_URI, "foo://", "not-a-url", X509_V_ERR_UNSUPPORTED_NAME_SYNTAX},
       // Hosts are an exact match.
-      {GEN_URI, "foo://example.com", "example.com", X509_V_OK},
-      {GEN_URI, "foo://example.com:443", "example.com", X509_V_OK},
-      {GEN_URI, "foo://example.com/whatever", "example.com", X509_V_OK},
+      {GEN_URI, "foo://example.com", "example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_URI, "foo://example.com:443", "example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_URI, "foo://example.com/whatever", "example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_URI, "foo://bar.example.com", "example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://bar.example.com:443", "example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://bar.example.com/whatever", "example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://bar.example.com", "xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://bar.example.com:443", "xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://bar.example.com/whatever", "xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com", "some-other-name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com:443", "some-other-name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com/whatever", "some-other-name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       // A leading dot allows components to be added.
       {GEN_URI, "foo://example.com", ".example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com:443", ".example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com/whatever", ".example.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
-      {GEN_URI, "foo://bar.example.com", ".example.com", X509_V_OK},
-      {GEN_URI, "foo://bar.example.com:443", ".example.com", X509_V_OK},
-      {GEN_URI, "foo://bar.example.com/whatever", ".example.com", X509_V_OK},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
+      {GEN_URI, "foo://bar.example.com", ".example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_URI, "foo://bar.example.com:443", ".example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
+      {GEN_URI, "foo://bar.example.com/whatever", ".example.com", X509_V_OK,
+       X509_V_ERR_EXCLUDED_VIOLATION},
       {GEN_URI, "foo://example.com", ".some-other-name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com:443", ".some-other-name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com/whatever", ".some-other-name.example",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com", ".xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com:443", ".xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
       {GEN_URI, "foo://example.com/whatever", ".xample.com",
-       X509_V_ERR_PERMITTED_VIOLATION},
+       X509_V_ERR_PERMITTED_VIOLATION, X509_V_OK},
   };
   for (const auto &t : kTests) {
     SCOPED_TRACE(t.type);
     SCOPED_TRACE(t.name);
     SCOPED_TRACE(t.constraint);
 
-    UniquePtr<GENERAL_NAME> name = MakeGeneralName(t.type, t.name);
-    ASSERT_TRUE(name);
-    UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
-    ASSERT_TRUE(names);
-    ASSERT_TRUE(PushToStack(names.get(), std::move(name)));
+    for (bool exclude : {false, true}) {
+      SCOPED_TRACE(exclude);
 
-    UniquePtr<NAME_CONSTRAINTS> nc(NAME_CONSTRAINTS_new());
-    ASSERT_TRUE(nc);
-    nc->permittedSubtrees = sk_GENERAL_SUBTREE_new_null();
-    ASSERT_TRUE(nc->permittedSubtrees);
-    UniquePtr<GENERAL_SUBTREE> subtree(GENERAL_SUBTREE_new());
-    ASSERT_TRUE(subtree);
-    GENERAL_NAME_free(subtree->base);
-    subtree->base = MakeGeneralName(t.type, t.constraint).release();
-    ASSERT_TRUE(subtree->base);
-    ASSERT_TRUE(PushToStack(nc->permittedSubtrees, std::move(subtree)));
+      UniquePtr<GENERAL_NAME> name = MakeGeneralName(t.type, t.name);
+      ASSERT_TRUE(name);
+      UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
+      ASSERT_TRUE(names);
+      ASSERT_TRUE(PushToStack(names.get(), std::move(name)));
 
-    UniquePtr<X509> root =
-        MakeTestCert("Root", "Root", key.get(), /*is_ca=*/true);
-    ASSERT_TRUE(root);
-    ASSERT_TRUE(X509_add1_ext_i2d(root.get(), NID_name_constraints, nc.get(),
-                                  /*crit=*/1, /*flags=*/0));
-    ASSERT_TRUE(X509_sign(root.get(), key.get(), EVP_sha256()));
+      UniquePtr<NAME_CONSTRAINTS> nc(NAME_CONSTRAINTS_new());
+      ASSERT_TRUE(nc);
+      STACK_OF(GENERAL_SUBTREE) **rule =
+          exclude ? &nc->excludedSubtrees : &nc->permittedSubtrees;
+      *rule = sk_GENERAL_SUBTREE_new_null();
+      ASSERT_TRUE(*rule);
+      UniquePtr<GENERAL_SUBTREE> subtree(GENERAL_SUBTREE_new());
+      ASSERT_TRUE(subtree);
+      GENERAL_NAME_free(subtree->base);
+      subtree->base = MakeGeneralName(t.type, t.constraint).release();
+      ASSERT_TRUE(subtree->base);
+      ASSERT_TRUE(PushToStack(*rule, std::move(subtree)));
 
-    UniquePtr<X509> leaf =
-        MakeTestCert("Root", "Leaf", key.get(), /*is_ca=*/false);
-    ASSERT_TRUE(leaf);
-    ASSERT_TRUE(X509_add1_ext_i2d(leaf.get(), NID_subject_alt_name, names.get(),
-                                  /*crit=*/0, /*flags=*/0));
-    ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+      UniquePtr<X509> root =
+          MakeTestCert("Root", "Root", key.get(), /*is_ca=*/true);
+      ASSERT_TRUE(root);
+      ASSERT_TRUE(X509_add1_ext_i2d(root.get(), NID_name_constraints, nc.get(),
+                                    /*crit=*/1, /*flags=*/0));
+      ASSERT_TRUE(X509_sign(root.get(), key.get(), EVP_sha256()));
 
-    int ret = Verify(leaf.get(), {root.get()}, {}, {}, 0);
-    EXPECT_EQ(t.result, ret) << X509_verify_cert_error_string(ret);
+      UniquePtr<X509> leaf =
+          MakeTestCert("Root", "Leaf", key.get(), /*is_ca=*/false);
+      ASSERT_TRUE(leaf);
+      ASSERT_TRUE(X509_add1_ext_i2d(leaf.get(), NID_subject_alt_name,
+                                    names.get(),
+                                    /*crit=*/0, /*flags=*/0));
+      ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+      int got_result = Verify(leaf.get(), {root.get()}, {}, {}, 0);
+      int want_result = exclude ? t.exclude_result : t.permit_result;
+      EXPECT_EQ(want_result, got_result)
+          << "got \"" << X509_verify_cert_error_string(got_result)
+          << "\", want \"" << X509_verify_cert_error_string(want_result)
+          << "\"";
+    }
   }
 }
 
