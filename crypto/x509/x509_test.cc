@@ -5378,6 +5378,7 @@ TEST(X509Test, Names) {
     std::vector<std::pair<int, std::string>> cert_subject;
     std::vector<std::string> cert_dns_names;
     std::vector<std::string> cert_emails;
+    bool cert_invalid_subject_alt_name;
     std::vector<std::string> valid_dns_names;
     std::vector<std::string> invalid_dns_names;
     std::vector<std::string> valid_emails;
@@ -5389,6 +5390,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{"example.com", "WWW.EXAMPLE.COM"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/
           {"example.com", "EXAMPLE.COM", "www.example.com", "WWW.EXAMPLE.COM"},
           /*invalid_dns_names=*/{"test.example.com", "example.org"},
@@ -5402,6 +5404,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{"*.example.com", "*.EXAMPLE.ORG"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/
           {"www.example.com", "WWW.EXAMPLE.COM", "www.example.org",
            "WWW.EXAMPLE.ORG"},
@@ -5417,6 +5420,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{"example.com", "*.example.com"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{"example.com"},
           /*invalid_dns_names=*/{"www.example.com"},
           /*valid_emails=*/{},
@@ -5431,6 +5435,7 @@ TEST(X509Test, Names) {
           {"a.*", "**.b.example", "*c.example", "d*.example", "e*e.example",
            "*", ".", "..", "*."},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/
           {"a.example", "test.b.example", "cc.example", "dd.example",
@@ -5447,6 +5452,7 @@ TEST(X509Test, Names) {
           {"xn--rger-koa.a.example", "*.xn--rger-koa.b.example",
            "www.xn--rger-koa.c.example"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/
           {"xn--rger-koa.a.example", "www.xn--rger-koa.b.example",
            "www.xn--rger-koa.c.example"},
@@ -5466,6 +5472,7 @@ TEST(X509Test, Names) {
                             {NID_commonName, "*.b.example"}},
           /*cert_dns_names=*/{},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/
           {"a.example", "A.EXAMPLE", "test.b.example", "TEST.B.EXAMPLE"},
           /*invalid_dns_names=*/{},
@@ -5478,6 +5485,22 @@ TEST(X509Test, Names) {
                             {NID_commonName, "*.b.example"}},
           /*cert_dns_names=*/{"example.com"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
+          /*valid_dns_names=*/{},
+          /*invalid_dns_names=*/
+          {"a.example", "A.EXAMPLE", "test.b.example", "TEST.B.EXAMPLE"},
+          /*valid_emails=*/{},
+          /*invalid_emails=*/{},
+          /*flags=*/0,
+      },
+
+      // An invalid SAN extension should not trigger the common name fallback.
+      {
+          /*cert_subject=*/{{NID_commonName, "a.example"},
+                            {NID_commonName, "*.b.example"}},
+          /*cert_dns_names=*/{},
+          /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/true,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/
           {"a.example", "A.EXAMPLE", "test.b.example", "TEST.B.EXAMPLE"},
@@ -5491,6 +5514,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{{NID_organizationName, "example.com"}},
           /*cert_dns_names=*/{},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/{"example.com"},
           /*valid_emails=*/{},
@@ -5503,6 +5527,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{"www.example.com"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/{"*.example.com"},
           /*valid_emails=*/{},
@@ -5516,6 +5541,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{"www.a.example", "*.b.test"},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/
           {".www.a.example", ".www.b.test", ".a.example", ".b.test", ".example",
@@ -5531,6 +5557,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{},
           /*cert_emails=*/{"test@a.example", "TEST@B.EXAMPLE"},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/{"a.example", "b.example"},
           /*valid_emails=*/
@@ -5548,6 +5575,7 @@ TEST(X509Test, Names) {
                             {NID_pkcs9_emailAddress, "TEST@B.EXAMPLE"}},
           /*cert_dns_names=*/{},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/{"a.example", "b.example"},
           /*valid_emails=*/
@@ -5564,6 +5592,7 @@ TEST(X509Test, Names) {
           /*cert_subject=*/{},
           /*cert_dns_names=*/{},
           /*cert_emails=*/{"test@*.a.example", "@b.example", "*@c.example"},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{},
           /*invalid_dns_names=*/{},
           /*valid_emails=*/{},
@@ -5580,6 +5609,7 @@ TEST(X509Test, Names) {
                             {NID_countryName, "US"}},
           /*cert_dns_names=*/{},
           /*cert_emails=*/{},
+          /*cert_invalid_subject_alt_name=*/false,
           /*valid_dns_names=*/{"a.example"},
           /*invalid_dns_names=*/{},
           /*valid_emails=*/{"test@b.example"},
@@ -5628,7 +5658,14 @@ TEST(X509Test, Names) {
           ASN1_STRING_set(name->d.rfc822Name, email.data(), email.size()));
       ASSERT_TRUE(PushToStack(sans.get(), std::move(name)));
     }
-    if (sk_GENERAL_NAME_num(sans.get()) != 0) {
+    if (t.cert_invalid_subject_alt_name) {
+      UniquePtr<X509_EXTENSION> ext(X509_EXTENSION_new());
+      ASSERT_TRUE(ext);
+      ASSERT_TRUE(X509_EXTENSION_set_object(ext.get(),
+                                            OBJ_nid2obj(NID_subject_alt_name)));
+      // Leave the contents as an empty string, which is invalid.
+      ASSERT_TRUE(X509_add_ext(cert.get(), ext.get(), -1));
+    } else if (sk_GENERAL_NAME_num(sans.get()) != 0) {
       ASSERT_TRUE(X509_add1_ext_i2d(cert.get(), NID_subject_alt_name,
                                     sans.get(), /*crit=*/0, /*flags=*/0));
     }
@@ -5638,7 +5675,8 @@ TEST(X509Test, Names) {
       SCOPED_TRACE(dns);
       EXPECT_EQ(1, X509_check_host(cert.get(), dns.data(), dns.size(), t.flags,
                                    /*peername=*/nullptr));
-      EXPECT_EQ(X509_V_OK,
+      EXPECT_EQ(t.cert_invalid_subject_alt_name ? X509_V_ERR_INVALID_EXTENSION
+                                                : X509_V_OK,
                 Verify(cert.get(), {root.get()}, /*intermediates=*/{},
                        /*crls=*/{}, /*flags=*/0, [&](X509_STORE_CTX *ctx) {
                          X509_VERIFY_PARAM *param =
@@ -5653,7 +5691,8 @@ TEST(X509Test, Names) {
       SCOPED_TRACE(dns);
       EXPECT_EQ(0, X509_check_host(cert.get(), dns.data(), dns.size(), t.flags,
                                    /*peername=*/nullptr));
-      EXPECT_EQ(X509_V_ERR_HOSTNAME_MISMATCH,
+      EXPECT_EQ(t.cert_invalid_subject_alt_name ? X509_V_ERR_INVALID_EXTENSION
+                                                : X509_V_ERR_HOSTNAME_MISMATCH,
                 Verify(cert.get(), {root.get()}, /*intermediates=*/{},
                        /*crls=*/{}, /*flags=*/0, [&](X509_STORE_CTX *ctx) {
                          X509_VERIFY_PARAM *param =
@@ -5668,7 +5707,8 @@ TEST(X509Test, Names) {
       SCOPED_TRACE(email);
       EXPECT_EQ(
           1, X509_check_email(cert.get(), email.data(), email.size(), t.flags));
-      EXPECT_EQ(X509_V_OK,
+      EXPECT_EQ(t.cert_invalid_subject_alt_name ? X509_V_ERR_INVALID_EXTENSION
+                                                : X509_V_OK,
                 Verify(cert.get(), {root.get()}, /*intermediates=*/{},
                        /*crls=*/{}, /*flags=*/0, [&](X509_STORE_CTX *ctx) {
                          X509_VERIFY_PARAM *param =
@@ -5683,7 +5723,8 @@ TEST(X509Test, Names) {
       SCOPED_TRACE(email);
       EXPECT_EQ(
           0, X509_check_email(cert.get(), email.data(), email.size(), t.flags));
-      EXPECT_EQ(X509_V_ERR_EMAIL_MISMATCH,
+      EXPECT_EQ(t.cert_invalid_subject_alt_name ? X509_V_ERR_INVALID_EXTENSION
+                                                : X509_V_ERR_EMAIL_MISMATCH,
                 Verify(cert.get(), {root.get()}, /*intermediates=*/{},
                        /*crls=*/{}, /*flags=*/0, [&](X509_STORE_CTX *ctx) {
                          X509_VERIFY_PARAM *param =

@@ -949,11 +949,11 @@ static int do_x509_check(const X509 *x, const char *chk, size_t chklen,
     equal = equal_case;
   }
 
-  GENERAL_NAMES *gens = reinterpret_cast<GENERAL_NAMES *>(
-      X509_get_ext_d2i(x, NID_subject_alt_name, nullptr, nullptr));
+  int critical;
+  UniquePtr<GENERAL_NAMES> gens(reinterpret_cast<GENERAL_NAMES *>(
+      X509_get_ext_d2i(x, NID_subject_alt_name, &critical, nullptr)));
   if (gens) {
-    for (size_t i = 0; i < sk_GENERAL_NAME_num(gens); i++) {
-      const GENERAL_NAME *gen = sk_GENERAL_NAME_value(gens, i);
+    for (const GENERAL_NAME *gen : gens.get()) {
       if (gen->type != check_type) {
         continue;
       }
@@ -971,8 +971,10 @@ static int do_x509_check(const X509 *x, const char *chk, size_t chklen,
         break;
       }
     }
-    GENERAL_NAMES_free(gens);
     return rv;
+  } else if (critical != -1) {
+    // Syntax error in the subjectAltName extension.
+    return 0;
   }
 
   // We're done if CN-ID is not pertinent
