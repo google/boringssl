@@ -20,6 +20,8 @@
 #include <openssl/prefix_symbols.h>
 
 
+#if defined(BORINGSSL_PREFIX)
+
 #define BORINGSSL_function_hit BORINGSSL_ADD_PREFIX(BORINGSSL_function_hit)
 #define CRYPTO_rdrand BORINGSSL_ADD_PREFIX(CRYPTO_rdrand)
 #define CRYPTO_rdrand_multiple8_buf BORINGSSL_ADD_PREFIX(CRYPTO_rdrand_multiple8_buf)
@@ -319,5 +321,7 @@
 #define vpaes_set_decrypt_key BORINGSSL_ADD_PREFIX(vpaes_set_decrypt_key)
 #define vpaes_set_encrypt_key BORINGSSL_ADD_PREFIX(vpaes_set_encrypt_key)
 #define x25519_NEON BORINGSSL_ADD_PREFIX(x25519_NEON)
+
+#endif  // BORINGSSL_PREFIX
 
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H

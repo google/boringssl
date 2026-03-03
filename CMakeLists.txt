@@ -82,10 +82,10 @@ if(BORINGSSL_PREFIX)
   # but not add_definitions.
   set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -DBORINGSSL_PREFIX=${BORINGSSL_PREFIX}")
   set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DBORINGSSL_PREFIX=${BORINGSSL_PREFIX}")
-
-  # Also add the generated files to NASM's includes. With a final slash for NASM 2.
-  set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/gen/")
 endif()
+
+# Add the generated files to NASM's includes. With a final slash for NASM 2.
+set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/gen/")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CLANG 1)
