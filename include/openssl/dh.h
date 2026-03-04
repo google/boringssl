@@ -59,6 +59,9 @@ OPENSSL_EXPORT int DH_up_ref(DH *dh);
 // DH_bits returns the size of |dh|'s group modulus, in bits.
 OPENSSL_EXPORT unsigned DH_bits(const DH *dh);
 
+// DH_size returns the number of bytes in the DH group's prime.
+OPENSSL_EXPORT int DH_size(const DH *dh);
+
 // DH_get0_pub_key returns |dh|'s public key.
 OPENSSL_EXPORT const BIGNUM *DH_get0_pub_key(const DH *dh);
 
@@ -211,13 +214,6 @@ OPENSSL_EXPORT int DH_compute_key_hashed(DH *dh, uint8_t *out, size_t *out_len,
 
 
 // Utility functions.
-
-// DH_size returns the number of bytes in the DH group's prime.
-OPENSSL_EXPORT int DH_size(const DH *dh);
-
-// DH_num_bits returns the minimum number of bits needed to represent the
-// absolute value of the DH group's prime.
-OPENSSL_EXPORT unsigned DH_num_bits(const DH *dh);
 
 #define DH_CHECK_P_NOT_PRIME 0x01
 #define DH_CHECK_P_NOT_SAFE_PRIME 0x02

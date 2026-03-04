@@ -395,11 +395,6 @@ int DH_size(const DH *dh) {
   return BN_num_bytes(impl->p);
 }
 
-unsigned DH_num_bits(const DH *dh) {
-  auto *impl = FromOpaque(dh);
-  return BN_num_bits(impl->p);
-}
-
 int DH_up_ref(DH *dh) {
   auto *impl = FromOpaque(dh);
   impl->UpRefInternal();
