@@ -62,8 +62,6 @@ DSAImpl::~DSAImpl() {
   BN_clear_free(g);
   BN_clear_free(pub_key);
   BN_clear_free(priv_key);
-  BN_MONT_CTX_free(method_mont_p);
-  BN_MONT_CTX_free(method_mont_q);
 }
 
 void DSA_free(DSA *dsa) {
@@ -176,9 +174,7 @@ int DSA_set0_pqg(DSA *dsa, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
     impl->g = g;
   }
 
-  BN_MONT_CTX_free(impl->method_mont_p);
   impl->method_mont_p = nullptr;
-  BN_MONT_CTX_free(impl->method_mont_q);
   impl->method_mont_q = nullptr;
   return 1;
 }
@@ -480,7 +476,7 @@ int DSA_generate_key(DSA *dsa) {
   if (!BN_MONT_CTX_set_locked(&impl->method_mont_p, &impl->method_mont_lock,
                               impl->p, ctx.get()) ||
       !BN_mod_exp_mont_consttime(pub_key, impl->g, priv_key, impl->p, ctx.get(),
-                                 impl->method_mont_p)) {
+                                 impl->method_mont_p.get())) {
     goto err;
   }
 
@@ -616,9 +612,10 @@ DSA_SIG *DSA_do_sign(const uint8_t *digest, size_t digest_len, const DSA *dsa) {
 
     // Compute s = inv(k) (m + xr) mod q. Note |impl->method_mont_q| is
     // initialized by |dsa_sign_setup|.
-    if (!mod_mul_consttime(&xr, impl->priv_key, r, impl->method_mont_q, ctx) ||
+    if (!mod_mul_consttime(&xr, impl->priv_key, r, impl->method_mont_q.get(),
+                           ctx) ||
         !bn_mod_add_consttime(s, &xr, &m, impl->q, ctx) ||
-        !mod_mul_consttime(s, s, kinv, impl->method_mont_q, ctx)) {
+        !mod_mul_consttime(s, s, kinv, impl->method_mont_q.get(), ctx)) {
       goto err;
     }
 
@@ -715,7 +712,7 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
     // Calculate W = inv(S) mod Q, in the Montgomery domain. This is slightly
     // more efficiently computed as FromMont(s)^-1 = (s * R^-1)^-1 = s^-1 * R,
     // instead of ToMont(s^-1) = s^-1 * R.
-    if (!BN_from_montgomery(&u2, sig->s, impl->method_mont_q, ctx) ||
+    if (!BN_from_montgomery(&u2, sig->s, impl->method_mont_q.get(), ctx) ||
         !BN_mod_inverse(&u2, &u2, impl->q, ctx)) {
       goto err;
     }
@@ -735,18 +732,19 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
 
     // u1 = M * w mod q. w was stored in the Montgomery domain while M was not,
     // so the result will already be out of the Montgomery domain.
-    if (!BN_mod_mul_montgomery(&u1, &u1, &u2, impl->method_mont_q, ctx)) {
+    if (!BN_mod_mul_montgomery(&u1, &u1, &u2, impl->method_mont_q.get(), ctx)) {
       goto err;
     }
 
     // u2 = r * w mod q. w was stored in the Montgomery domain while r was not,
     // so the result will already be out of the Montgomery domain.
-    if (!BN_mod_mul_montgomery(&u2, sig->r, &u2, impl->method_mont_q, ctx)) {
+    if (!BN_mod_mul_montgomery(&u2, sig->r, &u2, impl->method_mont_q.get(),
+                               ctx)) {
       goto err;
     }
 
     if (!BN_mod_exp2_mont(&t1, impl->g, &u1, impl->pub_key, &u2, impl->p, ctx,
-                          impl->method_mont_p)) {
+                          impl->method_mont_p.get())) {
       goto err;
     }
 
@@ -886,7 +884,7 @@ static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx, BIGNUM **out_kinv,
                               dsa->q, ctx) ||
       // Compute r = (g^k mod p) mod q
       !BN_mod_exp_mont_consttime(r, dsa->g, &k, dsa->p, ctx,
-                                 dsa->method_mont_p)) {
+                                 dsa->method_mont_p.get())) {
     OPENSSL_PUT_ERROR(DSA, ERR_R_BN_LIB);
     goto err;
   }
@@ -901,7 +899,7 @@ static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx, BIGNUM **out_kinv,
   if (!BN_mod(r, r, dsa->q, ctx) ||
       // Compute part of 's = inv(k) (m + xr) mod q' using Fermat's Little
       // Theorem.
-      !bn_mod_inverse_prime(kinv, &k, dsa->q, ctx, dsa->method_mont_q)) {
+      !bn_mod_inverse_prime(kinv, &k, dsa->q, ctx, dsa->method_mont_q.get())) {
     OPENSSL_PUT_ERROR(DSA, ERR_R_BN_LIB);
     goto err;
   }
@@ -938,6 +936,18 @@ void *DSA_get_ex_data(const DSA *dsa, int idx) {
   return CRYPTO_get_ex_data(&impl->ex_data, idx);
 }
 
+static bool copy_bn(UniquePtr<BIGNUM> *dst, const BIGNUM *src) {
+  UniquePtr<BIGNUM> copy;
+  if (src) {
+    copy.reset(BN_dup(src));
+    if (!copy) {
+      return false;
+    }
+  }
+  *dst = std::move(copy);
+  return true;
+}
+
 DH *DSA_dup_DH(const DSA *dsa) {
   auto *impl = FromOpaque(dsa);
 
@@ -952,16 +962,14 @@ DH *DSA_dup_DH(const DSA *dsa) {
   }
   if (impl->q != nullptr) {
     dh->priv_length = BN_num_bits(impl->q);
-    if ((dh->q = BN_dup(impl->q)) == nullptr) {
+    if (!copy_bn(&dh->q, impl->q)) {
       return nullptr;
     }
   }
-  if ((impl->p != nullptr && (dh->p = BN_dup(impl->p)) == nullptr) ||
-      (impl->g != nullptr && (dh->g = BN_dup(impl->g)) == nullptr) ||
-      (impl->pub_key != nullptr &&
-       (dh->pub_key = BN_dup(impl->pub_key)) == nullptr) ||
-      (impl->priv_key != nullptr &&
-       (dh->priv_key = BN_dup(impl->priv_key)) == nullptr)) {
+  if (!copy_bn(&dh->p, impl->p) ||              //
+      !copy_bn(&dh->g, impl->g) ||              //
+      !copy_bn(&dh->pub_key, impl->pub_key) ||  //
+      !copy_bn(&dh->priv_key, impl->priv_key)) {
     return nullptr;
   }
 

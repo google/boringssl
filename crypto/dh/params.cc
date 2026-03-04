@@ -310,14 +310,14 @@ int DH_generate_parameters_ex(DH *dh, int prime_bits, int generator,
   // Make sure |dh| has the necessary elements
   auto *impl = FromOpaque(dh);
   if (impl->p == nullptr) {
-    impl->p = BN_new();
+    impl->p.reset(BN_new());
     if (impl->p == nullptr) {
       OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
       return 0;
     }
   }
   if (impl->g == nullptr) {
-    impl->g = BN_new();
+    impl->g.reset(BN_new());
     if (impl->g == nullptr) {
       OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
       return 0;
@@ -350,10 +350,10 @@ int DH_generate_parameters_ex(DH *dh, int prime_bits, int generator,
   if (t1_bn == nullptr || t2_bn == nullptr ||
       !BN_set_word(t1_bn.get(), t1) ||  //
       !BN_set_word(t2_bn.get(), t2) ||  //
-      !BN_generate_prime_ex(impl->p, prime_bits, 1, t1_bn.get(), t2_bn.get(),
-                            cb) ||
+      !BN_generate_prime_ex(impl->p.get(), prime_bits, 1, t1_bn.get(),
+                            t2_bn.get(), cb) ||
       !BN_GENCB_call(cb, 3, 0) ||  //
-      !BN_set_word(impl->g, g)) {
+      !BN_set_word(impl->g.get(), g)) {
     OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
     return 0;
   }
@@ -361,19 +361,16 @@ int DH_generate_parameters_ex(DH *dh, int prime_bits, int generator,
   return 1;
 }
 
-static int int_dh_bn_cpy(BIGNUM **dst, const BIGNUM *src) {
-  BIGNUM *a = nullptr;
-
+static bool copy_bn(UniquePtr<BIGNUM> *dst, const BIGNUM *src) {
+  UniquePtr<BIGNUM> copy;
   if (src) {
-    a = BN_dup(src);
-    if (!a) {
-      return 0;
+    copy.reset(BN_dup(src));
+    if (!copy) {
+      return false;
     }
   }
-
-  BN_free(*dst);
-  *dst = a;
-  return 1;
+  *dst = std::move(copy);
+  return true;
 }
 
 static int int_dh_param_copy(DH *to, const DH *from, int is_x942) {
@@ -383,8 +380,8 @@ static int int_dh_param_copy(DH *to, const DH *from, int is_x942) {
   if (is_x942 == -1) {
     is_x942 = !!from_impl->q;
   }
-  if (!int_dh_bn_cpy(&to_impl->p, from_impl->p) ||
-      !int_dh_bn_cpy(&to_impl->g, from_impl->g)) {
+  if (!copy_bn(&to_impl->p, from_impl->p.get()) ||
+      !copy_bn(&to_impl->g, from_impl->g.get())) {
     return 0;
   }
 
@@ -392,7 +389,7 @@ static int int_dh_param_copy(DH *to, const DH *from, int is_x942) {
     return 1;
   }
 
-  if (!int_dh_bn_cpy(&to_impl->q, from_impl->q)) {
+  if (!copy_bn(&to_impl->q, from_impl->q.get())) {
     return 0;
   }
 

@@ -27,13 +27,13 @@
 
 using namespace bssl;
 
-static int parse_integer(CBS *cbs, BIGNUM **out) {
+static int parse_integer(CBS *cbs, UniquePtr<BIGNUM> *out) {
   assert(*out == nullptr);
-  *out = BN_new();
+  out->reset(BN_new());
   if (*out == nullptr) {
     return 0;
   }
-  return BN_parse_asn1_unsigned(cbs, *out);
+  return BN_parse_asn1_unsigned(cbs, out->get());
 }
 
 static int marshal_integer(CBB *cbb, BIGNUM *bn) {
@@ -54,7 +54,8 @@ DH *DH_parse_parameters(CBS *cbs) {
   CBS child;
   auto *impl = FromOpaque(ret.get());
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
-      !parse_integer(&child, &impl->p) || !parse_integer(&child, &impl->g)) {
+      !parse_integer(&child, &impl->p) ||  //
+      !parse_integer(&child, &impl->g)) {
     OPENSSL_PUT_ERROR(DH, DH_R_DECODE_ERROR);
     return nullptr;
   }
@@ -86,7 +87,8 @@ int DH_marshal_parameters(CBB *cbb, const DH *dh) {
   CBB child;
   auto *impl = FromOpaque(dh);
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->g) ||
+      !marshal_integer(&child, impl->p.get()) ||
+      !marshal_integer(&child, impl->g.get()) ||
       (impl->priv_length != 0 &&
        !CBB_add_asn1_uint64(&child, impl->priv_length)) ||
       !CBB_flush(cbb)) {

@@ -38,8 +38,8 @@ class DSAImpl : public dsa_st, public RefCounted<DSAImpl> {
 
   // Normally used to cache montgomery values
   mutable Mutex method_mont_lock;
-  mutable BN_MONT_CTX *method_mont_p = nullptr;
-  mutable BN_MONT_CTX *method_mont_q = nullptr;
+  mutable UniquePtr<BN_MONT_CTX> method_mont_p;
+  mutable UniquePtr<BN_MONT_CTX> method_mont_q;
   CRYPTO_EX_DATA ex_data;
 
  private:

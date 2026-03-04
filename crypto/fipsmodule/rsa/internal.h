@@ -68,9 +68,9 @@ class RSAImpl : public rsa_st, public RefCounted<RSAImpl> {
 
   // Used to cache montgomery values. The creation of these values is protected
   // by |lock|.
-  BN_MONT_CTX *mont_n = nullptr;
-  BN_MONT_CTX *mont_p = nullptr;
-  BN_MONT_CTX *mont_q = nullptr;
+  UniquePtr<BN_MONT_CTX> mont_n;
+  UniquePtr<BN_MONT_CTX> mont_p;
+  UniquePtr<BN_MONT_CTX> mont_q;
 
   // The following fields are copies of |d|, |dmp1|, and |dmq1|, respectively,
   // but with the correct widths to prevent side channels. These must use

@@ -165,10 +165,10 @@ BN_MONT_CTX *BN_MONT_CTX_new_consttime(const BIGNUM *mod, BN_CTX *ctx) {
   return mont;
 }
 
-int bssl::BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, Mutex *lock,
+int bssl::BN_MONT_CTX_set_locked(UniquePtr<BN_MONT_CTX> *pmont, Mutex *lock,
                                  const BIGNUM *mod, BN_CTX *bn_ctx) {
   lock->LockRead();
-  BN_MONT_CTX *ctx = *pmont;
+  BN_MONT_CTX *ctx = pmont->get();
   lock->UnlockRead();
 
   if (ctx) {
@@ -177,7 +177,7 @@ int bssl::BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, Mutex *lock,
 
   MutexWriteLock write_lock(lock);
   if (*pmont == nullptr) {
-    *pmont = BN_MONT_CTX_new_for_modulus(mod, bn_ctx);
+    pmont->reset(BN_MONT_CTX_new_for_modulus(mod, bn_ctx));
   }
   return *pmont != nullptr;
 }

@@ -406,7 +406,7 @@ int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
 
   if (!BN_MONT_CTX_set_locked(&impl->mont_n, &impl->lock, impl->n, ctx.get()) ||
       !BN_mod_exp_mont(result, f, impl->e, &impl->mont_n->N, ctx.get(),
-                       impl->mont_n)) {
+                       impl->mont_n.get())) {
     goto err;
   }
 

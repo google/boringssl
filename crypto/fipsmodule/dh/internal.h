@@ -27,24 +27,24 @@ BSSL_NAMESPACE_BEGIN
 
 class DHImpl : public dh_st, public RefCounted<DHImpl> {
  public:
-  DHImpl();
+  DHImpl() : RefCounted(CheckSubClass()) {}
 
-  BIGNUM *p = nullptr;
-  BIGNUM *g = nullptr;
-  BIGNUM *q = nullptr;
-  BIGNUM *pub_key = nullptr;   // g^x mod p
-  BIGNUM *priv_key = nullptr;  // x
+  UniquePtr<BIGNUM> p;
+  UniquePtr<BIGNUM> g;
+  UniquePtr<BIGNUM> q;
+  UniquePtr<BIGNUM> pub_key;   // g^x mod p
+  UniquePtr<BIGNUM> priv_key;  // x
 
   // priv_length contains the length, in bits, of the private value. If zero,
   // the private value will be the same length as |p|.
   unsigned priv_length = 0;
 
   mutable Mutex method_mont_p_lock;
-  mutable BN_MONT_CTX *method_mont_p = nullptr;
+  mutable UniquePtr<BN_MONT_CTX> method_mont_p;
 
  private:
   friend RefCounted;
-  ~DHImpl();
+  ~DHImpl() = default;
 };
 
 // dh_check_params_fast checks basic invariants on |dh|'s domain parameters. It
