@@ -43,19 +43,20 @@ int bssl::dsa_check_key(const DSAImpl *dsa) {
   // caller. However, we check bounds on all values to avoid DoS vectors even
   // when domain parameters are invalid. In particular, signing will infinite
   // loop if |g| is zero.
-  if (BN_is_negative(dsa->p) || BN_is_negative(dsa->q) || BN_is_zero(dsa->p) ||
-      BN_is_zero(dsa->q) || !BN_is_odd(dsa->p) || !BN_is_odd(dsa->q) ||
+  if (BN_is_negative(dsa->p.get()) || BN_is_negative(dsa->q.get()) ||
+      BN_is_zero(dsa->p.get()) || BN_is_zero(dsa->q.get()) ||
+      !BN_is_odd(dsa->p.get()) || !BN_is_odd(dsa->q.get()) ||
       // |q| must be a prime divisor of |p - 1|, which implies |q < p|.
-      BN_cmp(dsa->q, dsa->p) >= 0 ||
+      BN_cmp(dsa->q.get(), dsa->p.get()) >= 0 ||
       // |g| is in the multiplicative group of |p|.
-      BN_is_negative(dsa->g) || BN_is_zero(dsa->g) ||
-      BN_cmp(dsa->g, dsa->p) >= 0) {
+      BN_is_negative(dsa->g.get()) || BN_is_zero(dsa->g.get()) ||
+      BN_cmp(dsa->g.get(), dsa->p.get()) >= 0) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_INVALID_PARAMETERS);
     return 0;
   }
 
   // FIPS 186-4 allows only three different sizes for q.
-  unsigned q_bits = BN_num_bits(dsa->q);
+  unsigned q_bits = BN_num_bits(dsa->q.get());
   if (q_bits != 160 && q_bits != 224 && q_bits != 256) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_BAD_Q_VALUE);
     return 0;
@@ -63,15 +64,15 @@ int bssl::dsa_check_key(const DSAImpl *dsa) {
 
   // Bound |dsa->p| to avoid a DoS vector. Note this limit is much larger than
   // the one in FIPS 186-4, which only allows L = 1024, 2048, and 3072.
-  if (BN_num_bits(dsa->p) > OPENSSL_DSA_MAX_MODULUS_BITS) {
+  if (BN_num_bits(dsa->p.get()) > OPENSSL_DSA_MAX_MODULUS_BITS) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_MODULUS_TOO_LARGE);
     return 0;
   }
 
   if (dsa->pub_key != nullptr) {
     // The public key is also in the multiplicative group of |p|.
-    if (BN_is_negative(dsa->pub_key) || BN_is_zero(dsa->pub_key) ||
-        BN_cmp(dsa->pub_key, dsa->p) >= 0) {
+    if (BN_is_negative(dsa->pub_key.get()) || BN_is_zero(dsa->pub_key.get()) ||
+        BN_cmp(dsa->pub_key.get(), dsa->p.get()) >= 0) {
       OPENSSL_PUT_ERROR(DSA, DSA_R_INVALID_PARAMETERS);
       return 0;
     }
@@ -80,9 +81,10 @@ int bssl::dsa_check_key(const DSAImpl *dsa) {
   if (dsa->priv_key != nullptr) {
     // The private key is a non-zero element of the scalar field, determined by
     // |q|.
-    if (BN_is_negative(dsa->priv_key) ||
-        constant_time_declassify_int(BN_is_zero(dsa->priv_key)) ||
-        constant_time_declassify_int(BN_cmp(dsa->priv_key, dsa->q) >= 0)) {
+    if (BN_is_negative(dsa->priv_key.get()) ||
+        constant_time_declassify_int(BN_is_zero(dsa->priv_key.get())) ||
+        constant_time_declassify_int(
+            BN_cmp(dsa->priv_key.get(), dsa->q.get()) >= 0)) {
       OPENSSL_PUT_ERROR(DSA, DSA_R_INVALID_PARAMETERS);
       return 0;
     }
@@ -91,13 +93,13 @@ int bssl::dsa_check_key(const DSAImpl *dsa) {
   return 1;
 }
 
-static int parse_integer(CBS *cbs, BIGNUM **out) {
+static int parse_integer(CBS *cbs, UniquePtr<BIGNUM> *out) {
   assert(*out == nullptr);
-  *out = BN_new();
+  out->reset(BN_new());
   if (*out == nullptr) {
     return 0;
   }
-  return BN_parse_asn1_unsigned(cbs, *out);
+  return BN_parse_asn1_unsigned(cbs, out->get());
 }
 
 static int marshal_integer(CBB *cbb, BIGNUM *bn) {
@@ -115,14 +117,17 @@ DSA_SIG *DSA_SIG_parse(CBS *cbs) {
     return nullptr;
   }
   CBS child;
+  UniquePtr<BIGNUM> r, s;
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
-      !parse_integer(&child, &ret->r) ||
-      !parse_integer(&child, &ret->s) ||
+      !parse_integer(&child, &r) ||
+      !parse_integer(&child, &s) ||
       CBS_len(&child) != 0) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_DECODE_ERROR);
     DSA_SIG_free(ret);
     return nullptr;
   }
+  ret->r = r.release();
+  ret->s = s.release();
   return ret;
 }
 
@@ -164,9 +169,10 @@ int DSA_marshal_public_key(CBB *cbb, const DSA *dsa) {
 
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, impl->pub_key) ||
-      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->q) ||
-      !marshal_integer(&child, impl->g) || !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->pub_key.get()) ||
+      !marshal_integer(&child, impl->p.get()) ||
+      !marshal_integer(&child, impl->q.get()) ||
+      !marshal_integer(&child, impl->g.get()) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_ENCODE_ERROR);
     return 0;
   }
@@ -198,8 +204,9 @@ int DSA_marshal_parameters(CBB *cbb, const DSA *dsa) {
 
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->q) ||
-      !marshal_integer(&child, impl->g) || !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->p.get()) ||
+      !marshal_integer(&child, impl->q.get()) ||
+      !marshal_integer(&child, impl->g.get()) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_ENCODE_ERROR);
     return 0;
   }
@@ -247,10 +254,11 @@ int DSA_marshal_private_key(CBB *cbb, const DSA *dsa) {
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&child, 0 /* version */) ||
-      !marshal_integer(&child, impl->p) || !marshal_integer(&child, impl->q) ||
-      !marshal_integer(&child, impl->g) ||
-      !marshal_integer(&child, impl->pub_key) ||
-      !marshal_integer(&child, impl->priv_key) || !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->p.get()) ||
+      !marshal_integer(&child, impl->q.get()) ||
+      !marshal_integer(&child, impl->g.get()) ||
+      !marshal_integer(&child, impl->pub_key.get()) ||
+      !marshal_integer(&child, impl->priv_key.get()) || !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_ENCODE_ERROR);
     return 0;
   }

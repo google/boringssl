@@ -45,12 +45,12 @@ static bssl::evp_decode_result_t dsa_pub_decode(const EVP_PKEY_ALG *alg,
     return evp_decode_error;
   }
 
-  dsa->pub_key = BN_new();
+  dsa->pub_key.reset(BN_new());
   if (dsa->pub_key == nullptr) {
     return evp_decode_error;
   }
 
-  if (!BN_parse_asn1_unsigned(key, dsa->pub_key) || CBS_len(key) != 0) {
+  if (!BN_parse_asn1_unsigned(key, dsa->pub_key.get()) || CBS_len(key) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
   }
@@ -73,7 +73,7 @@ static int dsa_pub_encode(CBB *out, const EvpPkey *key) {
       (has_params && !DSA_marshal_parameters(&algorithm, dsa)) ||
       !CBB_add_asn1(&spki, &key_bitstring, CBS_ASN1_BITSTRING) ||
       !CBB_add_u8(&key_bitstring, 0 /* padding */) ||
-      !BN_marshal_asn1(&key_bitstring, dsa->pub_key) || !CBB_flush(out)) {
+      !BN_marshal_asn1(&key_bitstring, dsa->pub_key.get()) || !CBB_flush(out)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_ENCODE_ERROR);
     return 0;
   }
@@ -93,11 +93,11 @@ static bssl::evp_decode_result_t dsa_priv_decode(const EVP_PKEY_ALG *alg,
     return evp_decode_error;
   }
 
-  dsa->priv_key = BN_new();
+  dsa->priv_key.reset(BN_new());
   if (dsa->priv_key == nullptr) {
     return evp_decode_error;
   }
-  if (!BN_parse_asn1_unsigned(key, dsa->priv_key) || CBS_len(key) != 0) {
+  if (!BN_parse_asn1_unsigned(key, dsa->priv_key.get()) || CBS_len(key) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
   }
@@ -112,10 +112,11 @@ static bssl::evp_decode_result_t dsa_priv_decode(const EVP_PKEY_ALG *alg,
 
   // Calculate the public key.
   UniquePtr<BN_CTX> ctx(BN_CTX_new());
-  dsa->pub_key = BN_new();
+  dsa->pub_key.reset(BN_new());
   if (ctx == nullptr || dsa->pub_key == nullptr ||
-      !BN_mod_exp_mont_consttime(dsa->pub_key, dsa->g, dsa->priv_key, dsa->p,
-                                 ctx.get(), nullptr)) {
+      !BN_mod_exp_mont_consttime(dsa->pub_key.get(), dsa->g.get(),
+                                 dsa->priv_key.get(), dsa->p.get(), ctx.get(),
+                                 nullptr)) {
     return evp_decode_error;
   }
 
@@ -139,7 +140,7 @@ static int dsa_priv_encode(CBB *out, const EvpPkey *key) {
                             dsa_asn1_meth.oid_len) ||
       !DSA_marshal_parameters(&algorithm, dsa) ||
       !CBB_add_asn1(&pkcs8, &private_key, CBS_ASN1_OCTETSTRING) ||
-      !BN_marshal_asn1(&private_key, dsa->priv_key) || !CBB_flush(out)) {
+      !BN_marshal_asn1(&private_key, dsa->priv_key.get()) || !CBB_flush(out)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_ENCODE_ERROR);
     return 0;
   }
@@ -166,22 +167,21 @@ static int dsa_missing_parameters(const EvpPkey *pkey) {
   return 0;
 }
 
-static int dup_bn_into(BIGNUM **out, BIGNUM *src) {
-  UniquePtr<BIGNUM> a(BN_dup(src));
-  if (a == nullptr) {
+static int dup_bn_into(UniquePtr<BIGNUM> *out, const BIGNUM *src) {
+  UniquePtr<BIGNUM> copy(BN_dup(src));
+  if (copy == nullptr) {
     return 0;
   }
-  BN_free(*out);
-  *out = a.release();
+  *out = std::move(copy);
   return 1;
 }
 
 static int dsa_copy_parameters(EvpPkey *to, const EvpPkey *from) {
   DSAImpl *to_dsa = reinterpret_cast<DSAImpl *>(to->pkey);
   const DSAImpl *from_dsa = reinterpret_cast<const DSAImpl *>(from->pkey);
-  if (!dup_bn_into(&to_dsa->p, from_dsa->p) ||
-      !dup_bn_into(&to_dsa->q, from_dsa->q) ||
-      !dup_bn_into(&to_dsa->g, from_dsa->g)) {
+  if (!dup_bn_into(&to_dsa->p, from_dsa->p.get()) ||
+      !dup_bn_into(&to_dsa->q, from_dsa->q.get()) ||
+      !dup_bn_into(&to_dsa->g, from_dsa->g.get())) {
     return 0;
   }
 

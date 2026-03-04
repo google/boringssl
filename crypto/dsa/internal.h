@@ -29,12 +29,12 @@ class DSAImpl : public dsa_st, public RefCounted<DSAImpl> {
  public:
   DSAImpl();
 
-  BIGNUM *p = nullptr;
-  BIGNUM *q = nullptr;
-  BIGNUM *g = nullptr;
+  UniquePtr<BIGNUM> p;
+  UniquePtr<BIGNUM> q;
+  UniquePtr<BIGNUM> g;
 
-  BIGNUM *pub_key = nullptr;
-  BIGNUM *priv_key = nullptr;
+  UniquePtr<BIGNUM> pub_key;
+  UniquePtr<BIGNUM> priv_key;
 
   // Normally used to cache montgomery values
   mutable Mutex method_mont_lock;

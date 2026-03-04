@@ -16,6 +16,8 @@
 
 #include <string.h>
 
+#include <utility>
+
 #include <openssl/bn.h>
 #include <openssl/dh.h>
 #include <openssl/digest.h>
@@ -54,15 +56,7 @@ DSAImpl::DSAImpl() : RefCounted(CheckSubClass()) {
   CRYPTO_new_ex_data(&ex_data);
 }
 
-DSAImpl::~DSAImpl() {
-  CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);
-
-  BN_clear_free(p);
-  BN_clear_free(q);
-  BN_clear_free(g);
-  BN_clear_free(pub_key);
-  BN_clear_free(priv_key);
-}
+DSAImpl::~DSAImpl() { CRYPTO_free_ex_data(&g_ex_data_class, &ex_data); }
 
 void DSA_free(DSA *dsa) {
   if (dsa == nullptr) {
@@ -79,43 +73,31 @@ int DSA_up_ref(DSA *dsa) {
 }
 
 unsigned DSA_bits(const DSA *dsa) {
-  auto *impl = FromOpaque(dsa);
-  return BN_num_bits(impl->p);
+  return BN_num_bits(FromOpaque(dsa)->p.get());
 }
 
 const BIGNUM *DSA_get0_pub_key(const DSA *dsa) {
-  auto *impl = FromOpaque(dsa);
-  return impl->pub_key;
+  return FromOpaque(dsa)->pub_key.get();
 }
 
 const BIGNUM *DSA_get0_priv_key(const DSA *dsa) {
-  auto *impl = FromOpaque(dsa);
-  return impl->priv_key;
+  return FromOpaque(dsa)->priv_key.get();
 }
 
-const BIGNUM *DSA_get0_p(const DSA *dsa) {
-  auto *impl = FromOpaque(dsa);
-  return impl->p;
-}
+const BIGNUM *DSA_get0_p(const DSA *dsa) { return FromOpaque(dsa)->p.get(); }
 
-const BIGNUM *DSA_get0_q(const DSA *dsa) {
-  auto *impl = FromOpaque(dsa);
-  return impl->q;
-}
+const BIGNUM *DSA_get0_q(const DSA *dsa) { return FromOpaque(dsa)->q.get(); }
 
-const BIGNUM *DSA_get0_g(const DSA *dsa) {
-  auto *impl = FromOpaque(dsa);
-  return impl->g;
-}
+const BIGNUM *DSA_get0_g(const DSA *dsa) { return FromOpaque(dsa)->g.get(); }
 
 void DSA_get0_key(const DSA *dsa, const BIGNUM **out_pub_key,
                   const BIGNUM **out_priv_key) {
   auto *impl = FromOpaque(dsa);
   if (out_pub_key != nullptr) {
-    *out_pub_key = impl->pub_key;
+    *out_pub_key = impl->pub_key.get();
   }
   if (out_priv_key != nullptr) {
-    *out_priv_key = impl->priv_key;
+    *out_priv_key = impl->priv_key.get();
   }
 }
 
@@ -123,13 +105,13 @@ void DSA_get0_pqg(const DSA *dsa, const BIGNUM **out_p, const BIGNUM **out_q,
                   const BIGNUM **out_g) {
   auto *impl = FromOpaque(dsa);
   if (out_p != nullptr) {
-    *out_p = impl->p;
+    *out_p = impl->p.get();
   }
   if (out_q != nullptr) {
-    *out_q = impl->q;
+    *out_q = impl->q.get();
   }
   if (out_g != nullptr) {
-    *out_g = impl->g;
+    *out_g = impl->g.get();
   }
 }
 
@@ -141,12 +123,10 @@ int DSA_set0_key(DSA *dsa, BIGNUM *pub_key, BIGNUM *priv_key) {
   }
 
   if (pub_key != nullptr) {
-    BN_free(impl->pub_key);
-    impl->pub_key = pub_key;
+    impl->pub_key.reset(pub_key);
   }
   if (priv_key != nullptr) {
-    BN_free(impl->priv_key);
-    impl->priv_key = priv_key;
+    impl->priv_key.reset(priv_key);
   }
 
   return 1;
@@ -162,16 +142,13 @@ int DSA_set0_pqg(DSA *dsa, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
   }
 
   if (p != nullptr) {
-    BN_free(impl->p);
-    impl->p = p;
+    impl->p.reset(p);
   }
   if (q != nullptr) {
-    BN_free(impl->q);
-    impl->q = q;
+    impl->q.reset(q);
   }
   if (g != nullptr) {
-    BN_free(impl->g);
-    impl->g = g;
+    impl->g.reset(g);
   }
 
   impl->method_mont_p = nullptr;
@@ -404,12 +381,9 @@ end:
     return 0;
   }
 
-  BN_free(impl->p);
-  BN_free(impl->q);
-  BN_free(impl->g);
-  impl->p = BN_dup(p);
-  impl->q = BN_dup(q);
-  impl->g = BN_dup(g);
+  impl->p.reset(BN_dup(p));
+  impl->q.reset(BN_dup(q));
+  impl->g.reset(BN_dup(g));
   if (impl->p == nullptr || impl->q == nullptr || impl->g == nullptr) {
     return 0;
   }
@@ -429,9 +403,9 @@ DSA *DSAparams_dup(const DSA *dsa) {
   if (ret == nullptr) {
     return nullptr;
   }
-  ret->p = BN_dup(impl->p);
-  ret->q = BN_dup(impl->q);
-  ret->g = BN_dup(impl->g);
+  ret->p.reset(BN_dup(impl->p.get()));
+  ret->q.reset(BN_dup(impl->q.get()));
+  ret->g.reset(BN_dup(impl->g.get()));
   if (ret->p == nullptr || ret->q == nullptr || ret->g == nullptr) {
     DSA_free(ret);
     return nullptr;
@@ -447,55 +421,26 @@ int DSA_generate_key(DSA *dsa) {
   }
 
   UniquePtr<BN_CTX> ctx(BN_CTX_new());
-  if (ctx == nullptr) {
+  UniquePtr<BIGNUM> pub_key(BN_new()), priv_key(BN_new());
+  if (ctx == nullptr || pub_key == nullptr || priv_key == nullptr) {
     return 0;
   }
 
-  int ok = 0;
-  BIGNUM *pub_key = nullptr;
-  BIGNUM *priv_key = impl->priv_key;
-  if (priv_key == nullptr) {
-    priv_key = BN_new();
-    if (priv_key == nullptr) {
-      goto err;
-    }
-  }
-
-  if (!BN_rand_range_ex(priv_key, 1, impl->q)) {
-    goto err;
-  }
-
-  pub_key = impl->pub_key;
-  if (pub_key == nullptr) {
-    pub_key = BN_new();
-    if (pub_key == nullptr) {
-      goto err;
-    }
-  }
-
-  if (!BN_MONT_CTX_set_locked(&impl->method_mont_p, &impl->method_mont_lock,
-                              impl->p, ctx.get()) ||
-      !BN_mod_exp_mont_consttime(pub_key, impl->g, priv_key, impl->p, ctx.get(),
+  if (!BN_rand_range_ex(priv_key.get(), 1, impl->q.get()) ||
+      !BN_MONT_CTX_set_locked(&impl->method_mont_p, &impl->method_mont_lock,
+                              impl->p.get(), ctx.get()) ||
+      !BN_mod_exp_mont_consttime(pub_key.get(), impl->g.get(), priv_key.get(),
+                                 impl->p.get(), ctx.get(),
                                  impl->method_mont_p.get())) {
-    goto err;
+    return 0;
   }
 
   // The public key is computed from the private key, but is public.
-  bn_declassify(pub_key);
+  bn_declassify(pub_key.get());
 
-  impl->priv_key = priv_key;
-  impl->pub_key = pub_key;
-  ok = 1;
-
-err:
-  if (impl->pub_key == nullptr) {
-    BN_free(pub_key);
-  }
-  if (impl->priv_key == nullptr) {
-    BN_free(priv_key);
-  }
-
-  return ok;
+  impl->priv_key = std::move(priv_key);
+  impl->pub_key = std::move(pub_key);
+  return 1;
 }
 
 DSA_SIG *DSA_SIG_new() { return NewZeroed<DSA_SIG>(); }
@@ -588,11 +533,11 @@ DSA_SIG *DSA_do_sign(const uint8_t *digest, size_t digest_len, const DSA *dsa) {
       goto err;
     }
 
-    if (digest_len > BN_num_bytes(impl->q)) {
+    if (digest_len > BN_num_bytes(impl->q.get())) {
       // If the digest length is greater than the size of |impl->q| use the
       // BN_num_bits(impl->q) leftmost bits of the digest, see FIPS 186-3, 4.2.
       // Note the above check that |impl->q| is a multiple of 8 bits.
-      digest_len = BN_num_bytes(impl->q);
+      digest_len = BN_num_bytes(impl->q.get());
     }
 
     if (BN_bin2bn(digest, digest_len, &m) == nullptr) {
@@ -603,7 +548,7 @@ DSA_SIG *DSA_do_sign(const uint8_t *digest, size_t digest_len, const DSA *dsa) {
     // violates |bn_mod_add_consttime| and |mod_mul_consttime|'s preconditions.
     // (The underlying algorithms could accept looser bounds, but we reduce for
     // simplicity.)
-    size_t q_width = bn_minimal_width(impl->q);
+    size_t q_width = bn_minimal_width(impl->q.get());
     if (!bn_resize_words(&m, q_width) || !bn_resize_words(&xr, q_width)) {
       goto err;
     }
@@ -612,9 +557,9 @@ DSA_SIG *DSA_do_sign(const uint8_t *digest, size_t digest_len, const DSA *dsa) {
 
     // Compute s = inv(k) (m + xr) mod q. Note |impl->method_mont_q| is
     // initialized by |dsa_sign_setup|.
-    if (!mod_mul_consttime(&xr, impl->priv_key, r, impl->method_mont_q.get(),
-                           ctx) ||
-        !bn_mod_add_consttime(s, &xr, &m, impl->q, ctx) ||
+    if (!mod_mul_consttime(&xr, impl->priv_key.get(), r,
+                           impl->method_mont_q.get(), ctx) ||
+        !bn_mod_add_consttime(s, &xr, &m, impl->q.get(), ctx) ||
         !mod_mul_consttime(s, s, kinv, impl->method_mont_q.get(), ctx)) {
       goto err;
     }
@@ -692,20 +637,20 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
     }
 
     if (BN_is_zero(sig->r) || BN_is_negative(sig->r) ||
-        BN_ucmp(sig->r, impl->q) >= 0) {
+        BN_ucmp(sig->r, impl->q.get()) >= 0) {
       ret = 1;
       goto err;
     }
     if (BN_is_zero(sig->s) || BN_is_negative(sig->s) ||
-        BN_ucmp(sig->s, impl->q) >= 0) {
+        BN_ucmp(sig->s, impl->q.get()) >= 0) {
       ret = 1;
       goto err;
     }
 
     if (!BN_MONT_CTX_set_locked(&impl->method_mont_p, &impl->method_mont_lock,
-                                impl->p, ctx) ||
+                                impl->p.get(), ctx) ||
         !BN_MONT_CTX_set_locked(&impl->method_mont_q, &impl->method_mont_lock,
-                                impl->q, ctx)) {
+                                impl->q.get(), ctx)) {
       goto err;
     }
 
@@ -713,12 +658,12 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
     // more efficiently computed as FromMont(s)^-1 = (s * R^-1)^-1 = s^-1 * R,
     // instead of ToMont(s^-1) = s^-1 * R.
     if (!BN_from_montgomery(&u2, sig->s, impl->method_mont_q.get(), ctx) ||
-        !BN_mod_inverse(&u2, &u2, impl->q, ctx)) {
+        !BN_mod_inverse(&u2, &u2, impl->q.get(), ctx)) {
       goto err;
     }
 
     // save M in u1
-    unsigned q_bits = BN_num_bits(impl->q);
+    unsigned q_bits = BN_num_bits(impl->q.get());
     if (digest_len > (q_bits >> 3)) {
       // if the digest length is greater than the size of q use the
       // BN_num_bits(impl->q) leftmost bits of the digest, see
@@ -743,13 +688,13 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
       goto err;
     }
 
-    if (!BN_mod_exp2_mont(&t1, impl->g, &u1, impl->pub_key, &u2, impl->p, ctx,
-                          impl->method_mont_p.get())) {
+    if (!BN_mod_exp2_mont(&t1, impl->g.get(), &u1, impl->pub_key.get(), &u2,
+                          impl->p.get(), ctx, impl->method_mont_p.get())) {
       goto err;
     }
 
     // let u1 = u1 mod q
-    if (!BN_mod(&u1, &t1, impl->q, ctx)) {
+    if (!BN_mod(&u1, &t1, impl->q.get(), ctx)) {
       goto err;
     }
 
@@ -848,7 +793,7 @@ int DSA_size(const DSA *dsa) {
     return 0;
   }
 
-  size_t order_len = BN_num_bytes(impl->q);
+  size_t order_len = BN_num_bytes(impl->q.get());
   // Compute the maximum length of an |order_len| byte integer. Defensively
   // assume that the leading 0x00 is included.
   size_t integer_len = 1 /* tag */ + der_len_len(order_len + 1) + 1 + order_len;
@@ -877,13 +822,13 @@ static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx, BIGNUM **out_kinv,
   BIGNUM *kinv = BN_new();
   if (r == nullptr || kinv == nullptr ||
       // Get random k
-      !BN_rand_range_ex(&k, 1, dsa->q) ||
+      !BN_rand_range_ex(&k, 1, dsa->q.get()) ||
       !BN_MONT_CTX_set_locked(&dsa->method_mont_p, &dsa->method_mont_lock,
-                              dsa->p, ctx) ||
+                              dsa->p.get(), ctx) ||
       !BN_MONT_CTX_set_locked(&dsa->method_mont_q, &dsa->method_mont_lock,
-                              dsa->q, ctx) ||
+                              dsa->q.get(), ctx) ||
       // Compute r = (g^k mod p) mod q
-      !BN_mod_exp_mont_consttime(r, dsa->g, &k, dsa->p, ctx,
+      !BN_mod_exp_mont_consttime(r, dsa->g.get(), &k, dsa->p.get(), ctx,
                                  dsa->method_mont_p.get())) {
     OPENSSL_PUT_ERROR(DSA, ERR_R_BN_LIB);
     goto err;
@@ -896,10 +841,10 @@ static int dsa_sign_setup(const DSAImpl *dsa, BN_CTX *ctx, BIGNUM **out_kinv,
   // revealed in the signature anyway (g^k (mod p) (mod q)), going from it to
   // |k| would require computing a discrete log.
   bn_declassify(r);
-  if (!BN_mod(r, r, dsa->q, ctx) ||
+  if (!BN_mod(r, r, dsa->q.get(), ctx) ||
       // Compute part of 's = inv(k) (m + xr) mod q' using Fermat's Little
       // Theorem.
-      !bn_mod_inverse_prime(kinv, &k, dsa->q, ctx, dsa->method_mont_q.get())) {
+      !bn_mod_inverse_prime(kinv, &k, dsa->q.get(), ctx, dsa->method_mont_q.get())) {
     OPENSSL_PUT_ERROR(DSA, ERR_R_BN_LIB);
     goto err;
   }
@@ -950,7 +895,6 @@ static bool copy_bn(UniquePtr<BIGNUM> *dst, const BIGNUM *src) {
 
 DH *DSA_dup_DH(const DSA *dsa) {
   auto *impl = FromOpaque(dsa);
-
   if (dsa == nullptr) {
     return nullptr;
   }
@@ -961,15 +905,15 @@ DH *DSA_dup_DH(const DSA *dsa) {
     return nullptr;
   }
   if (impl->q != nullptr) {
-    dh->priv_length = BN_num_bits(impl->q);
-    if (!copy_bn(&dh->q, impl->q)) {
+    dh->priv_length = BN_num_bits(impl->q.get());
+    if (!copy_bn(&dh->q, impl->q.get())) {
       return nullptr;
     }
   }
-  if (!copy_bn(&dh->p, impl->p) ||              //
-      !copy_bn(&dh->g, impl->g) ||              //
-      !copy_bn(&dh->pub_key, impl->pub_key) ||  //
-      !copy_bn(&dh->priv_key, impl->priv_key)) {
+  if (!copy_bn(&dh->p, impl->p.get()) ||              //
+      !copy_bn(&dh->g, impl->g.get()) ||              //
+      !copy_bn(&dh->pub_key, impl->pub_key.get()) ||  //
+      !copy_bn(&dh->priv_key, impl->priv_key.get())) {
     return nullptr;
   }
 
