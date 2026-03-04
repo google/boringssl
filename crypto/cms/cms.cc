@@ -96,9 +96,6 @@ CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms, X509 *signcert,
       !impl->der.empty() ||
       // We only support one signer.
       impl->has_signer_info ||
-      // We do not support configuring a signer in multiple steps. (In OpenSSL,
-      // this is used to configure attributes.
-      (flags & CMS_PARTIAL) != 0 ||
       // We do not support embedding certificates in SignedData.
       (flags & CMS_NOCERTS) == 0 ||
       // We do not support attributes in SignedData.
