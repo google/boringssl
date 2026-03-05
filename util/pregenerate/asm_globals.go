@@ -86,8 +86,6 @@ func BuildAsmGlobalsCHeader(syms []string) []byte {
 #include <openssl/prefix_symbols.h>
 
 
-#if defined(BORINGSSL_PREFIX)
-
 `)
 	// Not using redefine_extname here, as some asm symbols are conditionally inline functions
 	// (on platforms with no asm implementation).
@@ -95,8 +93,6 @@ func BuildAsmGlobalsCHeader(syms []string) []byte {
 		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
 	output.WriteString(`
-#endif  // BORINGSSL_PREFIX
-
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H
 `)
 	return output.Bytes()
@@ -113,25 +109,21 @@ func BuildAsmGlobalsGasHeader(syms []string) []byte {
 #include <openssl/prefix_symbols.h>
 
 
-#if defined(BORINGSSL_PREFIX)
-
 `)
-	output.WriteString("#if defined(__APPLE__)\n")
+	fmt.Fprintf(&output, "#if defined(__APPLE__)\n")
 	output.WriteString("\n")
 	for _, sym := range syms {
-		fmt.Fprintf(&output, "#define _%s BORINGSSL_ADD_USER_LABEL_AND_PREFIX(%s)\n", sym, sym)
+		fmt.Fprintf(&output, "#define _%s BORINGSSL_SYMBOL(BORINGSSL_ADD_PREFIX(%s))\n", sym, sym)
 	}
 	output.WriteString("\n")
-	output.WriteString("#else  // __APPLE__\n")
+	fmt.Fprintf(&output, "#else  // __APPLE__\n")
 	output.WriteString("\n")
 	for _, sym := range syms {
-		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_USER_LABEL_AND_PREFIX(%s)\n", sym, sym)
+		fmt.Fprintf(&output, "#define %s BORINGSSL_ADD_PREFIX(%s)\n", sym, sym)
 	}
 	output.WriteString("\n")
-	output.WriteString("#endif  // __APPLE__\n")
+	fmt.Fprintf(&output, "#endif  // __APPLE__\n")
 	output.WriteString(`
-#endif  // BORINGSSL_PREFIX
-
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_S_H
 `)
 	return output.Bytes()
@@ -146,14 +138,11 @@ func BuildAsmGlobalsNasmX86Header(syms []string) []byte {
 %define OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
 
 
-%ifdef BORINGSSL_PREFIX
 `)
 	for _, sym := range syms {
 		fmt.Fprintf(&output, "%%define _%s _ %%+ BORINGSSL_PREFIX %%+ _%s\n", sym, sym)
 	}
 	output.WriteString(`
-%endif  ; BORINGSSL_PREFIX
-
 %endif  ; OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
 `)
 	return output.Bytes()
@@ -168,14 +157,11 @@ func BuildAsmGlobalsNasmX8664Header(syms []string) []byte {
 %define OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_64_WIN_ASM_H
 
 
-%ifdef BORINGSSL_PREFIX
 `)
 	for _, sym := range syms {
 		fmt.Fprintf(&output, "%%define %s BORINGSSL_PREFIX %%+ _%s\n", sym, sym)
 	}
 	output.WriteString(`
-%endif  ; BORINGSSL_PREFIX
-
 %endif  ; OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_64_WIN_ASM_H
 `)
 	return output.Bytes()

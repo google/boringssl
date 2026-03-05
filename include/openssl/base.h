@@ -39,8 +39,17 @@
 // opensslconf.h.
 #include <openssl/is_boringssl.h>
 #include <openssl/opensslconf.h>
-#include <openssl/prefix_symbols.h>
 #include <openssl/target.h>  // IWYU pragma: export
+
+// Define |BORINGSSL_ALWAYS_USE_STATIC_INLINE| early so |prefix_symbols.h| has
+// access to it. See comment at |OPENSSL_INLINE| for what it does.
+#if !defined(__cplusplus) && !defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
+#define BORINGSSL_ALWAYS_USE_STATIC_INLINE
+#endif
+
+#if defined(BORINGSSL_PREFIX)
+#include <openssl/prefix_symbols.h>
+#endif  // BORINGSSL_PREFIX
 
 #if defined(__cplusplus)
 extern "C" {
@@ -177,6 +186,26 @@ extern "C" {
 #define OPENSSL_UNUSED
 #endif
 
+// C and C++ handle inline functions differently. In C++, an inline function is
+// defined in just the header file, potentially emitted in multiple compilation
+// units (in cases the compiler did not inline), but each copy must be identical
+// to satisfy ODR. In C, a non-static inline must be manually emitted in exactly
+// one compilation unit with a separate extern inline declaration.
+//
+// In both languages, exported inline functions referencing file-local symbols
+// are problematic. C forbids this altogether (though GCC and Clang seem not to
+// enforce it). It works in C++, but ODR requires the definitions be identical,
+// including all names in the definitions resolving to the "same entity". In
+// practice, this is unlikely to be a problem, but an inline function that
+// returns a pointer to a file-local symbol
+// could compile oddly.
+//
+// Historically, we used static inline in headers. However, to satisfy ODR, use
+// plain inline in C++, to allow inline consumer functions to call our header
+// functions. Plain inline would also work better with C99 inline, but that is
+// not used much in practice, extern inline is tedious, and there are conflicts
+// with the old gnu89 model:
+// https://stackoverflow.com/questions/216510/extern-inline
 #if defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
 // Add OPENSSL_UNUSED so that, should an inline function be emitted via macro
 // (e.g. a |STACK_OF(T)| implementation) in a source file without tripping

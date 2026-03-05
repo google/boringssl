@@ -18,7 +18,6 @@
 %define OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
 
 
-%ifdef BORINGSSL_PREFIX
 %define _BORINGSSL_function_hit _ %+ BORINGSSL_PREFIX %+ _BORINGSSL_function_hit
 %define _CRYPTO_rdrand _ %+ BORINGSSL_PREFIX %+ _CRYPTO_rdrand
 %define _CRYPTO_rdrand_multiple8_buf _ %+ BORINGSSL_PREFIX %+ _CRYPTO_rdrand_multiple8_buf
@@ -318,7 +317,5 @@
 %define _vpaes_set_decrypt_key _ %+ BORINGSSL_PREFIX %+ _vpaes_set_decrypt_key
 %define _vpaes_set_encrypt_key _ %+ BORINGSSL_PREFIX %+ _vpaes_set_encrypt_key
 %define _x25519_NEON _ %+ BORINGSSL_PREFIX %+ _x25519_NEON
-
-%endif  ; BORINGSSL_PREFIX
 
 %endif  ; OPENSSL_HEADER_GEN_BORINGSSL_PREFIX_SYMBOLS_INTERNAL_X86_WIN_ASM_H
