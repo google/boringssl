@@ -16,7 +16,7 @@
 #ifndef OPENSSL_HEADER_X509_H
 #define OPENSSL_HEADER_X509_H
 
-#include <openssl/base.h>   // IWYU pragma: export
+#include <openssl/base.h>  // IWYU pragma: export
 
 #include <time.h>
 
@@ -988,7 +988,7 @@ OPENSSL_EXPORT int X509_REVOKED_set_revocationDate(X509_REVOKED *revoked,
 OPENSSL_EXPORT const STACK_OF(X509_EXTENSION) *X509_REVOKED_get0_extensions(
     const X509_REVOKED *r);
 
-    // X509_REVOKED_get_ext_count returns the number of extensions in |x|.
+// X509_REVOKED_get_ext_count returns the number of extensions in |x|.
 OPENSSL_EXPORT int X509_REVOKED_get_ext_count(const X509_REVOKED *x);
 
 // X509_REVOKED_get_ext_by_NID behaves like |X509v3_get_ext_by_NID| but searches
@@ -4133,7 +4133,8 @@ OPENSSL_EXPORT int X509_NAME_print(BIO *bp, const X509_NAME *name, int obase);
 // This function outputs a legacy format that does not correctly handle string
 // encodings and other cases. Prefer |X509_NAME_print_ex| if printing a name for
 // debugging purposes.
-OPENSSL_EXPORT char *X509_NAME_oneline(const X509_NAME *name, char *buf, int size);
+OPENSSL_EXPORT char *X509_NAME_oneline(const X509_NAME *name, char *buf,
+                                       int size);
 
 // X509_NAME_print_ex_fp behaves like |X509_NAME_print_ex| but writes to |fp|.
 OPENSSL_EXPORT int X509_NAME_print_ex_fp(FILE *fp, const X509_NAME *nm,
