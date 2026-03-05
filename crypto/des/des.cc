@@ -14,6 +14,7 @@
 
 #include <openssl/des.h>
 
+#include <assert.h>
 #include <stdlib.h>
 
 #include "internal.h"
@@ -619,6 +620,7 @@ void bssl::DES_ncbc_encrypt_ex(const uint8_t *in, uint8_t *out, size_t len,
   uint32_t tout0, tout1, xor0, xor1;
   uint32_t tin[2];
   unsigned char *iv;
+  assert(len % 8 == 0);
 
   iv = ivec;
 
@@ -727,6 +729,7 @@ void bssl::DES_ede3_cbc_encrypt_ex(const uint8_t *in, uint8_t *out, size_t len,
   uint32_t tout0, tout1, xor0, xor1;
   uint32_t tin[2];
   uint8_t *iv;
+  assert(len % 8 == 0);
 
   iv = ivec;
 
