@@ -70,6 +70,10 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_PASSED_NULL_PARAMETER);
     return nullptr;
   }
+  if (impl->pkey == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
+    return nullptr;
+  }
 
   const EVP_PKEY_CTX_METHOD *pkey_method = impl->ameth->pkey_method;
   if (pkey_method == nullptr) {
@@ -314,7 +318,7 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer) {
     return 1;
   }
 
-  if (!impl->pkey) {
+  if (!impl->pkey || !FromOpaque(peer)->pkey) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
     return 0;
   }

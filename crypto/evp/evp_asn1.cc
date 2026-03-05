@@ -89,6 +89,10 @@ int EVP_marshal_public_key(CBB *cbb, const EVP_PKEY *key) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return 0;
   }
+  if (impl->pkey == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
+    return 0;
+  }
 
   return impl->ameth->pub_encode(cbb, impl);
 }
@@ -140,6 +144,10 @@ int EVP_marshal_private_key(CBB *cbb, const EVP_PKEY *key) {
   auto *impl = FromOpaque(key);
   if (impl->ameth == nullptr || impl->ameth->priv_encode == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+    return 0;
+  }
+  if (impl->pkey == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
     return 0;
   }
 

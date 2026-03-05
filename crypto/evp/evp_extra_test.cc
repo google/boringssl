@@ -1304,6 +1304,54 @@ TEST(EVPExtraTest, NoHalfEmptyKeys) {
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
 }
 
+// Due to an OpenSSL API flaw, it is possible to make a half-empty X25519 key.
+// Using a key in this state is a caller error, but we gracefully handle this
+// case.
+TEST(EVPExtraTest, HalfEmptyX25519) {
+  UniquePtr<EVP_PKEY> half_empty(EVP_PKEY_new());
+  ASSERT_TRUE(half_empty);
+  ASSERT_TRUE(EVP_PKEY_set_type(half_empty.get(), EVP_PKEY_X25519));
+
+  // A half-empty key has nothing.
+  EXPECT_FALSE(EVP_PKEY_has_public(half_empty.get()));
+  EXPECT_FALSE(EVP_PKEY_has_private(half_empty.get()));
+
+  // We cannot copy parameters from a half-empty key.
+  EXPECT_TRUE(EVP_PKEY_missing_parameters(half_empty.get()));
+  UniquePtr<EVP_PKEY> pkey(EVP_PKEY_new());
+  ASSERT_TRUE(pkey);
+  EXPECT_FALSE(EVP_PKEY_copy_parameters(pkey.get(), half_empty.get()));
+
+  // A half-empty key cannot be serialized.
+  ScopedCBB cbb;
+  ASSERT_TRUE(CBB_init(cbb.get(), 0));
+  EXPECT_FALSE(EVP_marshal_public_key(cbb.get(), half_empty.get()));
+  EXPECT_FALSE(EVP_marshal_private_key(cbb.get(), half_empty.get()));
+
+  // A half-empty key cannot be used.
+  UniquePtr<EVP_PKEY_CTX> ctx(EVP_PKEY_CTX_new(half_empty.get(), nullptr));
+  EXPECT_FALSE(ctx);
+
+  // Make a real key.
+  ctx.reset(EVP_PKEY_CTX_new_id(EVP_PKEY_X25519, nullptr));
+  ASSERT_TRUE(ctx);
+  ASSERT_TRUE(EVP_PKEY_keygen_init(ctx.get()));
+  EVP_PKEY *real_key_raw = nullptr;
+  ASSERT_TRUE(EVP_PKEY_keygen(ctx.get(), &real_key_raw));
+  UniquePtr<EVP_PKEY> real_key(real_key_raw);
+
+  // A half-empty key cannot be compared.
+  EXPECT_FALSE(EVP_PKEY_cmp(half_empty.get(), half_empty.get()));
+  EXPECT_FALSE(EVP_PKEY_cmp(half_empty.get(), real_key.get()));
+  EXPECT_FALSE(EVP_PKEY_cmp(real_key.get(), half_empty.get()));
+
+  // A half-empty cannot be the peer in a Diffie-Hellman operation.
+  ctx.reset(EVP_PKEY_CTX_new(real_key.get(), nullptr));
+  ASSERT_TRUE(ctx);
+  ASSERT_TRUE(EVP_PKEY_derive_init(ctx.get()));
+  EXPECT_FALSE(EVP_PKEY_derive_set_peer(ctx.get(), half_empty.get()));
+}
+
 // Test that parsers correctly handle trailing data.
 TEST(EVPExtraTest, TrailingData) {
   UniquePtr<EVP_PKEY> pkey = LoadExampleRSAKey();
