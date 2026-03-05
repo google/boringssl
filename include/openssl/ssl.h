@@ -3720,6 +3720,11 @@ OPENSSL_EXPORT const SRTP_PROTECTION_PROFILE *SSL_get_selected_srtp_profile(
 // |SSL_CTX_add1_credential| or |SSL_add1_credential|. |context| is the context
 // string to use when importing to TLS.
 //
+// WARNING: An attacker with knowledge of |key| can impersonate either side of
+// the connection. Additionally, using a pre-shared key exposes |key| to offline
+// brute force attacks. |key| must thus be a high-entropy, secret value.
+// Passwords or short PINs, for example, would not be safe to use as |key|.
+//
 // Callers can configure the credential list with multiple PSKs, or a mix of
 // PSKs and other credentials, in some preference order. Due to protocol
 // differences, clients and servers evaluate PSKs in the credential list
