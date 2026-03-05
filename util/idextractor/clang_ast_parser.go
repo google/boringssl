@@ -396,6 +396,7 @@ func (x extractor) visit(n *node) (err error) {
 	case
 		"AccessSpecDecl",
 		"AlwaysInlineAttr",
+		"AsmLabelAttr",
 		"BuiltinAttr",
 		"BuiltinType",
 		"CXX11NoReturnAttr",

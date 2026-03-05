@@ -39,9 +39,7 @@
 
 #if defined(__ASSEMBLER__)
 
-#if defined(BORINGSSL_PREFIX)
 #include <openssl/prefix_symbols_internal_S.h>
-#endif
 
 #if defined(__ELF__)
 // Every ELF object file, even empty ones, should disable executable stacks. See

@@ -8,9 +8,7 @@ default	rel
 %define ZMMWORD
 %define _CET_ENDBR
 
-%ifdef BORINGSSL_PREFIX
 %include "boringssl_prefix_symbols_internal_x86_64_win_asm.inc"
-%endif
 section	.rdata rdata align=8
 ALIGN	64
 
