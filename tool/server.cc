@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include <openssl/digest.h>
 #include <openssl/err.h>
 #include <openssl/hpke.h>
 #include <openssl/rand.h>
@@ -112,6 +113,26 @@ static const struct argument kArguments[] = {
         "-jdk11-workaround",
         kBooleanArgument,
         "Enable the JDK 11 workaround",
+    },
+    {
+        "-psk-hex",
+        kOptionalArgument,
+        "A hex-encoded pre-shared key to import (RFC 9258)",
+    },
+    {
+        "-psk-identity",
+        kOptionalArgument,
+        "A PSK identity to configure",
+    },
+    {
+        "-psk-context",
+        kOptionalArgument,
+        "A PSK context string to configure",
+    },
+    {
+        "-psk-sha384",
+        kBooleanArgument,
+        "Use a SHA-384 PSK instead of a SHA-256 PSK.",
     },
     {
         "",
@@ -286,6 +307,32 @@ bool Server(const std::vector<std::string> &args) {
         args_map.count("-cert") != 0 ? args_map["-cert"] : key;
     if (!SSL_CTX_use_certificate_chain_file(ctx.get(), cert.c_str())) {
       fprintf(stderr, "Failed to load cert chain: %s\n", cert.c_str());
+      return false;
+    }
+  } else if (auto psk_hex = args_map.find("-psk-hex");
+             psk_hex != args_map.end()) {
+    auto psk = DecodeHex(psk_hex->second);
+    if (!psk) {
+      fprintf(stderr, "Could not convert PSK from hex\n");
+      return false;
+    }
+    auto psk_id_arg = args_map.find("-psk-identity");
+    if (psk_id_arg == args_map.end()) {
+      fprintf(stderr, "No PSK identity specified\n");
+      return false;
+    }
+    Span<const uint8_t> psk_id = StringAsBytes(psk_id_arg->second);
+    Span<const uint8_t> psk_context;
+    if (auto it = args_map.find("-psk-context"); it != args_map.end()) {
+      psk_context = StringAsBytes(it->second);
+    }
+    const EVP_MD *psk_md =
+        args_map.count("-psk-sha384") ? EVP_sha384() : EVP_sha256();
+    UniquePtr<SSL_CREDENTIAL> cred(SSL_CREDENTIAL_new_pre_shared_key(
+        psk->data(), psk->size(), psk_id.data(), psk_id.size(), psk_md,
+        psk_context.data(), psk_context.size()));
+    if (!cred || !SSL_CTX_add1_credential(ctx.get(), cred.get())) {
+      fprintf(stderr, "Failed to load PSK\n");
       return false;
     }
   } else {

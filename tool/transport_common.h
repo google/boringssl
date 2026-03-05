@@ -18,7 +18,10 @@
 #include <openssl/ssl.h>
 #include <string.h>
 
+#include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 
 BSSL_NAMESPACE_BEGIN
@@ -51,6 +54,8 @@ class Listener {
 };
 
 bool VersionFromString(uint16_t *out_version, const std::string &version);
+
+std::optional<std::vector<uint8_t>> DecodeHex(std::string_view hex);
 
 void PrintConnectionInfo(BIO *bio, const SSL *ssl);
 

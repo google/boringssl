@@ -281,6 +281,35 @@ bool VersionFromString(uint16_t *out_version, const std::string &version) {
   return false;
 }
 
+static std::optional<uint8_t> DecodeHexChar(char c) {
+  if ('0' <= c && c <= '9') {
+    return c - '0';
+  } else if ('a' <= c && c <= 'f') {
+    return c - 'a' + 10;
+  } else if ('A' <= c && c <= 'F') {
+    return c - 'A' + 10;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<std::vector<uint8_t>> DecodeHex(std::string_view hex) {
+  if (hex.size() % 2 != 0) {
+    return std::nullopt;
+  }
+  std::vector<uint8_t> ret;
+  ret.reserve(hex.size() / 2);
+  for (size_t i = 0; i < hex.size(); i += 2) {
+    auto hi = DecodeHexChar(hex[i]);
+    auto lo = DecodeHexChar(hex[i + 1]);
+    if (!hi.has_value() || !lo.has_value()) {
+      return std::nullopt;
+    }
+    ret.push_back((*hi << 4) | *lo);
+  }
+  return ret;
+}
+
 void PrintConnectionInfo(BIO *bio, const SSL *ssl) {
   const SSL_CIPHER *cipher = SSL_get_current_cipher(ssl);
 
