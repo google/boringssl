@@ -341,7 +341,7 @@ uint32_t mod_sub(uint32_t a, uint32_t b) {
   uint32_t r = a - b;
   // return r < 0 ? r + kPrime : r;
   uint32_t mask = 0u - (r >> 31);
-  // See |reduce_once| for which this does not have a value barrier.
+  // See |reduce_once| for why this does not have a value barrier.
   return (mask & (r + kPrime)) | (~mask & r);
 }
 
