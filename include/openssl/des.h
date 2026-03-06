@@ -58,7 +58,7 @@ OPENSSL_EXPORT void DES_set_key(const DES_cblock *key,
 OPENSSL_EXPORT void DES_set_odd_parity(DES_cblock *key);
 
 // DES_ecb_encrypt encrypts (or decrypts, if |is_encrypt| is |DES_DECRYPT|) a
-// single DES block (8 bytes) from in to out, using the key configured in
+// single DES block (8 bytes) from |in| to |out|, using the key configured in
 // |schedule|.
 OPENSSL_EXPORT void DES_ecb_encrypt(const DES_cblock *in, DES_cblock *out,
                                     const DES_key_schedule *schedule,
@@ -66,6 +66,8 @@ OPENSSL_EXPORT void DES_ecb_encrypt(const DES_cblock *in, DES_cblock *out,
 
 // DES_ncbc_encrypt encrypts (or decrypts, if |enc| is |DES_DECRYPT|) |len|
 // bytes from |in| to |out| with DES in CBC mode. |len| must be a multiple of 8.
+// The IV is taken from |ivec|. When the function completes, the IV for the next
+// block is written to |ivec|.
 OPENSSL_EXPORT void DES_ncbc_encrypt(const uint8_t *in, uint8_t *out,
                                      size_t len,
                                      const DES_key_schedule *schedule,
@@ -83,7 +85,8 @@ OPENSSL_EXPORT void DES_ecb3_encrypt(const DES_cblock *input,
 // DES_ede3_cbc_encrypt encrypts (or decrypts, if |enc| is |DES_DECRYPT|) |len|
 // bytes from |in| to |out| with 3DES in CBC mode. 3DES uses three keys, thus
 // the function takes three different |DES_key_schedule|s. |len| must be a
-// multiple of 8.
+// multiple of 8. The IV is taken from |ivec|. When the function completes, the
+// IV for the next block is written to |ivec|.
 OPENSSL_EXPORT void DES_ede3_cbc_encrypt(const uint8_t *in, uint8_t *out,
                                          size_t len,
                                          const DES_key_schedule *ks1,
@@ -94,7 +97,9 @@ OPENSSL_EXPORT void DES_ede3_cbc_encrypt(const uint8_t *in, uint8_t *out,
 // DES_ede2_cbc_encrypt encrypts (or decrypts, if |enc| is |DES_DECRYPT|) |len|
 // bytes from |in| to |out| with 3DES in CBC mode. With this keying option, the
 // first and third 3DES keys are identical. Thus, this function takes only two
-// different |DES_key_schedule|s. |len| must be a multiple of 8.
+// different |DES_key_schedule|s. |len| must be a multiple of 8. The IV is taken
+// from |ivec|. When the function completes, the IV for the next block is
+// written to |ivec|.
 OPENSSL_EXPORT void DES_ede2_cbc_encrypt(const uint8_t *in, uint8_t *out,
                                          size_t len,
                                          const DES_key_schedule *ks1,

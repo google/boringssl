@@ -16,9 +16,7 @@
 #include <openssl/cipher.h>
 #include <openssl/obj.h>
 
-#if defined(OPENSSL_WINDOWS)
-#include <intrin.h>
-#endif
+#include <assert.h>
 
 #include "../../crypto/fipsmodule/cipher/internal.h"
 #include "../../crypto/internal.h"
@@ -28,8 +26,8 @@
 
 using namespace bssl;
 
-void CAST_ecb_encrypt(const uint8_t *in, uint8_t *out, const CAST_KEY *ks,
-                      int enc) {
+void CAST_ecb_encrypt(const uint8_t in[CAST_BLOCK], uint8_t out[CAST_BLOCK],
+                      const CAST_KEY *ks, int enc) {
   uint32_t d[2];
 
   n2l(in, d[0]);
@@ -56,7 +54,7 @@ void CAST_ecb_encrypt(const uint8_t *in, uint8_t *out, const CAST_KEY *ks,
          0xffffffffL;                                                \
   }
 
-void CAST_encrypt(uint32_t *data, const CAST_KEY *key) {
+void CAST_encrypt(uint32_t data[2], const CAST_KEY *key) {
   uint32_t l, r, t;
   const uint32_t *k;
 
@@ -88,7 +86,7 @@ void CAST_encrypt(uint32_t *data, const CAST_KEY *key) {
   data[0] = r & 0xffffffffL;
 }
 
-void CAST_decrypt(uint32_t *data, const CAST_KEY *key) {
+void CAST_decrypt(uint32_t data[2], const CAST_KEY *key) {
   uint32_t l, r, t;
   const uint32_t *k;
 
@@ -121,7 +119,8 @@ void CAST_decrypt(uint32_t *data, const CAST_KEY *key) {
 }
 
 void CAST_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t length,
-                      const CAST_KEY *ks, uint8_t *iv, int enc) {
+                      const CAST_KEY *ks, uint8_t iv[8], int enc) {
+  assert(length % CAST_BLOCK == 0);
   uint32_t tin0, tin1;
   uint32_t tout0, tout1, xor0, xor1;
   size_t l = length;
@@ -311,7 +310,7 @@ void CAST_set_key(CAST_KEY *key, size_t len, const uint8_t *data) {
 // extra state information to record how much of the 64bit block we have used
 // is contained in *num.
 void CAST_cfb64_encrypt(const uint8_t *in, uint8_t *out, size_t length,
-                        const CAST_KEY *schedule, uint8_t *ivec, int *num,
+                        const CAST_KEY *schedule, uint8_t ivec[8], int *num,
                         int enc) {
   uint32_t v0, v1, t;
   int n = *num;
