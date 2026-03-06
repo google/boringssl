@@ -36,7 +36,10 @@
 //! assert_eq!(shared_key1, shared_key2);
 //! ```
 
-use crate::{ec, with_output_vec, Buffer};
+use crate::{
+    ec::{self, Group},
+    with_output_vec, Buffer,
+};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
@@ -60,6 +63,36 @@ impl<C: ec::Curve> PublicKey<C> {
     /// Serialize this key as uncompressed X9.62 format.
     pub fn to_x962_uncompressed(&self) -> Buffer {
         self.point.to_x962_uncompressed()
+    }
+}
+
+/// Parsed `ECPrivateKey` dispatched into the corresponding curve types.
+pub enum ParsedPrivateKey {
+    /// A P-256 private key.
+    P256(PrivateKey<ec::P256>),
+    /// A P-384 private key.
+    P384(PrivateKey<ec::P384>),
+}
+
+impl ParsedPrivateKey {
+    /// Parses an ECPrivateKey structure froma DER encoded structure per [RFC 5915],
+    /// whose curve is specified by the `ECParameters`.
+    ///
+    /// Unless the curve group is one of the variants of [`Group`], this method returns [`None`].
+    ///
+    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
+    pub fn from_der(der: &[u8]) -> Option<Self> {
+        let key = ec::Key::from_der_ec_private_key_with_curve_names(der)?;
+        match key.get_group()? {
+            Group::P256 => Some(ParsedPrivateKey::P256(PrivateKey {
+                key,
+                marker: PhantomData,
+            })),
+            Group::P384 => Some(ParsedPrivateKey::P384(PrivateKey {
+                key,
+                marker: PhantomData,
+            })),
+        }
     }
 }
 
@@ -106,19 +139,6 @@ impl<C: ec::Curve> PrivateKey<C> {
     pub fn from_der_ec_private_key(der: &[u8]) -> Option<Self> {
         let key = ec::Key::from_der_ec_private_key(C::group(), der)?;
         Some(Self {
-            key,
-            marker: PhantomData,
-        })
-    }
-
-    /// Parses an ECPrivateKey structure from [RFC 5915], whose curve is specified by
-    /// the `ECParameters`.
-    ///
-    /// Unless the curve group is one of the variants of [`Group`], this method returns [`None`].
-    ///
-    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
-    pub fn from_der_ec_private_key_with_curve_names(der: &[u8]) -> Option<Self> {
-        ec::Key::from_der_ec_private_key_with_curve_names(der).map(|key| Self {
             key,
             marker: PhantomData,
         })
@@ -199,10 +219,9 @@ mod test {
         let alice_public_key = alice_private_key.to_public_key();
         let alice_private_key =
             PrivateKey::<C>::from_big_endian(alice_private_key.to_big_endian().as_ref()).unwrap();
-        let alice_private_key = PrivateKey::<C>::from_der_ec_private_key(
-            alice_private_key.to_der_ec_private_key().as_ref(),
-        )
-        .unwrap();
+        let alice_private_key_der = alice_private_key.to_der_ec_private_key();
+        let alice_private_key =
+            PrivateKey::<C>::from_der_ec_private_key(alice_private_key_der.as_ref()).unwrap();
 
         let bob_private_key = PrivateKey::<C>::generate();
         let bob_public_key = bob_private_key.to_public_key();
@@ -211,6 +230,11 @@ mod test {
         let shared_key2 = bob_private_key.compute_shared_key(&alice_public_key);
 
         assert_eq!(shared_key1, shared_key2);
+
+        match ParsedPrivateKey::from_der(alice_private_key_der.as_ref()).unwrap() {
+            ParsedPrivateKey::P256(_) => assert!(matches!(C::group(), Group::P256)),
+            ParsedPrivateKey::P384(_) => assert!(matches!(C::group(), Group::P384)),
+        }
     }
 
     #[test]

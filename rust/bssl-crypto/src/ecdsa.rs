@@ -33,7 +33,10 @@
 //! assert!(public_key.verify(signed_message, sig.as_slice()).is_ok());
 //! ```
 
-use crate::{ec, with_output_vec, Buffer, FfiSlice, InvalidSignatureError};
+use crate::{
+    ec::{self, Group},
+    with_output_vec, Buffer, FfiSlice, InvalidSignatureError,
+};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
@@ -158,6 +161,36 @@ impl<C: ec::Curve> Clone for PrivateKey<C> {
     }
 }
 
+/// Parsed `ECPrivateKey` dispatched into the corresponding curve types.
+pub enum ParsedPrivateKey {
+    /// A P-256 private key.
+    P256(PrivateKey<ec::P256>),
+    /// A P-384 private key.
+    P384(PrivateKey<ec::P384>),
+}
+
+impl ParsedPrivateKey {
+    /// Parses an ECPrivateKey structure froma DER encoded structure per [RFC 5915],
+    /// whose curve is specified by the `ECParameters`.
+    ///
+    /// Unless the curve group is one of the variants of [`Group`], this method returns [`None`].
+    ///
+    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
+    pub fn from_der(der: &[u8]) -> Option<Self> {
+        let key = ec::Key::from_der_ec_private_key_with_curve_names(der)?;
+        match key.get_group()? {
+            Group::P256 => Some(ParsedPrivateKey::P256(PrivateKey {
+                key,
+                marker: PhantomData,
+            })),
+            Group::P384 => Some(ParsedPrivateKey::P384(PrivateKey {
+                key,
+                marker: PhantomData,
+            })),
+        }
+    }
+}
+
 impl<C: ec::Curve> PrivateKey<C> {
     /// Generate a random private key.
     pub fn generate() -> Self {
@@ -186,19 +219,6 @@ impl<C: ec::Curve> PrivateKey<C> {
     pub fn from_der_ec_private_key(der: &[u8]) -> Option<Self> {
         let key = ec::Key::from_der_ec_private_key(C::group(), der)?;
         Some(Self {
-            key,
-            marker: PhantomData,
-        })
-    }
-
-    /// Parses an ECPrivateKey structure from [RFC 5915], whose curve is specified by
-    /// the `ECParameters`.
-    ///
-    /// Unless the curve group is one of the variants of [`Group`], this method returns [`None`].
-    ///
-    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
-    pub fn from_der_ec_private_key_with_curve_names(der: &[u8]) -> Option<Self> {
-        ec::Key::from_der_ec_private_key_with_curve_names(der).map(|key| Self {
             key,
             marker: PhantomData,
         })
@@ -386,15 +406,27 @@ mod test {
             .is_err());
     }
 
+    fn check_parsing<C: ec::Curve>() {
+        let key = PrivateKey::<C>::generate();
+        let der = key.to_der_ec_private_key();
+        let parsed = ParsedPrivateKey::from_der(der.as_ref()).unwrap();
+        match parsed {
+            ParsedPrivateKey::P256(_) => assert!(matches!(C::group(), Group::P256)),
+            ParsedPrivateKey::P384(_) => assert!(matches!(C::group(), Group::P384)),
+        }
+    }
+
     #[test]
     fn p256() {
         check_curve::<P256>();
         check_compressed::<P256>();
+        check_parsing::<P256>();
     }
 
     #[test]
     fn p384() {
         check_curve::<P384>();
         check_compressed::<P384>();
+        check_parsing::<P384>();
     }
 }
