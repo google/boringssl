@@ -191,6 +191,19 @@ impl<C: ec::Curve> PrivateKey<C> {
         })
     }
 
+    /// Parses an ECPrivateKey structure from [RFC 5915], whose curve is specified by
+    /// the `ECParameters`.
+    ///
+    /// Unless the curve group is one of the variants of [`Group`], this method returns [`None`].
+    ///
+    /// [RFC 5915]: <https://datatracker.ietf.org/doc/html/rfc5915>
+    pub fn from_der_ec_private_key_with_curve_names(der: &[u8]) -> Option<Self> {
+        ec::Key::from_der_ec_private_key_with_curve_names(der).map(|key| Self {
+            key,
+            marker: PhantomData,
+        })
+    }
+
     /// Serialize this private key as an ECPrivateKey structure (from RFC 5915).
     pub fn to_der_ec_private_key(&self) -> Buffer {
         self.key.to_der_ec_private_key()
