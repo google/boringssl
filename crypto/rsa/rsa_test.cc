@@ -577,58 +577,111 @@ TEST(RSATest, CheckFIPS) {
 }
 
 TEST(RSATest, GenerateFIPS) {
-  UniquePtr<RSA> rsa_opaque(RSA_new());
-  RSAImpl *rsa = FromOpaque(rsa_opaque.get());
+  UniquePtr<RSA> rsa(RSA_new());
   ASSERT_TRUE(rsa);
 
   // RSA_generate_key_fips may only be used for 2048-, 3072-, and 4096-bit
   // keys.
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 512, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 1024, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 2047, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 2049, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 3071, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 3073, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 4095, nullptr));
-  EXPECT_FALSE(RSA_generate_key_fips(rsa, 4097, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 512, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 1024, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 2047, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 2049, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 3071, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 3073, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 4095, nullptr));
+  EXPECT_FALSE(RSA_generate_key_fips(rsa.get(), 4097, nullptr));
   ERR_clear_error();
 
   // Test that we can generate keys of the supported lengths:
   for (const size_t bits : {2048, 3072, 4096}) {
     SCOPED_TRACE(bits);
 
-    rsa_opaque.reset(RSA_new());
-    rsa = FromOpaque(rsa_opaque.get());
+    rsa.reset(RSA_new());
     ASSERT_TRUE(rsa);
-    ASSERT_TRUE(RSA_generate_key_fips(rsa, bits, nullptr));
-    EXPECT_EQ(bits, BN_num_bits(rsa->n));
+    ASSERT_TRUE(RSA_generate_key_fips(rsa.get(), bits, nullptr));
+    EXPECT_EQ(bits, RSA_bits(rsa.get()));
   }
 }
 
+// Wrappers over |RSA_new| and |RSA_set0_*|. |RSA_new_public_key| and
+// |RSA_new_private_key| are much, much easier to use than OpenSSL's APIs, but
+// we specifically want to exercise the case where the key is not checked for
+// consistency after creation.
+//
+// Matching the |RSA_set0_*| functions, each group of parameters must be either
+// all null or all non-null. OpenSSL picked some odd invariants for these APIs.
+
+UniquePtr<RSA> NewRSAPublicUnchecked(const BIGNUM *n, const BIGNUM *e) {
+  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<BIGNUM> n_copy(BN_dup(n)), e_copy(BN_dup(e));
+  if (rsa == nullptr || n_copy == nullptr || e_copy == nullptr) {
+    return nullptr;
+  }
+  BSSL_CHECK(
+      RSA_set0_key(rsa.get(), n_copy.release(), e_copy.release(), nullptr));
+  return rsa;
+}
+
+UniquePtr<RSA> NewRSAPrivateUnchecked(const BIGNUM *n, const BIGNUM *e,
+                                      const BIGNUM *d, const BIGNUM *p,
+                                      const BIGNUM *q, const BIGNUM *dmp1,
+                                      const BIGNUM *dmq1, const BIGNUM *iqmp) {
+  UniquePtr<RSA> rsa(RSA_new());
+  UniquePtr<BIGNUM> n_copy(BN_dup(n)), e_copy(BN_dup(e)), d_copy(BN_dup(d));
+  if (rsa == nullptr || n_copy == nullptr || e_copy == nullptr ||
+      d_copy == nullptr) {
+    return nullptr;
+  }
+  BSSL_CHECK(RSA_set0_key(rsa.get(), n_copy.release(), e_copy.release(),
+                          d_copy.release()));
+  if (p != nullptr) {
+    UniquePtr<BIGNUM> p_copy(BN_dup(p)), q_copy(BN_dup(q));
+    if (p_copy == nullptr || q_copy == nullptr) {
+      return nullptr;
+    }
+    BSSL_CHECK(RSA_set0_factors(rsa.get(), p_copy.release(), q_copy.release()));
+  }
+  if (dmp1 != nullptr) {
+    UniquePtr<BIGNUM> dmp1_copy(BN_dup(dmp1)), dmq1_copy(BN_dup(dmq1)),
+        iqmp_copy(BN_dup(iqmp));
+    if (dmp1_copy == nullptr || dmq1_copy == nullptr || iqmp_copy == nullptr) {
+      return nullptr;
+    }
+    BSSL_CHECK(RSA_set0_crt_params(rsa.get(), dmp1_copy.release(),
+                                   dmq1_copy.release(), iqmp_copy.release()));
+  }
+  return rsa;
+}
+
 TEST(RSATest, BadKey) {
-  UniquePtr<RSA> key_opaque(RSA_new());
-  RSAImpl *key = FromOpaque(key_opaque.get());
+  // Make a valid key to copy fields out of.
+  UniquePtr<RSA> base(RSA_new());
   UniquePtr<BIGNUM> e(BN_new());
-  ASSERT_TRUE(key);
+  ASSERT_TRUE(base);
   ASSERT_TRUE(e);
   ASSERT_TRUE(BN_set_word(e.get(), RSA_F4));
+  ASSERT_TRUE(RSA_generate_key_ex(base.get(), 2048, e.get(), nullptr));
 
-  // Generate a bad key.
-  ASSERT_TRUE(RSA_generate_key_ex(key, 2048, e.get(), nullptr));
-  ASSERT_TRUE(BN_add(key->p, key->p, BN_value_one()));
+  // Manually construct a key with a bad p.
+  UniquePtr<BIGNUM> p(BN_dup(RSA_get0_p(base.get())));
+  ASSERT_TRUE(p);
+  ASSERT_TRUE(BN_add_word(p.get(), 1));
+  UniquePtr<RSA> key = NewRSAPrivateUnchecked(
+      RSA_get0_n(base.get()), RSA_get0_e(base.get()), RSA_get0_d(base.get()),
+      p.get(), RSA_get0_q(base.get()), RSA_get0_dmp1(base.get()),
+      RSA_get0_dmq1(base.get()), RSA_get0_iqmp(base.get()));
 
   // Bad keys are detected.
-  EXPECT_FALSE(RSA_check_key(key));
-  EXPECT_FALSE(RSA_check_fips(key));
+  EXPECT_FALSE(RSA_check_key(key.get()));
+  EXPECT_FALSE(RSA_check_fips(key.get()));
 
   // Bad keys may not be parsed.
   uint8_t *der;
   size_t der_len;
-  ASSERT_TRUE(RSA_private_key_to_bytes(&der, &der_len, key));
+  ASSERT_TRUE(RSA_private_key_to_bytes(&der, &der_len, key.get()));
   UniquePtr<uint8_t> delete_der(der);
-  key_opaque.reset(RSA_private_key_from_bytes(der, der_len));
-  key = FromOpaque(key_opaque.get());
-  EXPECT_FALSE(key);
+  key.reset(RSA_private_key_from_bytes(der, der_len));
+  EXPECT_FALSE(key.get());
 }
 
 TEST(RSATest, ASN1) {
@@ -691,33 +744,29 @@ TEST(RSATest, RoundKeyLengths) {
   ASSERT_TRUE(e);
   ASSERT_TRUE(BN_set_word(e.get(), RSA_F4));
 
-  UniquePtr<RSA> rsa_opaque(RSA_new());
-  RSAImpl *rsa = FromOpaque(rsa_opaque.get());
+  UniquePtr<RSA> rsa(RSA_new());
   ASSERT_TRUE(rsa);
-  ASSERT_TRUE(RSA_generate_key_ex(rsa, 1025, e.get(), nullptr));
-  EXPECT_EQ(1024u, BN_num_bits(rsa->n));
+  ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1025, e.get(), nullptr));
+  EXPECT_EQ(1024u, RSA_bits(rsa.get()));
 
-  rsa_opaque.reset(RSA_new());
-  rsa = FromOpaque(rsa_opaque.get());
-  ASSERT_TRUE(rsa);
-  ASSERT_TRUE(RSA_generate_key_ex(rsa, 1027, e.get(), nullptr));
-  EXPECT_EQ(1024u, BN_num_bits(rsa->n));
+  rsa.reset(RSA_new());
+  ASSERT_TRUE(rsa.get());
+  ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1027, e.get(), nullptr));
+  EXPECT_EQ(1024u, RSA_bits(rsa.get()));
 
-  rsa_opaque.reset(RSA_new());
-  rsa = FromOpaque(rsa_opaque.get());
-  ASSERT_TRUE(rsa);
-  ASSERT_TRUE(RSA_generate_key_ex(rsa, 1151, e.get(), nullptr));
-  EXPECT_EQ(1024u, BN_num_bits(rsa->n));
+  rsa.reset(RSA_new());
+  ASSERT_TRUE(rsa.get());
+  ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1151, e.get(), nullptr));
+  EXPECT_EQ(1024u, RSA_bits(rsa.get()));
 
-  rsa_opaque.reset(RSA_new());
-  rsa = FromOpaque(rsa_opaque.get());
-  ASSERT_TRUE(rsa);
-  ASSERT_TRUE(RSA_generate_key_ex(rsa, 1152, e.get(), nullptr));
-  EXPECT_EQ(1152u, BN_num_bits(rsa->n));
+  rsa.reset(RSA_new());
+  ASSERT_TRUE(rsa.get());
+  ASSERT_TRUE(RSA_generate_key_ex(rsa.get(), 1152, e.get(), nullptr));
+  EXPECT_EQ(1152u, RSA_bits(rsa.get()));
 }
 
 TEST(RSATest, CheckKey) {
-  static const char kN[] =
+  UniquePtr<BIGNUM> n = HexToBIGNUM(
       "b5a5651bc2e15ce31d789f0984053a2ea0cf8f964a78068c45acfdf078c57fd62d5a287c"
       "32f3baa879f5dfea27d7a3077c9d3a2a728368c3d90164690c3d82f660ffebc7f13fed45"
       "4eb5103df943c10dc32ec60b0d9b6e307bfd7f9b943e0dc3901e42501765365f7286eff2"
@@ -725,9 +774,11 @@ TEST(RSATest, CheckKey) {
       "fbd872b4f9b833dfb2a4ca7fcc23298020044e8130bfe930adfb3e5cab8d324547adf4b2"
       "ce34d7cea4298f0b613d85f2bf1df03da44aee0784a1a20a15ee0c38a0f8e84962f1f61b"
       "18bd43781c7385f3c2b8e2aebd3c560b4faad208ad3938bad27ddda9ed9e933dba088021"
-      "2dd9e28d";
-  static const char kE[] = "10001";
-  static const char kD[] =
+      "2dd9e28d");
+  ASSERT_TRUE(n);
+  UniquePtr<BIGNUM> e = HexToBIGNUM("10001");
+  ASSERT_TRUE(e);
+  UniquePtr<BIGNUM> d = HexToBIGNUM(
       "fb9c6afd9568ce5ddac8e6a32bb881eb6cdd962bbc639dce5805548bf0fec2214f18ffd3"
       "6a50aa520cfe4477f9507d87355a24e3ff537f9f29ccffe5730b11896ebb9142982ed0df"
       "9c32ba98dddab863f3e5aa764d16ebff4500d3ee11de12fabd7aeca83c7ffa5d242b3ddc"
@@ -735,80 +786,111 @@ TEST(RSATest, CheckKey) {
       "853e2cba9b0c2447a8757951ae9a0336dfa64c3d5476df9b20f200cfb52e3fbd2d4e3f34"
       "200b1171cbac367096f23366e74592025875efb6a7e3b1dd365abb0d86f34ee65ddbfa93"
       "90460da0d346833d6aa6277c0216b20073ba2f18471549c309e82d12e10714d0e0dbf146"
-      "6fcd1f1";
-  static const char kP[] =
+      "6fcd1f1");
+  ASSERT_TRUE(d);
+  UniquePtr<BIGNUM> p = HexToBIGNUM(
       "edbe476fe8989f3966e72a20348ec6d8e924f44e1d9fa2c3485ea8a2ffd39f68574a5cef"
       "ffbb92d6764789ac0f67149127239c2027fbc55b5268a1dac6588de44e614f3bdce00f0a"
       "56d138800ad772d159a583c6548e37cadbfcf1b4ebfd50d01508986a516f36ed827b94ef"
-      "1f9b4e233bf5762b3a903d2dfbbbce1fba30e9f1";
-  static const char kQ[] =
+      "1f9b4e233bf5762b3a903d2dfbbbce1fba30e9f1");
+  ASSERT_TRUE(d);
+  UniquePtr<BIGNUM> q = HexToBIGNUM(
       "c398518790a166dbe50498f04940d14c87ded09313fb0f69f69255c688142802ba3d4f9e"
       "f9425dadc462170635593c06a332cfc5fc9e6e1c05281950a5ce3bad4fd7cc83a38bd4ad"
       "6865594275af424f47c64c04af1caab2e261e95b975097c887d587dc8150df34cbeccd7d"
-      "0688c392d9f1c617810043c9b93b884bf6ed465d";
-  static const char kDMP1[] =
+      "0688c392d9f1c617810043c9b93b884bf6ed465d");
+  ASSERT_TRUE(q);
+  UniquePtr<BIGNUM> dmp1 = HexToBIGNUM(
       "b44db5d1fa7e1d6ba44e36d59be6988a132f7294f7c484e543b27e84b82e9fdbbb2feb92"
       "1cc9fe0fe63e54fc07e66e63b3623f5ae7d7fb124a4a8e4de4556eaf327e7c5ff3207e67"
       "a1f624ba7efe6cd6b6fd5f160034a7bd92df9fd44d919d436260556f74793b181ff867b8"
-      "7ea9033697978e5a349d05b9250c86c3eb2a8391";
-  static const char kDMQ1[] =
+      "7ea9033697978e5a349d05b9250c86c3eb2a8391");
+  ASSERT_TRUE(dmp1);
+  UniquePtr<BIGNUM> dmq1 = HexToBIGNUM(
       "7c06d9240265264927a6cba80a7b4c7c9fe77d10d669abb38083f85a24adcb55376d6b50"
       "9e34241cecdb5a483889f6132b672bf31aa607a242eed3669d4cf1f08b2186f0ae431bc0"
       "3de38e3f234ad7dc57e1f9103b4e0d3bd36b4cc324671968322207bd9e4e7ecb06c888e0"
-      "cfc4e766f646665b3f14c0e7684ac4b98ec1948d";
-  static const char kIQMP[] =
+      "cfc4e766f646665b3f14c0e7684ac4b98ec1948d");
+  ASSERT_TRUE(dmq1);
+  UniquePtr<BIGNUM> iqmp = HexToBIGNUM(
       "2887a5cb0c1bf6710e91c25da141dad92134a927431471c2d4a8b78036026d21182990e1"
       "2c1d70635f07ee551383899365a69b33d4db23e5ff7371ff4244d2c3290ce2b91ac11adc"
       "a54bb61ea5e64b9423102933ea100c12dad809fbf9589515e9d28e867f6b95c2d307f792"
-      "cac28c6d7d23f441cb5b62798233db29b5cc0348";
+      "cac28c6d7d23f441cb5b62798233db29b5cc0348");
+  ASSERT_TRUE(iqmp);
 
-  UniquePtr<RSA> rsa_opaque(RSA_new());
-  RSAImpl *rsa = FromOpaque(rsa_opaque.get());
+  // An empty RSA key is invalid.
+  UniquePtr<RSA> rsa(RSA_new());
   ASSERT_TRUE(rsa);
-
-  // Missing n or e does not pass.
-  ASSERT_TRUE(BN_hex2bn(&rsa->n, kN));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
 
-  BN_free(rsa->n);
-  rsa->n = nullptr;
-  ASSERT_TRUE(BN_hex2bn(&rsa->e, kE));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  // It is no longer possible in the public API to construct these, but
+  // |RSA_check_key| should notice if n or e is missing.
+  rsa = NewRSAPublicUnchecked(n.get(), e.get());
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->n = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
 
-  // Public keys pass.
-  ASSERT_TRUE(BN_hex2bn(&rsa->n, kN));
-  EXPECT_TRUE(RSA_check_key(rsa));
-
-  // Configuring d also passes.
-  ASSERT_TRUE(BN_hex2bn(&rsa->d, kD));
-  EXPECT_TRUE(RSA_check_key(rsa));
-
-  // p and q must be provided together.
-  ASSERT_TRUE(BN_hex2bn(&rsa->p, kP));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  rsa = NewRSAPublicUnchecked(n.get(), e.get());
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->e = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
 
-  BN_free(rsa->p);
-  rsa->p = nullptr;
-  ASSERT_TRUE(BN_hex2bn(&rsa->q, kQ));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  // Public keys are valid.
+  rsa = NewRSAPublicUnchecked(n.get(), e.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_TRUE(RSA_check_key(rsa.get()));
+
+  // A key with n, e, and d is valid.
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), /*p=*/nullptr,
+                               /*q=*/nullptr, /*dmp1=*/nullptr,
+                               /*dmq1=*/nullptr, /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  EXPECT_TRUE(RSA_check_key(rsa.get()));
+
+  // It is not longer to construct a key with p but not q, but |RSA_check_key|
+  // should notice if only one of p and q is available.
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               /*dmp1=*/nullptr,
+                               /*dmq1=*/nullptr, /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->q = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
 
-  // Supplying p and q without CRT parameters passes.
-  ASSERT_TRUE(BN_hex2bn(&rsa->p, kP));
-  EXPECT_TRUE(RSA_check_key(rsa));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               /*dmp1=*/nullptr,
+                               /*dmq1=*/nullptr, /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->p = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
+  ERR_clear_error();
 
-  // With p and q together, it is sufficient to check d against e.
-  ASSERT_TRUE(BN_add_word(rsa->d, 1));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  // Supplying p and q without CRT parameters is valid.
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               /*dmp1=*/nullptr,
+                               /*dmq1=*/nullptr, /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  EXPECT_TRUE(RSA_check_key(rsa.get()));
+
+  // With p and q available, we check that d are consistent e.
+  UniquePtr<BIGNUM> wrong(BN_dup(d.get()));
+  ASSERT_TRUE(wrong);
+  ASSERT_TRUE(BN_add_word(wrong.get(), 1));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), wrong.get(), p.get(), q.get(),
+                               /*dmp1=*/nullptr,
+                               /*dmq1=*/nullptr, /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
 
   // Test another invalid d. p-1 is divisible by 3, so there is no valid value
   // of d here if e = 111. Set d to what extended GCD would have given if it
   // forgot to check the inverse existed.
-  static const char kDBogus[] =
+  UniquePtr<BIGNUM> d_bogus = HexToBIGNUM(
       "140be923edb928cf4340a08ada19f23da680ff20275a81e033825ee8605afc3bf6039b87"
       "f0ddc7ea3b95f214a6fdda1064d0c66b50ac7bfe8cfe6c85d3cd217ae6f5094cd72a39e5"
       "a17a9ce43eae1ba5d7d8c3fb743d8cbcb3bcd74edd0b75fcca23a0b00bcea119864c0243"
@@ -816,16 +898,20 @@ TEST(RSATest, CheckKey) {
       "85850558868468d60015927cb10b2a893e23aa16b1f9278d4413f64d0a3122218f9000ae"
       "cd8743b8e9e50bd9de81eebc4e0230d1f4f7bffc1e6f903606afba9ee694c2b40022f171"
       "a760e7c63e736e31d7c7ff8b77dc206c2a3aa5afd540073060ebb9050bddce1ff1917630"
-      "47fff51d";
-  ASSERT_TRUE(BN_set_word(rsa->e, 111));
-  ASSERT_TRUE(BN_hex2bn(&rsa->d, kDBogus));
-  EXPECT_FALSE(RSA_check_key(rsa));
+      "47fff51d");
+  ASSERT_TRUE(d_bogus);
+  UniquePtr<BIGNUM> bn111 = HexToBIGNUM("6f");
+  ASSERT_TRUE(bn111);
+  rsa = NewRSAPrivateUnchecked(n.get(), bn111.get(), d_bogus.get(), p.get(),
+                               q.get(), /*dmp1=*/nullptr, /*dmq1=*/nullptr,
+                               /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_hex2bn(&rsa->e, kE));
 
   // d computed via the Euler totient rather than the Carmichael totient is also
   // acceptable.
-  static const char kDEuler[] =
+  UniquePtr<BIGNUM> d_euler = HexToBIGNUM(
       "3d231ff6ca0ee41ea50ab62c93bcd6aa5f01bd484e643b7ff6eb94c4dd414c17a0481a1c"
       "4361f94f3f4d5c42098af09a527cf0d8dc96122ae8dd29189a4011d62f2bb40625d2e85f"
       "4d706fb90c2e9bc9b00a0c2a28384a4c134f6d25c62d64a08fdf3f5e89a14d3daee46fda"
@@ -833,12 +919,16 @@ TEST(RSATest, CheckKey) {
       "2b090e409bb822b117744a9aabf878b8b1998d406337ec24cee3877795061c67322ac626"
       "6c675a2cefe0f85f06b4d24eb6ad8e3fae7f218f5bd8ff2fb8bf8176d8527b0dfdaf8490"
       "8f9bfaf3f37dcf8aa0211311bac07b1a478c3ed8a6369e5d5fc42b2afa93f5de8f520981"
-      "c62bbe81";
-  ASSERT_TRUE(BN_hex2bn(&rsa->d, kDEuler));
-  EXPECT_TRUE(RSA_check_key(rsa));
+      "c62bbe81");
+  ASSERT_TRUE(d_euler);
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d_euler.get(), p.get(),
+                               q.get(), /*dmp1=*/nullptr, /*dmq1=*/nullptr,
+                               /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  EXPECT_TRUE(RSA_check_key(rsa.get()));
 
   // If d is completely out of range but otherwise valid, it is rejected.
-  static const char kDTooLarge[] =
+  UniquePtr<BIGNUM> d_too_large = HexToBIGNUM(
       "f2c885128cf04101c283553617c210d8ffd14cde98dc420c3c9892b55606cbedcda24298"
       "7655b3f7b9433c2c316293a1cf1a2b034f197aeec1de8d81a67d94cc902b9fce1712d5a4"
       "9c257ff705725cd77338d23535d3b87c8f4cecc15a6b72641ffd81aea106839d216b5fcd"
@@ -846,65 +936,87 @@ TEST(RSATest, CheckKey) {
       "b5ddbc1463d5a4638b2816b0f033dacdc0162f329af9e4d142352521fbd2fe14af824ef3"
       "1601fe843c79cc3efbcb8eafd79262bdd25e2bdf21440f774e26d88ed7df938c5cf6982d"
       "e9fa635b8ca36ce5c5fbd579a53cbb0348ceae752d4bc5621c5acc922ca2082494633337"
-      "42e770c1";
-  ASSERT_TRUE(BN_hex2bn(&rsa->d, kDTooLarge));
-  EXPECT_FALSE(RSA_check_key(rsa));
+      "42e770c1");
+  ASSERT_TRUE(d_too_large);
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d_too_large.get(), p.get(),
+                               q.get(), /*dmp1=*/nullptr, /*dmq1=*/nullptr,
+                               /*iqmp=*/nullptr);
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_hex2bn(&rsa->d, kD));
 
-  // CRT value must either all be provided or all missing.
-  ASSERT_TRUE(BN_hex2bn(&rsa->dmp1, kDMP1));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  // CRT values must either all be provided or all missing. It is no longer
+  // possible to construct these from the public API.
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), dmq1.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->dmp1 = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  BN_free(rsa->dmp1);
-  rsa->dmp1 = nullptr;
 
-  ASSERT_TRUE(BN_hex2bn(&rsa->dmq1, kDMQ1));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), dmq1.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->dmq1 = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  BN_free(rsa->dmq1);
-  rsa->dmq1 = nullptr;
 
-  ASSERT_TRUE(BN_hex2bn(&rsa->iqmp, kIQMP));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), dmq1.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  FromOpaque(rsa.get())->iqmp = nullptr;
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
 
   // The full key is accepted.
-  ASSERT_TRUE(BN_hex2bn(&rsa->dmp1, kDMP1));
-  ASSERT_TRUE(BN_hex2bn(&rsa->dmq1, kDMQ1));
-  EXPECT_TRUE(RSA_check_key(rsa));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), dmq1.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_TRUE(RSA_check_key(rsa.get()));
 
   // Incorrect CRT values are rejected.
-  ASSERT_TRUE(BN_add_word(rsa->dmp1, 1));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  ASSERT_TRUE(BN_add(wrong.get(), dmp1.get(), BN_value_one()));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               wrong.get(), dmq1.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_sub_word(rsa->dmp1, 1));
 
-  ASSERT_TRUE(BN_add_word(rsa->dmq1, 1));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  ASSERT_TRUE(BN_add(wrong.get(), dmq1.get(), BN_value_one()));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), wrong.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_sub_word(rsa->dmq1, 1));
 
-  ASSERT_TRUE(BN_add_word(rsa->iqmp, 1));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  ASSERT_TRUE(BN_add(wrong.get(), iqmp.get(), BN_value_one()));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), dmq1.get(), wrong.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_sub_word(rsa->iqmp, 1));
 
   // Non-reduced CRT values are rejected.
-  ASSERT_TRUE(BN_add(rsa->dmp1, rsa->dmp1, rsa->p));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  ASSERT_TRUE(BN_add(wrong.get(), dmp1.get(), p.get()));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               wrong.get(), dmq1.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_sub(rsa->dmp1, rsa->dmp1, rsa->p));
 
-  ASSERT_TRUE(BN_add(rsa->dmq1, rsa->dmq1, rsa->q));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  ASSERT_TRUE(BN_add(wrong.get(), dmq1.get(), q.get()));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), wrong.get(), iqmp.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_sub(rsa->dmq1, rsa->dmq1, rsa->q));
 
-  ASSERT_TRUE(BN_add(rsa->iqmp, rsa->iqmp, rsa->p));
-  EXPECT_FALSE(RSA_check_key(rsa));
+  ASSERT_TRUE(BN_add(wrong.get(), iqmp.get(), p.get()));
+  rsa = NewRSAPrivateUnchecked(n.get(), e.get(), d.get(), p.get(), q.get(),
+                               dmp1.get(), dmq1.get(), wrong.get());
+  ASSERT_TRUE(rsa);
+  EXPECT_FALSE(RSA_check_key(rsa.get()));
   ERR_clear_error();
-  ASSERT_TRUE(BN_sub(rsa->iqmp, rsa->iqmp, rsa->p));
 }
 
 TEST(RSATest, KeygenFail) {
@@ -1209,57 +1321,48 @@ TEST(RSATest, Negative) {
 TEST(RSATest, LargeE) {
   // Test an RSA key with large e by swapping d and e in kKey1.
   // Since e is small, e mod (p-1) and e mod (q-1) will simply be e.
-  UniquePtr<RSA> key_opaque(RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
-  RSAImpl *key = FromOpaque(key_opaque.get());
+  UniquePtr<RSA> key(RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
   ASSERT_TRUE(key);
-  const BIGNUM *n = RSA_get0_n(key);
-  const BIGNUM *e = RSA_get0_e(key);
-  const BIGNUM *d = RSA_get0_d(key);
-  const BIGNUM *p = RSA_get0_p(key);
-  const BIGNUM *q = RSA_get0_q(key);
-  const BIGNUM *iqmp = RSA_get0_iqmp(key);
+  const BIGNUM *n = RSA_get0_n(key.get());
+  const BIGNUM *e = RSA_get0_e(key.get());
+  const BIGNUM *d = RSA_get0_d(key.get());
+  const BIGNUM *p = RSA_get0_p(key.get());
+  const BIGNUM *q = RSA_get0_q(key.get());
+  const BIGNUM *iqmp = RSA_get0_iqmp(key.get());
 
   // By default, the large exponent is not allowed as e.
   UniquePtr<RSA> pub(RSA_new_public_key(n, /*e=*/d));
   EXPECT_FALSE(pub);
-  UniquePtr<RSA> priv_opaque(RSA_new_private_key(n, /*e=*/d, /*d=*/e, p, q,
-                                                 /*dmp1=*/e, /*dmq1=*/e, iqmp));
-  RSAImpl *priv = FromOpaque(priv_opaque.get());
+  UniquePtr<RSA> priv(RSA_new_private_key(n, /*e=*/d, /*d=*/e, p, q,
+                                          /*dmp1=*/e, /*dmq1=*/e, iqmp));
   EXPECT_FALSE(priv);
 
-  // Constructing such a key piecemeal also would not work. This was only
-  // possible with private APIs, so when |RSA| is opaque, this case will be
-  // impossible.
-  priv_opaque.reset(RSA_new());
-  priv = FromOpaque(priv_opaque.get());
+  // Constructing such a key piecemeal gives back an object that fails all
+  // operations.
+  priv = NewRSAPrivateUnchecked(n, d, e, /*p=*/nullptr, /*q=*/nullptr,
+                                /*dmp1=*/nullptr, /*dmq1=*/nullptr,
+                                /*iqmp=*/nullptr);
   ASSERT_TRUE(priv);
-  priv->n = BN_dup(n);
-  ASSERT_TRUE(priv->n);
-  priv->e = BN_dup(d);  // Swapped
-  ASSERT_TRUE(priv->e);
-  priv->d = BN_dup(e);
-  ASSERT_TRUE(priv->d);
 
   static const uint8_t kDigest[32] = {0};
-  std::vector<uint8_t> sig(RSA_size(priv));
+  std::vector<uint8_t> sig(RSA_size(priv.get()));
   size_t len;
-  EXPECT_FALSE(RSA_sign_pss_mgf1(priv, &len, sig.data(), sig.size(), kDigest,
+  EXPECT_FALSE(RSA_sign_pss_mgf1(priv.get(), &len, sig.data(), sig.size(), kDigest,
                                  sizeof(kDigest), EVP_sha256(), EVP_sha256(),
                                  /*salt_len=*/32));
 
   // But the "large e" APIs tolerate it.
   pub.reset(RSA_new_public_key_large_e(n, /*e=*/d));
   ASSERT_TRUE(pub);
-  priv_opaque.reset(RSA_new_private_key_large_e(n, /*e=*/d, /*d=*/e, p, q,
-                                                /*dmp1=*/e,
-                                                /*dmq1=*/e, iqmp));
-  priv = FromOpaque(priv_opaque.get());
+  priv.reset(RSA_new_private_key_large_e(n, /*e=*/d, /*d=*/e, p, q, /*dmp1=*/e,
+                                         /*dmq1=*/e, iqmp));
   ASSERT_TRUE(priv);
 
   // Test that operations work correctly.
-  sig.resize(RSA_size(priv));
-  ASSERT_TRUE(RSA_sign_pss_mgf1(priv, &len, sig.data(), sig.size(), kDigest,
-                                sizeof(kDigest), EVP_sha256(), EVP_sha256(),
+  sig.resize(RSA_size(priv.get()));
+  ASSERT_TRUE(RSA_sign_pss_mgf1(priv.get(), &len, sig.data(), sig.size(),
+                                kDigest, sizeof(kDigest), EVP_sha256(),
+                                EVP_sha256(),
                                 /*salt_len=*/32));
   sig.resize(len);
 
@@ -1361,64 +1464,45 @@ TEST(RSATest, KeyLimits) {
 
 #if defined(OPENSSL_THREADS)
 TEST(RSATest, Threads) {
-  UniquePtr<RSA> rsa_template_opaque(
-      RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
-  RSAImpl *rsa_template = FromOpaque(rsa_template_opaque.get());
+  UniquePtr<RSA> rsa_template(RSA_private_key_from_bytes(kKey1, sizeof(kKey1)));
   ASSERT_TRUE(rsa_template);
 
   const uint8_t kDummyHash[32] = {0};
-  std::vector<uint8_t> sig(RSA_size(rsa_template));
+  std::vector<uint8_t> sig(RSA_size(rsa_template.get()));
   unsigned sig_len;
   EXPECT_TRUE(RSA_sign(NID_sha256, kDummyHash, sizeof(kDummyHash), sig.data(),
-                       &sig_len, rsa_template));
+                       &sig_len, rsa_template.get()));
   sig.resize(sig_len);
 
   // RSA keys may be assembled piece-meal and then used in parallel between
   // threads, which requires internal locking to create some derived properties.
-  UniquePtr<RSA> rsa_opaque(RSA_new());
-  RSAImpl *rsa = FromOpaque(rsa_opaque.get());
-  rsa->n = BN_dup(rsa_template->n);
-  ASSERT_TRUE(rsa->n);
-  rsa->e = BN_dup(rsa_template->e);
-  ASSERT_TRUE(rsa->e);
-  rsa->d = BN_dup(rsa_template->d);
-  ASSERT_TRUE(rsa->d);
-  rsa->p = BN_dup(rsa_template->p);
-  ASSERT_TRUE(rsa->p);
-  rsa->q = BN_dup(rsa_template->q);
-  ASSERT_TRUE(rsa->q);
-  rsa->dmp1 = BN_dup(rsa_template->dmp1);
-  ASSERT_TRUE(rsa->dmp1);
-  rsa->dmq1 = BN_dup(rsa_template->dmq1);
-  ASSERT_TRUE(rsa->dmq1);
-  rsa->iqmp = BN_dup(rsa_template->iqmp);
-  ASSERT_TRUE(rsa->iqmp);
+  UniquePtr<RSA> rsa = NewRSAPrivateUnchecked(
+      RSA_get0_n(rsa_template.get()), RSA_get0_e(rsa_template.get()),
+      RSA_get0_d(rsa_template.get()), RSA_get0_p(rsa_template.get()),
+      RSA_get0_q(rsa_template.get()), RSA_get0_dmp1(rsa_template.get()),
+      RSA_get0_dmq1(rsa_template.get()), RSA_get0_iqmp(rsa_template.get()));
+  ASSERT_TRUE(rsa);
 
   // Each of these operations must be safe to do concurrently on different
   // threads.
-  auto raw_access = [&] { EXPECT_EQ(0, BN_cmp(rsa->d, rsa_template->d)); };
   auto getter = [&] {
-    const BIGNUM *d;
-    RSA_get0_key(rsa, nullptr, nullptr, &d);
-    EXPECT_EQ(0, BN_cmp(d, rsa_template->d));
+    EXPECT_EQ(0, BN_cmp(RSA_get0_d(rsa.get()), RSA_get0_d(rsa_template.get())));
   };
   auto sign = [&] {
-    std::vector<uint8_t> sig2(RSA_size(rsa));
+    std::vector<uint8_t> sig2(RSA_size(rsa.get()));
     unsigned sig2_len;
     EXPECT_TRUE(RSA_sign(NID_sha256, kDummyHash, sizeof(kDummyHash),
-                         sig2.data(), &sig2_len, rsa));
+                         sig2.data(), &sig2_len, rsa.get()));
     sig2.resize(sig2_len);
     // RSASSA-PKCS1-v1_5 is deterministic.
     EXPECT_EQ(Bytes(sig), Bytes(sig2));
   };
   auto verify = [&] {
     EXPECT_TRUE(RSA_verify(NID_sha256, kDummyHash, sizeof(kDummyHash),
-                           sig.data(), sig.size(), rsa));
+                           sig.data(), sig.size(), rsa.get()));
   };
 
   std::vector<std::thread> threads;
-  threads.emplace_back(raw_access);
-  threads.emplace_back(raw_access);
   threads.emplace_back(getter);
   threads.emplace_back(getter);
   threads.emplace_back(sign);

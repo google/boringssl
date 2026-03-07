@@ -49,20 +49,20 @@ class RSAImpl : public rsa_st, public RefCounted<RSAImpl> {
  public:
   explicit RSAImpl(const ENGINE *engine);
 
-  RSA_METHOD *meth;
+  RSA_METHOD *meth = nullptr;
 
-  BIGNUM *n = nullptr;
-  BIGNUM *e = nullptr;
-  BIGNUM *d = nullptr;
-  BIGNUM *p = nullptr;
-  BIGNUM *q = nullptr;
-  BIGNUM *dmp1 = nullptr;
-  BIGNUM *dmq1 = nullptr;
-  BIGNUM *iqmp = nullptr;
+  UniquePtr<BIGNUM> n;
+  UniquePtr<BIGNUM> e;
+  UniquePtr<BIGNUM> d;
+  UniquePtr<BIGNUM> p;
+  UniquePtr<BIGNUM> q;
+  UniquePtr<BIGNUM> dmp1;
+  UniquePtr<BIGNUM> dmq1;
+  UniquePtr<BIGNUM> iqmp;
 
   // be careful using this if the RSA structure is shared
   CRYPTO_EX_DATA ex_data = {};
-  int flags;
+  int flags = 0;
 
   Mutex lock;
 
@@ -77,14 +77,14 @@ class RSAImpl : public rsa_st, public RefCounted<RSAImpl> {
   // separate copies due to threading concerns caused by OpenSSL's API
   // mistakes. See https://github.com/openssl/openssl/issues/5158 and
   // the |freeze_private_key| implementation.
-  BIGNUM *d_fixed = nullptr, *dmp1_fixed = nullptr, *dmq1_fixed = nullptr;
+  UniquePtr<BIGNUM> d_fixed, dmp1_fixed, dmq1_fixed;
 
   // iqmp_mont is q^-1 mod p in Montgomery form, using |mont_p|.
-  BIGNUM *iqmp_mont = nullptr;
+  UniquePtr<BIGNUM> iqmp_mont;
 
   // pss_params is the RSA-PSS parameters associated with the key. This is not
   // used by the low-level RSA implementation, just the EVP layer.
-  bssl::rsa_pss_params_t pss_params = {};
+  bssl::rsa_pss_params_t pss_params = bssl::rsa_pss_none;
 
   // private_key_frozen is one if the key has been used for a private key
   // operation and may no longer be mutated.

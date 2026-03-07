@@ -47,7 +47,7 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
     return 0;
   }
 
-  unsigned n_bits = BN_num_bits(impl->n);
+  unsigned n_bits = BN_num_bits(impl->n.get());
   if (n_bits > OPENSSL_RSA_MAX_MODULUS_BITS) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_MODULUS_TOO_LARGE);
     return 0;
@@ -60,7 +60,7 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
 
   // RSA moduli must be positive and odd. In addition to being necessary for RSA
   // in general, we cannot setup Montgomery reduction with even moduli.
-  if (!BN_is_odd(impl->n) || BN_is_negative(impl->n)) {
+  if (!BN_is_odd(impl->n.get()) || BN_is_negative(impl->n.get())) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_RSA_PARAMETERS);
     return 0;
   }
@@ -69,15 +69,16 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
   if (impl->e != nullptr) {
     // Reject e = 1, negative e, and even e. e must be odd to be relatively
     // prime with phi(n).
-    unsigned e_bits = BN_num_bits(impl->e);
-    if (e_bits < 2 || BN_is_negative(impl->e) || !BN_is_odd(impl->e)) {
+    unsigned e_bits = BN_num_bits(impl->e.get());
+    if (e_bits < 2 || BN_is_negative(impl->e.get()) ||
+        !BN_is_odd(impl->e.get())) {
       OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_E_VALUE);
       return 0;
     }
     if (impl->flags & RSA_FLAG_LARGE_PUBLIC_EXPONENT) {
       // The caller has requested disabling DoS protections. Still, e must be
       // less than n.
-      if (BN_ucmp(impl->n, impl->e) <= 0) {
+      if (BN_ucmp(impl->n.get(), impl->e.get()) <= 0) {
         OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_E_VALUE);
         return 0;
       }
@@ -98,7 +99,7 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
 
       // The upper bound on |e_bits| and lower bound on |n_bits| imply e is
       // bounded by n.
-      assert(BN_ucmp(impl->n, impl->e) > 0);
+      assert(BN_ucmp(impl->n.get(), impl->e.get()) > 0);
     }
   } else if (!(impl->flags & RSA_FLAG_NO_PUBLIC_EXPONENT)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
@@ -108,18 +109,17 @@ int bssl::rsa_check_public_key(const RSA *rsa) {
   return 1;
 }
 
-static int ensure_fixed_copy(BIGNUM **out, const BIGNUM *in, int width) {
+static int ensure_fixed_copy(UniquePtr<BIGNUM> *out, const BIGNUM *in,
+                             int width) {
   if (*out != nullptr) {
     return 1;
   }
-  BIGNUM *copy = BN_dup(in);
-  if (copy == nullptr || !bn_resize_words(copy, width)) {
-    BN_free(copy);
+  UniquePtr<BIGNUM> copy(BN_dup(in));
+  if (copy == nullptr || !bn_resize_words(copy.get(), width)) {
     return 0;
   }
-  *out = copy;
-  bn_secret(copy);
-
+  bn_secret(copy.get());
+  *out = std::move(copy);
   return 1;
 }
 
@@ -153,7 +153,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
   // |p|, and |q| with the correct minimal widths.
 
   if (rsa->mont_n == nullptr) {
-    rsa->mont_n.reset(BN_MONT_CTX_new_for_modulus(rsa->n, ctx));
+    rsa->mont_n.reset(BN_MONT_CTX_new_for_modulus(rsa->n.get(), ctx));
     if (rsa->mont_n == nullptr) {
       return 0;
     }
@@ -165,7 +165,7 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
   // of |rsa->d|, but normalize it so we only leak it once, rather than per
   // operation.
   if (rsa->d != nullptr &&
-      !ensure_fixed_copy(&rsa->d_fixed, rsa->d, n_fixed->width)) {
+      !ensure_fixed_copy(&rsa->d_fixed, rsa->d.get(), n_fixed->width)) {
     return 0;
   }
 
@@ -176,14 +176,14 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
     // code.
 
     if (rsa->mont_p == nullptr) {
-      rsa->mont_p.reset(BN_MONT_CTX_new_consttime(rsa->p, ctx));
+      rsa->mont_p.reset(BN_MONT_CTX_new_consttime(rsa->p.get(), ctx));
       if (rsa->mont_p == nullptr) {
         return 0;
       }
     }
 
     if (rsa->mont_q == nullptr) {
-      rsa->mont_q.reset(BN_MONT_CTX_new_consttime(rsa->q, ctx));
+      rsa->mont_q.reset(BN_MONT_CTX_new_consttime(rsa->q.get(), ctx));
       if (rsa->mont_q == nullptr) {
         return 0;
       }
@@ -194,22 +194,24 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
       // moduli's bit lengths.
       const BIGNUM *p_fixed = &rsa->mont_p->N;
       const BIGNUM *q_fixed = &rsa->mont_q->N;
-      if (!ensure_fixed_copy(&rsa->dmp1_fixed, rsa->dmp1, p_fixed->width) ||
-          !ensure_fixed_copy(&rsa->dmq1_fixed, rsa->dmq1, q_fixed->width)) {
+      if (!ensure_fixed_copy(&rsa->dmp1_fixed, rsa->dmp1.get(),
+                             p_fixed->width) ||
+          !ensure_fixed_copy(&rsa->dmq1_fixed, rsa->dmq1.get(),
+                             q_fixed->width)) {
         return 0;
       }
 
       // Compute |iqmp_mont|, which is |iqmp| in Montgomery form and with the
       // correct bit width.
       if (rsa->iqmp_mont == nullptr) {
-        BIGNUM *iqmp_mont = BN_new();
+        UniquePtr<BIGNUM> iqmp_mont(BN_new());
         if (iqmp_mont == nullptr ||
-            !BN_to_montgomery(iqmp_mont, rsa->iqmp, rsa->mont_p.get(), ctx)) {
-          BN_free(iqmp_mont);
+            !BN_to_montgomery(iqmp_mont.get(), rsa->iqmp.get(),
+                              rsa->mont_p.get(), ctx)) {
           return 0;
         }
-        rsa->iqmp_mont = iqmp_mont;
-        bn_secret(rsa->iqmp_mont);
+        rsa->iqmp_mont = std::move(iqmp_mont);
+        bn_secret(rsa->iqmp_mont.get());
       }
     }
   }
@@ -220,20 +222,13 @@ static int freeze_private_key(RSAImpl *rsa, BN_CTX *ctx) {
 
 void bssl::rsa_invalidate_key(RSA *rsa) {
   auto *impl = FromOpaque(rsa);
-
   impl->private_key_frozen = 0;
-
   impl->mont_n = nullptr;
   impl->mont_p = nullptr;
   impl->mont_q = nullptr;
-
-  BN_free(impl->d_fixed);
   impl->d_fixed = nullptr;
-  BN_free(impl->dmp1_fixed);
   impl->dmp1_fixed = nullptr;
-  BN_free(impl->dmq1_fixed);
   impl->dmq1_fixed = nullptr;
-  BN_free(impl->iqmp_mont);
   impl->iqmp_mont = nullptr;
 }
 
@@ -341,13 +336,14 @@ int bssl::rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
     goto err;
   }
 
-  if (BN_ucmp(f, impl->n) >= 0) {
+  if (BN_ucmp(f, impl->n.get()) >= 0) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE_FOR_MODULUS);
     goto err;
   }
 
-  if (!BN_MONT_CTX_set_locked(&impl->mont_n, &impl->lock, impl->n, ctx.get()) ||
-      !BN_mod_exp_mont(result, f, impl->e, &impl->mont_n->N, ctx.get(),
+  if (!BN_MONT_CTX_set_locked(&impl->mont_n, &impl->lock, impl->n.get(),
+                              ctx.get()) ||
+      !BN_mod_exp_mont(result, f, impl->e.get(), &impl->mont_n->N, ctx.get(),
                        impl->mont_n.get())) {
     goto err;
   }
@@ -411,14 +407,14 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
   }
 
   // The caller should have ensured this.
-  assert(len == BN_num_bytes(impl->n));
+  assert(len == BN_num_bytes(impl->n.get()));
   if (BN_bin2bn(in, len, f) == nullptr) {
     return 0;
   }
 
   // The input to the RSA private transform may be secret, but padding is
   // expected to construct a value within range, so we can leak this comparison.
-  if (constant_time_declassify_int(BN_ucmp(f, impl->n) >= 0)) {
+  if (constant_time_declassify_int(BN_ucmp(f, impl->n.get()) >= 0)) {
     // Usually the padding functions would catch this.
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE_FOR_MODULUS);
     return 0;
@@ -444,13 +440,14 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
       // time, which requires primes be the same size, rounded to the Montgomery
       // coefficient. (See |mod_montgomery|.) This is not required by RFC 8017,
       // but it is true for keys generated by us and all common implementations.
-      bn_less_than_montgomery_R(impl->q, impl->mont_p.get()) &&
-      bn_less_than_montgomery_R(impl->p, impl->mont_q.get())) {
+      bn_less_than_montgomery_R(impl->q.get(), impl->mont_p.get()) &&
+      bn_less_than_montgomery_R(impl->p.get(), impl->mont_q.get())) {
     if (!rsa_mod_exp_crt(result, f, impl, ctx.get())) {
       return 0;
     }
-  } else if (!BN_mod_exp_mont_consttime(result, f, impl->d_fixed, impl->n,
-                                        ctx.get(), impl->mont_n.get())) {
+  } else if (!BN_mod_exp_mont_consttime(result, f, impl->d_fixed.get(),
+                                        impl->n.get(), ctx.get(),
+                                        impl->mont_n.get())) {
     return 0;
   }
 
@@ -467,7 +464,7 @@ int bssl::rsa_default_private_transform(RSA *rsa, uint8_t *out,
   if (impl->e != nullptr) {
     BIGNUM *vrfy = BN_CTX_get(ctx.get());
     if (vrfy == nullptr ||
-        !BN_mod_exp_mont(vrfy, result, impl->e, impl->n, ctx.get(),
+        !BN_mod_exp_mont(vrfy, result, impl->e.get(), impl->n.get(), ctx.get(),
                          impl->mont_n.get()) ||
         !constant_time_declassify_int(BN_equal_consttime(vrfy, f))) {
       OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
@@ -554,11 +551,11 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSAImpl *rsa,
 
   if (  // |m1| is the result modulo |q|.
       !mod_montgomery(r1, I, q, rsa->mont_q.get(), p, ctx) ||
-      !BN_mod_exp_mont_consttime(m1, r1, rsa->dmq1_fixed, q, ctx,
+      !BN_mod_exp_mont_consttime(m1, r1, rsa->dmq1_fixed.get(), q, ctx,
                                  rsa->mont_q.get()) ||
       // |r0| is the result modulo |p|.
       !mod_montgomery(r1, I, p, rsa->mont_p.get(), q, ctx) ||
-      !BN_mod_exp_mont_consttime(r0, r1, rsa->dmp1_fixed, p, ctx,
+      !BN_mod_exp_mont_consttime(r0, r1, rsa->dmp1_fixed.get(), p, ctx,
                                  rsa->mont_p.get()) ||
       // Compute r0 = r0 - m1 mod p. |m1| is reduced mod |q|, not |p|, so we
       // just run |mod_montgomery| again for srsaicity. This could be more
@@ -571,7 +568,8 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSAImpl *rsa,
       // r0 = r0 * iqmp mod p. We use Montgomery multiplication to compute this
       // in constant time. |iqmp_mont| is in Montgomery form and r0 is not, so
       // the result is taken out of Montgomery form.
-      !BN_mod_mul_montgomery(r0, r0, rsa->iqmp_mont, rsa->mont_p.get(), ctx) ||
+      !BN_mod_mul_montgomery(r0, r0, rsa->iqmp_mont.get(), rsa->mont_p.get(),
+                             ctx) ||
       // r0 = r0 * q + m1 gives the final result. Reducing modulo q gives m1, so
       // it is correct mod p. Reducing modulo p gives (r0-m1)*iqmp*q + m1 = r0,
       // so it is correct mod q. Finally, the result is bounded by [m1, n + m1),
@@ -595,9 +593,9 @@ static int rsa_mod_exp_crt(BIGNUM *r0, const BIGNUM *I, RSAImpl *rsa,
   return 1;
 }
 
-static int ensure_bignum(BIGNUM **out) {
+static int ensure_bignum(UniquePtr<BIGNUM> *out) {
   if (*out == nullptr) {
-    *out = BN_new();
+    out->reset(BN_new());
   }
   return *out != nullptr;
 }
@@ -788,7 +786,7 @@ static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
     return 0;
   }
 
-  if (!BN_copy(rsa->e, e_value)) {
+  if (!BN_copy(rsa->e.get(), e_value)) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
     return 0;
   }
@@ -799,20 +797,18 @@ static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
     //
     // Each call to |generate_prime| fails with probability p = 2^-21. The
     // probability that either call fails is 1 - (1-p)^2, which is around 2^-20.
-    if (!generate_prime(rsa->p, prime_bits, rsa->e, nullptr,
+    if (!generate_prime(rsa->p.get(), prime_bits, rsa->e.get(), nullptr,
                         pow2_prime_bits_100, ctx.get(), cb) ||
         !BN_GENCB_call(cb, 3, 0) ||
-        !generate_prime(rsa->q, prime_bits, rsa->e, rsa->p, pow2_prime_bits_100,
+        !generate_prime(rsa->q.get(), prime_bits, rsa->e.get(), rsa->p.get(), pow2_prime_bits_100,
                         ctx.get(), cb) ||
         !BN_GENCB_call(cb, 3, 1)) {
       OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
       return 0;
     }
 
-    if (BN_cmp(rsa->p, rsa->q) < 0) {
-      BIGNUM *tmp = rsa->p;
-      rsa->p = rsa->q;
-      rsa->q = tmp;
+    if (BN_cmp(rsa->p.get(), rsa->q.get()) < 0) {
+      std::swap(rsa->p, rsa->q);
     }
 
     // Calculate d = e^(-1) (mod lcm(p-1, q-1)), per FIPS 186-5. This differs
@@ -823,11 +819,11 @@ static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
     // use d (mod p-1) and d (mod q-1) as exponents. Using a minimal totient
     // does not affect those two values.
     int no_inverse;
-    if (!bn_usub_consttime(pm1, rsa->p, BN_value_one()) ||
-        !bn_usub_consttime(qm1, rsa->q, BN_value_one()) ||
+    if (!bn_usub_consttime(pm1, rsa->p.get(), BN_value_one()) ||
+        !bn_usub_consttime(qm1, rsa->q.get(), BN_value_one()) ||
         !bn_lcm_consttime(totient, pm1, qm1, ctx.get()) ||
-        !bn_mod_inverse_consttime(rsa->d, &no_inverse, rsa->e, totient,
-                                  ctx.get())) {
+        !bn_mod_inverse_consttime(rsa->d.get(), &no_inverse, rsa->e.get(),
+                                  totient, ctx.get())) {
       OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
       return 0;
     }
@@ -835,38 +831,39 @@ static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
     // Retry if |rsa->d| <= 2^|prime_bits|. See appendix A.3.1's guidance on
     // values for d. When we retry, p and q are discarded, so it is safe to leak
     // this comparison.
-  } while (constant_time_declassify_int(BN_cmp(rsa->d, pow2_prime_bits) <= 0));
+  } while (
+      constant_time_declassify_int(BN_cmp(rsa->d.get(), pow2_prime_bits) <= 0));
 
   assert(BN_num_bits(pm1) == (unsigned)prime_bits);
   assert(BN_num_bits(qm1) == (unsigned)prime_bits);
   if (  // Calculate n.
-      !bn_mul_consttime(rsa->n, rsa->p, rsa->q, ctx.get()) ||
+      !bn_mul_consttime(rsa->n.get(), rsa->p.get(), rsa->q.get(), ctx.get()) ||
       // Calculate d mod (p-1).
-      !bn_div_consttime(nullptr, rsa->dmp1, rsa->d, pm1, prime_bits,
+      !bn_div_consttime(nullptr, rsa->dmp1.get(), rsa->d.get(), pm1, prime_bits,
                         ctx.get()) ||
       // Calculate d mod (q-1)
-      !bn_div_consttime(nullptr, rsa->dmq1, rsa->d, qm1, prime_bits,
+      !bn_div_consttime(nullptr, rsa->dmq1.get(), rsa->d.get(), qm1, prime_bits,
                         ctx.get())) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
     return 0;
   }
-  bn_set_minimal_width(rsa->n);
+  bn_set_minimal_width(rsa->n.get());
 
   // |rsa->n| is computed from the private key, but is public.
-  bn_declassify(rsa->n);
+  bn_declassify(rsa->n.get());
 
   // Calculate q^-1 mod p.
-  rsa->mont_p.reset(BN_MONT_CTX_new_consttime(rsa->p, ctx.get()));
+  rsa->mont_p.reset(BN_MONT_CTX_new_consttime(rsa->p.get(), ctx.get()));
   if (rsa->mont_p == nullptr ||  //
-      !bn_mod_inverse_secret_prime(rsa->iqmp, rsa->q, rsa->p, ctx.get(),
-                                   rsa->mont_p.get())) {
+      !bn_mod_inverse_secret_prime(rsa->iqmp.get(), rsa->q.get(), rsa->p.get(),
+                                   ctx.get(), rsa->mont_p.get())) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
     return 0;
   }
 
   // Sanity-check that |rsa->n| has the specified size. This is rsaied by
   // |generate_prime|'s bounds.
-  if (BN_num_bits(rsa->n) != (unsigned)bits) {
+  if (BN_num_bits(rsa->n.get()) != (unsigned)bits) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
     return 0;
   }
@@ -880,12 +877,6 @@ static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
   }
 
   return 1;
-}
-
-static void replace_bignum(BIGNUM **out, BIGNUM **in) {
-  BN_free(*out);
-  *out = *in;
-  *in = nullptr;
 }
 
 static int RSA_generate_key_ex_maybe_fips(RSAImpl *rsa, int bits,
@@ -931,21 +922,21 @@ static int RSA_generate_key_ex_maybe_fips(RSAImpl *rsa, int bits,
   }
 
   rsa_invalidate_key(rsa);
-  replace_bignum(&rsa->n, &tmp->n);
-  replace_bignum(&rsa->e, &tmp->e);
-  replace_bignum(&rsa->d, &tmp->d);
-  replace_bignum(&rsa->p, &tmp->p);
-  replace_bignum(&rsa->q, &tmp->q);
-  replace_bignum(&rsa->dmp1, &tmp->dmp1);
-  replace_bignum(&rsa->dmq1, &tmp->dmq1);
-  replace_bignum(&rsa->iqmp, &tmp->iqmp);
+  rsa->n = std::move(tmp->n);
+  rsa->e = std::move(tmp->e);
+  rsa->d = std::move(tmp->d);
+  rsa->p = std::move(tmp->p);
+  rsa->q = std::move(tmp->q);
+  rsa->dmp1 = std::move(tmp->dmp1);
+  rsa->dmq1 = std::move(tmp->dmq1);
+  rsa->iqmp = std::move(tmp->iqmp);
   rsa->mont_n = std::move(tmp->mont_n);
   rsa->mont_p = std::move(tmp->mont_p);
   rsa->mont_q = std::move(tmp->mont_q);
-  replace_bignum(&rsa->d_fixed, &tmp->d_fixed);
-  replace_bignum(&rsa->dmp1_fixed, &tmp->dmp1_fixed);
-  replace_bignum(&rsa->dmq1_fixed, &tmp->dmq1_fixed);
-  replace_bignum(&rsa->iqmp_mont, &tmp->iqmp_mont);
+  rsa->d_fixed = std::move(tmp->d_fixed);
+  rsa->dmp1_fixed = std::move(tmp->dmp1_fixed);
+  rsa->dmq1_fixed = std::move(tmp->dmq1_fixed);
+  rsa->iqmp_mont = std::move(tmp->iqmp_mont);
   rsa->private_key_frozen = tmp->private_key_frozen;
   return 1;
 }

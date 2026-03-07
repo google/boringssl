@@ -35,16 +35,16 @@
 
 using namespace bssl;
 
-static int parse_integer(CBS *cbs, BIGNUM **out) {
+static int parse_integer(CBS *cbs, UniquePtr<BIGNUM> *out) {
   assert(*out == nullptr);
-  *out = BN_new();
+  out->reset(BN_new());
   if (*out == nullptr) {
     return 0;
   }
-  return BN_parse_asn1_unsigned(cbs, *out);
+  return BN_parse_asn1_unsigned(cbs, out->get());
 }
 
-static int marshal_integer(CBB *cbb, BIGNUM *bn) {
+static int marshal_integer(CBB *cbb, const BIGNUM *bn) {
   if (bn == nullptr) {
     // An RSA object may be missing some components.
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
@@ -93,7 +93,8 @@ int RSA_marshal_public_key(CBB *cbb, const RSA *rsa) {
   CBB child;
   const RSAImpl *impl = FromOpaque(rsa);
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
-      !marshal_integer(&child, impl->n) || !marshal_integer(&child, impl->e) ||
+      !marshal_integer(&child, impl->n.get()) ||
+      !marshal_integer(&child, impl->e.get()) ||  //
       !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_ENCODE_ERROR);
     return 0;
@@ -183,12 +184,15 @@ int RSA_marshal_private_key(CBB *cbb, const RSA *rsa) {
   CBB child;
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&child, kVersionTwoPrime) ||
-      !marshal_integer(&child, impl->n) || !marshal_integer(&child, impl->e) ||
-      !marshal_integer(&child, impl->d) || !marshal_integer(&child, impl->p) ||
-      !marshal_integer(&child, impl->q) ||
-      !marshal_integer(&child, impl->dmp1) ||
-      !marshal_integer(&child, impl->dmq1) ||
-      !marshal_integer(&child, impl->iqmp) || !CBB_flush(cbb)) {
+      !marshal_integer(&child, impl->n.get()) ||
+      !marshal_integer(&child, impl->e.get()) ||
+      !marshal_integer(&child, impl->d.get()) ||
+      !marshal_integer(&child, impl->p.get()) ||
+      !marshal_integer(&child, impl->q.get()) ||
+      !marshal_integer(&child, impl->dmp1.get()) ||
+      !marshal_integer(&child, impl->dmq1.get()) ||
+      !marshal_integer(&child, impl->iqmp.get()) ||  //
+      !CBB_flush(cbb)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_ENCODE_ERROR);
     return 0;
   }

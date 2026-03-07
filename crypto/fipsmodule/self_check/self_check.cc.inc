@@ -71,8 +71,8 @@ int bssl::BORINGSSL_check_test(Span<const uint8_t> expected,
   return 1;
 }
 
-static int set_bignum(BIGNUM **out, Span<const uint8_t> in) {
-  *out = BN_bin2bn(in.data(), in.size(), nullptr);
+static int set_bignum(UniquePtr<BIGNUM> *out, Span<const uint8_t> in) {
+  out->reset(BN_bin2bn(in.data(), in.size(), nullptr));
   return *out != nullptr;
 }
 

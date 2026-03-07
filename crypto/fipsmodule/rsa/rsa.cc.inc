@@ -45,14 +45,13 @@ OPENSSL_DECLARE_ERROR_REASON(RSA, BLOCK_TYPE_IS_NOT_02)
 
 DEFINE_STATIC_EX_DATA_CLASS(g_rsa_ex_data_class)
 
-static int bn_dup_into(BIGNUM **dst, const BIGNUM *src) {
+static int bn_dup_into(UniquePtr<BIGNUM> *dst, const BIGNUM *src) {
   if (src == nullptr) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
 
-  BN_free(*dst);
-  *dst = BN_dup(src);
+  dst->reset(BN_dup(src));
   return *dst != nullptr;
 }
 
@@ -210,89 +209,56 @@ RSAImpl::~RSAImpl() {
   METHOD_unref(meth);
 
   CRYPTO_free_ex_data(g_rsa_ex_data_class_bss_get(), &ex_data);
-
-  BN_free(n);
-  BN_free(e);
-  BN_free(d);
-  BN_free(p);
-  BN_free(q);
-  BN_free(dmp1);
-  BN_free(dmq1);
-  BN_free(iqmp);
-  rsa_invalidate_key(this);
 }
 
 void RSA_free(RSA *rsa) {
-  if (rsa == nullptr) {
-    return;
+  if (rsa != nullptr) {
+    FromOpaque(rsa)->DecRefInternal();
   }
-
-  auto *impl = FromOpaque(rsa);
-  impl->DecRefInternal();
 }
 
 int RSA_up_ref(RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  impl->UpRefInternal();
+  FromOpaque(rsa)->UpRefInternal();
   return 1;
 }
 
 unsigned RSA_bits(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return BN_num_bits(impl->n);
+  return BN_num_bits(FromOpaque(rsa)->n.get());
 }
 
-const BIGNUM *RSA_get0_n(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->n;
-}
+const BIGNUM *RSA_get0_n(const RSA *rsa) { return FromOpaque(rsa)->n.get(); }
 
-const BIGNUM *RSA_get0_e(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->e;
-}
+const BIGNUM *RSA_get0_e(const RSA *rsa) { return FromOpaque(rsa)->e.get(); }
 
-const BIGNUM *RSA_get0_d(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->d;
-}
+const BIGNUM *RSA_get0_d(const RSA *rsa) { return FromOpaque(rsa)->d.get(); }
 
-const BIGNUM *RSA_get0_p(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->p;
-}
+const BIGNUM *RSA_get0_p(const RSA *rsa) { return FromOpaque(rsa)->p.get(); }
 
-const BIGNUM *RSA_get0_q(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->q;
-}
+const BIGNUM *RSA_get0_q(const RSA *rsa) { return FromOpaque(rsa)->q.get(); }
 
 const BIGNUM *RSA_get0_dmp1(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->dmp1;
+  return FromOpaque(rsa)->dmp1.get();
 }
 
 const BIGNUM *RSA_get0_dmq1(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->dmq1;
+  return FromOpaque(rsa)->dmq1.get();
 }
 
 const BIGNUM *RSA_get0_iqmp(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return impl->iqmp;
+  return FromOpaque(rsa)->iqmp.get();
 }
 
 void RSA_get0_key(const RSA *rsa, const BIGNUM **out_n, const BIGNUM **out_e,
                   const BIGNUM **out_d) {
   auto *impl = FromOpaque(rsa);
   if (out_n != nullptr) {
-    *out_n = impl->n;
+    *out_n = impl->n.get();
   }
   if (out_e != nullptr) {
-    *out_e = impl->e;
+    *out_e = impl->e.get();
   }
   if (out_d != nullptr) {
-    *out_d = impl->d;
+    *out_d = impl->d.get();
   }
 }
 
@@ -300,10 +266,10 @@ void RSA_get0_factors(const RSA *rsa, const BIGNUM **out_p,
                       const BIGNUM **out_q) {
   auto *impl = FromOpaque(rsa);
   if (out_p != nullptr) {
-    *out_p = impl->p;
+    *out_p = impl->p.get();
   }
   if (out_q != nullptr) {
-    *out_q = impl->q;
+    *out_q = impl->q.get();
   }
 }
 
@@ -311,13 +277,13 @@ void RSA_get0_crt_params(const RSA *rsa, const BIGNUM **out_dmp1,
                          const BIGNUM **out_dmq1, const BIGNUM **out_iqmp) {
   auto *impl = FromOpaque(rsa);
   if (out_dmp1 != nullptr) {
-    *out_dmp1 = impl->dmp1;
+    *out_dmp1 = impl->dmp1.get();
   }
   if (out_dmq1 != nullptr) {
-    *out_dmq1 = impl->dmq1;
+    *out_dmq1 = impl->dmq1.get();
   }
   if (out_iqmp != nullptr) {
-    *out_iqmp = impl->iqmp;
+    *out_iqmp = impl->iqmp.get();
   }
 }
 
@@ -330,16 +296,13 @@ int RSA_set0_key(RSA *rsa, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
   }
 
   if (n != nullptr) {
-    BN_free(impl->n);
-    impl->n = n;
+    impl->n.reset(n);
   }
   if (e != nullptr) {
-    BN_free(impl->e);
-    impl->e = e;
+    impl->e.reset(e);
   }
   if (d != nullptr) {
-    BN_free(impl->d);
-    impl->d = d;
+    impl->d.reset(d);
   }
 
   rsa_invalidate_key(rsa);
@@ -355,12 +318,10 @@ int RSA_set0_factors(RSA *rsa, BIGNUM *p, BIGNUM *q) {
   }
 
   if (p != nullptr) {
-    BN_free(impl->p);
-    impl->p = p;
+    impl->p.reset(p);
   }
   if (q != nullptr) {
-    BN_free(impl->q);
-    impl->q = q;
+    impl->q.reset(q);
   }
 
   rsa_invalidate_key(rsa);
@@ -377,16 +338,13 @@ int RSA_set0_crt_params(RSA *rsa, BIGNUM *dmp1, BIGNUM *dmq1, BIGNUM *iqmp) {
   }
 
   if (dmp1 != nullptr) {
-    BN_free(impl->dmp1);
-    impl->dmp1 = dmp1;
+    impl->dmp1.reset(dmp1);
   }
   if (dmq1 != nullptr) {
-    BN_free(impl->dmq1);
-    impl->dmq1 = dmq1;
+    impl->dmq1.reset(dmq1);
   }
   if (iqmp != nullptr) {
-    BN_free(impl->iqmp);
-    impl->iqmp = iqmp;
+    impl->iqmp.reset(iqmp);
   }
 
   rsa_invalidate_key(rsa);
@@ -414,8 +372,7 @@ int RSA_sign_raw(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
 }
 
 unsigned RSA_size(const RSA *rsa) {
-  auto *impl = FromOpaque(rsa);
-  return BN_num_bytes(impl->n);
+  return BN_num_bytes(FromOpaque(rsa)->n.get());
 }
 
 int RSA_is_opaque(const RSA *rsa) {
@@ -791,8 +748,8 @@ int RSA_check_key(const RSA *key) {
 
   // |impl->d| must be bounded by |impl->n|. This ensures bounds on |RSA_bits|
   // translate to bounds on the running time of private key operations.
-  if (impl->d != nullptr &&
-      (BN_is_negative(impl->d) || BN_cmp(impl->d, impl->n) >= 0)) {
+  if (impl->d != nullptr && (BN_is_negative(impl->d.get()) ||
+                             BN_cmp(impl->d.get(), impl->n.get()) >= 0)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_D_OUT_OF_RANGE);
     return 0;
   }
@@ -809,7 +766,8 @@ int RSA_check_key(const RSA *key) {
   }
 
   BIGNUM tmp, de, pm1, qm1, dmp1, dmq1;
-  int ok = 0, has_crt_values;
+  int ok = 0;
+  bool has_crt_values;
   unsigned pm1_bits, qm1_bits;
   BN_init(&tmp);
   BN_init(&de);
@@ -822,18 +780,18 @@ int RSA_check_key(const RSA *key) {
   // bounds, to avoid a DoS vector in |bn_mul_consttime| below. Note that
   // n was bound by |rsa_check_public_key|. This also implicitly checks p and q
   // are odd, which is a necessary condition for Montgomery reduction.
-  if (BN_is_negative(impl->p) ||
-      constant_time_declassify_int(BN_cmp(impl->p, impl->n) >= 0) ||
-      BN_is_negative(impl->q) ||
-      constant_time_declassify_int(BN_cmp(impl->q, impl->n) >= 0)) {
+  if (BN_is_negative(impl->p.get()) ||
+      constant_time_declassify_int(BN_cmp(impl->p.get(), impl->n.get()) >= 0) ||
+      BN_is_negative(impl->q.get()) ||
+      constant_time_declassify_int(BN_cmp(impl->q.get(), impl->n.get()) >= 0)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_N_NOT_EQUAL_P_Q);
     goto out;
   }
-  if (!bn_mul_consttime(&tmp, impl->p, impl->q, ctx)) {
+  if (!bn_mul_consttime(&tmp, impl->p.get(), impl->q.get(), ctx)) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
     goto out;
   }
-  if (BN_cmp(&tmp, impl->n) != 0) {
+  if (BN_cmp(&tmp, impl->n.get()) != 0) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_N_NOT_EQUAL_P_Q);
     goto out;
   }
@@ -842,14 +800,14 @@ int RSA_check_key(const RSA *key) {
   // may be unreduced because other implementations use the Euler totient. We
   // simply check that d * e is one mod p-1 and mod q-1. Note d and e were bound
   // by earlier checks in this function.
-  if (!bn_usub_consttime(&pm1, impl->p, BN_value_one()) ||
-      !bn_usub_consttime(&qm1, impl->q, BN_value_one())) {
+  if (!bn_usub_consttime(&pm1, impl->p.get(), BN_value_one()) ||
+      !bn_usub_consttime(&qm1, impl->q.get(), BN_value_one())) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
     goto out;
   }
   pm1_bits = BN_num_bits(&pm1);
   qm1_bits = BN_num_bits(&qm1);
-  if (!bn_mul_consttime(&de, impl->d, impl->e, ctx) ||
+  if (!bn_mul_consttime(&de, impl->d.get(), impl->e.get(), ctx) ||
       !bn_div_consttime(nullptr, &tmp, &de, &pm1, pm1_bits, ctx) ||
       !bn_div_consttime(nullptr, &de, &de, &qm1, qm1_bits, ctx)) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
@@ -871,14 +829,14 @@ int RSA_check_key(const RSA *key) {
 
   if (has_crt_values) {
     int dmp1_ok, dmq1_ok, iqmp_ok;
-    if (!check_mod_inverse(&dmp1_ok, impl->e, impl->dmp1, &pm1, pm1_bits,
-                           ctx) ||
-        !check_mod_inverse(&dmq1_ok, impl->e, impl->dmq1, &qm1, qm1_bits,
-                           ctx) ||
+    if (!check_mod_inverse(&dmp1_ok, impl->e.get(), impl->dmp1.get(), &pm1,
+                           pm1_bits, ctx) ||
+        !check_mod_inverse(&dmq1_ok, impl->e.get(), impl->dmq1.get(), &qm1,
+                           qm1_bits, ctx) ||
         // |p| is odd, so |pm1| and |p| have the same bit width. If they didn't,
         // we only need a lower bound anyway.
-        !check_mod_inverse(&iqmp_ok, impl->q, impl->iqmp, impl->p, pm1_bits,
-                           ctx)) {
+        !check_mod_inverse(&iqmp_ok, impl->q.get(), impl->iqmp.get(),
+                           impl->p.get(), pm1_bits, ctx)) {
       OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
       goto out;
     }
@@ -956,14 +914,14 @@ int RSA_check_fips(RSA *key) {
   // |key->e| may be nullptr if created with |RSA_new_private_key_no_e|.
   enum bn_primality_result_t primality_result;
   auto *impl = FromOpaque(key);
-  if (impl->e == nullptr ||          //
-      BN_num_bits(impl->e) <= 16 ||  //
-      BN_num_bits(impl->e) > 256 ||  //
-      !BN_is_odd(impl->n) ||         //
-      !BN_is_odd(impl->e) ||
-      !BN_gcd(&small_gcd, impl->n, g_small_factors(), ctx) ||
+  if (impl->e.get() == nullptr ||          //
+      BN_num_bits(impl->e.get()) <= 16 ||  //
+      BN_num_bits(impl->e.get()) > 256 ||  //
+      !BN_is_odd(impl->n.get()) ||         //
+      !BN_is_odd(impl->e.get()) ||
+      !BN_gcd(&small_gcd, impl->n.get(), g_small_factors(), ctx) ||
       !BN_is_one(&small_gcd) ||
-      !BN_enhanced_miller_rabin_primality_test(&primality_result, impl->n,
+      !BN_enhanced_miller_rabin_primality_test(&primality_result, impl->n.get(),
                                                BN_prime_checks_for_generation,
                                                ctx, nullptr) ||
       primality_result != bn_non_prime_power_composite) {
