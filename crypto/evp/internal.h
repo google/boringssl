@@ -166,9 +166,6 @@ class EvpPkey : public evp_pkey_st, public RefCounted<EvpPkey> {
 
 #define EVP_PKEY_OP_TYPE_CRYPT (EVP_PKEY_OP_ENCRYPT | EVP_PKEY_OP_DECRYPT)
 
-#define EVP_PKEY_OP_TYPE_NOGEN \
-  (EVP_PKEY_OP_SIG | EVP_PKEY_OP_CRYPT | EVP_PKEY_OP_DERIVE)
-
 #define EVP_PKEY_OP_TYPE_GEN (EVP_PKEY_OP_KEYGEN | EVP_PKEY_OP_PARAMGEN)
 
 // EVP_PKEY_CTX_ctrl performs |cmd| on |ctx|. The |keytype| and |optype|
