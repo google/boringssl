@@ -1510,6 +1510,9 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 	if test.resumeConfig != nil {
 		test.resumeConfig = ptrTo(*test.resumeConfig)
 	}
+	if test.resumeExpectations != nil {
+		test.resumeExpectations = ptrTo(*test.resumeExpectations)
+	}
 
 	var flags []string
 	if len(*shimExtraFlags) > 0 {
