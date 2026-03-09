@@ -528,6 +528,7 @@ func writeData(path string, objs *objects) error {
 
 `)
 
+	fmt.Fprintf(&b, "BSSL_NAMESPACE_BEGIN\n")
 	fmt.Fprintf(&b, "#define NUM_NID %d\n", len(objs.byNID))
 
 	// Emit each object's DER encoding, concatenated, and save the offsets.
@@ -645,6 +646,8 @@ func writeData(path string, objs *objects) error {
 		fmt.Fprintf(&b, " (OBJ_%s) */,\n", obj.name)
 	}
 	fmt.Fprintf(&b, "};\n")
+
+	fmt.Fprintf(&b, "BSSL_NAMESPACE_END\n")
 
 	formatted, err := clangFormat(b.String())
 	if err != nil {

@@ -5510,7 +5510,7 @@ extern "C" {
 
 
 #if defined(__cplusplus)
-}  // extern C
+} /* extern C */
 #endif
 
 #endif /* OPENSSL_HEADER_NID_H */
