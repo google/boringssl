@@ -161,6 +161,7 @@ TEST(PoolTest, Threads) {
   // Race threads making pooled |CRYPTO_BUFFER|s.
   static const uint8_t kData[4] = {1, 2, 3, 4};
   static const uint8_t kData2[3] = {4, 5, 6};
+  static const uint8_t kData3[3] = {7, 8, 9};
   UniquePtr<CRYPTO_BUFFER> buf, buf2, buf3;
   {
     std::thread thread([&] {
@@ -226,6 +227,25 @@ TEST(PoolTest, Threads) {
     EXPECT_EQ(Bytes(kData), Bytes(CRYPTO_BUFFER_data(buf2.get()),
                                   CRYPTO_BUFFER_len(buf2.get())));
     buf = std::move(buf2);
+  }
+
+  // Race two threads repeatedly creating and destroying a buffer, to race
+  // destruction with a strong/weak reference upgrade.
+  {
+    constexpr size_t kNumThreads = 2;
+    constexpr size_t kIterations = 1000;
+    std::vector<std::thread> threads;
+    for (size_t i = 0; i < kNumThreads; i++) {
+      threads.emplace_back([&] {
+        for (size_t j = 0; j < kIterations; j++) {
+          CRYPTO_BUFFER_free(
+              CRYPTO_BUFFER_new(kData3, sizeof(kData3), pool.get()));
+        }
+      });
+    }
+    for (size_t i = 0; i < kNumThreads; i++) {
+      threads[i].join();
+    }
   }
 
   // Finally, race the frees.
