@@ -33,37 +33,37 @@ static const size_t kMinNumBuckets = 16;
 static const size_t kMaxAverageChainLength = 2;
 static const size_t kMinAverageChainLength = 1;
 
-// lhash_item_st is an element of a hash chain. It points to the opaque data
+// LHASH_ITEM is an element of a hash chain. It points to the opaque data
 // for this element and to the next item in the chain. The linked-list is NULL
 // terminated.
-typedef struct lhash_item_st {
-  void *data;
-  struct lhash_item_st *next;
+struct LHASH_ITEM {
+  void *data = nullptr;
+  LHASH_ITEM *next = nullptr;
   // hash contains the cached, hash value of |data|.
-  uint32_t hash;
-} LHASH_ITEM;
+  uint32_t hash = 0;
+};
 
-struct lhash_st {
+struct _LHASH {
   // num_items contains the total number of items in the hash table.
-  size_t num_items;
+  size_t num_items = 0;
   // buckets is an array of |num_buckets| pointers. Each points to the head of
   // a chain of LHASH_ITEM objects that have the same hash value, mod
   // |num_buckets|.
-  LHASH_ITEM **buckets;
+  LHASH_ITEM **buckets = nullptr;
   // num_buckets contains the length of |buckets|. This value is always >=
   // kMinNumBuckets.
-  size_t num_buckets;
+  size_t num_buckets = 0;
   // callback_depth contains the current depth of |lh_doall| or |lh_doall_arg|
   // calls. If non-zero then this suppresses resizing of the |buckets| array,
   // which would otherwise disrupt the iteration.
-  unsigned callback_depth;
+  unsigned callback_depth = 0;
 
-  lhash_cmp_func comp;
-  lhash_hash_func hash;
+  lhash_cmp_func comp = nullptr;
+  lhash_hash_func hash = nullptr;
 };
 
 _LHASH *OPENSSL_lh_new(lhash_hash_func hash, lhash_cmp_func comp) {
-  _LHASH *ret = NewZeroed<_LHASH>();
+  _LHASH *ret = New<_LHASH>();
   if (ret == nullptr) {
     return nullptr;
   }

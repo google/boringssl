@@ -29,27 +29,27 @@ using namespace bssl;
 
 namespace {
 struct bio_bio_st {
-  BIO *peer;  // NULL if buf == NULL.
-              // If peer != NULL, then BIO_get_data(peer) is also a bio_bio_st,
-              // and its "peer" member points back to us.
-              // peer != NULL iff init != 0 in the BIO.
+  BIO *peer = nullptr;  // NULL if buf == NULL.
+                        // If peer != NULL, then BIO_get_data(peer) is also a
+                        // bio_bio_st, and its "peer" member points back to us.
+                        // peer != NULL iff init != 0 in the BIO.
 
   // This is for what we write (i.e. reading uses peer's struct):
-  int closed;     // valid iff peer != NULL
-  size_t len;     // valid iff buf != NULL; 0 if peer == NULL
-  size_t offset;  // valid iff buf != NULL; 0 if len == 0
-  size_t size;
-  uint8_t *buf;  // "size" elements (if != NULL)
+  int closed = 0;     // valid iff peer != NULL
+  size_t len = 0;     // valid iff buf != NULL; 0 if peer == NULL
+  size_t offset = 0;  // valid iff buf != NULL; 0 if len == 0
+  size_t size = 0;
+  uint8_t *buf = nullptr;  // "size" elements (if != NULL)
 
-  size_t request;  // valid iff peer != NULL; 0 if len != 0,
-                   // otherwise set by peer to number of bytes
-                   // it (unsuccessfully) tried to read,
-                   // never more than buffer space (size-len) warrants.
+  size_t request = 0;  // valid iff peer != NULL; 0 if len != 0,
+                       // otherwise set by peer to number of bytes
+                       // it (unsuccessfully) tried to read,
+                       // never more than buffer space (size-len) warrants.
 };
 }  // namespace
 
 static int bio_new(BIO *bio) {
-  struct bio_bio_st *b = NewZeroed<struct bio_bio_st>();
+  struct bio_bio_st *b = New<struct bio_bio_st>();
   if (b == nullptr) {
     return 0;
   }

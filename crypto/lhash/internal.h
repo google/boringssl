@@ -65,7 +65,7 @@ typedef int (*lhash_cmp_func_helper)(lhash_cmp_func func, const void *a,
 typedef uint32_t (*lhash_hash_func)(const void *a);
 typedef uint32_t (*lhash_hash_func_helper)(lhash_hash_func func, const void *a);
 
-typedef struct lhash_st _LHASH;
+struct _LHASH;
 
 // OPENSSL_lh_new returns a new, empty hash table or NULL on error.
 OPENSSL_EXPORT _LHASH *OPENSSL_lh_new(lhash_hash_func hash,

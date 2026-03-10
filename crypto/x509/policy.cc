@@ -45,9 +45,9 @@ BSSL_NAMESPACE_BEGIN
 
 // An X509_POLICY_NODE is a node in the policy graph. It corresponds to a node
 // from RFC 5280, section 6.1.2, step (a), but we store some fields differently.
-typedef struct x509_policy_node_st {
+struct X509_POLICY_NODE {
   // policy is the "valid_policy" field from RFC 5280.
-  ASN1_OBJECT *policy;
+  ASN1_OBJECT *policy = nullptr;
 
   // parent_policies, if non-empty, is the list of "valid_policy" values for all
   // nodes which are a parent of this node. In this case, no entry in this list
@@ -62,31 +62,31 @@ typedef struct x509_policy_node_st {
   // concrete policy as a parent. Section 6.1.3, step (d.1.ii) only runs if
   // there was no match in step (d.1.i). We do not need to represent a parent
   // list of, say, {anyPolicy, OID1, OID2}.
-  STACK_OF(ASN1_OBJECT) *parent_policies;
+  STACK_OF(ASN1_OBJECT) *parent_policies = nullptr;
 
   // mapped is one if this node matches a policy mapping in the certificate and
   // zero otherwise.
-  int mapped;
+  int mapped = 0;
 
   // reachable is one if this node is reachable from some valid policy in the
   // end-entity certificate. It is computed during |has_explicit_policy|.
-  int reachable;
-} X509_POLICY_NODE;
+  int reachable = 0;
+};
 
 DEFINE_NAMESPACED_STACK_OF(X509_POLICY_NODE)
 
 // An X509_POLICY_LEVEL is the collection of nodes at the same depth in the
 // policy graph. This structure can also be used to represent a level's
 // "expected_policy_set" values. See |process_policy_mappings|.
-typedef struct x509_policy_level_st {
+struct X509_POLICY_LEVEL {
   // nodes is the list of nodes at this depth, except for the anyPolicy node, if
   // any. This list is sorted by policy OID for efficient lookup.
-  STACK_OF(X509_POLICY_NODE) *nodes;
+  STACK_OF(X509_POLICY_NODE) *nodes = nullptr;
 
   // has_any_policy is one if there is an anyPolicy node at this depth, and zero
   // otherwise.
-  int has_any_policy;
-} X509_POLICY_LEVEL;
+  int has_any_policy = 0;
+};
 
 DEFINE_NAMESPACED_STACK_OF(X509_POLICY_LEVEL)
 
@@ -106,7 +106,7 @@ static void x509_policy_node_free(X509_POLICY_NODE *node) {
 
 static X509_POLICY_NODE *x509_policy_node_new(const ASN1_OBJECT *policy) {
   assert(!is_any_policy(policy));
-  X509_POLICY_NODE *node = NewZeroed<X509_POLICY_NODE>();
+  X509_POLICY_NODE *node = New<X509_POLICY_NODE>();
   if (node == nullptr) {
     return nullptr;
   }
@@ -132,7 +132,7 @@ static void x509_policy_level_free(X509_POLICY_LEVEL *level) {
 }
 
 static X509_POLICY_LEVEL *x509_policy_level_new() {
-  X509_POLICY_LEVEL *level = NewZeroed<X509_POLICY_LEVEL>();
+  X509_POLICY_LEVEL *level = New<X509_POLICY_LEVEL>();
   if (level == nullptr) {
     return nullptr;
   }
