@@ -57,7 +57,7 @@ X509Impl::X509Impl() : RefCounted(CheckSubClass()) {
   CRYPTO_new_ex_data(&ex_data);
 }
 
-X509 *X509_new() { return NewZeroed<X509Impl>(); }
+X509 *X509_new() { return New<X509Impl>(); }
 
 X509Impl::~X509Impl() {
   CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);

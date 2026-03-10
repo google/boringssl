@@ -133,7 +133,7 @@ void bssl::x509_name_cleanup(X509_NAME *name) {
   Delete(impl->cache.exchange(nullptr));
 }
 
-X509_NAME *X509_NAME_new() { return NewZeroed<X509Name>(); }
+X509_NAME *X509_NAME_new() { return New<X509Name>(); }
 
 void X509_NAME_free(X509_NAME *name) {
   if (name != nullptr) {
