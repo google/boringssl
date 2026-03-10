@@ -368,7 +368,7 @@ static bool is_pss_only(const EvpPkeyCtx *ctx) {
   return ctx->pmeth->pkey_id == EVP_PKEY_RSA_PSS;
 }
 
-static int pkey_rsa_init(EvpPkeyCtx *ctx) {
+static int pkey_rsa_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *alg) {
   RSA_PKEY_CTX *rctx = New<RSA_PKEY_CTX>();
   if (!rctx) {
     return 0;
@@ -376,16 +376,21 @@ static int pkey_rsa_init(EvpPkeyCtx *ctx) {
 
   if (is_pss_only(ctx)) {
     rctx->pad_mode = RSA_PKCS1_PSS_PADDING;
-    // Pick up PSS parameters from the key.
-    if (ctx->pkey != nullptr && ctx->pkey->pkey != nullptr) {
-      RSAImpl *rsa = static_cast<RSAImpl *>(ctx->pkey->pkey);
-      const EVP_MD *md = rsa_pss_params_get_md(rsa->pss_params);
-      if (md != nullptr) {
-        rctx->md = rctx->mgf1md = md;
-        // All our supported modes use the digest length as the salt length.
-        rctx->saltlen = EVP_MD_size(rctx->md);
-        rctx->restrict_pss_params = true;
-      }
+    // Pick up PSS parameters from the key or algorithm. We don't currently
+    // support keygen from PSS, so the algorithm does not currently do anything.
+    rsa_pss_params_t pss_params = rsa_pss_none;
+    const auto *alg_pss = static_cast<const EVP_PKEY_ALG_RSA_PSS *>(alg);
+    if (alg_pss != nullptr) {
+      pss_params = alg_pss->pss_params;
+    } else if (ctx->pkey != nullptr && ctx->pkey->pkey != nullptr) {
+      pss_params = static_cast<const RSAImpl *>(ctx->pkey->pkey)->pss_params;
+    }
+    const EVP_MD *md = rsa_pss_params_get_md(pss_params);
+    if (md != nullptr) {
+      rctx->md = rctx->mgf1md = md;
+      // All our supported modes use the digest length as the salt length.
+      rctx->saltlen = EVP_MD_size(rctx->md);
+      rctx->restrict_pss_params = true;
     }
   }
 
@@ -395,7 +400,7 @@ static int pkey_rsa_init(EvpPkeyCtx *ctx) {
 
 static int pkey_rsa_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
   RSA_PKEY_CTX *dctx, *sctx;
-  if (!pkey_rsa_init(dst)) {
+  if (!pkey_rsa_init(dst, nullptr)) {
     return 0;
   }
   sctx = reinterpret_cast<RSA_PKEY_CTX *>(src->data);
@@ -888,6 +893,21 @@ const EVP_PKEY_ALG *EVP_pkey_rsa_pss_sha512() {
   static const EVP_PKEY_ALG_RSA_PSS kAlg = {
       {&rsa_pss_asn1_meth, &rsa_pss_pkey_meth}, rsa_pss_sha512};
   return &kAlg;
+}
+
+EVP_PKEY *EVP_RSA_gen(unsigned bits) {
+  // TODO(crbug.com/487376811): After EVP_PKEY_CTX is switched to C++
+  // subclassing, it should be possible to stack-allocate enough the
+  // RSA-specific subclass.
+  UniquePtr<EvpPkeyCtx> ctx = evp_pkey_ctx_new_alg(EVP_pkey_rsa());
+  EVP_PKEY *pkey = nullptr;
+  if (ctx == nullptr ||  //
+      !EVP_PKEY_keygen_init(ctx.get()) ||
+      !EVP_PKEY_CTX_set_rsa_keygen_bits(ctx.get(), bits) ||
+      !EVP_PKEY_keygen(ctx.get(), &pkey)) {
+    return nullptr;
+  }
+  return pkey;
 }
 
 int EVP_PKEY_set1_RSA(EVP_PKEY *pkey, RSA *key) {

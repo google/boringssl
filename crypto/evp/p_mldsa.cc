@@ -352,7 +352,7 @@ struct MLDSAImplementation {
     return Traits::kPublicKeyBytes * 8;
   }
 
-  static int Init(EvpPkeyCtx *ctx) {
+  static int Init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {
     MldsaPkeyCtx *mctx = New<MldsaPkeyCtx>();
     if (mctx == nullptr) {
       return 0;
@@ -366,7 +366,7 @@ struct MLDSAImplementation {
   }
 
   static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
-    if (!Init(dst)) {
+    if (!Init(dst, nullptr)) {
       return 0;
     }
     MldsaPkeyCtx *sctx = static_cast<MldsaPkeyCtx *>(src->data);

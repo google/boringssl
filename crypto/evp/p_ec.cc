@@ -318,10 +318,15 @@ typedef struct {
   const EC_GROUP *gen_group;
 } EC_PKEY_CTX;
 
-static int pkey_ec_init(EvpPkeyCtx *ctx) {
+static int pkey_ec_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *alg) {
   EC_PKEY_CTX *dctx = NewZeroed<EC_PKEY_CTX>();
   if (!dctx) {
     return 0;
+  }
+
+  const auto *ec_alg = static_cast<const EVP_PKEY_ALG_EC *>(alg);
+  if (ec_alg != nullptr && ec_alg->ec_group != nullptr) {
+    dctx->gen_group = ec_alg->ec_group();
   }
 
   ctx->data = dctx;
@@ -329,7 +334,7 @@ static int pkey_ec_init(EvpPkeyCtx *ctx) {
 }
 
 static int pkey_ec_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
-  if (!pkey_ec_init(dst)) {
+  if (!pkey_ec_init(dst, nullptr)) {
     return 0;
   }
 

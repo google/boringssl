@@ -39,7 +39,7 @@ typedef struct {
   CBB info;
 } HKDF_PKEY_CTX;
 
-static int pkey_hkdf_init(EvpPkeyCtx *ctx) {
+static int pkey_hkdf_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {
   HKDF_PKEY_CTX *hctx = NewZeroed<HKDF_PKEY_CTX>();
   if (hctx == nullptr) {
     return 0;
@@ -55,7 +55,7 @@ static int pkey_hkdf_init(EvpPkeyCtx *ctx) {
 }
 
 static int pkey_hkdf_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
-  if (!pkey_hkdf_init(dst)) {
+  if (!pkey_hkdf_init(dst, nullptr)) {
     return 0;
   }
 

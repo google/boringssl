@@ -141,7 +141,7 @@ struct DH_PKEY_CTX {
   int pad = 0;
 };
 
-static int pkey_dh_init(EvpPkeyCtx *ctx) {
+static int pkey_dh_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {
   DH_PKEY_CTX *dctx = New<DH_PKEY_CTX>();
   if (dctx == nullptr) {
     return 0;
@@ -152,7 +152,7 @@ static int pkey_dh_init(EvpPkeyCtx *ctx) {
 }
 
 static int pkey_dh_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
-  if (!pkey_dh_init(dst)) {
+  if (!pkey_dh_init(dst, nullptr)) {
     return 0;
   }
 

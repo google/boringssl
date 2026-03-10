@@ -248,7 +248,8 @@ class EvpPkeyCtx : public evp_pkey_ctx_st {
 struct evp_pkey_ctx_method_st {
   int pkey_id;
 
-  int (*init)(EvpPkeyCtx *ctx);
+  // |alg| may be nullptr. If non-null, |ctx| will have a key set.
+  int (*init)(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *alg);
   int (*copy)(EvpPkeyCtx *dst, EvpPkeyCtx *src);
   void (*cleanup)(EvpPkeyCtx *ctx);
 
@@ -289,6 +290,10 @@ const EVP_PKEY_ALG *evp_pkey_ec_no_curve();
 // evp_pkey_hkdf returns an internal |EVP_PKEY_ALG| used to implement
 // |EVP_PKEY_HKDF|. It has no associated key type.
 const EVP_PKEY_ALG *evp_pkey_hkdf();
+
+// evp_pkey_ctx_new_alg behaves like |EVP_PKEY_CTX_new_id| but takes an
+// |EVP_PKEY_ALG|.
+UniquePtr<EvpPkeyCtx> evp_pkey_ctx_new_alg(const EVP_PKEY_ALG *alg);
 
 // evp_pkey_set0 sets |pkey|'s method to |method| and data to |pkey_data|,
 // freeing any key that may previously have been configured. This function takes

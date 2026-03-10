@@ -434,6 +434,17 @@ OPENSSL_EXPORT int EVP_PKEY_get_raw_public_key(const EVP_PKEY *pkey,
                                                uint8_t *out, size_t *out_len);
 
 
+// Key generation
+
+// EVP_PKEY_generate_from_alg generates a new key of type |alg|. It returns a
+// newly-allocated |EVP_PKEY| or nullptr on error.
+//
+// When passed |EVP_pkey_rsa|, this function generates an RSA-2048 key with the
+// recommended public exponent of 65537, or |RSA_F4|. Use |EVP_RSA_gen| or
+// |EVP_PKEY_keygen| instead to customize these parameters.
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_generate_from_alg(const EVP_PKEY_ALG *alg);
+
+
 // Signing
 
 // EVP_DigestSignInit sets up |ctx| for a signing operation with |type| and
@@ -706,6 +717,8 @@ OPENSSL_EXPORT EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e);
 // (e.g. |EVP_PKEY_HMAC|). This can be used for key generation where
 // |EVP_PKEY_CTX_new| can't be used because there isn't an |EVP_PKEY| to pass
 // it. It returns the context or NULL on error.
+//
+// For key generation, prefer to use |EVP_PKEY_generate_from_alg|.
 OPENSSL_EXPORT EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e);
 
 // EVP_PKEY_CTX_free frees |ctx| and the data it owns.
@@ -914,6 +927,14 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_set1_signature_context_string(
 
 
 // RSA specific control functions.
+
+// EVP_RSA_gen generates a new RSA key with the specified number of bits. It
+// returns a newly-allocated |EVP_PKEY| or nullptr on error.
+//
+// This function sets the public exponent to the recommended value of 65537, or
+// |RSA_F4|. To use a less common value, instead use
+// |EVP_PKEY_CTX_set_rsa_keygen_pubexp| and |EVP_PKEY_keygen|.
+OPENSSL_EXPORT EVP_PKEY *EVP_RSA_gen(unsigned bits);
 
 // EVP_PKEY_CTX_set_rsa_padding sets the padding type to use. It should be one
 // of the |RSA_*_PADDING| values. Returns one on success or zero on error. By

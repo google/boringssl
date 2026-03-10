@@ -27,8 +27,9 @@
 
 using namespace bssl;
 
-static EvpPkeyCtx *evp_pkey_ctx_new(EvpPkey *pkey,
-                                    const EVP_PKEY_CTX_METHOD *pmeth) {
+static UniquePtr<EvpPkeyCtx> evp_pkey_ctx_new(
+    EvpPkey *pkey, const EVP_PKEY_ALG *alg, const EVP_PKEY_CTX_METHOD *pmeth) {
+  assert(pkey != nullptr || alg != nullptr);
   UniquePtr<EvpPkeyCtx> ret = MakeUnique<EvpPkeyCtx>();
   if (!ret) {
     return nullptr;
@@ -38,33 +39,33 @@ static EvpPkeyCtx *evp_pkey_ctx_new(EvpPkey *pkey,
   ret->operation = EVP_PKEY_OP_UNDEFINED;
   ret->pkey = UpRef(pkey);
 
-  if (pmeth->init && pmeth->init(ret.get()) <= 0) {
+  if (pmeth->init && pmeth->init(ret.get(), alg) <= 0) {
     ret->pmeth = nullptr;  // Don't call |pmeth->cleanup|.
     return nullptr;
   }
 
-  return ret.release();
+  return ret;
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e) {
-  auto *impl = FromOpaque(pkey);
-  if (impl == nullptr || impl->ameth == nullptr) {
+  auto *pkey_impl = FromOpaque(pkey);
+  if (pkey_impl == nullptr || pkey_impl->ameth == nullptr) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_PASSED_NULL_PARAMETER);
     return nullptr;
   }
-  if (impl->pkey == nullptr) {
+  if (pkey_impl->pkey == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
     return nullptr;
   }
 
-  const EVP_PKEY_CTX_METHOD *pkey_method = impl->ameth->pkey_method;
+  const EVP_PKEY_CTX_METHOD *pkey_method = pkey_impl->ameth->pkey_method;
   if (pkey_method == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
-    ERR_add_error_dataf("algorithm %d", impl->ameth->pkey_id);
+    ERR_add_error_dataf("algorithm %d", pkey_impl->ameth->pkey_id);
     return nullptr;
   }
 
-  return evp_pkey_ctx_new(impl, pkey_method);
+  return evp_pkey_ctx_new(pkey_impl, nullptr, pkey_method).release();
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
@@ -94,8 +95,11 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
     ERR_add_error_dataf("algorithm %d", id);
     return nullptr;
   }
+  return evp_pkey_ctx_new_alg(alg).release();
+}
 
-  return evp_pkey_ctx_new(nullptr, alg->pkey_method);
+UniquePtr<EvpPkeyCtx> bssl::evp_pkey_ctx_new_alg(const EVP_PKEY_ALG *alg) {
+  return evp_pkey_ctx_new(nullptr, alg, alg->pkey_method);
 }
 
 EvpPkeyCtx::~EvpPkeyCtx() {
@@ -362,6 +366,17 @@ int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, uint8_t *key, size_t *out_key_len) {
     return 0;
   }
   return impl->pmeth->derive(impl, key, out_key_len);
+}
+
+EVP_PKEY *EVP_PKEY_generate_from_alg(const EVP_PKEY_ALG *alg) {
+  UniquePtr<EvpPkeyCtx> ctx = evp_pkey_ctx_new_alg(alg);
+  EVP_PKEY *pkey = nullptr;
+  if (ctx == nullptr ||                    //
+      !EVP_PKEY_keygen_init(ctx.get()) ||  //
+      !EVP_PKEY_keygen(ctx.get(), &pkey)) {
+    return nullptr;
+  }
+  return pkey;
 }
 
 int EVP_PKEY_keygen_init(EVP_PKEY_CTX *ctx) {
