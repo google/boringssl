@@ -31,7 +31,7 @@
 //!
 //! ```
 //! use std::sync::Arc;
-//! use bssl_tls::CryptoProviderBuilder;
+//! use bssl_rustls_adapters::CryptoProviderBuilder;
 //! use rustls::client::ClientConfig;
 //!
 //! let provider = CryptoProviderBuilder::full();
@@ -47,7 +47,7 @@
 //!
 //! ```
 //! use std::sync::Arc;
-//! use bssl_tls::{CryptoProviderBuilder, cipher_suites, key_exchange};
+//! use bssl_rustls_adapters::{CryptoProviderBuilder, cipher_suites, key_exchange};
 //! use rustls::{SupportedCipherSuite, client::ClientConfig};
 //!
 //! let provider = CryptoProviderBuilder::new()
