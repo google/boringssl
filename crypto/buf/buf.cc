@@ -25,7 +25,7 @@
 
 using namespace bssl;
 
-BUF_MEM *BUF_MEM_new() { return NewZeroed<BUF_MEM>(); }
+BUF_MEM *BUF_MEM_new() { return New<BUF_MEM>(); }
 
 void BUF_MEM_free(BUF_MEM *buf) {
   if (buf == nullptr) {

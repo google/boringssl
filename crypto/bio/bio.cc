@@ -644,7 +644,7 @@ int BIO_get_new_index() {
 }
 
 BIO_METHOD *BIO_meth_new(int type, const char *name) {
-  BIO_METHOD *method = NewZeroed<BIO_METHOD>();
+  BIO_METHOD *method = New<BIO_METHOD>();
   if (method == nullptr) {
     return nullptr;
   }

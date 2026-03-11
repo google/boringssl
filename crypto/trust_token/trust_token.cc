@@ -124,7 +124,7 @@ void bssl::TRUST_TOKEN_PRETOKEN_free(TRUST_TOKEN_PRETOKEN *pretoken) {
 }
 
 TRUST_TOKEN *TRUST_TOKEN_new(const uint8_t *data, size_t len) {
-  TRUST_TOKEN *ret = NewZeroed<TRUST_TOKEN>();
+  TRUST_TOKEN *ret = New<TRUST_TOKEN>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -210,7 +210,7 @@ TRUST_TOKEN_CLIENT *TRUST_TOKEN_CLIENT_new(const TRUST_TOKEN_METHOD *method,
     return nullptr;
   }
 
-  TRUST_TOKEN_CLIENT *ret = NewZeroed<TRUST_TOKEN_CLIENT>();
+  TRUST_TOKEN_CLIENT *ret = New<TRUST_TOKEN_CLIENT>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -474,7 +474,7 @@ TRUST_TOKEN_ISSUER *TRUST_TOKEN_ISSUER_new(const TRUST_TOKEN_METHOD *method,
     return nullptr;
   }
 
-  TRUST_TOKEN_ISSUER *ret = NewZeroed<TRUST_TOKEN_ISSUER>();
+  TRUST_TOKEN_ISSUER *ret = New<TRUST_TOKEN_ISSUER>();
   if (ret == nullptr) {
     return nullptr;
   }

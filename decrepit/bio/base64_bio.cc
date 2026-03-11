@@ -51,7 +51,7 @@ typedef struct b64_struct {
 } BIO_B64_CTX;
 
 static int b64_new(BIO *bio) {
-  BIO_B64_CTX *ctx = NewZeroed<BIO_B64_CTX>();
+  BIO_B64_CTX *ctx = New<BIO_B64_CTX>();
   if (ctx == nullptr) {
     return 0;
   }

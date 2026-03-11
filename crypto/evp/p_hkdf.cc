@@ -40,7 +40,7 @@ typedef struct {
 } HKDF_PKEY_CTX;
 
 static int pkey_hkdf_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {
-  HKDF_PKEY_CTX *hctx = NewZeroed<HKDF_PKEY_CTX>();
+  HKDF_PKEY_CTX *hctx = New<HKDF_PKEY_CTX>();
   if (hctx == nullptr) {
     return 0;
   }

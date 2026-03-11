@@ -85,7 +85,7 @@ CONF *NCONF_new(void *method) {
   return conf;
 }
 
-CONF_VALUE *bssl::CONF_VALUE_new() { return NewZeroed<CONF_VALUE>(); }
+CONF_VALUE *bssl::CONF_VALUE_new() { return New<CONF_VALUE>(); }
 
 static void value_free(CONF_VALUE *value) {
   if (value == nullptr) {

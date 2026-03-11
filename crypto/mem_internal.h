@@ -44,29 +44,16 @@ BSSL_NAMESPACE_BEGIN
 // returns nullptr on allocation error. It only implements single-object
 // allocation and not new T[n].
 //
+// When called with no arguments, it performs value-initialization, not
+// default-initialization. This means that, if selects a non-user-provided
+// constructor, the object will be zero-initialized. (As in any C++ type, once
+// |T| gains a user-provided constructors, it is responsible for initializing
+// all fields explicitly.)
+//
 // Note: unlike |new|, this does not support non-public constructors.
 template <typename T, typename... Args>
 T *New(Args &&...args) {
   void *t = OPENSSL_malloc(sizeof(T));
-  if (t == nullptr) {
-    return nullptr;
-  }
-  return new (t) T(std::forward<Args>(args)...);
-}
-
-// NewZeroed behaves like |new| but uses |OPENSSL_zalloc| for memory
-// allocation, thereby zeroing the memory prior to calling constructors. It
-// returns nullptr on allocation error. It only implements single-object
-// allocation and not new T[n].
-//
-// Note: unlike |new|, this does not support non-public constructors.
-//
-// TODO(crbug.com/42220000): Actually replace calls to this by explicitly
-// setting default values in the structs, or - when it can be shown this is not
-// necessary - simply by |New|.
-template <typename T, typename... Args>
-T *NewZeroed(Args &&...args) {
-  void *t = OPENSSL_zalloc(sizeof(T));
   if (t == nullptr) {
     return nullptr;
   }

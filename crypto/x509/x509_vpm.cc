@@ -77,7 +77,7 @@ static int int_x509_param_set_hosts(X509_VERIFY_PARAM *param, int mode,
 }
 
 X509_VERIFY_PARAM *X509_VERIFY_PARAM_new() {
-  X509_VERIFY_PARAM *param = NewZeroed<X509_VERIFY_PARAM>();
+  X509_VERIFY_PARAM *param = New<X509_VERIFY_PARAM>();
   if (!param) {
     return nullptr;
   }

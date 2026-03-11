@@ -443,7 +443,7 @@ int DSA_generate_key(DSA *dsa) {
   return 1;
 }
 
-DSA_SIG *DSA_SIG_new() { return NewZeroed<DSA_SIG>(); }
+DSA_SIG *DSA_SIG_new() { return New<DSA_SIG>(); }
 
 void DSA_SIG_free(DSA_SIG *sig) {
   if (!sig) {

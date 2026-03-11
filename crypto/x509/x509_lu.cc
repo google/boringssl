@@ -43,7 +43,7 @@ static int X509_LOOKUP_by_subject(X509_LOOKUP *ctx, int type,
 
 static X509_LOOKUP *X509_LOOKUP_new(const X509_LOOKUP_METHOD *method,
                                     X509_STORE *store) {
-  X509_LOOKUP *ret = NewZeroed<X509_LOOKUP>();
+  X509_LOOKUP *ret = New<X509_LOOKUP>();
   if (ret == nullptr) {
     return nullptr;
   }
@@ -261,7 +261,7 @@ int X509_STORE_add_crl(X509_STORE *ctx, X509_CRL *x) {
   return x509_store_add(FromOpaque(ctx), x, /*is_crl=*/1);
 }
 
-X509_OBJECT *X509_OBJECT_new() { return NewZeroed<X509_OBJECT>(); }
+X509_OBJECT *X509_OBJECT_new() { return New<X509_OBJECT>(); }
 
 void X509_OBJECT_free(X509_OBJECT *obj) {
   if (obj == nullptr) {

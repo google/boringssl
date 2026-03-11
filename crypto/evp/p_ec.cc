@@ -319,7 +319,7 @@ typedef struct {
 } EC_PKEY_CTX;
 
 static int pkey_ec_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *alg) {
-  EC_PKEY_CTX *dctx = NewZeroed<EC_PKEY_CTX>();
+  EC_PKEY_CTX *dctx = New<EC_PKEY_CTX>();
   if (!dctx) {
     return 0;
   }

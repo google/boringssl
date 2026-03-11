@@ -24,8 +24,112 @@
 
 
 #if !defined(BORINGSSL_SHARED_LIBRARY)
+DECLARE_OPAQUE_STRUCT(SimpleOpaqueType, SimpleImplType)
+
 BSSL_NAMESPACE_BEGIN
+
+class SimpleImplType : public SimpleOpaqueType {
+public:
+  SimpleImplType() = default;
+  int x;
+};
+
 namespace {
+
+// New should default-initialize, which means it implicitly zero-initializes in
+// a lot of cases.
+TEST(NewTest, DefaultInit) {
+  // Non-user-provided constructors should zero-initialize.
+  {
+    struct Foo {
+      int x;
+    };
+    Foo *foo = New<Foo>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 0);
+    Delete(foo);
+  }
+
+  // Defaulted constructors don't count as user-provided and still
+  // zero-initialize.
+  {
+    struct Foo {
+      Foo() = default;
+      int x;
+    };
+    Foo *foo = New<Foo>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 0);
+    Delete(foo);
+  }
+
+  // The presence of a different user-provided constructor does not suppress
+  // zero initialization of the default constructor.
+  {
+    struct Foo {
+      Foo() = default;
+      Foo(int) { /* This constructor leaves |x| uninitialized. */ }
+      int x;
+    };
+    Foo *foo = New<Foo>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 0);
+    Delete(foo);
+  }
+
+  // Fields with initializers does not suppress zero initialization of other
+  // fields.
+  {
+    struct Foo {
+      int x;
+      int y = 2;
+    };
+    Foo *foo = New<Foo>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 0);
+    EXPECT_EQ(foo->y, 2);
+    Delete(foo);
+  }
+
+  // Complex types do not suppress zero-initialization of other fields.
+  {
+    struct Complex {
+      Complex() : value(42) {}
+      ~Complex() {}
+      int value;
+    };
+    struct Foo {
+      int x;
+      Complex y;
+    };
+    Foo *foo = New<Foo>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 0);
+    EXPECT_EQ(foo->y.value, 42);
+    Delete(foo);
+  }
+
+  // User-provided constructors run.
+  {
+    struct Foo {
+      Foo() : x(42) {}
+      int x;
+    };
+    Foo *foo = New<Foo>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 42);
+    Delete(foo);
+  }
+
+  // The public/opaque struct split pattern still performs zero initialization
+  // if the constructor is not user-provided.
+  {
+    SimpleImplType *foo = New<SimpleImplType>();
+    ASSERT_TRUE(foo);
+    EXPECT_EQ(foo->x, 0);
+    Delete(foo);
+  }
+}
 
 TEST(ArrayTest, Basic) {
   Array<int> array;

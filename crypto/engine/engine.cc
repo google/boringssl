@@ -33,7 +33,7 @@ struct engine_st {
   ECDSA_METHOD *ecdsa_method;
 };
 
-ENGINE *ENGINE_new() { return NewZeroed<ENGINE>(); }
+ENGINE *ENGINE_new() { return New<ENGINE>(); }
 
 int ENGINE_free(ENGINE *engine) {
   // Methods are currently required to be static so are not unref'ed.

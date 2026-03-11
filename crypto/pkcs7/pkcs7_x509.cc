@@ -245,7 +245,7 @@ int PKCS7_bundle_CRLs(CBB *out, const STACK_OF(X509_CRL) *crls) {
 
 static PKCS7 *pkcs7_new(CBS *cbs) {
   CBS copy = *cbs, copy2 = *cbs;
-  PKCS7 *ret = NewZeroed<PKCS7>();
+  PKCS7 *ret = New<PKCS7>();
   if (ret == nullptr) {
     return nullptr;
   }

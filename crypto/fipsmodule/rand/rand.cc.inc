@@ -368,7 +368,7 @@ bcm_infallible bssl::BCM_rand_bytes_with_additional_data(
       CRYPTO_get_thread_local(OPENSSL_THREAD_LOCAL_RAND));
 
   if (state == nullptr) {
-    state = NewZeroed<rand_thread_state>();
+    state = New<rand_thread_state>();
     if (state == nullptr ||
         !CRYPTO_set_thread_local(OPENSSL_THREAD_LOCAL_RAND, state,
                                  rand_thread_state_free)) {

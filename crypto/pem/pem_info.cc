@@ -33,7 +33,7 @@
 
 using namespace bssl;
 
-static X509_PKEY *X509_PKEY_new() { return NewZeroed<X509_PKEY>(); }
+static X509_PKEY *X509_PKEY_new() { return New<X509_PKEY>(); }
 
 static void X509_PKEY_free(X509_PKEY *x) {
   if (x == nullptr) {
@@ -44,7 +44,7 @@ static void X509_PKEY_free(X509_PKEY *x) {
   Delete(x);
 }
 
-static X509_INFO *X509_INFO_new() { return NewZeroed<X509_INFO>(); }
+static X509_INFO *X509_INFO_new() { return New<X509_INFO>(); }
 
 void X509_INFO_free(X509_INFO *x) {
   if (x == nullptr) {
