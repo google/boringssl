@@ -1108,6 +1108,16 @@
             "rust/bssl-crypto/src/*/*.rs"
         ]
     },
+    "rust_bssl_macros": {
+        "srcs": [
+            "rust/bssl-macros/src/*.rs"
+        ]
+    },
+    "rust_bssl_x509": {
+        "srcs": [
+            "rust/bssl-x509/src/*.rs"
+        ]
+    },
     "modulewrapper": {
         "srcs": [
             "util/fipstools/acvp/modulewrapper/main.cc",
