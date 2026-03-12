@@ -26,13 +26,23 @@
 //! # use bssl_x509::certificates::X509Certificate;
 //! # let concatenated_pem_bytes = include_bytes!("tests/consolidated.pem");
 //! # let pem = include_bytes!("tests/BoringSSLServerTest-RSA.crt");
-//! let certs: Vec<X509Certificate> = X509Certificate::parse_all_from_pem(concatenated_pem_bytes).unwrap();
+//! let certs: Vec<X509Certificate> =
+//!     X509Certificate::parse_all_from_pem(concatenated_pem_bytes).unwrap();
+//! assert_eq!(certs.len(), 6);
 //!
 //! let cert = X509Certificate::parse_one_from_pem(pem).unwrap();
+//!
+//! assert_eq!(cert.get_not_before().unwrap(), 1769078409);
+//! assert_eq!(cert.get_not_after().unwrap(), 64884278409);
+//! assert_eq!(cert.get_serial_number().unwrap().as_twos_complement_bytes().unwrap(),
+//!            [80, 45, 50, 81, 123, 185, 81, 240,
+//!             223, 110, 78, 195, 5, 31, 44, 75,
+//!             175, 205, 82, 115]);
+//!
 //! let der: Vec<u8> = cert.to_der().unwrap();
 //! ```
 //!
-//! # Inspect a certificate
+//! # Inspecting a certificate
 //!
 //! One can check if a certificate has a public key that matches a [`PrivateKey`].
 //! ```rust
@@ -255,7 +265,11 @@ impl<'a> SerialNumber<'a> {
         self.0.as_ptr()
     }
 
-    /// Get a twos-complement big-endian representation of the serial number.
+    /// Get a two's-complement, big-endian representation of the serial number.
+    ///
+    /// This is a big-endian integer. If the most-significant bit is set then
+    /// it is negative. Positive values that would otherwise have the
+    /// most-significant bit set are left padded with a zero byte to avoid this.
     pub fn as_twos_complement_bytes(&self) -> Option<&[u8]> {
         let serial = self.ptr();
         let len = unsafe {

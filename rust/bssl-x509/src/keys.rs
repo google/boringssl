@@ -23,8 +23,8 @@
 //! # let pem = include_bytes!("tests/BoringSSLTestCA.key");
 //! # let crt = include_bytes!("tests/BoringSSLTestCA.crt");
 //! # let crt = X509Certificate::parse_one_from_pem(crt).unwrap();
-//!
-//! let key = PrivateKey::from_pem(pem, || b"BoringSSL is awesome!").unwrap();
+//! let key = PrivateKey::from_pem(
+//!     pem, /*password_callback=*/ || b"BoringSSL is awesome!").unwrap();
 //! assert!(crt.matches_private_key(&key));
 //! ```
 

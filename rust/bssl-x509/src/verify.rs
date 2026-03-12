@@ -12,24 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! X.509 certificate verification process.
+//! X.509 certificate verification.
 //!
 //! To verify certificates, one may use [`X509Verifier`] which requires a fully constructed
-//! [`X509Store`] certificate store, [`X509CertificateList`] a list of untrusted intermediate
-//! certificates and [`X509Certificate`] the final end-entity certificate.
+//! [`X509Store`] certificate store, an [`X509CertificateList`] of untrusted intermediate
+//! certificates, and the final end-entity certificate as an [`X509Certificate`].
 //!
 //! ```rust
 //! # use bssl_x509::certificates::X509Certificate;
 //! # use bssl_x509::store::{X509Store, X509StoreBuilder};
 //! # use bssl_x509::verify::X509CertificateList;
 //! # use bssl_x509::verify::X509Verifier;
-//! # let ca = X509Certificate::parse_one_from_pem(include_bytes!("tests/BoringSSLTestCA.crt")).unwrap();
-//! # let cert = X509Certificate::parse_one_from_pem(include_bytes!("tests/BoringSSLServerTest-RSA.crt")).unwrap();
-//! # let chain = X509CertificateList::new();
-//! # let mut store = X509StoreBuilder::new();
-//! # store.add_cert(ca).unwrap();
-//! # let store = store.build();
-//! let mut verifier = X509Verifier::new(&cert, &chain, &store).unwrap();
+//! let ca = X509Certificate::parse_one_from_pem(
+//!     include_bytes!("tests/BoringSSLTestCA.crt")).unwrap();
+//! let mut store = X509StoreBuilder::new();
+//! store.add_cert(ca).unwrap();
+//! let store = store.build();
+//!
+//! let untrusted_intermediates = X509CertificateList::new();
+//!
+//! let leaf = X509Certificate::parse_one_from_pem(
+//!     include_bytes!("tests/BoringSSLServerTest-RSA.crt")).unwrap();
+//!
+//! let mut verifier = X509Verifier::new(&leaf, &untrusted_intermediates, &store).unwrap();
 //! assert!(verifier.verify().is_ok());
 //! ```
 

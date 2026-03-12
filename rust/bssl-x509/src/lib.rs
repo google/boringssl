@@ -25,9 +25,19 @@
 #![allow(private_bounds)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
-//! BoringSSL PKI and X.509 bindings
+//! BoringSSL crypto/x509 bindings.
 //!
 //! *WARNING* this crate is still work in progress and unstable.
+//!
+//! BoringSSL contains crypto/x509, an X.509 library inherited and cleaned up
+//! from OpenSSL. This crate contains bindings for it. While documentation
+//! is provided here, you may also need to see [the
+//! documentation](https://boringssl.googlesource.com/boringssl/+/refs/heads/main/include/openssl/x509.h)
+//! for the underlying C API.
+//!
+//! (BoringSSL also contains libpki, a much more modern and correct X.509
+//! validation library which is used in Chromium. But crypto/x509 is still used
+//! in many contexts and there can be valid reasons to want to use it.)
 
 extern crate alloc;
 extern crate core;
