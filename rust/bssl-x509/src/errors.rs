@@ -357,7 +357,7 @@ impl Display for PkiError {
                 let err_str = unsafe {
                     // Safety:
                     // - err_str is still valid;
-                    // - `ERR_error_string_n` guarantees that
+                    // - `ERR_error_string_n` guarantees that the buffer is NUL-terminated.
                     CStr::from_ptr(err_str.as_ptr())
                 };
                 f.write_str(&err_str.to_string_lossy())
@@ -384,7 +384,7 @@ impl PkiError {
     #[allow(irrefutable_let_patterns)]
     fn extract_err_from_code(packed_error: u32) -> Self {
         let lib = unsafe {
-            // Safety: extracing error source does not have a side-effect and only accesses static data.
+            // Safety: extracting error source does not have a side-effect and only accesses static data.
             bssl_sys::ERR_GET_LIB(packed_error)
         };
         let Ok(lib) = i32::try_from(lib) else {
@@ -394,7 +394,7 @@ impl PkiError {
             return Self::Library(packed_error, None, None);
         };
         let reason = unsafe {
-            // Safety: extracing error reason does not have a side-effect and only accesses static data.
+            // Safety: extracting error reason does not have a side-effect and only accesses static data.
             bssl_sys::ERR_GET_REASON(packed_error)
         };
         let Ok(reason) = i32::try_from(reason) else {

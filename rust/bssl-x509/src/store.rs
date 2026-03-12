@@ -28,7 +28,7 @@ use crate::{
     params::{CertificateVerificationParams, Purpose, Trust, VerificationFlags},
 };
 
-/// A X.509 certificate store builder.
+/// An X.509 certificate store builder.
 pub struct X509StoreBuilder(NonNull<bssl_sys::X509_STORE>);
 
 // Safety: `X509_STORE` is ref-counted and always requires exclusive accesses.
@@ -72,7 +72,7 @@ impl X509StoreBuilder {
     /// Load certificates from a file or directory.
     ///
     /// `file` and `dir` cannot be both [`None`];
-    /// otherwise, this method returns [`ConfigurationError::InvalidParameters`].
+    /// otherwise, this method returns [`X509Error::InvalidParameters`].
     pub fn load_locations(
         &mut self,
         file: Option<&str>,
@@ -158,7 +158,7 @@ impl X509StoreBuilder {
     }
 }
 
-/// A X.509 certificate store
+/// An X.509 certificate store
 pub struct X509Store(NonNull<bssl_sys::X509_STORE>);
 
 // Safety: `X509_STORE` is ref-counted and mutation behind a shared reference is protected

@@ -15,7 +15,7 @@
 //! X.509 certificate verification process.
 //!
 //! To verify certificates, one may use [`X509Verifier`] which requires a fully constructed
-//! [`X509Store`] certificate store, [`X509CertificateList`] a list of untrusted immediate
+//! [`X509Store`] certificate store, [`X509CertificateList`] a list of untrusted intermediate
 //! certificates and [`X509Certificate`] the final end-entity certificate.
 //!
 //! ```rust
@@ -65,7 +65,7 @@ impl Drop for X509Verifier<'_> {
 }
 
 impl<'a> X509Verifier<'a> {
-    /// Creates a new `X509StoreContext`.
+    /// Creates a new `X509Verifier`.
     pub fn new(
         cert: &'a X509Certificate,
         chain: &'a X509CertificateList,
@@ -133,7 +133,7 @@ impl<'a> X509Verifier<'a> {
     /// The first certificate will be the leaf certificate and the last certificate will be one of
     /// the trust anchor.
     ///
-    /// This method returns [`None`] if [`Self::verify_cert`] has not been called.
+    /// This method returns [`None`] if [`Self::verify`] has not been called.
     pub fn chain(&self) -> Option<Vec<X509Certificate>> {
         if !self.verified {
             return None;

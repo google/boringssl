@@ -142,7 +142,7 @@ impl Drop for GeneralNames {
 unsafe fn extract_ia5str<'a>(ia5str: *const bssl_sys::ASN1_IA5STRING) -> Option<&'a str> {
     let str_len = unsafe {
         // Safety: `value` is still a valid `ASN1_STRING`,
-        // which is a super-type of `ASN1_IA5STRING.
+        // which is a super-type of `ASN1_IA5STRING`.
         bssl_sys::ASN1_STRING_length(ia5str)
     };
     if str_len <= 0 {
@@ -151,7 +151,7 @@ unsafe fn extract_ia5str<'a>(ia5str: *const bssl_sys::ASN1_IA5STRING) -> Option<
     let str_len = usize::try_from(str_len).ok()?;
     let ptr = unsafe {
         // Safety: `value` is still a valid `ASN1_STRING`,
-        // which is a super-type of `ASN1_IA5STRING.
+        // which is a super-type of `ASN1_IA5STRING`.
         bssl_sys::ASN1_STRING_get0_data(ia5str)
     };
     if ptr.is_null() {
@@ -219,7 +219,7 @@ impl<'a> Iterator for GeneralNamesIter<'a> {
                 GeneralNameKind::IpAddr => {
                     let len = unsafe {
                         // Safety: `value` is still a valid `ASN1_STRING`,
-                        // which is a super-type of `ASN1_IA5STRING.
+                        // which is a super-type of `ASN1_OCTET_STRING`.
                         bssl_sys::ASN1_STRING_length(value as _)
                     };
                     match len {
@@ -509,7 +509,7 @@ impl X509Certificate {
         }
     }
 
-    /// This method dischanges the ownership.
+    /// This method discharges the ownership.
     ///
     /// Use this method only for cross-language interoperability.
     pub fn into_raw(self) -> *mut bssl_sys::X509 {

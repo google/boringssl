@@ -36,6 +36,7 @@ pub mod certificates;
 pub mod errors;
 pub(crate) mod ffi;
 pub mod keys;
+#[allow(dead_code)]
 mod oids;
 pub mod params;
 pub mod store;

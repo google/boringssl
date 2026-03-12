@@ -144,7 +144,7 @@ impl Drop for CertificateVerificationParams {
 }
 
 impl CertificateVerificationParams {
-    /// Create a new `X509VerifyParam`.
+    /// Create a new `CertificateVerificationParams`.
     pub fn new() -> Self {
         let param = unsafe {
             // Safety: this call returns a new X509_VERIFY_PARAM or null on failure.
@@ -214,7 +214,7 @@ impl CertificateVerificationParams {
         Ok(self)
     }
 
-    /// Set the expected IP address from an ASCII string, as defined by
+    /// Set the expected IP address from an ASCII string.
     pub fn set_ip_asc(&mut self, ip: &str) -> Result<&mut Self, PkiError> {
         let c_ip = CString::new(ip).map_err(|_| PkiError::InvalidIp)?;
         check_lib_error!(unsafe {
