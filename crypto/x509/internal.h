@@ -327,10 +327,6 @@ struct x509_lookup_method_st {
 
 BSSL_NAMESPACE_BEGIN
 
-DEFINE_NAMESPACED_STACK_OF(X509_LOOKUP)
-
-using StackOfX509Lookup = STACK_OF(X509_LOOKUP);
-
 // This is used to hold everything.  It is used for all certificate
 // validation.  Once we have a certificate chain, the 'verify'
 // function is then called to actually check the cert chain.
@@ -339,20 +335,20 @@ class X509Store : public x509_store_st, public RefCounted<X509Store> {
   X509Store();
 
   // The following is a cache of trusted certs
-  STACK_OF(X509_OBJECT) *objs;  // Cache of all objects
+  UniquePtr<STACK_OF(X509_OBJECT)> objs;  // Cache of all objects
   Mutex objs_lock;
 
   // These are external lookup methods
-  StackOfX509Lookup *get_cert_methods;
+  Vector<UniquePtr<X509_LOOKUP>> get_cert_methods;
 
-  X509_VERIFY_PARAM *param;
+  UniquePtr<X509_VERIFY_PARAM> param;
 
   // Callbacks for various operations
   X509_STORE_CTX_verify_cb verify_cb = nullptr;  // error callback
 
  private:
   friend RefCounted;
-  ~X509Store();
+  ~X509Store() = default;
 } /* X509_STORE */;
 
 BSSL_NAMESPACE_END

@@ -1522,7 +1522,7 @@ int X509_STORE_CTX_init(X509_STORE_CTX *ctx, X509_STORE *store, X509 *x509,
     auto *store_impl = FromOpaque(store);
     ctx->verify_cb = store_impl->verify_cb;
 
-    if (!X509_VERIFY_PARAM_inherit(ctx->param, store_impl->param) ||
+    if (!X509_VERIFY_PARAM_inherit(ctx->param, store_impl->param.get()) ||
         !X509_VERIFY_PARAM_inherit(ctx->param,
                                    X509_VERIFY_PARAM_lookup("default"))) {
       goto err;

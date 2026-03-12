@@ -16,6 +16,9 @@
 #include <limits.h>
 #include <string.h>
 
+#include <algorithm>
+#include <utility>
+
 #include <openssl/err.h>
 #include <openssl/mem.h>
 #include <openssl/x509.h>
@@ -131,60 +134,45 @@ static int x509_object_cmp_sk(const X509_OBJECT *const *a,
 X509Store::X509Store()
     : RefCounted(CheckSubClass()),
       objs(sk_X509_OBJECT_new(x509_object_cmp_sk)),
-      get_cert_methods(sk_X509_LOOKUP_new_null()),
       param(X509_VERIFY_PARAM_new()) {}
 
 X509_STORE *X509_STORE_new() {
   UniquePtr<X509Store> ret(New<X509Store>());
-  if (ret == nullptr) {
+  if (ret == nullptr || ret->objs == nullptr || ret->param == nullptr) {
     return nullptr;
   }
-
-  if (ret->objs == nullptr || ret->get_cert_methods == nullptr ||
-      ret->param == nullptr) {
-    return nullptr;
-  }
-
   return ret.release();
 }
 
 int X509_STORE_up_ref(X509_STORE *store) {
-  auto *impl = FromOpaque(store);
-  impl->UpRefInternal();
+  FromOpaque(store)->UpRefInternal();
   return 1;
-}
-
-X509Store::~X509Store() {
-  sk_X509_LOOKUP_pop_free(get_cert_methods, X509_LOOKUP_free);
-  sk_X509_OBJECT_pop_free(objs, X509_OBJECT_free);
-  X509_VERIFY_PARAM_free(param);
 }
 
 void X509_STORE_free(X509_STORE *vfy) {
   if (vfy == nullptr) {
     return;
   }
-  auto *impl = FromOpaque(vfy);
-  impl->DecRefInternal();
+  FromOpaque(vfy)->DecRefInternal();
 }
 
-X509_LOOKUP *X509_STORE_add_lookup(X509_STORE *v, const X509_LOOKUP_METHOD *m) {
-  auto *impl = FromOpaque(v);
-  STACK_OF(X509_LOOKUP) *sk = impl->get_cert_methods;
-  for (size_t i = 0; i < sk_X509_LOOKUP_num(sk); i++) {
-    X509_LOOKUP *lu = sk_X509_LOOKUP_value(sk, i);
-    if (m == lu->method) {
-      return lu;
-    }
+X509_LOOKUP *X509_STORE_add_lookup(X509_STORE *store,
+                                   const X509_LOOKUP_METHOD *method) {
+  auto *impl = FromOpaque(store);
+  auto it =
+      std::find_if(impl->get_cert_methods.begin(), impl->get_cert_methods.end(),
+                   [&](const auto &lu) { return method == lu->method; });
+  if (it != impl->get_cert_methods.end()) {
+    return it->get();
   }
 
-  X509_LOOKUP *lu = X509_LOOKUP_new(m, v);
-  if (lu == nullptr || !sk_X509_LOOKUP_push(impl->get_cert_methods, lu)) {
-    X509_LOOKUP_free(lu);
+  UniquePtr<X509_LOOKUP> lu(X509_LOOKUP_new(method, store));
+  X509_LOOKUP *lu_raw = lu.get();
+  if (lu == nullptr || !impl->get_cert_methods.Push(std::move(lu))) {
     return nullptr;
   }
 
-  return lu;
+  return lu_raw;
 }
 
 int X509_STORE_CTX_get_by_subject(X509_STORE_CTX *vs, int type,
@@ -192,13 +180,13 @@ int X509_STORE_CTX_get_by_subject(X509_STORE_CTX *vs, int type,
   X509Store *ctx = FromOpaque(vs->ctx);
   X509_OBJECT stmp;
   ctx->objs_lock.LockWrite();
-  X509_OBJECT *tmp = X509_OBJECT_retrieve_by_subject(ctx->objs, type, name);
+  X509_OBJECT *tmp =
+      X509_OBJECT_retrieve_by_subject(ctx->objs.get(), type, name);
   ctx->objs_lock.UnlockWrite();
 
   if (tmp == nullptr || type == X509_LU_CRL) {
-    for (size_t i = 0; i < sk_X509_LOOKUP_num(ctx->get_cert_methods); i++) {
-      X509_LOOKUP *lu = sk_X509_LOOKUP_value(ctx->get_cert_methods, i);
-      if (X509_LOOKUP_by_subject(lu, type, name, &stmp)) {
+    for (const auto &lu : ctx->get_cert_methods) {
+      if (X509_LOOKUP_by_subject(lu.get(), type, name, &stmp)) {
         tmp = &stmp;
         break;
       }
@@ -240,8 +228,8 @@ static int x509_store_add(X509Store *ctx, void *x, int is_crl) {
   int ret = 1;
   int added = 0;
   // Duplicates are silently ignored
-  if (!X509_OBJECT_retrieve_match(ctx->objs, obj)) {
-    ret = added = (sk_X509_OBJECT_push(ctx->objs, obj) != 0);
+  if (!X509_OBJECT_retrieve_match(ctx->objs.get(), obj)) {
+    ret = added = (sk_X509_OBJECT_push(ctx->objs.get(), obj) != 0);
   }
 
   ctx->objs_lock.UnlockWrite();
@@ -378,13 +366,13 @@ static X509_OBJECT *x509_object_dup(const X509_OBJECT *obj) {
 STACK_OF(X509_OBJECT) *X509_STORE_get1_objects(X509_STORE *store) {
   auto *impl = FromOpaque(store);
   MutexReadLock lock(&impl->objs_lock);
-  return sk_X509_OBJECT_deep_copy(impl->objs, x509_object_dup,
+  return sk_X509_OBJECT_deep_copy(impl->objs.get(), x509_object_dup,
                                   X509_OBJECT_free);
 }
 
 STACK_OF(X509_OBJECT) *X509_STORE_get0_objects(X509_STORE *store) {
   auto *impl = FromOpaque(store);
-  return impl->objs;
+  return impl->objs.get();
 }
 
 STACK_OF(X509) *X509_STORE_CTX_get1_certs(X509_STORE_CTX *ctx,
@@ -396,7 +384,7 @@ STACK_OF(X509) *X509_STORE_CTX_get1_certs(X509_STORE_CTX *ctx,
   }
   X509Store *store = FromOpaque(ctx->ctx);
   store->objs_lock.LockWrite();
-  int idx = x509_object_idx_cnt(store->objs, X509_LU_X509, nm, &cnt);
+  int idx = x509_object_idx_cnt(store->objs.get(), X509_LU_X509, nm, &cnt);
   if (idx < 0) {
     // Nothing found in cache: do lookup to possibly add new objects to
     // cache
@@ -408,7 +396,7 @@ STACK_OF(X509) *X509_STORE_CTX_get1_certs(X509_STORE_CTX *ctx,
     }
     X509_OBJECT_free_contents(&xobj);
     store->objs_lock.LockWrite();
-    idx = x509_object_idx_cnt(store->objs, X509_LU_X509, nm, &cnt);
+    idx = x509_object_idx_cnt(store->objs.get(), X509_LU_X509, nm, &cnt);
     if (idx < 0) {
       store->objs_lock.UnlockWrite();
       sk_X509_free(sk);
@@ -416,7 +404,7 @@ STACK_OF(X509) *X509_STORE_CTX_get1_certs(X509_STORE_CTX *ctx,
     }
   }
   for (int i = 0; i < cnt; i++, idx++) {
-    X509_OBJECT *obj = sk_X509_OBJECT_value(store->objs, idx);
+    X509_OBJECT *obj = sk_X509_OBJECT_value(store->objs.get(), idx);
     X509 *x = obj->data.x509;
     if (!sk_X509_push(sk, x)) {
       store->objs_lock.UnlockWrite();
@@ -446,7 +434,7 @@ STACK_OF(X509_CRL) *X509_STORE_CTX_get1_crls(X509_STORE_CTX *ctx,
   X509_OBJECT_free_contents(&xobj);
   X509Store *store = FromOpaque(ctx->ctx);
   store->objs_lock.LockWrite();
-  int idx = x509_object_idx_cnt(store->objs, X509_LU_CRL, nm, &cnt);
+  int idx = x509_object_idx_cnt(store->objs.get(), X509_LU_CRL, nm, &cnt);
   if (idx < 0) {
     store->objs_lock.UnlockWrite();
     sk_X509_CRL_free(sk);
@@ -454,7 +442,7 @@ STACK_OF(X509_CRL) *X509_STORE_CTX_get1_crls(X509_STORE_CTX *ctx,
   }
 
   for (int i = 0; i < cnt; i++, idx++) {
-    X509_OBJECT *obj = sk_X509_OBJECT_value(store->objs, idx);
+    X509_OBJECT *obj = sk_X509_OBJECT_value(store->objs.get(), idx);
     X509_CRL *x = obj->data.crl;
     X509_CRL_up_ref(x);
     if (!sk_X509_CRL_push(sk, x)) {
@@ -516,10 +504,10 @@ int X509_STORE_CTX_get1_issuer(X509 **out_issuer, X509_STORE_CTX *ctx,
   // |x509_check_issued_with_callback|.
   X509Store *store = FromOpaque(ctx->ctx);
   MutexWriteLock lock(&store->objs_lock);
-  int idx = X509_OBJECT_idx_by_subject(store->objs, X509_LU_X509, xn);
+  int idx = X509_OBJECT_idx_by_subject(store->objs.get(), X509_LU_X509, xn);
   if (idx != -1) {  // should be true as we've had at least one match
     // Look through all matching certs for suitable issuer
-    for (X509_OBJECT *pobj : store->objs) {
+    for (X509_OBJECT *pobj : store->objs.get()) {
       // See if we've run past the matches
       if (pobj->type != X509_LU_X509) {
         return 0;
@@ -539,33 +527,32 @@ int X509_STORE_CTX_get1_issuer(X509 **out_issuer, X509_STORE_CTX *ctx,
 
 int X509_STORE_set_flags(X509_STORE *ctx, unsigned long flags) {
   auto *impl = FromOpaque(ctx);
-  return X509_VERIFY_PARAM_set_flags(impl->param, flags);
+  return X509_VERIFY_PARAM_set_flags(impl->param.get(), flags);
 }
 
 int X509_STORE_set_depth(X509_STORE *ctx, int depth) {
   auto *impl = FromOpaque(ctx);
-  X509_VERIFY_PARAM_set_depth(impl->param, depth);
+  X509_VERIFY_PARAM_set_depth(impl->param.get(), depth);
   return 1;
 }
 
 int X509_STORE_set_purpose(X509_STORE *ctx, int purpose) {
   auto *impl = FromOpaque(ctx);
-  return X509_VERIFY_PARAM_set_purpose(impl->param, purpose);
+  return X509_VERIFY_PARAM_set_purpose(impl->param.get(), purpose);
 }
 
 int X509_STORE_set_trust(X509_STORE *ctx, int trust) {
   auto *impl = FromOpaque(ctx);
-  return X509_VERIFY_PARAM_set_trust(impl->param, trust);
+  return X509_VERIFY_PARAM_set_trust(impl->param.get(), trust);
 }
 
 int X509_STORE_set1_param(X509_STORE *ctx, const X509_VERIFY_PARAM *param) {
   auto *impl = FromOpaque(ctx);
-  return X509_VERIFY_PARAM_set1(impl->param, param);
+  return X509_VERIFY_PARAM_set1(impl->param.get(), param);
 }
 
 X509_VERIFY_PARAM *X509_STORE_get0_param(X509_STORE *ctx) {
-  auto *impl = FromOpaque(ctx);
-  return impl->param;
+  return FromOpaque(ctx)->param.get();
 }
 
 void X509_STORE_set_verify_cb(X509_STORE *ctx,

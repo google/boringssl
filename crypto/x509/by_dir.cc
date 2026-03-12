@@ -287,9 +287,9 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, const X509_NAME *name,
       auto *store_impl = FromOpaque(xl->store_ctx);
       store_impl->objs_lock.LockWrite();
       tmp = nullptr;
-      sk_X509_OBJECT_sort(store_impl->objs);
-      if (sk_X509_OBJECT_find(store_impl->objs, &idx, &stmp)) {
-        tmp = sk_X509_OBJECT_value(store_impl->objs, idx);
+      sk_X509_OBJECT_sort(store_impl->objs.get());
+      if (sk_X509_OBJECT_find(store_impl->objs.get(), &idx, &stmp)) {
+        tmp = sk_X509_OBJECT_value(store_impl->objs.get(), idx);
       }
       store_impl->objs_lock.UnlockWrite();
 
