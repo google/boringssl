@@ -15,13 +15,12 @@
 //! X.509 certificate verification.
 //!
 //! To verify certificates, one may use [`X509Verifier`] which requires a fully constructed
-//! [`X509Store`] certificate store, an [`X509CertificateList`] of untrusted intermediate
-//! certificates, and the final end-entity certificate as an [`X509Certificate`].
+//! [`X509Store`] certificate store, a slice of untrusted intermediate certificates, and the
+//! final end-entity certificate as an [`X509Certificate`].
 //!
 //! ```rust
 //! # use bssl_x509::certificates::X509Certificate;
 //! # use bssl_x509::store::{X509Store, X509StoreBuilder};
-//! # use bssl_x509::verify::X509CertificateList;
 //! # use bssl_x509::verify::X509Verifier;
 //! let ca = X509Certificate::parse_one_from_pem(
 //!     include_bytes!("tests/BoringSSLTestCA.crt")).unwrap();
@@ -29,17 +28,15 @@
 //! store.add_cert(ca).unwrap();
 //! let store = store.build();
 //!
-//! let untrusted_intermediates = X509CertificateList::new();
-//!
 //! let leaf = X509Certificate::parse_one_from_pem(
 //!     include_bytes!("tests/BoringSSLServerTest-RSA.crt")).unwrap();
 //!
-//! let mut verifier = X509Verifier::new(&leaf, &untrusted_intermediates, &store).unwrap();
+//! let mut verifier = X509Verifier::new(&leaf, &[], &store).unwrap();
 //! assert!(verifier.verify().is_ok());
 //! ```
 
 use alloc::vec::Vec;
-use core::{marker::PhantomData, mem::transmute, ptr::NonNull};
+use core::{marker::PhantomData, ptr::NonNull};
 
 use crate::{
     certificates::X509Certificate,
@@ -53,6 +50,7 @@ use crate::{
 /// This corresponds to `X509_STORE_CTX` in BoringSSL.
 pub struct X509Verifier<'a> {
     ptr: NonNull<bssl_sys::X509_STORE_CTX>,
+    chain: CertificateStack,
     verified: bool,
     _p: PhantomData<&'a ()>,
 }
@@ -73,24 +71,25 @@ impl<'a> X509Verifier<'a> {
     /// Creates a new `X509Verifier`.
     pub fn new(
         cert: &'a X509Certificate,
-        chain: &'a X509CertificateList,
+        untrusted: &[X509Certificate],
         store: &'a X509Store,
     ) -> Result<Self, PkiError> {
-        let this = Self::alloc();
+        let chain = CertificateStack::from_borrowed(untrusted);
+        let ctx = Self::alloc(chain);
         check_lib_error!(unsafe {
             // Safety:
-            // - `self.0` is valid.
+            // - `ctx.ptr()` is valid.
             // - `store.as_raw()` returns a valid X509_STORE pointer.
             // - `cert.ptr()` returns a valid X509 pointer.
-            // - `chain_ptr` is either NULL or a valid stack pointer.
-            // - The input objects will outlive `'a`, so much so that the verifier is outlived by
+            // - `chain` is a valid stack pointer, kept alive by `ctx.chain`.
+            // - The input objects will outlive `'a`, so the verifier is outlived by
             //   these objects.
-            bssl_sys::X509_STORE_CTX_init(this.ptr(), store.as_raw(), cert.ptr(), chain.ptr())
+            bssl_sys::X509_STORE_CTX_init(ctx.ptr(), store.as_raw(), cert.ptr(), ctx.chain.ptr())
         });
-        Ok(this)
+        Ok(ctx)
     }
 
-    fn alloc() -> Self {
+    fn alloc(chain: CertificateStack) -> Self {
         let Some(ctx) = NonNull::new(unsafe {
             // Safety: This function creates a new object and returns NULL on allocation failure.
             bssl_sys::X509_STORE_CTX_new()
@@ -100,6 +99,7 @@ impl<'a> X509Verifier<'a> {
 
         Self {
             ptr: ctx,
+            chain,
             verified: false,
             _p: PhantomData,
         }
@@ -147,83 +147,70 @@ impl<'a> X509Verifier<'a> {
             // Safety: `self.0` is valid.
             bssl_sys::X509_STORE_CTX_get0_chain(self.ptr())
         })?;
-        let chain: &X509CertificateList = unsafe {
-            // Safety: `X509CertificateList` is a transparent wrapper around the handle
-            transmute(&chain)
+        let len = unsafe {
+            // Safety: `chain` is valid.
+            bssl_sys::sk_X509_num(chain.as_ptr())
         };
         let mut res = Vec::new();
-        for i in 0..chain.len() {
-            res.push(chain.get(i)?);
+        for i in 0..len {
+            let cert = unsafe {
+                // Safety: `chain` is valid and `i` < `len`.
+                NonNull::new(bssl_sys::sk_X509_value(chain.as_ptr(), i))?
+            };
+            unsafe {
+                // Safety: `cert` is borrowed from the chain; bump the ref count.
+                res.push(X509Certificate::from_borrowed_raw(cert));
+            }
         }
         Some(res)
     }
 }
 
-/// A list of certificates.
-#[repr(transparent)]
-pub struct X509CertificateList(NonNull<bssl_sys::stack_st_X509>);
+/// A transient STACK_OF(X509) that borrows certificates.
+///
+/// The certificates pushed into this stack have their reference counts
+/// incremented, and are released when the stack is freed.
+struct CertificateStack(NonNull<bssl_sys::stack_st_X509>);
 
-// Safety: `X509CertificateList` is not clonable and contains no thread-local data.
-unsafe impl Send for X509CertificateList {}
+// Safety: contains no thread-local data.
+unsafe impl Send for CertificateStack {}
 
-impl X509CertificateList {
-    /// Create an empty certificate list.
-    pub fn new() -> Self {
-        let Some(cert_list) = NonNull::new(unsafe {
-            // Safety: we only make allocation here.
+impl CertificateStack {
+    /// Build a stack from borrowed certificates. Each certificate's reference
+    /// count is incremented so the stack owns a reference.
+    fn from_borrowed(certs: &[X509Certificate]) -> Self {
+        let Some(stack) = NonNull::new(unsafe {
+            // Safety: only allocation.
             bssl_sys::sk_X509_new_null()
         }) else {
             panic!("allocation error");
         };
-        Self(cert_list)
-    }
-
-    pub(crate) fn ptr(&self) -> *mut bssl_sys::stack_st_X509 {
-        self.0.as_ptr()
-    }
-
-    /// Get the size of the list.
-    pub fn len(&self) -> usize {
-        unsafe {
-            // Safety: `self` is valid.
-            bssl_sys::sk_X509_num(self.ptr())
-        }
-    }
-
-    /// Get a certificate.
-    pub fn get(&self, index: usize) -> Option<X509Certificate> {
-        if index < self.len() {
-            let cert = unsafe {
-                // Safety: `self` is valid.
-                NonNull::new(bssl_sys::sk_X509_value(self.ptr(), index))?
-            };
+        for cert in certs {
             unsafe {
-                // Safety: `cert` has the right ref-count now, so we have valid ownership.
-                Some(X509Certificate::from_borrowed_raw(cert))
+                // Safety: `cert` is valid. Bump the ref count so the stack
+                // owns its own reference.
+                bssl_sys::X509_up_ref(cert.ptr());
             }
-        } else {
-            None
+            if unsafe {
+                // Safety: `cert.ptr()` is valid.
+                bssl_sys::sk_X509_push(stack.as_ptr(), cert.ptr()) == 0
+            } {
+                panic!("allocation failure");
+            }
         }
+        Self(stack)
     }
 
-    /// Append a certificate into the list.
-    pub fn push(&mut self, cert: X509Certificate) -> Result<&mut Self, PkiError> {
-        if unsafe {
-            // Safety: `cert` is still valid and exclusively owned.
-            bssl_sys::sk_X509_push(self.ptr(), cert.ptr()) == 0
-        } {
-            panic!("allocation failure")
-        }
-        // We should transfer the ownership to the stack.
-        core::mem::forget(cert);
-        Ok(self)
+    fn ptr(&self) -> *mut bssl_sys::stack_st_X509 {
+        self.0.as_ptr()
     }
 }
 
-impl Drop for X509CertificateList {
+impl Drop for CertificateStack {
     fn drop(&mut self) {
         unsafe {
-            // Safety: `self` is valid.
+            // Safety: `self` is valid. Each element's ref count was incremented
+            // in `from_borrowed`, so `X509_free` will release that reference.
             bssl_sys::sk_X509_pop_free(self.ptr(), Some(bssl_sys::X509_free));
         }
     }
