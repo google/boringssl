@@ -32,12 +32,17 @@
 //!
 //! let cert = X509Certificate::parse_one_from_pem(pem).unwrap();
 //!
-//! assert_eq!(cert.get_not_before().unwrap(), 1769078409);
-//! assert_eq!(cert.get_not_after().unwrap(), 64884278409);
-//! assert_eq!(cert.get_serial_number().unwrap().as_twos_complement_bytes().unwrap(),
-//!            [80, 45, 50, 81, 123, 185, 81, 240,
-//!             223, 110, 78, 195, 5, 31, 44, 75,
-//!             175, 205, 82, 115]);
+//! assert_eq!(cert.not_before().unwrap(), 1769078409);
+//! assert_eq!(cert.not_after().unwrap(), 64884278409);
+//! let serial = cert.serial_number();
+//! assert_eq!(format!("{serial}"),
+//!     "457727178541466628947827494934005101068454548083");
+//!
+//! # use bssl_x509::certificates::GeneralName;
+//! let names = cert.subject_alt_names().unwrap();
+//! let sans: Vec<_> = names.iter().collect();
+//! assert_eq!(sans, vec![GeneralName::Dns("www.google.com"),
+//!                       GeneralName::Dns("localhost")]);
 //!
 //! let der: Vec<u8> = cert.to_der().unwrap();
 //! ```
@@ -60,6 +65,8 @@
 
 use alloc::{vec, vec::Vec};
 use core::{
+    ffi::CStr,
+    fmt,
     marker::PhantomData,
     mem::{forget, transmute},
     ptr::{NonNull, null_mut},
@@ -270,7 +277,7 @@ impl<'a> SerialNumber<'a> {
     /// This is a big-endian integer. If the most-significant bit is set then
     /// it is negative. Positive values that would otherwise have the
     /// most-significant bit set are left padded with a zero byte to avoid this.
-    pub fn as_twos_complement_bytes(&self) -> Option<&[u8]> {
+    pub fn as_twos_complement_bytes(&self) -> &'a [u8] {
         let serial = self.ptr();
         let len = unsafe {
             // Safety:
@@ -279,11 +286,8 @@ impl<'a> SerialNumber<'a> {
             // - ASN1_INTEGER is a subtype of ASN1_STRING.
             bssl_sys::ASN1_STRING_length(serial)
         };
-        if len <= 0 {
-            return None;
-        }
         let Ok(len) = usize::try_from(len) else {
-            return None;
+            panic!("invalid ASN1_INTEGER")
         };
         let ptr = unsafe {
             // Safety:
@@ -297,34 +301,78 @@ impl<'a> SerialNumber<'a> {
             // - `ptr` is non-null;
             // - `len` is positive and less then isize::MAX;
             // - the lifetime of `self` outlives that of `ptr`.
-            sanitize_slice(ptr, len)
+            sanitize_slice(ptr, len).expect("invalid ASN1_INTEGER")
         }
     }
+}
 
-    /// Get a `u64` value of the serial number.
-    pub fn as_u64(&self) -> Option<u64> {
-        let serial = self.ptr();
-        let mut num = 0;
-        let rc = unsafe {
-            // Safety:
-            // - self witnesses the validity of the ASN1_INTEGER handle.
-            // - all pointers contain the initialised data.
-            bssl_sys::ASN1_INTEGER_get_uint64(&raw mut num, serial)
+impl<'a> SerialNumber<'a> {
+    /// Formats the serial number as a string using the given BoringSSL
+    /// conversion function (`BN_bn2dec` or `BN_bn2hex`).
+    fn fmt_with(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        conv: unsafe extern "C" fn(*const bssl_sys::BIGNUM) -> *mut core::ffi::c_char,
+        alt_prefix: &str,
+    ) -> fmt::Result {
+        let bn = unsafe {
+            // Safety: self witnesses the validity of the ASN1_INTEGER handle.
+            bssl_sys::ASN1_INTEGER_to_BN(self.ptr(), null_mut())
         };
-        (rc == 1).then_some(num)
+        if bn.is_null() {
+            return Err(fmt::Error);
+        }
+
+        struct BnGuard(*mut bssl_sys::BIGNUM);
+        impl Drop for BnGuard {
+            fn drop(&mut self) {
+                unsafe { bssl_sys::BN_free(self.0) };
+            }
+        }
+        let _bn_guard = BnGuard(bn);
+
+        let s = unsafe {
+            // Safety: `bn` is a valid BIGNUM.
+            conv(bn)
+        };
+        if s.is_null() {
+            return Err(fmt::Error);
+        }
+
+        struct StringGuard(*mut core::ffi::c_char);
+        impl Drop for StringGuard {
+            fn drop(&mut self) {
+                unsafe { bssl_sys::OPENSSL_free(self.0 as *mut _) };
+            }
+        }
+        let _s_guard = StringGuard(s);
+
+        let s_str = unsafe {
+            // Safety: `s` is a valid, NUL-terminated C string allocated by BoringSSL.
+            CStr::from_ptr(s).to_str()
+        }
+        .map_err(|_| fmt::Error)?;
+
+        let (is_nonnegative, abs_str) = if let Some(stripped) = s_str.strip_prefix('-') {
+            (false, stripped)
+        } else {
+            (true, s_str)
+        };
+
+        let prefix = if f.alternate() { alt_prefix } else { "" };
+        f.pad_integral(is_nonnegative, prefix, abs_str)
     }
+}
 
-    /// Get a `i64` value of the serial number.
-    pub fn as_i64(&self) -> Option<i64> {
-        let serial = self.ptr();
-        let mut num = 0;
-        let rc = unsafe {
-            // Safety:
-            // - self witnesses the validity of the ASN1_INTEGER handle.
-            // - all pointers contain the initialised data.
-            bssl_sys::ASN1_INTEGER_get_int64(&raw mut num, serial)
-        };
-        (rc == 1).then_some(num)
+impl<'a> fmt::Display for SerialNumber<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with(f, bssl_sys::BN_bn2dec, "")
+    }
+}
+
+impl<'a> fmt::LowerHex for SerialNumber<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with(f, bssl_sys::BN_bn2hex, "0x")
     }
 }
 
@@ -536,7 +584,7 @@ impl X509Certificate {
     ///
     /// This method returns `None` if the certificate does not have a valid
     /// time value in this field.
-    pub fn get_not_before(&self) -> Option<i64> {
+    pub fn not_before(&self) -> Option<i64> {
         let time = unsafe {
             // Safety: self witnesses the validity of the X509 handle.
             bssl_sys::X509_get0_notBefore(self.ptr())
@@ -556,7 +604,7 @@ impl X509Certificate {
     ///
     /// This method returns `None` if the certificate does not have a valid
     /// time value in this field.
-    pub fn get_not_after(&self) -> Option<i64> {
+    pub fn not_after(&self) -> Option<i64> {
         let time = unsafe {
             // Safety: self witnesses the validity of the X509 handle.
             bssl_sys::X509_get0_notAfter(self.ptr())
@@ -576,13 +624,13 @@ impl X509Certificate {
     ///
     /// This method returns `None` if the certificate does not have a valid
     /// serial number.
-    pub fn get_serial_number(&self) -> Option<SerialNumber<'_>> {
+    pub fn serial_number(&self) -> SerialNumber<'_> {
         let serial = unsafe {
             // Safety: self witnesses the validity of the X509 handle.
             bssl_sys::X509_get0_serialNumber(self.ptr())
         };
-        let serial = NonNull::new(serial as _)?;
-        Some(SerialNumber(serial, PhantomData))
+        let serial = NonNull::new(serial as _).expect("non-null serial number");
+        SerialNumber(serial, PhantomData)
     }
 
     /// Check if the private key matches the public key in the certificate.

@@ -74,14 +74,11 @@ fn parse_all_pems() {
         .zip(NOT_AFTER)
     {
         assert_eq!(
-            pem.get_serial_number()
-                .unwrap()
-                .as_twos_complement_bytes()
-                .unwrap(),
+            pem.serial_number().as_twos_complement_bytes(),
             serial_number
         );
-        assert_eq!(pem.get_not_before().unwrap(), not_before);
-        assert_eq!(pem.get_not_after().unwrap(), not_after);
+        assert_eq!(pem.not_before().unwrap(), not_before);
+        assert_eq!(pem.not_after().unwrap(), not_after);
     }
 
     assert!(matches!(
@@ -135,4 +132,54 @@ fn parse_pem_key_with_pass() {
         .pop()
         .unwrap();
     assert!(ca_cert.matches_private_key(&key));
+}
+
+#[test]
+fn format_serial_number() {
+    let certs = certificates::X509Certificate::parse_all_from_pem(PEM).unwrap();
+    let cert = &certs[0];
+    let serial = cert.serial_number();
+
+    assert_eq!(
+        format!("{serial}"),
+        "173077792251592774985953586210206334486912395868"
+    );
+
+    // Alternate Display format should NOT prepend "0x" to a decimal number
+    assert_eq!(
+        format!("{serial:#}"),
+        "173077792251592774985953586210206334486912395868"
+    );
+
+    assert_eq!(
+        format!("{serial:x}"),
+        "1e51139d9c81903825327251f3331b70d09b6a5c"
+    );
+
+    // Alternate LowerHex format SHOULD prepend "0x" to the hex string
+    assert_eq!(
+        format!("{serial:#x}"),
+        "0x1e51139d9c81903825327251f3331b70d09b6a5c"
+    );
+}
+
+#[test]
+fn format_serial_number_padding() {
+    let certs = certificates::X509Certificate::parse_all_from_pem(PEM).unwrap();
+    let serial = certs[0].serial_number();
+
+    assert_eq!(
+        format!("{serial:045x}"),
+        "000001e51139d9c81903825327251f3331b70d09b6a5c"
+    );
+
+    assert_eq!(
+        format!("{serial:>45x}"),
+        "     1e51139d9c81903825327251f3331b70d09b6a5c"
+    );
+
+    assert_eq!(
+        format!("{serial:<45x}"),
+        "1e51139d9c81903825327251f3331b70d09b6a5c     "
+    );
 }
