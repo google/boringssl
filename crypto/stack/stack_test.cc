@@ -30,10 +30,11 @@
 #include "../mem_internal.h"
 
 
-BSSL_NAMESPACE_BEGIN
-
 // Define a custom stack type for testing.
 using TEST_INT = int;
+DEFINE_STACK_OF(TEST_INT)
+
+BSSL_NAMESPACE_BEGIN
 
 static void TEST_INT_free(TEST_INT *x) { Delete(x); }
 
@@ -47,8 +48,6 @@ static UniquePtr<TEST_INT> TEST_INT_new(int x) {
   *ret = x;
   return ret;
 }
-
-DEFINE_NAMESPACED_STACK_OF(TEST_INT)
 
 namespace {
 
