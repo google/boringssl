@@ -16,7 +16,7 @@ path = "../bssl-macros"
 path = "../bssl-sys"
 
 [features]
-default = []
+default = ["std"]
 # `std` depends on the Rust `std` crate, but adds some useful trait impls if
 # available.
 std = ["bssl-crypto/std"]
