@@ -312,11 +312,11 @@ const EVP_PKEY_ASN1_METHOD ec_asn1_meth = {
     int_ec_free,
 };
 
-typedef struct {
+struct EC_PKEY_CTX {
   // message digest
-  const EVP_MD *md;
-  const EC_GROUP *gen_group;
-} EC_PKEY_CTX;
+  const EVP_MD *md = nullptr;
+  const EC_GROUP *gen_group = nullptr;
+};
 
 static int pkey_ec_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *alg) {
   EC_PKEY_CTX *dctx = New<EC_PKEY_CTX>();

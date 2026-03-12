@@ -138,7 +138,7 @@ static const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
 };
 
 struct DH_PKEY_CTX {
-  int pad = 0;
+  bool pad = false;
 };
 
 static int pkey_dh_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {

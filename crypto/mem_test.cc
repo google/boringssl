@@ -201,6 +201,59 @@ TEST(VectorTest, Resize) {
   EXPECT_EQ(vec.back(), 42u);
 }
 
+TEST(VectorTest, AppendSimpleType) {
+  Vector<size_t> vec;
+  ASSERT_TRUE(vec.empty());
+
+  // Append through the initial capacity and small growth cases.
+  for (size_t i = 0; i < 32; i++) {
+    size_t in[2] = {2 * i, 2 * i + 1};
+    ASSERT_TRUE(vec.Append(in));
+  }
+  EXPECT_EQ(vec.size(), 64u);
+  for (size_t i = 0; i < 64; i++) {
+    EXPECT_EQ(vec[i], i);
+  }
+
+  // Append a large buffer to test when we more than double the capacity.
+  size_t buf[512];
+  for (size_t i = 0; i < std::size(buf); i++) {
+    buf[i] = 64 + i;
+  }
+  ASSERT_TRUE(vec.Append(buf));
+  EXPECT_EQ(vec.size(), 512u + 64u);
+  for (size_t i = 0; i < 512u + 64u; i++) {
+    EXPECT_EQ(vec[i], i);
+  }
+}
+
+TEST(VectorTest, AppendComplexType) {
+  Vector<std::shared_ptr<size_t>> vec;
+  ASSERT_TRUE(vec.empty());
+
+  // Append through the initial capacity and small growth cases.
+  for (size_t i = 0; i < 32; i++) {
+    std::shared_ptr<size_t> in[2] = {std::make_shared<size_t>(2 * i),
+                                     std::make_shared<size_t>(2 * i + 1)};
+    ASSERT_TRUE(vec.Append(in));
+  }
+  EXPECT_EQ(vec.size(), 64u);
+  for (size_t i = 0; i < 64; i++) {
+    EXPECT_EQ(*vec[i], i);
+  }
+
+  // Append a large buffer to test when we more than double the capacity.
+  std::shared_ptr<size_t> buf[512];
+  for (size_t i = 0; i < std::size(buf); i++) {
+    buf[i] = std::make_shared<size_t>(64 + i);
+  }
+  ASSERT_TRUE(vec.Append(buf));
+  EXPECT_EQ(vec.size(), 512u + 64u);
+  for (size_t i = 0; i < 512u + 64u; i++) {
+    EXPECT_EQ(*vec[i], i);
+  }
+}
+
 TEST(VectorTest, MoveConstructor) {
   Vector<size_t> vec;
   for (size_t i = 0; i < 100; i++) {

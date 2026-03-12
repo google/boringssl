@@ -380,7 +380,7 @@ class Vector {
   // Push adds |elem| at the end of the internal array, growing if necessary. It
   // returns false when allocation fails.
   [[nodiscard]] bool Push(T elem) {
-    if (!MaybeGrow()) {
+    if (!MaybeGrow(1)) {
       return false;
     }
     new (&data_[size_]) T(std::move(elem));
@@ -402,6 +402,17 @@ class Vector {
     return true;
   }
 
+  // Append appends the contents of |in| to the array. It returns true on
+  // success and false on allocation error.
+  [[nodiscard]] bool Append(Span<const T> in) {
+    if (!MaybeGrow(in.size())) {
+      return false;
+    }
+    std::uninitialized_copy(in.begin(), in.end(), data_ + size_);
+    size_ += in.size();
+    return true;
+  }
+
   // EraseIf removes all elements that satisfy the predicate |pred|.
   template <typename Pred>
   void EraseIf(Pred pred) {
@@ -411,25 +422,26 @@ class Vector {
   }
 
  private:
-  // If there is no room for one more element, creates a new backing array with
+  // If there is no room for |num| elements, creates a new backing array with
   // double the size of the old one and copies elements over.
-  bool MaybeGrow() {
-    // No need to grow if we have room for one more T.
-    if (size_ < capacity_) {
-      return true;
-    }
-    size_t new_capacity = kDefaultSize;
-    if (capacity_ > 0) {
-      // Double the array's size if it's safe to do so.
-      if (capacity_ > SIZE_MAX / 2) {
-        OPENSSL_PUT_ERROR(CRYPTO, ERR_R_OVERFLOW);
-        return false;
-      }
-      new_capacity = capacity_ * 2;
-    }
-    if (new_capacity > SIZE_MAX / sizeof(T)) {
+  [[nodiscard]] bool MaybeGrow(size_t num) {
+    constexpr size_t kDefaultSize = 16;
+    constexpr size_t kMaxCapacity = SIZE_MAX / sizeof(T);
+    if (num > kMaxCapacity - size_) {
       OPENSSL_PUT_ERROR(CRYPTO, ERR_R_OVERFLOW);
       return false;
+    }
+    size_t new_capacity = size_ + num;
+    // No need to grow if we have room.
+    if (capacity_ >= new_capacity) {
+      return true;
+    }
+    // Always grow to at least kDefaultSize to avoid several small mallocs at
+    // the start.
+    new_capacity = std::max(new_capacity, std::min(kDefaultSize, kMaxCapacity));
+    // At least double the old capacity for linear amortized behavior.
+    if (capacity_ <= kMaxCapacity / 2) {
+      new_capacity = std::max(new_capacity, capacity_ * 2);
     }
     T *new_data =
         reinterpret_cast<T *>(OPENSSL_malloc(new_capacity * sizeof(T)));
@@ -452,8 +464,6 @@ class Vector {
   size_t size_ = 0;
   // |capacity_| is the number of elements allocated in this Vector.
   size_t capacity_ = 0;
-  // |kDefaultSize| is the default initial size of the backing array.
-  static constexpr size_t kDefaultSize = 16;
 };
 
 // A PackedSize is an integer that can store values from 0 to N, represented as

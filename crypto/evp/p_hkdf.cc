@@ -14,11 +14,11 @@
 
 #include <openssl/evp.h>
 
-#include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/hkdf.h>
 #include <openssl/kdf.h>
 #include <openssl/mem.h>
+#include <openssl/span.h>
 
 #include "../internal.h"
 #include "../mem_internal.h"
@@ -29,28 +29,16 @@ using namespace bssl;
 
 namespace {
 
-typedef struct {
-  int mode;
-  const EVP_MD *md;
-  uint8_t *key;
-  size_t key_len;
-  uint8_t *salt;
-  size_t salt_len;
-  CBB info;
-} HKDF_PKEY_CTX;
+struct HKDF_PKEY_CTX {
+  int mode = 0;
+  const EVP_MD *md = nullptr;
+  Array<uint8_t> key;
+  Array<uint8_t> salt;
+  Vector<uint8_t> info;
+};
 
 static int pkey_hkdf_init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {
-  HKDF_PKEY_CTX *hctx = New<HKDF_PKEY_CTX>();
-  if (hctx == nullptr) {
-    return 0;
-  }
-
-  if (!CBB_init(&hctx->info, 0)) {
-    Delete(hctx);
-    return 0;
-  }
-
-  ctx->data = hctx;
+  ctx->data = New<HKDF_PKEY_CTX>();
   return 1;
 }
 
@@ -65,26 +53,9 @@ static int pkey_hkdf_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
   hctx_dst->mode = hctx_src->mode;
   hctx_dst->md = hctx_src->md;
 
-  if (hctx_src->key_len != 0) {
-    hctx_dst->key = reinterpret_cast<uint8_t *>(
-        OPENSSL_memdup(hctx_src->key, hctx_src->key_len));
-    if (hctx_dst->key == nullptr) {
-      return 0;
-    }
-    hctx_dst->key_len = hctx_src->key_len;
-  }
-
-  if (hctx_src->salt_len != 0) {
-    hctx_dst->salt = reinterpret_cast<uint8_t *>(
-        OPENSSL_memdup(hctx_src->salt, hctx_src->salt_len));
-    if (hctx_dst->salt == nullptr) {
-      return 0;
-    }
-    hctx_dst->salt_len = hctx_src->salt_len;
-  }
-
-  if (!CBB_add_bytes(&hctx_dst->info, CBB_data(&hctx_src->info),
-                     CBB_len(&hctx_src->info))) {
+  if (!hctx_dst->key.CopyFrom(hctx_src->key) ||
+      !hctx_dst->salt.CopyFrom(hctx_src->salt) ||
+      !hctx_dst->info.CopyFrom(hctx_src->info)) {
     return 0;
   }
 
@@ -93,13 +64,8 @@ static int pkey_hkdf_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
 
 static void pkey_hkdf_cleanup(EvpPkeyCtx *ctx) {
   HKDF_PKEY_CTX *hctx = reinterpret_cast<HKDF_PKEY_CTX *>(ctx->data);
-  if (hctx != nullptr) {
-    OPENSSL_free(hctx->key);
-    OPENSSL_free(hctx->salt);
-    CBB_cleanup(&hctx->info);
-    Delete(hctx);
-    ctx->data = nullptr;
-  }
+  Delete(hctx);
+  ctx->data = nullptr;
 }
 
 static int pkey_hkdf_derive(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len) {
@@ -108,7 +74,7 @@ static int pkey_hkdf_derive(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
     return 0;
   }
-  if (hctx->key_len == 0) {
+  if (hctx->key.empty()) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
     return 0;
   }
@@ -124,20 +90,23 @@ static int pkey_hkdf_derive(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len) {
 
   switch (hctx->mode) {
     case EVP_PKEY_HKDEF_MODE_EXTRACT_AND_EXPAND:
-      return HKDF(out, *out_len, hctx->md, hctx->key, hctx->key_len, hctx->salt,
-                  hctx->salt_len, CBB_data(&hctx->info), CBB_len(&hctx->info));
+      return HKDF(out, *out_len, hctx->md, hctx->key.data(), hctx->key.size(),
+                  hctx->salt.data(), hctx->salt.size(), hctx->info.data(),
+                  hctx->info.size());
 
     case EVP_PKEY_HKDEF_MODE_EXTRACT_ONLY:
       if (*out_len < EVP_MD_size(hctx->md)) {
         OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
         return 0;
       }
-      return HKDF_extract(out, out_len, hctx->md, hctx->key, hctx->key_len,
-                          hctx->salt, hctx->salt_len);
+      return HKDF_extract(out, out_len, hctx->md, hctx->key.data(),
+                          hctx->key.size(), hctx->salt.data(),
+                          hctx->salt.size());
 
     case EVP_PKEY_HKDEF_MODE_EXPAND_ONLY:
-      return HKDF_expand(out, *out_len, hctx->md, hctx->key, hctx->key_len,
-                         CBB_data(&hctx->info), CBB_len(&hctx->info));
+      return HKDF_expand(out, *out_len, hctx->md, hctx->key.data(),
+                         hctx->key.size(), hctx->info.data(),
+                         hctx->info.size());
   }
   OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
   return 0;
@@ -159,27 +128,18 @@ static int pkey_hkdf_ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
       hctx->md = reinterpret_cast<const EVP_MD *>(p2);
       return 1;
     case EVP_PKEY_CTRL_HKDF_KEY: {
-      const CBS *key = reinterpret_cast<const CBS *>(p2);
-      if (!CBS_stow(key, &hctx->key, &hctx->key_len)) {
-        return 0;
-      }
-      return 1;
+      const auto *key = reinterpret_cast<const Span<const uint8_t> *>(p2);
+      return hctx->key.CopyFrom(*key);
     }
     case EVP_PKEY_CTRL_HKDF_SALT: {
-      const CBS *salt = reinterpret_cast<const CBS *>(p2);
-      if (!CBS_stow(salt, &hctx->salt, &hctx->salt_len)) {
-        return 0;
-      }
-      return 1;
+      const auto *salt = reinterpret_cast<const Span<const uint8_t> *>(p2);
+      return hctx->salt.CopyFrom(*salt);
     }
     case EVP_PKEY_CTRL_HKDF_INFO: {
-      const CBS *info = reinterpret_cast<const CBS *>(p2);
+      const auto *info = reinterpret_cast<const Span<const uint8_t> *>(p2);
       // |EVP_PKEY_CTX_add1_hkdf_info| appends to the info string, rather than
       // replacing it.
-      if (!CBB_add_bytes(&hctx->info, CBS_data(info), CBS_len(info))) {
-        return 0;
-      }
-      return 1;
+      return hctx->info.Append(*info);
     }
     default:
       OPENSSL_PUT_ERROR(EVP, EVP_R_COMMAND_NOT_SUPPORTED);
@@ -224,24 +184,21 @@ int EVP_PKEY_CTX_set_hkdf_md(EVP_PKEY_CTX *ctx, const EVP_MD *md) {
 
 int EVP_PKEY_CTX_set1_hkdf_key(EVP_PKEY_CTX *ctx, const uint8_t *key,
                                size_t key_len) {
-  CBS cbs;
-  CBS_init(&cbs, key, key_len);
+  Span<const uint8_t> span(key, key_len);
   return EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_HKDF, EVP_PKEY_OP_DERIVE,
-                           EVP_PKEY_CTRL_HKDF_KEY, 0, &cbs);
+                           EVP_PKEY_CTRL_HKDF_KEY, 0, &span);
 }
 
 int EVP_PKEY_CTX_set1_hkdf_salt(EVP_PKEY_CTX *ctx, const uint8_t *salt,
                                 size_t salt_len) {
-  CBS cbs;
-  CBS_init(&cbs, salt, salt_len);
+  Span<const uint8_t> span(salt, salt_len);
   return EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_HKDF, EVP_PKEY_OP_DERIVE,
-                           EVP_PKEY_CTRL_HKDF_SALT, 0, &cbs);
+                           EVP_PKEY_CTRL_HKDF_SALT, 0, &span);
 }
 
 int EVP_PKEY_CTX_add1_hkdf_info(EVP_PKEY_CTX *ctx, const uint8_t *info,
                                 size_t info_len) {
-  CBS cbs;
-  CBS_init(&cbs, info, info_len);
+  Span<const uint8_t> span(info, info_len);
   return EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_HKDF, EVP_PKEY_OP_DERIVE,
-                           EVP_PKEY_CTRL_HKDF_INFO, 0, &cbs);
+                           EVP_PKEY_CTRL_HKDF_INFO, 0, &span);
 }
