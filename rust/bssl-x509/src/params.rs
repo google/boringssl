@@ -73,43 +73,33 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct VerificationFlags: c_ulong {
-        /// Send issuer check callback.
-        const CB_ISSUER_CHECK = bssl_sys::X509_V_FLAG_CB_ISSUER_CHECK as c_ulong;
         /// Use check time.
         const USE_CHECK_TIME = bssl_sys::X509_V_FLAG_USE_CHECK_TIME as c_ulong;
-        /// Check CRL.
-        const CRL_CHECK = bssl_sys::X509_V_FLAG_CRL_CHECK as c_ulong;
-        /// Check CRL for all certificates in the chain.
-        const CRL_CHECK_ALL = bssl_sys::X509_V_FLAG_CRL_CHECK_ALL as c_ulong;
-        /// Ignore critical extensions.
-        const IGNORE_CRITICAL = bssl_sys::X509_V_FLAG_IGNORE_CRITICAL as c_ulong;
-        /// Strict X.509 checks.
-        const X509_STRICT = bssl_sys::X509_V_FLAG_X509_STRICT as c_ulong;
-        /// Allow proxy certificates.
-        const ALLOW_PROXY_CERTS = bssl_sys::X509_V_FLAG_ALLOW_PROXY_CERTS as c_ulong;
-        /// Check policies.
-        const POLICY_CHECK = bssl_sys::X509_V_FLAG_POLICY_CHECK as c_ulong;
-        /// Explicit policy.
+        /// Explicit policy, which mandates assertions of the policy OIDs in the final certificate
+        /// chain.
+        ///
+        /// See [RFC 5280], §6.1.1.
+        ///
+        /// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#section-6.1.1>
         const EXPLICIT_POLICY = bssl_sys::X509_V_FLAG_EXPLICIT_POLICY as c_ulong;
-        /// Inhibit any policy.
+        /// Inhibit the `anyPolicy`.
+        ///
+        /// See [RFC 5280], §6.1.1.
+        ///
+        /// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#section-6.1.1>
         const INHIBIT_ANY = bssl_sys::X509_V_FLAG_INHIBIT_ANY as c_ulong;
         /// Inhibit policy mapping.
+        ///
+        /// See [RFC 5280], §6.1.1.
+        ///
+        /// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#section-6.1.1>
         const INHIBIT_MAP = bssl_sys::X509_V_FLAG_INHIBIT_MAP as c_ulong;
-        /// Notify policy.
-        const NOTIFY_POLICY = bssl_sys::X509_V_FLAG_NOTIFY_POLICY as c_ulong;
-        /// Extended CRL support.
-        const EXTENDED_CRL_SUPPORT = bssl_sys::X509_V_FLAG_EXTENDED_CRL_SUPPORT as c_ulong;
-        /// Use deltas.
-        const USE_DELTAS = bssl_sys::X509_V_FLAG_USE_DELTAS as c_ulong;
-        /// Check self-signed signature.
-        const CHECK_SS_SIGNATURE = bssl_sys::X509_V_FLAG_CHECK_SS_SIGNATURE as c_ulong;
-        /// Trusted first.
-        const TRUSTED_FIRST = bssl_sys::X509_V_FLAG_TRUSTED_FIRST as c_ulong;
-        /// Partial chain.
+        /// Treat all trusted certificates as trust anchors regardless of the
+        /// [`CertificateVerificationParams::set_trust`] setting.
         const PARTIAL_CHAIN = bssl_sys::X509_V_FLAG_PARTIAL_CHAIN as c_ulong;
-        /// No alternative chains.
+        /// Disable building of alternative chains, when the first built chain was rejected.
         const NO_ALT_CHAINS = bssl_sys::X509_V_FLAG_NO_ALT_CHAINS as c_ulong;
-        /// No check time.
+        /// Disable all time checks during certificate verification.
         const NO_CHECK_TIME = bssl_sys::X509_V_FLAG_NO_CHECK_TIME as c_ulong;
     }
 }
