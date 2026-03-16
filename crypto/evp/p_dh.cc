@@ -277,6 +277,8 @@ const EVP_PKEY_CTX_METHOD dh_pkey_meth = {
     /*decrypt=*/nullptr,
     /*derive=*/pkey_dh_derive,
     /*paramgen=*/nullptr,
+    /*encap=*/nullptr,
+    /*decap=*/nullptr,
     /*ctrl=*/pkey_dh_ctrl,
 };
 

@@ -162,6 +162,8 @@ const EVP_PKEY_CTX_METHOD hkdf_pkey_meth = {
     /*decrypt=*/nullptr,
     pkey_hkdf_derive,
     /*paramgen=*/nullptr,
+    /*encap=*/nullptr,
+    /*decap=*/nullptr,
     pkey_hkdf_ctrl,
 };
 

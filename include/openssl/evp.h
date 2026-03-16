@@ -121,6 +121,8 @@ OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_copy_public(const EVP_PKEY *pkey);
 #define EVP_PKEY_ML_DSA_44 NID_ML_DSA_44
 #define EVP_PKEY_ML_DSA_65 NID_ML_DSA_65
 #define EVP_PKEY_ML_DSA_87 NID_ML_DSA_87
+#define EVP_PKEY_ML_KEM_768 NID_ML_KEM_768
+#define EVP_PKEY_ML_KEM_1024 NID_ML_KEM_1024
 
 // EVP_PKEY_id returns the type of |pkey|, which is one of the |EVP_PKEY_*|
 // values above. These type values generally correspond to the algorithm OID,
@@ -188,6 +190,18 @@ OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ed25519(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_44(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_65(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_87(void);
+
+// EVP_pkey_ml_kem_* implement ML-KEM keys, encoded as in RFC 9935. The
+// |EVP_PKEY_id| values are |EVP_PKEY_ML_KEM_*|. In the private key
+// representation, only the "seed" form is serialized or parsed.
+//
+// To configure OpenSSL to output the standard "seed" form, configure the
+// "ml-kem.output_formats" provider parameter so that "seed-only" is first. This
+// can be done programmatically with OpenSSL's
+// |OSSL_PROVIDER_add_conf_parameter| function, or by passing "-provparam" to
+// the command-line tool.
+OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_kem_768(void);
+OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_kem_1024(void);
 
 // EVP_pkey_dsa implements DSA keys, encoded as in RFC 3279, Section 2.3.2. The
 // |EVP_PKEY_id| value is |EVP_PKEY_DSA|. This |EVP_PKEY_ALG| accepts all DSA
@@ -900,6 +914,63 @@ OPENSSL_EXPORT int EVP_PKEY_paramgen_init(EVP_PKEY_CTX *ctx);
 // newly-allocated |EVP_PKEY| containing the result. It returns one on success
 // or zero on error.
 OPENSSL_EXPORT int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey);
+
+// EVP_PKEY_encapsulate_init initialises an |EVP_PKEY_CTX| for an encapsulate
+// operation. It should be called before |EVP_PKEY_encapsulate|. |params| is
+// included for OpenSSL compatibility, but this parameter should be NULL.
+//
+// It returns one on success or zero on error.
+OPENSSL_EXPORT int EVP_PKEY_encapsulate_init(EVP_PKEY_CTX *ctx,
+                                             const OSSL_PARAM *params);
+
+// EVP_PKEY_encapsulate implements public key encapsulation using |ctx|. It
+// either performs the operation or returns the maximum output sizes, depending
+// on whether |out_ciphertext| is NULL:
+//
+// If |out_ciphertext| is NULL, it writes the maximum ciphertext length to
+// |*out_ciphertext_len| and the maximum shared secret length to
+// |*out_secret_len|. Either of |out_ciphertext_len| or |out_secret_len| may be
+// NULL to ignore the corresponding output.
+//
+// If |out_ciphertext| is non-NULL, it performs the operation and, on success,
+// writes the ciphertext to |out_ciphertext|, the ciphertext size to
+// |out_ciphertext_len|, the shared secret to |out_secret|, and the shared
+// secret length to |out_secret_len|. On input, |*out_ciphertext_len| and
+// |*out_secret_len| must contain the amount of space available in
+// |out_ciphertext| and |out_secret|, respectively. If there is insufficient
+// space to write the output, the operation will fail.
+//
+// In both modes, this function returns one on success or zero on error.
+OPENSSL_EXPORT int EVP_PKEY_encapsulate(EVP_PKEY_CTX *ctx,
+                                        uint8_t *out_ciphertext,
+                                        size_t *out_ciphertext_len,
+                                        uint8_t *out_secret,
+                                        size_t *out_secret_len);
+
+// EVP_PKEY_decapsulate_init initialises an |EVP_PKEY_CTX| for a decapsulate
+// operation. It should be called before |EVP_PKEY_decapsulate|. |params| is
+// included for OpenSSL compatibility, but this parameter should be NULL.
+//
+// It returns one on success or zero on error.
+OPENSSL_EXPORT int EVP_PKEY_decapsulate_init(EVP_PKEY_CTX *ctx,
+                                             const OSSL_PARAM *params);
+
+// EVP_PKEY_decapsulate implements private key decapsulation using |ctx|.
+// |ciphertext| and |ciphertext_len| specify the ciphertext to be decapsulated.
+// If |out_secret| is NULL, it writes the maximum size of the shared secret
+// output to |*out_secret_len| and returns one. Otherwise, |*out_secret_len|
+// must contain the number of bytes of space available at |out_secret|. If the
+// space is insufficient, this function returns zero. If the space is
+// sufficient, the decapsulated shared secret will be written to |out_secret|
+// and the size of the output to |out_secret_len|, and this function will return
+// one. If |ciphertext| has been corrupted, the function may fail or it may
+// output a shared secret that appears to be random. Any subsequent symmetric
+// encryption using |out_secret| must use an authenticated encryption scheme to
+// discover the decapsulation failure.
+OPENSSL_EXPORT int EVP_PKEY_decapsulate(EVP_PKEY_CTX *ctx, uint8_t *out_secret,
+                                        size_t *out_secret_len,
+                                        const uint8_t *ciphertext,
+                                        size_t ciphertext_len);
 
 
 // Generic control functions.

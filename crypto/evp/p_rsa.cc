@@ -863,6 +863,8 @@ const EVP_PKEY_CTX_METHOD rsa_pkey_meth = {
     pkey_rsa_decrypt,
     /*derive=*/nullptr,
     /*paramgen=*/nullptr,
+    /*encap=*/nullptr,
+    /*decap=*/nullptr,
     pkey_rsa_ctrl,
 };
 
@@ -887,6 +889,8 @@ const EVP_PKEY_CTX_METHOD rsa_pss_pkey_meth = {
     /*decrypt=*/nullptr,
     /*derive=*/nullptr,
     /*paramgen=*/nullptr,
+    /*encap=*/nullptr,
+    /*decap=*/nullptr,
     pkey_rsa_ctrl,
 };
 

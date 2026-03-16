@@ -165,6 +165,8 @@ class EvpPkey : public evp_pkey_st, public RefCounted<EvpPkey> {
 #define EVP_PKEY_OP_DECRYPT (1 << 7)
 #define EVP_PKEY_OP_DERIVE (1 << 8)
 #define EVP_PKEY_OP_PARAMGEN (1 << 9)
+#define EVP_PKEY_OP_ENCAPSULATE (1 << 10)
+#define EVP_PKEY_OP_DECAPSULATE (1 << 11)
 
 #define EVP_PKEY_OP_TYPE_SIG \
   (EVP_PKEY_OP_SIGN | EVP_PKEY_OP_VERIFY | EVP_PKEY_OP_VERIFYRECOVER)
@@ -281,6 +283,13 @@ struct evp_pkey_ctx_method_st {
   int (*derive)(EvpPkeyCtx *ctx, uint8_t *key, size_t *keylen);
 
   int (*paramgen)(EvpPkeyCtx *ctx, EvpPkey *pkey);
+
+  int (*encap)(EvpPkeyCtx *ctx, uint8_t *out_ciphertext,
+               size_t *out_ciphertext_len, uint8_t *out_secret,
+               size_t *out_secret_len);
+
+  int (*decap)(EvpPkeyCtx *ctx, uint8_t *out_secret, size_t *out_secret_len,
+               const uint8_t *ciphertext, size_t ciphertext_len);
 
   int (*ctrl)(EvpPkeyCtx *ctx, int type, int p1, void *p2);
 } /* EVP_PKEY_CTX_METHOD */;

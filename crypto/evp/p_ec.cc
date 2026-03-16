@@ -512,6 +512,8 @@ const EVP_PKEY_CTX_METHOD ec_pkey_meth = {
     nullptr /* decrypt */,
     pkey_ec_derive,
     pkey_ec_paramgen,
+    /*encap=*/nullptr,
+    /*decap=*/nullptr,
     pkey_ec_ctrl,
 };
 

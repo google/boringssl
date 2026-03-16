@@ -1,4 +1,4 @@
-// Copyright 2025 The BoringSSL Authors
+// Copyright 2026 The BoringSSL Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@
 
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
-#include <openssl/mldsa.h>
+#include <openssl/evp_errors.h>
+#include <openssl/mlkem.h>
 #include <openssl/nid.h>
-#include <openssl/span.h>
 
 #include "../fipsmodule/bcm_interface.h"
 #include "../mem_internal.h"
@@ -34,53 +34,40 @@ namespace {
 
 constexpr CBS_ASN1_TAG kSeedTag = CBS_ASN1_CONTEXT_SPECIFIC | 0;
 
-constexpr uint8_t kMLDSA44OID[] = {OBJ_ENC_ML_DSA_44};
-constexpr uint8_t kMLDSA65OID[] = {OBJ_ENC_ML_DSA_65};
-constexpr uint8_t kMLDSA87OID[] = {OBJ_ENC_ML_DSA_87};
+constexpr uint8_t kMLKEM768OID[] = {OBJ_ENC_ML_KEM_768};
+constexpr uint8_t kMLKEM1024OID[] = {OBJ_ENC_ML_KEM_1024};
 
-constexpr int kMaxContextLength = 255;
-
-// We must generate EVP bindings for three ML-DSA algorithms. Define a traits
-// type that captures the functions and other parameters of an ML-DSA algorithm.
-#define MAKE_MLDSA_TRAITS(kl)                                                 \
-  struct MLDSA##kl##Traits {                                                  \
-    using PublicKey = MLDSA##kl##_public_key;                                 \
-    using PrivateKey = MLDSA##kl##_private_key;                               \
-    static constexpr size_t kPublicKeyBytes = MLDSA##kl##_PUBLIC_KEY_BYTES;   \
-    static constexpr size_t kSignatureBytes = MLDSA##kl##_SIGNATURE_BYTES;    \
-    static constexpr int kType = EVP_PKEY_ML_DSA_##kl;                        \
-    static constexpr Span<const uint8_t> kOID = kMLDSA##kl##OID;              \
-    static constexpr auto PrivateKeyFromSeed =                                \
-        &MLDSA##kl##_private_key_from_seed;                                   \
-    static constexpr auto GenerateKey = &MLDSA##kl##_generate_key;            \
-    static constexpr auto Sign = &MLDSA##kl##_sign;                           \
-    static constexpr auto ParsePublicKey = &MLDSA##kl##_parse_public_key;     \
-    static constexpr auto PublicOfPrivate =                                   \
-        &BCM_mldsa##kl##_public_of_private;                                   \
-    static constexpr auto MarshalPublicKey = &MLDSA##kl##_marshal_public_key; \
-    static constexpr auto PublicKeysEqual =                                   \
-        &BCM_mldsa##kl##_public_keys_equal;                                   \
-    static constexpr auto Verify = &MLDSA##kl##_verify;                       \
-    static_assert(std::is_trivially_copyable_v<PublicKey>,                    \
-                  "PublicKey type must be trivially copyable.");              \
+// Generate EVP bindings for multiple ML-KEM algorithms.
+#define MAKE_MLKEM_TRAITS(x)                                                   \
+  struct MLKEM##x##Traits {                                                    \
+    using PublicKey = MLKEM##x##_public_key;                                   \
+    using PrivateKey = MLKEM##x##_private_key;                                 \
+    static constexpr size_t kPublicKeyBytes = MLKEM##x##_PUBLIC_KEY_BYTES;     \
+    static constexpr size_t kCiphertextBytes = MLKEM##x##_CIPHERTEXT_BYTES;    \
+    static constexpr int kType = EVP_PKEY_ML_KEM_##x;                          \
+    static constexpr Span<const uint8_t> kOID = kMLKEM##x##OID;                \
+    static constexpr auto GenerateKey = &MLKEM##x##_generate_key;              \
+    static constexpr auto PrivateKeyFromSeed =                                 \
+        &MLKEM##x##_private_key_from_seed;                                     \
+    static constexpr auto PublicOfPrivate = &BCM_mlkem##x##_public_of_private; \
+    static constexpr auto PublicKeysEqual = &BCM_mlkem##x##_public_keys_equal; \
+    static constexpr auto Encap = &MLKEM##x##_encap;                           \
+    static constexpr auto Decap = &MLKEM##x##_decap;                           \
+    static constexpr auto MarshalPublicKey = &MLKEM##x##_marshal_public_key;   \
+    static constexpr auto ParsePublicKey = &MLKEM##x##_parse_public_key;       \
+    static_assert(std::is_trivially_copyable_v<PublicKey>,                     \
+                  "PublicKey type must be trivially copyable.");               \
   };
 
-MAKE_MLDSA_TRAITS(44)
-MAKE_MLDSA_TRAITS(65)
-MAKE_MLDSA_TRAITS(87)
-
-// For each ML-DSA variant, the |EvpPkey| must hold a public or private key.
-// EVP uses the same type for public and private keys, so the representation
-// must support both. The private key type contains the public key struct in it,
-// so we use a pointer to either a PrivateKeyData<Traits> or
-// PublicKeyData<Traits>, with a common base class to dispatch between them.
-//
-// TODO(crbug.com/404286922): In C++20, we need fewer |typename|s in front of
-// dependent type names.
+MAKE_MLKEM_TRAITS(768)
+MAKE_MLKEM_TRAITS(1024)
 
 template <typename Traits>
 class PrivateKeyData;
 
+// The private key type contains the public key struct in it, so we use a
+// pointer to either a PrivateKeyData<Traits> or PublicKeyData<Traits>, with a
+// common base class to dispatch between them.
 template <typename Traits>
 class KeyData {
  public:
@@ -123,7 +110,7 @@ class PrivateKeyData : public KeyData<Traits> {
   enum { kAllowUniquePtr = true };
   PrivateKeyData() : KeyData<Traits>(/*is_private=*/true) {}
   typename Traits::PrivateKey priv;
-  uint8_t seed[MLDSA_SEED_BYTES];
+  uint8_t seed[MLKEM_SEED_BYTES];
 };
 
 template <typename Traits>
@@ -158,15 +145,8 @@ void KeyData<Traits>::Free(KeyData<Traits> *data) {
   }
 }
 
-struct MldsaPkeyCtx {
-  bssl::Array<uint8_t> context;
-};
-
-
-// Finally, MLDSAImplementation instantiates the methods themselves.
-
 template <typename Traits>
-struct MLDSAImplementation {
+struct MLKEMImplementation {
   static KeyData<Traits> *GetKeyData(EvpPkey *pkey) {
     assert(pkey->ameth == &asn1_method);
     return static_cast<KeyData<Traits> *>(pkey->pkey);
@@ -187,7 +167,7 @@ struct MLDSAImplementation {
       return 0;
     }
 
-    if (len != MLDSA_SEED_BYTES ||
+    if (len != MLKEM_SEED_BYTES ||
         !Traits::PrivateKeyFromSeed(&priv->priv, in, len)) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
       return 0;
@@ -220,15 +200,15 @@ struct MLDSAImplementation {
       return 0;
     }
     if (out == nullptr) {
-      *out_len = MLDSA_SEED_BYTES;
+      *out_len = MLKEM_SEED_BYTES;
       return 1;
     }
-    if (*out_len < MLDSA_SEED_BYTES) {
+    if (*out_len < MLKEM_SEED_BYTES) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    OPENSSL_memcpy(out, priv->seed, MLDSA_SEED_BYTES);
-    *out_len = MLDSA_SEED_BYTES;
+    OPENSSL_memcpy(out, priv->seed, MLKEM_SEED_BYTES);
+    *out_len = MLKEM_SEED_BYTES;
     return 1;
   }
 
@@ -252,8 +232,7 @@ struct MLDSAImplementation {
 
   static evp_decode_result_t DecodePublic(const EVP_PKEY_ALG *alg, EvpPkey *out,
                                           CBS *params, CBS *key) {
-    // The parameters must be omitted. See
-    // draft-ietf-lamps-dilithium-certificates-13, Section 2.
+    // Parameters must be absent. See RFC 9935, section 3.
     if (CBS_len(params) != 0) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
       return evp_decode_error;
@@ -264,15 +243,15 @@ struct MLDSAImplementation {
 
   static int EncodePublic(CBB *out, const EvpPkey *pkey) {
     const auto *pub = GetKeyData(pkey)->GetPublicKey();
-    // See draft-ietf-lamps-dilithium-certificates-13, Sections 2 and 4.
+    // See RFC 9935, section 4.
     CBB spki, algorithm, key_bitstring;
     if (!CBB_add_asn1(out, &spki, CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1(&spki, &algorithm, CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, Traits::kOID.data(),
                               Traits::kOID.size()) ||
         !CBB_add_asn1(&spki, &key_bitstring, CBS_ASN1_BITSTRING) ||
-        !CBB_add_u8(&key_bitstring, 0 /* padding */) ||
-        !Traits::MarshalPublicKey(&key_bitstring, pub) ||
+        !CBB_add_u8(&key_bitstring, 0 /* no unused bits */) ||
+        !Traits::MarshalPublicKey(&key_bitstring, pub) ||  //
         !CBB_flush(out)) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_ENCODE_ERROR);
       return 0;
@@ -292,7 +271,6 @@ struct MLDSAImplementation {
     auto *public_copy =
         New<PublicKeyData<Traits>>(*GetKeyData(pk)->GetPublicKey());
     if (public_copy == nullptr) {
-      OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
       return false;
     }
     evp_pkey_set0(out, pk->ameth, public_copy);
@@ -302,29 +280,14 @@ struct MLDSAImplementation {
   static evp_decode_result_t DecodePrivate(const EVP_PKEY_ALG *alg,
                                            EvpPkey *out, CBS *params,
                                            CBS *key) {
-    // The parameters must be omitted. See
-    // draft-ietf-lamps-dilithium-certificates-13, Section 2.
+    // Parameters must be absent. See RFC 9935, section 3.
     if (CBS_len(params) != 0) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
       return evp_decode_error;
     }
 
-    // See draft-ietf-lamps-dilithium-certificates-13, Section 6. Three
-    // different encodings were specified, adding complexity to the question of
-    // whether a private key is valid. We only implement the "seed"
-    // representation. Give this case a different error for easier diagnostics.
-    //
-    // The "expandedKey" representation was a last-minute accommodation for
-    // legacy hardware, which should be updated to use seeds. Supporting it
-    // complicates the notion of a private key with both seedful and seedless
-    // variants.
-    //
-    // The "both" representation is technically unsound and
-    // dangerous, so we do not implement it. Systems composed of components,
-    // some of which look at one half of the "both" representation, and half of
-    // the other, will appear to interop, but break when an input is
-    // inconsistent. The expanded key can be computed from the seed, so there is
-    // no purpose in this form.
+    // See RFC 9935, section 6. Three different encodings are specified. We only
+    // implement the "seed" representation.
     CBS seed;
     if (!CBS_get_asn1(key, &seed, kSeedTag)) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_PRIVATE_KEY_WAS_NOT_SEED);
@@ -345,8 +308,9 @@ struct MLDSAImplementation {
       OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
       return 0;
     }
-    // See draft-ietf-lamps-dilithium-certificates-13, Sections 2 and 6. We
-    // encode only the seed representation.
+
+    // See RFC 9935, section 6. Three different encodings are specified. We only
+    // implement the "seed" representation.
     CBB pkcs8, algorithm, private_key;
     if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
@@ -367,124 +331,93 @@ struct MLDSAImplementation {
     return GetKeyData(pk)->AsPrivateKeyData() != nullptr;
   }
 
-  static int PkeySize(const EvpPkey *pkey) { return Traits::kSignatureBytes; }
+  static int PkeySize(const EvpPkey *pkey) { return Traits::kCiphertextBytes; }
   static int PkeyBits(const EvpPkey *pkey) {
-    // OpenSSL counts the bits in the public key serialization.
     return Traits::kPublicKeyBytes * 8;
   }
 
-  static int Init(EvpPkeyCtx *ctx, const EVP_PKEY_ALG *) {
-    MldsaPkeyCtx *mctx = New<MldsaPkeyCtx>();
-    if (mctx == nullptr) {
-      return 0;
-    }
-    ctx->data = mctx;
-    return 1;
-  }
-
-  static void Cleanup(EvpPkeyCtx *ctx) {
-    Delete(static_cast<MldsaPkeyCtx *>(ctx->data));
-  }
-
-  static int CopyContext(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
-    if (!Init(dst, nullptr)) {
-      return 0;
-    }
-    MldsaPkeyCtx *sctx = static_cast<MldsaPkeyCtx *>(src->data);
-    MldsaPkeyCtx *dctx = static_cast<MldsaPkeyCtx *>(dst->data);
-    if (!dctx->context.CopyFrom(sctx->context)) {
-      return 0;
-    }
-    return 1;
-  }
+  static int CopyCtx(EvpPkeyCtx *dst, EvpPkeyCtx *src) { return 1; }
 
   static int KeyGen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
     auto priv = MakeUnique<PrivateKeyData<Traits>>();
     if (priv == nullptr) {
+      OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
       return 0;
     }
     uint8_t unused_public[Traits::kPublicKeyBytes];
-    if (!Traits::GenerateKey(unused_public, priv->seed, &priv->priv)) {
-      return 0;
-    }
+    Traits::GenerateKey(unused_public, priv->seed, &priv->priv);
     evp_pkey_set0(pkey, &asn1_method, priv.release());
     return 1;
   }
 
-  static int SignMessage(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
-                         const uint8_t *tbs, size_t tbslen) {
-    const auto *priv_data = GetKeyData(ctx->pkey.get())->AsPrivateKeyData();
-    if (priv_data == nullptr) {
-      OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
-      return 0;
-    }
-    if (sig == nullptr) {
-      *siglen = Traits::kSignatureBytes;
+  static int EncapCtx(EvpPkeyCtx *ctx, uint8_t *out_ciphertext,
+                      size_t *out_ciphertext_len, uint8_t *out_secret,
+                      size_t *out_secret_len) {
+    const EVP_PKEY *pkey = ctx->pkey.get();
+    const auto *public_key = GetKeyData(FromOpaque(pkey))->GetPublicKey();
+    if (out_ciphertext == nullptr) {
+      if (out_ciphertext_len != nullptr) {
+        *out_ciphertext_len = Traits::kCiphertextBytes;
+      }
+      if (out_secret_len != nullptr) {
+        *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
+      }
       return 1;
     }
-    if (*siglen < Traits::kSignatureBytes) {
+    if (*out_ciphertext_len < Traits::kCiphertextBytes ||
+        *out_secret_len < MLKEM_SHARED_SECRET_BYTES) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
-    if (!Traits::Sign(sig, &priv_data->priv, tbs, tbslen, mctx->context.data(),
-                      mctx->context.size())) {
-      return 0;
-    }
-    *siglen = Traits::kSignatureBytes;
+    Traits::Encap(out_ciphertext, out_secret, public_key);
+    *out_ciphertext_len = Traits::kCiphertextBytes;
+    *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
     return 1;
   }
 
-  static int VerifyMessage(EvpPkeyCtx *ctx, const uint8_t *sig, size_t siglen,
-                           const uint8_t *tbs, size_t tbslen) {
-    const auto *pub = GetKeyData(ctx->pkey.get())->GetPublicKey();
-    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
-    if (!Traits::Verify(pub, sig, siglen, tbs, tbslen, mctx->context.data(),
-                        mctx->context.size())) {
-      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SIGNATURE);
+  static int DecapCtx(EvpPkeyCtx *ctx, uint8_t *out_secret,
+                      size_t *out_secret_len, const uint8_t *ciphertext,
+                      size_t ciphertext_len) {
+    if (out_secret == nullptr) {
+      *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
+      return 1;
+    }
+    if (*out_secret_len < MLKEM_SHARED_SECRET_BYTES) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    return 1;
-  }
-
-  static int Ctrl(EvpPkeyCtx *ctx, int type, int p1, void *p2) {
-    MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
-    switch (type) {
-      case EVP_PKEY_CTRL_SIGNATURE_CONTEXT_STRING: {
-        const auto *context_string =
-            reinterpret_cast<const Span<const uint8_t> *>(p2);
-        if (context_string == nullptr ||
-            context_string->size() > kMaxContextLength) {
-          OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PARAMETERS);
-          return 0;
-        }
-        return mctx->context.CopyFrom(*context_string);
-      }
-
-      default:
-        OPENSSL_PUT_ERROR(EVP, EVP_R_COMMAND_NOT_SUPPORTED);
-        return 0;
+    const EVP_PKEY *pkey = ctx->pkey.get();
+    const auto *private_key = GetKeyData(FromOpaque(pkey))->AsPrivateKeyData();
+    if (private_key == nullptr) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
+      return 0;
     }
+    if (Traits::Decap(out_secret, ciphertext, ciphertext_len,
+                      &private_key->priv)) {
+      *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
+      return 1;
+    }
+    return 0;
   }
 
   static constexpr EVP_PKEY_CTX_METHOD pkey_method = {
       Traits::kType,
-      &Init,
-      &CopyContext,
-      &Cleanup,
+      /*init=*/nullptr,
+      &CopyCtx,
+      /*cleanup=*/nullptr,
       &KeyGen,
       /*sign=*/nullptr,
-      &SignMessage,
+      /*sign_message=*/nullptr,
       /*verify=*/nullptr,
-      &VerifyMessage,
+      /*verify_message=*/nullptr,
       /*verify_recover=*/nullptr,
       /*encrypt=*/nullptr,
       /*decrypt=*/nullptr,
       /*derive=*/nullptr,
       /*paramgen=*/nullptr,
-      /*encap=*/nullptr,
-      /*decap=*/nullptr,
-      &Ctrl,
+      &EncapCtx,
+      &DecapCtx,
+      /*ctrl=*/nullptr,
   };
 
   static constexpr EVP_PKEY_ASN1_METHOD BuildASN1Method() {
@@ -493,7 +426,9 @@ struct MLDSAImplementation {
         // The OID is filled in below.
         /*oid=*/{},
         /*oid_len=*/0,
+
         &pkey_method,
+
         &DecodePublic,
         &EncodePublic,
         &EqualPublic,
@@ -502,23 +437,24 @@ struct MLDSAImplementation {
         &DecodePrivate,
         &EncodePrivate,
         &HasPrivate,
-        // While exporting the seed as the "raw" private key would be natural,
-        // OpenSSL connected these APIs to the "raw private key", so we export
-        // the seed separately.
+
         /*set_priv_raw=*/nullptr,
         &SetPrivateSeed,
         &SetRawPublic,
         /*get_priv_raw=*/nullptr,
         &GetPrivateSeed,
         &GetRawPublic,
+
         /*set1_tls_encodedpoint=*/nullptr,
         /*get1_tls_encodedpoint=*/nullptr,
         /*pkey_opaque=*/nullptr,
         &PkeySize,
         &PkeyBits,
+
         /*param_missing=*/nullptr,
         /*param_copy=*/nullptr,
         /*param_equal=*/nullptr,
+
         &PkeyFree,
     };
     // TODO(crbug.com/404286922): Use std::copy in C++20, when it's constexpr.
@@ -539,14 +475,10 @@ struct MLDSAImplementation {
 
 }  // namespace
 
-const EVP_PKEY_ALG *EVP_pkey_ml_dsa_44() {
-  return &MLDSAImplementation<MLDSA44Traits>::pkey_alg;
+const EVP_PKEY_ALG *EVP_pkey_ml_kem_768() {
+  return &MLKEMImplementation<MLKEM768Traits>::pkey_alg;
 }
 
-const EVP_PKEY_ALG *EVP_pkey_ml_dsa_65() {
-  return &MLDSAImplementation<MLDSA65Traits>::pkey_alg;
-}
-
-const EVP_PKEY_ALG *EVP_pkey_ml_dsa_87() {
-  return &MLDSAImplementation<MLDSA87Traits>::pkey_alg;
+const EVP_PKEY_ALG *EVP_pkey_ml_kem_1024() {
+  return &MLKEMImplementation<MLKEM1024Traits>::pkey_alg;
 }

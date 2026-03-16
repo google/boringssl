@@ -358,6 +358,8 @@ const EVP_PKEY_CTX_METHOD x25519_pkey_meth = {
     /*decrypt=*/nullptr,
     /*derive=*/pkey_x25519_derive,
     /*paramgen=*/nullptr,
+    /*encap=*/nullptr,
+    /*decap=*/nullptr,
     /*ctrl=*/pkey_x25519_ctrl,
 };
 

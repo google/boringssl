@@ -44,6 +44,7 @@ using namespace bssl;
 #define MAX_SEED_LEN XWING_SEED_LEN
 #define MAX_SHARED_SECRET_LEN SHA256_DIGEST_LENGTH
 
+// TODO(chlily): Fold this into `EVP_KEM`.
 struct evp_hpke_kem_st {
   uint16_t id;
   size_t public_key_len;

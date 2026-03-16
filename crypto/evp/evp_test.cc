@@ -36,6 +36,7 @@
 #include <openssl/dsa.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
+#include <openssl/mlkem.h>
 #include <openssl/obj.h>
 #include <openssl/rsa.h>
 
@@ -108,6 +109,8 @@ const std::map<std::string, AlgorithmInfo> kAllAlgorithms = {
     {"ML-DSA-44", {EVP_pkey_ml_dsa_44(), EVP_PKEY_ML_DSA_44, true}},
     {"ML-DSA-65", {EVP_pkey_ml_dsa_65(), EVP_PKEY_ML_DSA_65, true}},
     {"ML-DSA-87", {EVP_pkey_ml_dsa_87(), EVP_PKEY_ML_DSA_87, true}},
+    {"ML-KEM-768", {EVP_pkey_ml_kem_768(), EVP_PKEY_ML_KEM_768, false}},
+    {"ML-KEM-1024", {EVP_pkey_ml_kem_1024(), EVP_PKEY_ML_KEM_1024, false}},
 };
 
 using KeyMap = std::map<std::string, bssl::UniquePtr<EVP_PKEY>>;
@@ -166,6 +169,47 @@ bool CheckRawKey(FileTest *t, std::string_view attr_name, const EVP_PKEY *pkey,
   raw.resize(len - 1);
   len = raw.size();
   EXPECT_FALSE(getter(pkey, raw.data(), &len));
+  return true;
+}
+
+bool ImportRawKey(FileTest *t, KeyMap *key_map, KeyRole key_role,
+                  bool use_seed) {
+  auto parse_func = key_role == KeyRole::kPublic
+                        ? &EVP_PKEY_from_raw_public_key
+                        : (use_seed ? &EVP_PKEY_from_private_seed
+                                    : &EVP_PKEY_from_raw_private_key);
+  auto getter = key_role == KeyRole::kPublic
+                    ? &EVP_PKEY_get_raw_public_key
+                    : (use_seed ? &EVP_PKEY_get_private_seed
+                                : &EVP_PKEY_get_raw_private_key);
+  std::string alg_name;
+  if (!t->GetAttribute(&alg_name, "Algorithm")) {
+    return false;
+  }
+  const auto it = kAllAlgorithms.find(alg_name);
+  if (it == kAllAlgorithms.end()) {
+    ADD_FAILURE() << "Unknown algorithm: " << alg_name;
+    return false;
+  }
+  const AlgorithmInfo &alg_info = it->second;
+
+  std::vector<uint8_t> input;
+  if (!t->GetBytes(&input, "Input")) {
+    return false;
+  }
+  UniquePtr<EVP_PKEY> pkey(
+      parse_func(alg_info.alg, input.data(), input.size()));
+  if (pkey == nullptr) {
+    return false;
+  }
+  if (!CheckRawKey(t, "Input", pkey.get(), getter)) {
+    return false;
+  }
+
+  // Save the key for future tests.
+  const std::string &key_name = t->GetParameter();
+  EXPECT_EQ(0u, key_map->count(key_name)) << "Duplicate key: " << key_name;
+  (*key_map)[key_name] = std::move(pkey);
   return true;
 }
 
@@ -641,6 +685,158 @@ bool TestDerive(FileTest *t, const KeyMap *key_map, EVP_PKEY *key,
   return true;
 }
 
+// Tests encapsulation and/or decapsulation. If performing both, this checks
+// that the output of encapsulation is successfully decapsulated to the same
+// shared secret value. If only performing decapsulation, this reads ciphertext
+// input from the test vectors file and checks the decapsulation result against
+// known output. If only performing encapsulation, this only checks that the
+// operation succeeds.
+bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
+             bool decapsulate) {
+  std::string alg_name;
+  if (!t->GetAttribute(&alg_name, "Algorithm")) {
+    ADD_FAILURE() << "Algorithm not specified.";
+    return false;
+  }
+  auto it = kAllAlgorithms.find(alg_name);
+  if (it == kAllAlgorithms.end()) {
+    ADD_FAILURE() << "Unknown algorithm: " << alg_name;
+    return false;
+  }
+  const AlgorithmInfo &alg_info = it->second;
+  if (alg_info.alg == nullptr) {
+    ADD_FAILURE() << "Method not defined: " << alg_name;
+    return false;
+  }
+
+  const size_t expected_ciphertext_len = (alg_info.alg == EVP_pkey_ml_kem_768())
+                                             ? MLKEM768_CIPHERTEXT_BYTES
+                                             : MLKEM1024_CIPHERTEXT_BYTES;
+  const size_t expected_secret_len = MLKEM_SHARED_SECRET_BYTES;
+
+  bssl::UniquePtr<EVP_PKEY_CTX> ctx;
+  std::vector<uint8_t> ciphertext, secret, decapsulated_secret;
+  size_t ciphertext_size, secret_size;
+
+  const auto resize_output_buffers =
+      [&](std::optional<size_t> new_ciphertext_len,
+          std::optional<size_t> new_secret_len,
+          bool resize_decap_buffer_only = false) {
+        if (new_ciphertext_len) {
+          ciphertext_size = *new_ciphertext_len;
+          ciphertext.resize(ciphertext_size);
+        }
+        if (new_secret_len) {
+          secret_size = *new_secret_len;
+          if (!resize_decap_buffer_only) {
+            secret.resize(secret_size);
+          }
+          decapsulated_secret.resize(secret_size);
+        }
+      };
+
+  const auto reset_test_state = [&]() {
+    ctx.reset(EVP_PKEY_CTX_new(pkey, nullptr));
+    resize_output_buffers(0, 0);
+
+    // Read values from the test vector file.
+    if (decapsulate && !encapsulate) {
+      if (!t->GetBytes(&ciphertext, "Input")) {
+        ADD_FAILURE() << "Input not found.";
+      }
+      if (!t->HasAttribute("DecapsulateFail") &&
+          !t->GetBytes(&secret, "Output")) {
+        ADD_FAILURE() << "Output not found.";
+      }
+    }
+  };
+
+  reset_test_state();
+
+  // Perform encapsulation.
+  if (encapsulate) {
+    if (!ctx ||  //
+        !EVP_PKEY_encapsulate_init(ctx.get(), nullptr) ||
+        !MaybeReplaceWithCopy(&ctx, copy_ctx)) {
+      return false;
+    }
+
+    // Test the mode that writes the output size.
+    EXPECT_EQ(EVP_PKEY_encapsulate(ctx.get(), nullptr, &ciphertext_size,
+                                   nullptr, &secret_size),
+              1);
+    EXPECT_EQ(ciphertext_size, expected_ciphertext_len);
+    EXPECT_EQ(secret_size, expected_secret_len);
+
+    // If insufficient space is supplied, the function will fail.
+    resize_output_buffers(ciphertext_size - 1, secret_size - 1);
+    EXPECT_EQ(
+        EVP_PKEY_encapsulate(ctx.get(), ciphertext.data(), &ciphertext_size,
+                             secret.data(), &secret_size),
+        0);
+    EXPECT_TRUE(
+        ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_BUFFER_TOO_SMALL));
+    ERR_clear_error();
+
+    // Test the mode that actually performs the operation.
+    resize_output_buffers(expected_ciphertext_len + 1, expected_secret_len + 1);
+    EXPECT_EQ(
+        EVP_PKEY_encapsulate(ctx.get(), ciphertext.data(), &ciphertext_size,
+                             secret.data(), &secret_size),
+        1);
+    // The correct output sizes are written out.
+    EXPECT_EQ(ciphertext_size, expected_ciphertext_len);
+    EXPECT_EQ(secret_size, expected_secret_len);
+    resize_output_buffers(ciphertext_size, secret_size);
+  }
+
+  const auto check_decapsulate_result = [&](int result) {
+    if (t->HasAttribute("DecapsulateFail")) {
+      EXPECT_EQ(result, 0);
+      return;
+    }
+    EXPECT_EQ(result, 1);
+    // The correct output size was writen out.
+    EXPECT_EQ(secret_size, expected_secret_len);
+    decapsulated_secret.resize(secret_size);
+    EXPECT_EQ(secret, decapsulated_secret);
+  };
+
+  // Perform decapsulation.
+  if (decapsulate) {
+    ctx.reset(EVP_PKEY_CTX_new(pkey, nullptr));
+    if (!ctx ||  //
+        !EVP_PKEY_decapsulate_init(ctx.get(), nullptr) ||
+        !MaybeReplaceWithCopy(&ctx, copy_ctx)) {
+      return false;
+    }
+
+    // Test the mode that writes the output size.
+    secret_size = 0;
+    EXPECT_EQ(EVP_PKEY_decapsulate(ctx.get(), nullptr, &secret_size,
+                                   ciphertext.data(), ciphertext.size()),
+              1);
+    EXPECT_EQ(secret_size, expected_secret_len);
+
+    // If insufficient space is supplied, the function will fail.
+    resize_output_buffers(std::nullopt, secret_size - 1, true);
+    EXPECT_EQ(EVP_PKEY_decapsulate(ctx.get(), decapsulated_secret.data(),
+                                   &secret_size, ciphertext.data(),
+                                   ciphertext.size()),
+              0);
+    EXPECT_TRUE(
+        ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_BUFFER_TOO_SMALL));
+    ERR_clear_error();
+
+    // Test the mode that actually performs the operation.
+    resize_output_buffers(std::nullopt, secret_size + 1, true);
+    check_decapsulate_result(EVP_PKEY_decapsulate(
+        ctx.get(), decapsulated_secret.data(), &secret_size, ciphertext.data(),
+        ciphertext.size()));
+  }
+  return true;
+}
+
 bool TestEVPOperation(FileTest *t, const KeyMap *key_map, bool copy_ctx) {
   SCOPED_TRACE(copy_ctx);
   // Load the key.
@@ -677,6 +873,12 @@ bool TestEVPOperation(FileTest *t, const KeyMap *key_map, bool copy_ctx) {
     key_op = EVP_PKEY_encrypt;
   } else if (t->GetType() == "Derive") {
     return TestDerive(t, key_map, key, copy_ctx);
+  } else if (t->GetType() == "Encapsulate") {
+    return TestKem(t, key, copy_ctx, true, false);
+  } else if (t->GetType() == "EncapsulateDecapsulate") {
+    return TestKem(t, key, copy_ctx, true, true);
+  } else if (t->GetType() == "Decapsulate") {
+    return TestKem(t, key, copy_ctx, false, true);
   } else {
     ADD_FAILURE() << "Unknown test " << t->GetType();
     return false;
@@ -836,8 +1038,16 @@ bool TestEVP(FileTest *t, KeyMap *key_map) {
     return ImportKey(t, key_map, KeyRole::kPrivate);
   }
 
+  if (t->GetType() == "PrivateKeyFromSeed") {
+    return ImportRawKey(t, key_map, KeyRole::kPrivate, /*use_seed=*/true);
+  }
+
   if (t->GetType() == "PublicKey") {
     return ImportKey(t, key_map, KeyRole::kPublic);
+  }
+
+  if (t->GetType() == "PublicKeyFromRaw") {
+    return ImportRawKey(t, key_map, KeyRole::kPublic, /*use_seed=*/false);
   }
 
   if (t->GetType() == "DHKey") {
@@ -877,6 +1087,10 @@ TEST(EVPTest, Ed25519TestVectors) {
 
 TEST(EVPTest, MLDSATestVectors) {
   RunEVPTests("crypto/evp/test/mldsa_tests.txt");
+}
+
+TEST(EVPTest, MLKEMTestVectors) {
+  RunEVPTests("crypto/evp/test/mlkem_tests.txt");
 }
 
 TEST(EVPTest, RSATestVectors) { RunEVPTests("crypto/evp/test/rsa_tests.txt"); }
@@ -954,9 +1168,8 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md));
         ASSERT_TRUE(EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx, pss_salt_len));
       }
-      if (!sig_ctx.empty() &&
-          !EVP_PKEY_CTX_set1_signature_context_string(pctx, sig_ctx.data(),
-                                                      sig_ctx.size())) {
+      if (!sig_ctx.empty() && !EVP_PKEY_CTX_set1_signature_context_string(
+                                  pctx, sig_ctx.data(), sig_ctx.size())) {
         EXPECT_FALSE(expect_valid);
         return;
       }
