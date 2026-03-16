@@ -431,13 +431,14 @@ struct MLDSAImplementation {
     MldsaPkeyCtx *mctx = static_cast<MldsaPkeyCtx *>(ctx->data);
     switch (type) {
       case EVP_PKEY_CTRL_SIGNATURE_CONTEXT_STRING: {
-        if (p1 < 0 || p1 > kMaxContextLength) {
+        const auto *context_string =
+            reinterpret_cast<const Span<const uint8_t> *>(p2);
+        if (context_string == nullptr ||
+            context_string->size() > kMaxContextLength) {
           OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PARAMETERS);
           return 0;
         }
-        uint8_t *context = reinterpret_cast<uint8_t *>(p2);
-        return mctx->context.CopyFrom(
-            bssl::Span<uint8_t>(context, p1));
+        return mctx->context.CopyFrom(*context_string);
       }
 
       default:

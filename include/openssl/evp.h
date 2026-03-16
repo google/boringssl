@@ -910,10 +910,10 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx,
                                                  const EVP_MD **out_md);
 
 // EVP_PKEY_CTX_set1_signature_context_string sets the context string for a
-// signature or verification operation. It returns one success and zero on
-// error. The context string is an additional input to some signature
-// algorithms, such as ML-DSA, to separate different uses of the same key.
-// This is known as domain separation. Section 8.3 of RFC 8032 provides some
+// signature or verification operation to |context|. It returns one success and
+// zero on error. The context string is an additional input to some signature
+// algorithms, such as ML-DSA, to separate different uses of the same key.  This
+// is known as domain separation. Section 8.3 of RFC 8032 provides some
 // additional guidance on context strings.
 //
 // Not all signature algorithms support context strings. Callers that support
@@ -921,9 +921,7 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx,
 // separate the signature input itself. For example, callers can prepend
 // context-specific prefixes to signature inputs.
 OPENSSL_EXPORT int EVP_PKEY_CTX_set1_signature_context_string(
-    EVP_PKEY_CTX *ctx,
-    uint8_t *context,
-    size_t context_len);
+    EVP_PKEY_CTX *ctx, const uint8_t *context, size_t context_len);
 
 
 // RSA specific control functions.
