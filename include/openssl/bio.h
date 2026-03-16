@@ -118,8 +118,12 @@ OPENSSL_EXPORT char *BIO_ptr_ctrl(BIO *bp, int cmd, long larg);
 OPENSSL_EXPORT long BIO_int_ctrl(BIO *bp, int cmd, long larg, int iarg);
 
 // BIO_reset resets |bio| to its initial state, the precise meaning of which
-// depends on the concrete type of |bio|. It returns one on success and zero
-// otherwise.
+// depends on the concrete type of |bio|. It normally returns one on success and
+// <= 0 otherwise. However, for file and fd BIOs, it returns zero on success and
+// a negative number on error.
+//
+// WARNING: This function's return value conventions differs from most functions
+// in this library.
 OPENSSL_EXPORT int BIO_reset(BIO *bio);
 
 // BIO_eof returns non-zero when |bio| has reached end-of-file. The precise
@@ -496,8 +500,8 @@ OPENSSL_EXPORT int BIO_rw_filename(BIO *bio, const char *filename);
 // BIO_tell returns the file offset of |bio|, or a negative number on error or
 // if |bio| does not support the operation.
 //
-// TODO(https://crbug.com/boringssl/465): On platforms where |long| is 32-bit,
-// this function cannot report 64-bit offsets.
+// TODO(crbug.com/42290329): On platforms where |long| is 32-bit, this function
+// cannot report 64-bit offsets.
 OPENSSL_EXPORT long BIO_tell(BIO *bio);
 
 // BIO_seek sets the file offset of |bio| to |offset|. It returns a non-negative
@@ -508,8 +512,8 @@ OPENSSL_EXPORT long BIO_tell(BIO *bio);
 // WARNING: This function's return value conventions differs from most functions
 // in this library.
 //
-// TODO(https://crbug.com/boringssl/465): On platforms where |long| is 32-bit,
-// this function cannot handle 64-bit offsets.
+// TODO(crbug.com/42290329): On platforms where |long| is 32-bit, this function
+// cannot handle 64-bit offsets.
 OPENSSL_EXPORT long BIO_seek(BIO *bio, long offset);
 
 

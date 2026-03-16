@@ -704,6 +704,37 @@ TEST(BIOTest, Gets) {
   EXPECT_EQ(c, 'a');
 }
 
+TEST(BIOTest, FileEOF) {
+  if (SkipTempFileTests()) {
+    GTEST_SKIP();
+  }
+
+  TemporaryFile file;
+  ASSERT_TRUE(file.Init("abcd"));
+  UniquePtr<BIO> bio(BIO_new_file(file.path().c_str(), "rb"));
+  ASSERT_TRUE(bio);
+  EXPECT_EQ(BIO_eof(bio.get()), 0);
+  // Read everything.
+  char buf[4];
+  ASSERT_EQ(4, BIO_read(bio.get(), buf, sizeof(buf)));
+  EXPECT_EQ(Bytes(buf, sizeof(buf)), Bytes("abcd"));
+  EXPECT_EQ(BIO_eof(bio.get()), 0);
+  // Try to keep reading. The BIO should now signal EOF.
+  ASSERT_EQ(0, BIO_read(bio.get(), buf, sizeof(buf)));
+  EXPECT_EQ(BIO_eof(bio.get()), 1);
+  // Reset the BIO. File BIOs have an unusual return value convention for
+  // |BIO_reset|.
+  EXPECT_EQ(BIO_reset(bio.get()), 0);
+  // This should clear the EOF indicator for the stream.
+  EXPECT_EQ(BIO_eof(bio.get()), 0);
+  // Repeat the test.
+  ASSERT_EQ(4, BIO_read(bio.get(), buf, sizeof(buf)));
+  EXPECT_EQ(Bytes(buf, sizeof(buf)), Bytes("abcd"));
+  EXPECT_EQ(BIO_eof(bio.get()), 0);
+  ASSERT_EQ(0, BIO_read(bio.get(), buf, sizeof(buf)));
+  EXPECT_EQ(BIO_eof(bio.get()), 1);
+}
+
 // Test that, on Windows, file BIOs correctly handle text vs binary mode.
 TEST(BIOTest, FileMode) {
   if (SkipTempFileTests()) {

@@ -147,7 +147,8 @@ static long file_ctrl(BIO *b, int cmd, long num, void *ptr) {
     case BIO_C_FILE_SEEK:
       return fseek(fp, num, 0);
     case BIO_CTRL_EOF:
-      return feof(fp);
+      // feof may return any non-zero value for EOF, but we must return 1.
+      return feof(fp) != 0;
     case BIO_C_FILE_TELL:
     case BIO_CTRL_INFO:
       return ftell(fp);
