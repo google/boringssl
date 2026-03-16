@@ -343,6 +343,7 @@ typedef struct evp_hpke_ctx_st EVP_HPKE_CTX;
 typedef struct evp_hpke_kdf_st EVP_HPKE_KDF;
 typedef struct evp_hpke_kem_st EVP_HPKE_KEM;
 typedef struct evp_hpke_key_st EVP_HPKE_KEY;
+typedef struct evp_kem_st EVP_KEM;
 typedef struct evp_pkey_alg_st EVP_PKEY_ALG;
 typedef struct evp_pkey_ctx_st EVP_PKEY_CTX;
 typedef struct evp_pkey_st EVP_PKEY;

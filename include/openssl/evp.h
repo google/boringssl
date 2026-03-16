@@ -1135,6 +1135,63 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_set_ec_paramgen_curve_nid(EVP_PKEY_CTX *ctx,
 OPENSSL_EXPORT int EVP_PKEY_CTX_set_dh_pad(EVP_PKEY_CTX *ctx, int pad);
 
 
+// Key encapsulation mechanism algorithms.
+//
+// Two APIs for working with key encapsulation mechanism (KEM) algorithms are
+// provided:
+//
+//  1. Create an |EVP_PKEY_CTX|, initialize it for the appropriate KEM operation
+//     (see |EVP_PKEY_encapsulate_init| and |EVP_PKEY_decapsulate_init|), then
+//     run the operation. This matches the OpenSSL API.
+//
+//  2. Pass an appropriate |EVP_KEM| object to the functions below to use it
+//     for encapsulation and decapsulation operations with compatible |EVP_PKEY|
+//     objects. This API requires fewer steps.
+//
+// The |EVP_KEM| API is only compatible with KEMs that use fixed-length
+// ciphertexts and secrets.
+
+// EVP_kem_ml_kem_* implement ML-KEM, defined in FIPS 203.
+OPENSSL_EXPORT const EVP_KEM *EVP_kem_ml_kem_768(void);
+OPENSSL_EXPORT const EVP_KEM *EVP_kem_ml_kem_1024(void);
+
+// TODO(crbug.com/449751916): Add more supported KEMs.
+
+// EVP_KEM_ciphertext_len returns the fixed length, in bytes, of a ciphertext
+// produced and consumed by |kem|.
+OPENSSL_EXPORT size_t EVP_KEM_ciphertext_len(const EVP_KEM *kem);
+
+// EVP_KEM_secret_len returns the fixed length, in bytes, of the shared
+// secret produced and consumed by |kem|.
+OPENSSL_EXPORT size_t EVP_KEM_secret_len(const EVP_KEM *kem);
+
+// EVP_KEM_encap uses |kem| to encapsulate a |peer_key|. It outputs a
+// ciphertext of length |ciphertext_len| into |*out_ciphertext| and outputs a
+// shared secret of length |secret_len| into |*out_secret|. |peer_key| must be
+// a public key of the type expected by |kem|. |ciphertext_len| and
+// |secret_len| must match the output of |EVP_KEM_ciphertext_len| and
+// |EVP_KEM_secret_len|, respectively, when called with |kem|. This function
+// returns one on success or zero on failure.
+OPENSSL_EXPORT int EVP_KEM_encap(const EVP_KEM *kem, uint8_t *out_ciphertext,
+                                 size_t ciphertext_len, uint8_t *out_secret,
+                                 size_t secret_len, const EVP_PKEY *peer_key);
+
+// EVP_KEM_decap uses |kem| to decapsulate a |ciphertext| of length
+// |ciphertext_len|, using |key| as a decapsulation key. It outputs a shared
+// secret of length |secret_len| into |*out_secret|. |key| must be a private key
+// of the type expected by |kem|. |secret_len| must match the output of
+// |EVP_KEM_secret_len| when called with |kem|. This function returns one on
+// success or zero on failure. If |ciphertext| is invalid (but of the correct
+// length), this will return one and fill |out_secret| with a key that will
+// always be the same for the same |ciphertext| and |key|, but which appears to
+// be random unless one has access to the private |key|. Any subsequent
+// symmetric encryption using |*out_secret| must use an authenticated encryption
+// scheme in order to discover the decapsulation failure.
+OPENSSL_EXPORT int EVP_KEM_decap(const EVP_KEM *kem, uint8_t *out_secret,
+                                 size_t secret_len, const uint8_t *ciphertext,
+                                 size_t ciphertext_len, const EVP_PKEY *key);
+
+
 // Deprecated functions.
 
 // EVP_PKEY_RSA2 was historically an alternate form for RSA public keys (OID

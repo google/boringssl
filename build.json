@@ -259,6 +259,7 @@
             "crypto/evp/evp.cc",
             "crypto/evp/evp_asn1.cc",
             "crypto/evp/evp_ctx.cc",
+            "crypto/evp/evp_kem.cc",
             "crypto/evp/p_dh.cc",
             "crypto/evp/p_dsa.cc",
             "crypto/evp/p_ec.cc",

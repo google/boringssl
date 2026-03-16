@@ -90,27 +90,46 @@ std::optional<int> GetRSAPadding(std::string_view name) {
 
 struct AlgorithmInfo {
   const EVP_PKEY_ALG *alg;
+  const EVP_KEM *kem;
   int pkey_id;
   bool is_default;
 };
 
 const std::map<std::string, AlgorithmInfo> kAllAlgorithms = {
-    {"RSA", {EVP_pkey_rsa(), EVP_PKEY_RSA, true}},
-    {"RSA-PSS-SHA-256", {EVP_pkey_rsa_pss_sha256(), EVP_PKEY_RSA_PSS, false}},
-    {"RSA-PSS-SHA-384", {EVP_pkey_rsa_pss_sha384(), EVP_PKEY_RSA_PSS, false}},
-    {"RSA-PSS-SHA-512", {EVP_pkey_rsa_pss_sha512(), EVP_PKEY_RSA_PSS, false}},
-    {"EC-P-224", {EVP_pkey_ec_p224(), EVP_PKEY_EC, true}},
-    {"EC-P-256", {EVP_pkey_ec_p256(), EVP_PKEY_EC, true}},
-    {"EC-P-384", {EVP_pkey_ec_p384(), EVP_PKEY_EC, true}},
-    {"EC-P-521", {EVP_pkey_ec_p521(), EVP_PKEY_EC, true}},
-    {"X25519", {EVP_pkey_x25519(), EVP_PKEY_X25519, true}},
-    {"Ed25519", {EVP_pkey_ed25519(), EVP_PKEY_ED25519, true}},
-    {"DSA", {EVP_pkey_dsa(), EVP_PKEY_DSA, true}},
-    {"ML-DSA-44", {EVP_pkey_ml_dsa_44(), EVP_PKEY_ML_DSA_44, true}},
-    {"ML-DSA-65", {EVP_pkey_ml_dsa_65(), EVP_PKEY_ML_DSA_65, true}},
-    {"ML-DSA-87", {EVP_pkey_ml_dsa_87(), EVP_PKEY_ML_DSA_87, true}},
-    {"ML-KEM-768", {EVP_pkey_ml_kem_768(), EVP_PKEY_ML_KEM_768, false}},
-    {"ML-KEM-1024", {EVP_pkey_ml_kem_1024(), EVP_PKEY_ML_KEM_1024, false}},
+    {"RSA",
+     {EVP_pkey_rsa(),
+      /*kem=*/nullptr, EVP_PKEY_RSA, true}},
+
+    {"RSA-PSS-SHA-256",
+     {EVP_pkey_rsa_pss_sha256(), /*kem=*/nullptr, EVP_PKEY_RSA_PSS, false}},
+    {"RSA-PSS-SHA-384",
+     {EVP_pkey_rsa_pss_sha384(), /*kem=*/nullptr, EVP_PKEY_RSA_PSS, false}},
+    {"RSA-PSS-SHA-512",
+     {EVP_pkey_rsa_pss_sha512(), /*kem=*/nullptr, EVP_PKEY_RSA_PSS, false}},
+
+    {"EC-P-224", {EVP_pkey_ec_p224(), /*kem=*/nullptr, EVP_PKEY_EC, true}},
+    {"EC-P-256", {EVP_pkey_ec_p256(), /*kem=*/nullptr, EVP_PKEY_EC, true}},
+    {"EC-P-384", {EVP_pkey_ec_p384(), /*kem=*/nullptr, EVP_PKEY_EC, true}},
+    {"EC-P-521", {EVP_pkey_ec_p521(), /*kem=*/nullptr, EVP_PKEY_EC, true}},
+
+    {"X25519", {EVP_pkey_x25519(), /*kem=*/nullptr, EVP_PKEY_X25519, true}},
+
+    {"Ed25519", {EVP_pkey_ed25519(), /*kem=*/nullptr, EVP_PKEY_ED25519, true}},
+
+    {"DSA", {EVP_pkey_dsa(), /*kem=*/nullptr, EVP_PKEY_DSA, true}},
+
+    {"ML-DSA-44",
+     {EVP_pkey_ml_dsa_44(), /*kem=*/nullptr, EVP_PKEY_ML_DSA_44, true}},
+    {"ML-DSA-65",
+     {EVP_pkey_ml_dsa_65(), /*kem=*/nullptr, EVP_PKEY_ML_DSA_65, true}},
+    {"ML-DSA-87",
+     {EVP_pkey_ml_dsa_87(), /*kem=*/nullptr, EVP_PKEY_ML_DSA_87, true}},
+
+    {"ML-KEM-768",
+     {EVP_pkey_ml_kem_768(), EVP_kem_ml_kem_768(), EVP_PKEY_ML_KEM_768, false}},
+    {"ML-KEM-1024",
+     {EVP_pkey_ml_kem_1024(), EVP_kem_ml_kem_1024(), EVP_PKEY_ML_KEM_1024,
+      false}},
 };
 
 using KeyMap = std::map<std::string, bssl::UniquePtr<EVP_PKEY>>;
@@ -704,7 +723,7 @@ bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
     return false;
   }
   const AlgorithmInfo &alg_info = it->second;
-  if (alg_info.alg == nullptr) {
+  if (alg_info.alg == nullptr || alg_info.kem == nullptr) {
     ADD_FAILURE() << "Method not defined: " << alg_name;
     return false;
   }
@@ -834,6 +853,78 @@ bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
         ctx.get(), decapsulated_secret.data(), &secret_size, ciphertext.data(),
         ciphertext.size()));
   }
+
+  // Repeat everything the EVP_KEM way, which is simpler.
+  reset_test_state();
+
+  EXPECT_EQ(EVP_KEM_ciphertext_len(alg_info.kem), expected_ciphertext_len);
+  EXPECT_EQ(EVP_KEM_secret_len(alg_info.kem), expected_secret_len);
+
+  if (encapsulate) {
+    ciphertext.resize(ciphertext_size);
+
+    // Passing the wrong sizes fails (even if larger than required).
+    resize_output_buffers(expected_ciphertext_len - 1, expected_secret_len);
+    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
+                            secret.data(), secret.size(), pkey),
+              0);
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_EVP,
+                            EVP_R_INVALID_CIPHERTEXT_LENGTH));
+    ERR_clear_error();
+    resize_output_buffers(expected_ciphertext_len + 1, expected_secret_len);
+    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
+                            secret.data(), secret.size(), pkey),
+              0);
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_EVP,
+                            EVP_R_INVALID_CIPHERTEXT_LENGTH));
+    ERR_clear_error();
+    resize_output_buffers(expected_ciphertext_len, expected_secret_len - 1);
+    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
+                            secret.data(), secret.size(), pkey),
+              0);
+    EXPECT_TRUE(
+        ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_SECRET_LENGTH));
+    ERR_clear_error();
+    resize_output_buffers(expected_ciphertext_len, expected_secret_len + 1);
+    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
+                            secret.data(), secret.size(), pkey),
+              0);
+    EXPECT_TRUE(
+        ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_SECRET_LENGTH));
+    ERR_clear_error();
+
+    // Only the correct sizes are accepted.
+    resize_output_buffers(expected_ciphertext_len, expected_secret_len);
+    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
+                            secret.data(), secret.size(), pkey),
+              1);
+  }
+
+  if (decapsulate) {
+    // Passing the wrong sizes fails (even if larger than required).
+    resize_output_buffers(std::nullopt, expected_secret_len - 1, true);
+    EXPECT_EQ(EVP_KEM_decap(alg_info.kem, decapsulated_secret.data(),
+                            decapsulated_secret.size(), ciphertext.data(),
+                            ciphertext.size(), pkey),
+              0);
+    EXPECT_TRUE(
+        ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_SECRET_LENGTH));
+    ERR_clear_error();
+    resize_output_buffers(std::nullopt, expected_secret_len + 1, true);
+    EXPECT_EQ(EVP_KEM_decap(alg_info.kem, decapsulated_secret.data(),
+                            decapsulated_secret.size(), ciphertext.data(),
+                            ciphertext.size(), pkey),
+              0);
+    EXPECT_TRUE(
+        ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_SECRET_LENGTH));
+    ERR_clear_error();
+
+    resize_output_buffers(std::nullopt, expected_secret_len, true);
+    check_decapsulate_result(EVP_KEM_decap(
+        alg_info.kem, decapsulated_secret.data(), decapsulated_secret.size(),
+        ciphertext.data(), ciphertext.size(), pkey));
+  }
+
   return true;
 }
 

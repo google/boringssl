@@ -350,6 +350,22 @@ struct MLKEMImplementation {
     return 1;
   }
 
+  static int KemEncap(uint8_t *out_ciphertext, size_t ciphertext_len,
+                      uint8_t *out_secret, size_t secret_len,
+                      const EVP_PKEY *peer_key) {
+    const auto *peer_pubkey = GetKeyData(FromOpaque(peer_key))->GetPublicKey();
+    if (ciphertext_len != Traits::kCiphertextBytes) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
+      return 0;
+    }
+    if (secret_len != MLKEM_SHARED_SECRET_BYTES) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
+      return 0;
+    }
+    Traits::Encap(out_ciphertext, out_secret, peer_pubkey);
+    return 1;
+  }
+
   static int EncapCtx(EvpPkeyCtx *ctx, uint8_t *out_ciphertext,
                       size_t *out_ciphertext_len, uint8_t *out_secret,
                       size_t *out_secret_len) {
@@ -373,6 +389,21 @@ struct MLKEMImplementation {
     *out_ciphertext_len = Traits::kCiphertextBytes;
     *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
     return 1;
+  }
+
+  static int KemDecap(uint8_t *out_secret, size_t secret_len,
+                      const uint8_t *ciphertext, size_t ciphertext_len,
+                      const EVP_PKEY *key) {
+    const auto *priv = GetKeyData(FromOpaque(key))->AsPrivateKeyData();
+    if (priv == nullptr) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
+      return 0;
+    }
+    if (secret_len != MLKEM_SHARED_SECRET_BYTES) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
+      return 0;
+    }
+    return Traits::Decap(out_secret, ciphertext, ciphertext_len, &priv->priv);
   }
 
   static int DecapCtx(EvpPkeyCtx *ctx, uint8_t *out_secret,
@@ -469,6 +500,14 @@ struct MLKEMImplementation {
     return ret;
   }
 
+  static constexpr EVP_KEM evp_kem = {
+      /*pkey_id=*/Traits::kType,
+      /*ciphertext_len=*/Traits::kCiphertextBytes,
+      /*secret_len=*/MLKEM_SHARED_SECRET_BYTES,
+      &KemEncap,
+      &KemDecap,
+  };
+
   static constexpr EVP_PKEY_ASN1_METHOD asn1_method = BuildASN1Method();
   static constexpr EVP_PKEY_ALG pkey_alg = {&asn1_method, &pkey_method};
 };
@@ -481,4 +520,12 @@ const EVP_PKEY_ALG *EVP_pkey_ml_kem_768() {
 
 const EVP_PKEY_ALG *EVP_pkey_ml_kem_1024() {
   return &MLKEMImplementation<MLKEM1024Traits>::pkey_alg;
+}
+
+const EVP_KEM *EVP_kem_ml_kem_768() {
+  return &MLKEMImplementation<MLKEM768Traits>::evp_kem;
+}
+
+const EVP_KEM *EVP_kem_ml_kem_1024() {
+  return &MLKEMImplementation<MLKEM1024Traits>::evp_kem;
 }

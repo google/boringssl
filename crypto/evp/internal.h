@@ -294,6 +294,27 @@ struct evp_pkey_ctx_method_st {
   int (*ctrl)(EvpPkeyCtx *ctx, int type, int p1, void *p2);
 } /* EVP_PKEY_CTX_METHOD */;
 
+BSSL_NAMESPACE_END
+
+// TODO(chlily): Make compatible with `EVP_HPKE_KEM`.
+struct evp_kem_st {
+  // Identifies the type of EVP_PKEYs compatible with this KEM.
+  int pkey_id;
+
+  // Constant lengths of ciphertexts and secrets produced/consumed by this KEM.
+  size_t ciphertext_len;
+  size_t secret_len;
+
+  int (*encap)(uint8_t *out_ciphertext, size_t ciphertext_len,
+               uint8_t *out_secret, size_t secret_len,
+               const EVP_PKEY *peer_key);
+  int (*decap)(uint8_t *out_secret, size_t secret_len,
+               const uint8_t *ciphertext, size_t ciphertext_len,
+               const EVP_PKEY *key);
+} /* EVP_KEM */;
+
+BSSL_NAMESPACE_BEGIN
+
 // evp_pkey_ec_no_curve returns an internal curveless EC |EVP_PKEY_ALG|. This
 // cannot be used to parse anything and is only useful for key generation.
 const EVP_PKEY_ALG *evp_pkey_ec_no_curve();
