@@ -41,13 +41,15 @@ static int do_i2r_name_constraints(const X509V3_EXT_METHOD *method,
                                    BIO *bp, int ind, const char *name);
 static int print_nc_ipadd(BIO *bp, const ASN1_OCTET_STRING *ip);
 
-static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc);
+static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc,
+                    bool case_insensitive_exclude_localpart);
 static int nc_match_single(const GENERAL_NAME *sub, const GENERAL_NAME *gen,
-                           bool excluding);
+                           bool excluding, bool case_insensitive_local_part);
 static int nc_dn(const X509_NAME *sub, const X509_NAME *nm);
 static int nc_dns(const ASN1_IA5STRING *sub, const ASN1_IA5STRING *dns,
                   bool excluding);
-static int nc_email(const ASN1_IA5STRING *sub, const ASN1_IA5STRING *eml);
+static int nc_email(const ASN1_IA5STRING *sub, const ASN1_IA5STRING *eml,
+                    bool case_insensitive_local_part);
 static int nc_uri(const ASN1_IA5STRING *uri, const ASN1_IA5STRING *base);
 
 const X509V3_EXT_METHOD bssl::v3_name_constraints = {
@@ -217,9 +219,9 @@ int NAME_CONSTRAINTS_check(const X509 *x, const NAME_CONSTRAINTS *nc) {
   if (X509_NAME_entry_count(nm) > 0) {
     GENERAL_NAME gntmp;
     gntmp.type = GEN_DIRNAME;
-    gntmp.d.directoryName = const_cast<X509_NAME*>(nm);
+    gntmp.d.directoryName = const_cast<X509_NAME *>(nm);
 
-    int r = nc_match(&gntmp, nc);
+    int r = nc_match(&gntmp, nc, /*case_insensitive_exclude_localpart=*/false);
     if (r != X509_V_OK) {
       return r;
     }
@@ -238,7 +240,18 @@ int NAME_CONSTRAINTS_check(const X509 *x, const NAME_CONSTRAINTS *nc) {
         return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
       }
 
-      r = nc_match(&gntmp, nc);
+      // Whether local_part should be matched case-sensitive or not is somewhat
+      // unclear. RFC 2821 says that it should be case-sensitive. RFC 2985 says
+      // that emailAddress attributes in a Name are fully case-insensitive.
+      // Some other verifier implementations always do local-part comparison
+      // case-sensitive, while some always do it case-insensitive. Many but not
+      // all SMTP servers interpret addresses as case-insensitive.
+      //
+      // Give how poorly specified this is, and the conflicting implementations
+      // in the wild, this implementation will do case-insensitive match for
+      // excluded names from the subject to avoid potentially allowing
+      // something that wasn't expected.
+      r = nc_match(&gntmp, nc, /*case_insensitive_exclude_localpart=*/true);
       if (r != X509_V_OK) {
         return r;
       }
@@ -246,7 +259,7 @@ int NAME_CONSTRAINTS_check(const X509 *x, const NAME_CONSTRAINTS *nc) {
   }
 
   for (const GENERAL_NAME *gen : x_impl->altname) {
-    int r = nc_match(gen, nc);
+    int r = nc_match(gen, nc, /*case_insensitive_exclude_localpart=*/false);
     if (r != X509_V_OK) {
       return r;
     }
@@ -255,7 +268,8 @@ int NAME_CONSTRAINTS_check(const X509 *x, const NAME_CONSTRAINTS *nc) {
   return X509_V_OK;
 }
 
-static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc) {
+static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc,
+                    bool case_insensitive_exclude_localpart) {
   // Permitted subtrees: if any subtrees exist of matching the type at
   // least one subtree must match.
   int match = 0;
@@ -273,7 +287,8 @@ static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc) {
     if (match == 0) {
       match = 1;
     }
-    int r = nc_match_single(gen, sub->base, /*excluding=*/false);
+    int r = nc_match_single(gen, sub->base, /*excluding=*/false,
+                            /*case_insensitive_local_part=*/false);
     if (r == X509_V_OK) {
       match = 2;
     } else if (r != X509_V_ERR_PERMITTED_VIOLATION) {
@@ -294,7 +309,9 @@ static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc) {
       return X509_V_ERR_SUBTREE_MINMAX;
     }
 
-    int r = nc_match_single(gen, sub->base, /*excluding=*/true);
+    int r = nc_match_single(gen, sub->base, /*excluding=*/true,
+                            /*case_insensitive_local_part=*/
+                            case_insensitive_exclude_localpart);
     if (r == X509_V_OK) {
       return X509_V_ERR_EXCLUDED_VIOLATION;
     } else if (r != X509_V_ERR_PERMITTED_VIOLATION) {
@@ -306,7 +323,7 @@ static int nc_match(const GENERAL_NAME *gen, const NAME_CONSTRAINTS *nc) {
 }
 
 static int nc_match_single(const GENERAL_NAME *gen, const GENERAL_NAME *base,
-                           bool excluding) {
+                           bool excluding, bool case_insensitive_local_part) {
   switch (base->type) {
     case GEN_DIRNAME:
       return nc_dn(gen->d.directoryName, base->d.directoryName);
@@ -315,7 +332,8 @@ static int nc_match_single(const GENERAL_NAME *gen, const GENERAL_NAME *base,
       return nc_dns(gen->d.dNSName, base->d.dNSName, excluding);
 
     case GEN_EMAIL:
-      return nc_email(gen->d.rfc822Name, base->d.rfc822Name);
+      return nc_email(gen->d.rfc822Name, base->d.rfc822Name,
+                      case_insensitive_local_part);
 
     case GEN_URI:
       return nc_uri(gen->d.uniformResourceIdentifier,
@@ -386,6 +404,36 @@ static int has_suffix_case(const CBS *a, const CBS *b) {
   return equal_case(&copy, b);
 }
 
+static bool is_allowed_rfc822_local_part(const CBS *cbs) {
+  if (CBS_len(cbs) == 0) {
+    return false;
+  }
+  for (size_t i = 0; i < CBS_len(cbs); i++) {
+    uint8_t c = CBS_data(cbs)[i];
+    if (!(OPENSSL_isalnum(c) || c == '!' || c == '#' || c == '$' || c == '%' ||
+          c == '&' || c == '\'' || c == '*' || c == '+' || c == '-' ||
+          c == '/' || c == '=' || c == '?' || c == '^' || c == '_' ||
+          c == '`' || c == '{' || c == '|' || c == '}' || c == '~' ||
+          c == '.')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool is_allowed_rfc822_domain(const CBS *cbs) {
+  if (CBS_len(cbs) == 0) {
+    return false;
+  }
+  for (size_t i = 0; i < CBS_len(cbs); i++) {
+    uint8_t c = CBS_data(cbs)[i];
+    if (!(OPENSSL_isalnum(c) || c == '-' || c == '.')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static int nc_dns(const ASN1_IA5STRING *dns, const ASN1_IA5STRING *base,
                   bool excluding) {
   CBS dns_cbs, base_cbs;
@@ -451,52 +499,98 @@ static int nc_dns(const ASN1_IA5STRING *dns, const ASN1_IA5STRING *base,
   return X509_V_OK;
 }
 
-static int nc_email(const ASN1_IA5STRING *eml, const ASN1_IA5STRING *base) {
+static int nc_email(const ASN1_IA5STRING *eml, const ASN1_IA5STRING *base,
+                    bool case_insensitive_local_part) {
   CBS eml_cbs, base_cbs;
   CBS_init(&eml_cbs, eml->data, eml->length);
   CBS_init(&base_cbs, base->data, base->length);
 
-  // TODO(davidben): In OpenSSL 1.1.1, this switched from the first '@' to the
-  // last one. Match them here, or perhaps do an actual parse. Looks like
-  // multiple '@'s may be allowed in quoted strings.
-  CBS eml_local, base_local;
-  if (!CBS_get_until_first(&eml_cbs, &eml_local, '@')) {
+  CBS eml_local;
+  if (!CBS_get_until_first(&eml_cbs, &eml_local, '@') ||
+      !CBS_skip(&eml_cbs, 1)) {
     return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
   }
-  int base_has_at = CBS_get_until_first(&base_cbs, &base_local, '@');
+  CBS eml_domain = eml_cbs;
 
-  // Special case: initial '.' is RHS match
-  if (!base_has_at && starts_with(&base_cbs, '.')) {
-    if (has_suffix_case(&eml_cbs, &base_cbs)) {
+  // Exactly one '@' in eml.
+  CBS unused;
+  if (CBS_get_until_first(&eml_cbs, &unused, '@')) {
+    return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
+  }
+
+  if (!is_allowed_rfc822_local_part(&eml_local) ||
+      !is_allowed_rfc822_domain(&eml_domain)) {
+    return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
+  }
+
+  CBS base_local, base_domain;
+  bool base_has_at = CBS_get_until_first(&base_cbs, &base_local, '@');
+  if (base_has_at && CBS_len(&base_local) == 0) {
+    // OpenSSL ignores a stray leading @.
+    // This is a difference to libpki, which does not have this exception!
+    //
+    // TODO: crbug.com/500243591 - This is not in RFC5280. Document, or remove
+    // this block?
+    base_has_at = false;
+    CBS_skip(&base_cbs, 1);
+  }
+  if (base_has_at) {
+    CBS_skip(&base_cbs, 1);
+    base_domain = base_cbs;
+    if (CBS_get_until_first(&base_cbs, &unused, '@')) {
+      // If we did the full parsing then it is possible for a @ to be in a
+      // quoted local-part of the name, but we don't do that, so just error if @
+      // appears more than once.
+      return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
+    }
+    if (!is_allowed_rfc822_local_part(&base_local)) {
+      return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
+    }
+  } else {
+    base_domain = base_cbs;
+  }
+
+  if (!is_allowed_rfc822_domain(&base_domain)) {
+    return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
+  }
+
+  // RFC 5280 section 4.2.1.10:
+  // To indicate a particular mailbox, the constraint is the complete mail
+  // address.  For example, "root@example.com" indicates the root mailbox on
+  // the host "example.com".
+  if (base_has_at) {
+    bool local_part_matches =
+        case_insensitive_local_part
+            ? equal_case(&base_local, &eml_local)
+            : CBS_mem_equal(&base_local, CBS_data(&eml_local),
+                            CBS_len(&eml_local));
+    bool domain_matches = equal_case(&base_domain, &eml_domain);
+    if (!local_part_matches || !domain_matches) {
+      return X509_V_ERR_PERMITTED_VIOLATION;
+    }
+    return X509_V_OK;
+  }
+
+  // RFC 5280 section 4.2.1.10:
+  // To specify any address within a domain, the constraint is specified with a
+  // leading period (as with URIs).  For example, ".example.com" indicates all
+  // the Internet mail addresses in the domain "example.com", but not Internet
+  // mail addresses on the host "example.com".
+  if (starts_with(&base_domain, '.')) {
+    if (has_suffix_case(&eml_domain, &base_domain)) {
       return X509_V_OK;
     }
     return X509_V_ERR_PERMITTED_VIOLATION;
   }
 
-  // If we have anything before '@' match local part
-  if (base_has_at) {
-    // TODO(davidben): This interprets a constraint of "@example.com" as
-    // "example.com", which is not part of RFC5280.
-    if (CBS_len(&base_local) > 0) {
-      // Case sensitive match of local part
-      if (!CBS_mem_equal(&base_local, CBS_data(&eml_local),
-                         CBS_len(&eml_local))) {
-        return X509_V_ERR_PERMITTED_VIOLATION;
-      }
-    }
-    // Position base after '@'
-    assert(starts_with(&base_cbs, '@'));
-    CBS_skip(&base_cbs, 1);
+  // RFC 5280 section 4.2.1.10:
+  // To indicate all Internet mail addresses on a particular host, the
+  // constraint is specified as the host name.  For example, the constraint
+  // "example.com" is satisfied by any mail address at the host "example.com".
+  if (equal_case(&base_domain, &eml_domain)) {
+    return X509_V_OK;
   }
-
-  // Just have hostname left to match: case insensitive
-  assert(starts_with(&eml_cbs, '@'));
-  CBS_skip(&eml_cbs, 1);
-  if (!equal_case(&base_cbs, &eml_cbs)) {
-    return X509_V_ERR_PERMITTED_VIOLATION;
-  }
-
-  return X509_V_OK;
+  return X509_V_ERR_PERMITTED_VIOLATION;
 }
 
 static int nc_uri(const ASN1_IA5STRING *uri, const ASN1_IA5STRING *base) {
