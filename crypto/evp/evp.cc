@@ -423,3 +423,17 @@ int EVP_PKEY_has_private(const EVP_PKEY *pkey) {
   }
   return impl->ameth->priv_present(impl);
 }
+
+EVP_PKEY *EVP_PKEY_copy_public(const EVP_PKEY *pkey) {
+  auto *impl = FromOpaque(pkey);
+  if (impl == nullptr || impl->ameth == nullptr || impl->pkey == nullptr ||
+      impl->ameth->pub_copy == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
+    return nullptr;
+  }
+  UniquePtr<EvpPkey> ret(FromOpaque(EVP_PKEY_new()));
+  if (ret == nullptr || !impl->ameth->pub_copy(ret.get(), impl)) {
+    return nullptr;
+  }
+  return ret.release();
+}

@@ -108,6 +108,24 @@ static bool rsa_pub_present(const EvpPkey *pk) {
   return RSA_get0_n(pk_rsa) != nullptr && RSA_get0_e(pk_rsa) != nullptr;
 }
 
+static bool rsa_pub_copy(EvpPkey *out, const EvpPkey *pkey) {
+  const RSAImpl *pk_rsa = reinterpret_cast<const RSAImpl *>(pkey->pkey);
+  const BIGNUM *pk_n = RSA_get0_n(pk_rsa);
+  const BIGNUM *pk_e = RSA_get0_e(pk_rsa);
+  if (pk_n == nullptr || pk_e == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PUBLIC_KEY);
+    return false;
+  }
+  UniquePtr<RSA> public_copy_rsa(RSA_new_public_key(pk_n, pk_e));
+  if (!public_copy_rsa) {
+    OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+  FromOpaque(public_copy_rsa.get())->pss_params = pk_rsa->pss_params;
+  evp_pkey_set0(out, pkey->ameth, public_copy_rsa.release());
+  return true;
+}
+
 static int rsa_priv_encode(CBB *out, const EvpPkey *key) {
   const RSA *rsa = reinterpret_cast<const RSA *>(key->pkey);
   CBB pkcs8, algorithm, null, private_key;
@@ -280,6 +298,7 @@ const EVP_PKEY_ASN1_METHOD rsa_asn1_meth = {
     rsa_pub_encode,
     rsa_pub_equal,
     rsa_pub_present,
+    rsa_pub_copy,
 
     rsa_priv_decode,
     rsa_priv_encode,
@@ -318,6 +337,7 @@ const EVP_PKEY_ASN1_METHOD rsa_pss_asn1_meth = {
     rsa_pub_encode_pss,
     rsa_pub_equal,
     rsa_pub_present,
+    rsa_pub_copy,
 
     rsa_priv_decode_pss,
     rsa_priv_encode_pss,

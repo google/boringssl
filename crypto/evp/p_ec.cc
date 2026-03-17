@@ -269,6 +269,24 @@ static bool eckey_pub_present(const EvpPkey *pkey) {
   return EC_KEY_get0_public_key(ec_key) != nullptr;
 }
 
+static bool eckey_pub_copy(EvpPkey *out, const EvpPkey *pkey) {
+  const EC_KEY *ec_key = reinterpret_cast<const EC_KEY *>(pkey->pkey);
+  const EC_POINT *public_key = EC_KEY_get0_public_key(ec_key);
+  if (public_key == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PUBLIC_KEY);
+    return false;
+  }
+  UniquePtr<EC_KEY> public_copy_ec_key(EC_KEY_new());
+  if (public_copy_ec_key == nullptr ||
+      !EC_KEY_set_group(public_copy_ec_key.get(), public_key->group) ||
+      !EC_KEY_set_public_key(public_copy_ec_key.get(), public_key)) {
+    OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+  evp_pkey_set0(out, pkey->ameth, public_copy_ec_key.release());
+  return true;
+}
+
 static bool eckey_priv_present(const EvpPkey *pkey) {
   const EC_KEY *ec_key = reinterpret_cast<const EC_KEY *>(pkey->pkey);
   return EC_KEY_get0_private_key(ec_key) != nullptr;
@@ -286,6 +304,7 @@ const EVP_PKEY_ASN1_METHOD ec_asn1_meth = {
     eckey_pub_encode,
     eckey_pub_equal,
     eckey_pub_present,
+    eckey_pub_copy,
 
     eckey_priv_decode,
     eckey_priv_encode,

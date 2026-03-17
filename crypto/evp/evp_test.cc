@@ -412,6 +412,26 @@ bool ImportKey(FileTest *t, KeyMap *key_map, KeyRole key_role) {
         !CheckRawKey(t, "PrivateSeed", pkey.get(), EVP_PKEY_get_private_seed)) {
       return false;
     }
+
+    // Test copying the public part of the key.
+    UniquePtr<EVP_PKEY> public_copy(EVP_PKEY_copy_public(pkey.get()));
+    EXPECT_TRUE(public_copy);
+    EXPECT_TRUE(EVP_PKEY_has_public(public_copy.get()));
+    EXPECT_FALSE(EVP_PKEY_has_private(public_copy.get()));
+    EXPECT_EQ(EVP_PKEY_cmp(public_copy.get(), pkey.get()), 1);
+    EXPECT_EQ(EVP_PKEY_cmp_parameters(public_copy.get(), pkey.get()), 1);
+    // Check that the copied public key serializes the same.
+    bssl::ScopedCBB cbb_public, cbb_public_copy;
+    if (!CBB_init(cbb_public.get(), 0) ||
+        !EVP_marshal_public_key(cbb_public.get(), pkey.get()) ||
+        !CBB_init(cbb_public_copy.get(), 0) ||
+        !EVP_marshal_public_key(cbb_public_copy.get(), public_copy.get())) {
+      return false;
+    }
+    EXPECT_EQ(
+        Bytes(CBB_data(cbb_public.get()), CBB_len(cbb_public.get())),
+        Bytes(CBB_data(cbb_public_copy.get()), CBB_len(cbb_public_copy.get())))
+        << "Public copy of the key did not match.";
   }
 
   // Save the key for future tests.

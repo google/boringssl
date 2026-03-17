@@ -16,6 +16,8 @@
 
 #include <assert.h>
 
+#include <type_traits>
+
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/mldsa.h>
@@ -59,6 +61,8 @@ constexpr int kMaxContextLength = 255;
     static constexpr auto PublicKeysEqual =                                   \
         &BCM_mldsa##kl##_public_keys_equal;                                   \
     static constexpr auto Verify = &MLDSA##kl##_verify;                       \
+    static_assert(std::is_trivially_copyable_v<PublicKey>,                    \
+                  "PublicKey type must be trivially copyable.");              \
   };
 
 MAKE_MLDSA_TRAITS(44)
@@ -105,6 +109,11 @@ class PublicKeyData : public KeyData<Traits> {
  public:
   enum { kAllowUniquePtr = true };
   PublicKeyData() : KeyData<Traits>(/*is_private=*/false) {}
+
+  // Allows copying the PublicKey.
+  explicit PublicKeyData(const typename Traits::PublicKey &key)
+      : KeyData<Traits>(/*is_private=*/false), pub(key) {}
+
   typename Traits::PublicKey pub;
 };
 
@@ -278,6 +287,17 @@ struct MLDSAImplementation {
   }
 
   static bool HasPublic(const EvpPkey *pk) { return true; }
+
+  static bool CopyPublic(EvpPkey *out, const EvpPkey *pk) {
+    auto *public_copy =
+        New<PublicKeyData<Traits>>(*GetKeyData(pk)->GetPublicKey());
+    if (public_copy == nullptr) {
+      OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
+      return false;
+    }
+    evp_pkey_set0(out, pk->ameth, public_copy);
+    return true;
+  }
 
   static evp_decode_result_t DecodePrivate(const EVP_PKEY_ALG *alg,
                                            EvpPkey *out, CBS *params,
@@ -476,6 +496,7 @@ struct MLDSAImplementation {
         &EncodePublic,
         &EqualPublic,
         &HasPublic,
+        &CopyPublic,
         &DecodePrivate,
         &EncodePrivate,
         &HasPrivate,
@@ -494,8 +515,8 @@ struct MLDSAImplementation {
         &PkeySize,
         &PkeyBits,
         /*param_missing=*/nullptr,
+        /*param_copy=*/nullptr,
         /*param_equal=*/nullptr,
-        /*param_cmp=*/nullptr,
         &PkeyFree,
     };
     // TODO(crbug.com/404286922): Use std::copy in C++20, when it's constexpr.

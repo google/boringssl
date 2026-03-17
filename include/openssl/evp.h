@@ -102,6 +102,11 @@ OPENSSL_EXPORT int EVP_PKEY_has_public(const EVP_PKEY *pkey);
 // otherwise.
 OPENSSL_EXPORT int EVP_PKEY_has_private(const EVP_PKEY *pkey);
 
+// EVP_PKEY_copy_public returns a newly-allocated |EVP_PKEY| that contains only
+// the public key of |pkey|, or NULL on error. Parameters, if relevant for the
+// key type, are also copied.
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_copy_public(const EVP_PKEY *pkey);
+
 // The following constants are returned by |EVP_PKEY_id| and specify the type of
 // key.
 #define EVP_PKEY_NONE NID_undef

@@ -83,6 +83,11 @@ struct evp_pkey_asn1_method_st {
   // is not guaranteed and should be checked separately.)
   bool (*pub_present)(const EvpPkey *pk);
 
+  // pub_copy sets the key data of |out| to a newly allocated key data structure
+  // which contains a copy of only the public key of |pk|, freeing any key
+  // previously in |out|. Returns true on success or false on failure.
+  bool (*pub_copy)(EvpPkey *out, const EvpPkey *pk);
+
   // priv_decode decodes |params| and |key| as a PrivateKeyInfo and writes the
   // result into |out|.  It returns |evp_decode_ok| on success, and
   // |evp_decode_error| on error, and |evp_decode_unsupported| if the key type

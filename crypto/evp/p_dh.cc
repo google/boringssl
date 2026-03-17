@@ -103,6 +103,25 @@ static bool dh_has_pub(const EvpPkey *pk) {
   return DH_get0_pub_key(pk_dh) != nullptr;
 }
 
+static bool dh_pub_copy(EvpPkey *out, const EvpPkey *pk) {
+  const DH *pk_dh = reinterpret_cast<const DH *>(pk->pkey);
+  const BIGNUM *public_key = DH_get0_pub_key(pk_dh);
+  if (public_key == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PUBLIC_KEY);
+    return false;
+  }
+  UniquePtr<DH> public_copy_dh(DHparams_dup(pk_dh));
+  BIGNUM *public_key_copy = BN_dup(public_key);
+  if (public_copy_dh == nullptr || public_key_copy == nullptr ||
+      !DH_set0_key(public_copy_dh.get(), public_key_copy, nullptr)) {
+    BN_free(public_key_copy);
+    OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+  evp_pkey_set0(out, pk->ameth, public_copy_dh.release());
+  return true;
+}
+
 static bool dh_has_priv(const EvpPkey *pk) {
   const DH *pk_dh = reinterpret_cast<const DH *>(pk->pkey);
   return DH_get0_priv_key(pk_dh) != nullptr;
@@ -117,6 +136,7 @@ static const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
     /*pub_encode=*/nullptr,
     /*pub_equal=*/dh_pub_equal,
     /*pub_present=*/dh_has_pub,
+    /*pub_dup=*/dh_pub_copy,
     /*priv_decode=*/nullptr,
     /*priv_encode=*/nullptr,
     /*priv_present=*/dh_has_priv,

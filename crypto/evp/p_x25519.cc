@@ -228,6 +228,19 @@ static int x25519_priv_encode(CBB *out, const EvpPkey *pkey) {
 
 static bool x25519_pub_present(const EvpPkey *) { return true; }
 
+static bool x25519_pub_copy(EvpPkey *out, const EvpPkey *pkey) {
+  const X25519_KEY *pkey_x25519 =
+      reinterpret_cast<const X25519_KEY *>(pkey->pkey);
+  X25519_KEY *public_copy = New<X25519_KEY>();
+  if (public_copy == nullptr) {
+    return false;
+  }
+  OPENSSL_memcpy(public_copy->pub, pkey_x25519->pub, 32);
+  public_copy->has_private = false;
+  evp_pkey_set0(out, pkey->ameth, public_copy);
+  return true;
+}
+
 static bool x25519_priv_present(const EvpPkey *pk) {
   const X25519_KEY *key = reinterpret_cast<const X25519_KEY *>(pk->pkey);
   return key->has_private;
@@ -246,6 +259,7 @@ const EVP_PKEY_ASN1_METHOD x25519_asn1_meth = {
     x25519_pub_encode,
     x25519_pub_equal,
     x25519_pub_present,
+    x25519_pub_copy,
     x25519_priv_decode,
     x25519_priv_encode,
     x25519_priv_present,

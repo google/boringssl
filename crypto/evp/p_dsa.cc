@@ -207,6 +207,25 @@ static bool dsa_pub_present(const EvpPkey *pk) {
   return DSA_get0_pub_key(pk_dsa) != nullptr;
 }
 
+static bool dsa_pub_copy(EvpPkey *out, const EvpPkey *pk) {
+  const DSA *pk_dsa = reinterpret_cast<const DSA *>(pk->pkey);
+  const BIGNUM *public_key = DSA_get0_pub_key(pk_dsa);
+  if (public_key == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PUBLIC_KEY);
+    return false;
+  }
+  UniquePtr<DSA> public_copy_dsa(DSAparams_dup(pk_dsa));
+  BIGNUM *public_key_copy = BN_dup(public_key);
+  if (public_copy_dsa == nullptr || public_key_copy == nullptr ||
+      !DSA_set0_key(public_copy_dsa.get(), public_key_copy, nullptr)) {
+    BN_free(public_key_copy);
+    OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+  evp_pkey_set0(out, pk->ameth, public_copy_dsa.release());
+  return true;
+}
+
 static bool dsa_priv_present(const EvpPkey *pk) {
   const DSA *pk_dsa = reinterpret_cast<const DSA *>(pk->pkey);
   return DSA_get0_priv_key(pk_dsa) != nullptr;
@@ -229,6 +248,7 @@ const EVP_PKEY_ASN1_METHOD dsa_asn1_meth = {
     dsa_pub_encode,
     dsa_pub_equal,
     dsa_pub_present,
+    dsa_pub_copy,
 
     dsa_priv_decode,
     dsa_priv_encode,
