@@ -25,6 +25,7 @@
 #include <openssl/mem.h>
 #include <openssl/x509.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
 #include "internal.h"
 
@@ -353,6 +354,20 @@ static int SSL_SESSION_to_bytes_full(const SSL_SESSION *in, CBB *cbb,
   }
 
   return CBB_flush(cbb);
+}
+
+static int SSL_SESSION_to_bytes_if_not_resumable(const SSL_SESSION *in,
+                                                 CBB *out, int for_ticket) {
+  if (in->not_resumable) {
+    // If the caller has an unresumable session, e.g. if |SSL_get_session|
+    // were called on a TLS 1.3 or False Started connection, serialize with
+    // a placeholder value so it is not accidentally deserialized into a
+    // resumable one.
+    const auto kNotResumableSession = StringAsBytes("NOT RESUMABLE");
+    return CBB_add_bytes(out, kNotResumableSession.data(),
+                         kNotResumableSession.size());
+  }
+  return SSL_SESSION_to_bytes_full(in, out, for_ticket);
 }
 
 // SSL_SESSION_parse_string gets an optional ASN.1 OCTET STRING explicitly
@@ -717,29 +732,12 @@ using namespace bssl;
 
 int SSL_SESSION_to_bytes(const SSL_SESSION *in, uint8_t **out_data,
                          size_t *out_len) {
-  if (in->not_resumable) {
-    // If the caller has an unresumable session, e.g. if |SSL_get_session| were
-    // called on a TLS 1.3 or False Started connection, serialize with a
-    // placeholder value so it is not accidentally deserialized into a resumable
-    // one.
-    static const char kNotResumableSession[] = "NOT RESUMABLE";
-
-    *out_len = strlen(kNotResumableSession);
-    *out_data = (uint8_t *)OPENSSL_memdup(kNotResumableSession, *out_len);
-    if (*out_data == nullptr) {
-      return 0;
-    }
-
-    return 1;
-  }
-
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 256) ||
-      !SSL_SESSION_to_bytes_full(in, cbb.get(), 0) ||
+      !SSL_SESSION_to_bytes_if_not_resumable(in, cbb.get(), 0) ||
       !CBB_finish(cbb.get(), out_data, out_len)) {
     return 0;
   }
-
   return 1;
 }
 
@@ -751,31 +749,16 @@ int SSL_SESSION_to_bytes_for_ticket(const SSL_SESSION *in, uint8_t **out_data,
       !CBB_finish(cbb.get(), out_data, out_len)) {
     return 0;
   }
-
   return 1;
 }
 
 int i2d_SSL_SESSION(SSL_SESSION *in, uint8_t **pp) {
-  uint8_t *out;
-  size_t len;
-
-  if (!SSL_SESSION_to_bytes(in, &out, &len)) {
-    return -1;
+  ScopedCBB cbb;
+  if (!CBB_init(cbb.get(), 256) ||
+      !SSL_SESSION_to_bytes_if_not_resumable(in, cbb.get(), 0)) {
+    return 0;
   }
-
-  if (len > INT_MAX) {
-    OPENSSL_free(out);
-    OPENSSL_PUT_ERROR(SSL, ERR_R_OVERFLOW);
-    return -1;
-  }
-
-  if (pp) {
-    OPENSSL_memcpy(*pp, out, len);
-    *pp += len;
-  }
-  OPENSSL_free(out);
-
-  return len;
+  return CBB_finish_i2d(cbb.get(), pp);
 }
 
 SSL_SESSION *SSL_SESSION_from_bytes(const uint8_t *in, size_t in_len,

@@ -1279,12 +1279,20 @@ TEST(SSLTest, SessionEncoding) {
     uint8_t *ptr = encoded.get();
     len = i2d_SSL_SESSION(session.get(), &ptr);
     ASSERT_GT(len, 0) << "i2d_SSL_SESSION failed";
-    ASSERT_EQ(static_cast<size_t>(len), input.size())
-        << "i2d_SSL_SESSION(NULL) returned invalid length";
     ASSERT_EQ(ptr, encoded.get() + input.size())
         << "i2d_SSL_SESSION did not advance ptr correctly";
-    EXPECT_EQ(Bytes(encoded.get(), encoded_len), Bytes(input))
-        << "SSL_SESSION_to_bytes did not round-trip";
+    EXPECT_EQ(Bytes(encoded.get(), len), Bytes(input))
+        << "i2d_SSL_SESSION did not round-trip";
+
+    // Verify the SSL_SESSION encoding round-trips via the legacy allocating
+    // API.
+    uint8_t *aptr = nullptr;
+    len = i2d_SSL_SESSION(session.get(), &aptr);
+    encoded.reset(aptr);
+    ASSERT_GT(len, 0) << "i2d_SSL_SESSION failed";
+    ASSERT_TRUE(aptr != nullptr) << "i2d_SSL_SESSION did not allocate ptr";
+    EXPECT_EQ(Bytes(aptr, len), Bytes(input))
+        << "i2d_SSL_SESSION did not round-trip";
   }
 
   for (const char *input_b64 : {

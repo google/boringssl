@@ -68,7 +68,7 @@ OPENSSL_EXPORT int CBS_get_asn1_implicit_string(CBS *in, CBS *out,
 // error, it calls |CBB_cleanup| on |cbb|.
 //
 // This function may be used to help implement legacy i2d ASN.1 functions.
-int CBB_finish_i2d(CBB *cbb, uint8_t **outp);
+OPENSSL_EXPORT int CBB_finish_i2d(CBB *cbb, uint8_t **outp);
 
 // CBBAsSpan returns a span containing |cbb|'s contents. It does not flush
 // |cbb|. The span is valid until the next operation to |cbb|.
