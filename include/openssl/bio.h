@@ -131,10 +131,13 @@ OPENSSL_EXPORT int BIO_reset(BIO *bio);
 // case of BIO_pair this always returns non-zero.
 OPENSSL_EXPORT int BIO_eof(BIO *bio);
 
-// BIO_set_flags ORs |flags| with |bio->flags|.
+// BIO_set_flags ORs |flags| with |bio->flags|. Unless otherwise documented,
+// flags are private to either BoringSSL or the custom |BIO_METHOD|.
 OPENSSL_EXPORT void BIO_set_flags(BIO *bio, int flags);
 
 // BIO_clear_flags ANDs |bio->flags| with the bitwise-complement of |flags|.
+// Unless otherwise documented, flags are private to either BoringSSL or the
+// custom |BIO_METHOD|.
 OPENSSL_EXPORT void BIO_clear_flags(BIO *bio, int flags);
 
 // BIO_test_flags returns |bio->flags| AND |flags|.
