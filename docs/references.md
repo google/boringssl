@@ -28,6 +28,8 @@ This document collects links to useful references. It is currently incomplete, b
 * [PKIX (RFC 5280)](https://www.rfc-editor.org/rfc/rfc5280.html)
 * [New ASN.1 Modules for PKIX (RFC 5912)](https://www.rfc-editor.org/rfc/rfc5912.html)
 * [ITU X.509](https://www.itu.int/rec/t-rec-x.509)
+* [Service Identity in TLS (RFC 9525)](https://www.rfc-editor.org/rfc/rfc9525.html)
+   * Specifies how to match subject alternative names against reference identifiers
 * [PrivateKeyInfo (PKCS #8, RFC 5208)](https://www.rfc-editor.org/rfc/rfc5208.html)
 * [PKCS #7 (RFC 2315)](https://www.rfc-editor.org/rfc/rfc2315.html)
    * Called CMS 1.5, but this "CMS" now refers to the new version. PKCS #7 is the predecessor
