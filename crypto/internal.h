@@ -186,6 +186,13 @@ inline int buffers_alias(const void *a, size_t a_bytes, const void *b,
   return a_u + a_bytes > b_u && b_u + b_bytes > a_u;
 }
 
+// spans_alias returns one if |a| and |b| alias, and zero otherwise.
+template <typename T>
+inline int spans_alias(Span<const T> a, Span<const T> b) {
+  return buffers_alias(a.data(), a.size() * sizeof(T), b.data(),
+                       b.size() * sizeof(T));
+}
+
 // align_pointer returns |ptr|, advanced to |alignment|. |alignment| must be a
 // power of two, and |ptr| must have at least |alignment - 1| bytes of scratch
 // space.

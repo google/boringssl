@@ -265,7 +265,10 @@ class Array {
 
   // CopyFrom replaces the array with a newly-allocated copy of |in|. It returns
   // true on success and false on error.
+  //
+  // |in| may not alias |this|.
   [[nodiscard]] bool CopyFrom(Span<const T> in) {
+    BSSL_CHECK(!spans_alias(MakeConstSpan(*this), in));
     if (!InitUninitialized(in.size())) {
       return false;
     }
@@ -585,7 +588,10 @@ class InplaceVector {
 
   // TryCopyFrom sets the vector to a copy of |in| and returns true, or returns
   // false if |in| is too large.
+  //
+  // |in| may not alias |this|.
   [[nodiscard]] bool TryCopyFrom(Span<const T> in) {
+    BSSL_CHECK(!spans_alias(MakeConstSpan(*this), in));
     if (in.size() > capacity()) {
       return false;
     }

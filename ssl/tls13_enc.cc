@@ -399,17 +399,17 @@ bool tls13_derive_application_secrets(SSL_HANDSHAKE *hs) {
 static const char kTLS13LabelApplicationTraffic[] = "traffic upd";
 
 bool tls13_rotate_traffic_key(SSL *ssl, enum evp_aead_direction_t direction) {
-  Span<uint8_t> secret = direction == evp_aead_open
-                             ? Span(ssl->s3->read_traffic_secret)
-                             : Span(ssl->s3->write_traffic_secret);
+  InplaceVector<uint8_t, SSL_MAX_MD_SIZE> secret(
+      direction == evp_aead_open ? ssl->s3->read_traffic_secret
+                                 : ssl->s3->write_traffic_secret);
 
   const SSL_SESSION *session = SSL_get_session(ssl);
   const EVP_MD *digest = ssl_session_get_digest(session);
-  return hkdf_expand_label(secret, digest, secret,
+  return hkdf_expand_label(Span(secret), digest, secret,
                            kTLS13LabelApplicationTraffic, {},
                            SSL_is_dtls(ssl)) &&
          tls13_set_traffic_key(ssl, ssl_encryption_application, direction,
-                               session, secret);
+                               session, Span(secret));
 }
 
 static const char kTLS13LabelResumption[] = "res master";
