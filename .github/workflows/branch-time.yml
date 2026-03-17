@@ -41,24 +41,29 @@ jobs:
           git fetch upstream ${{ env.BRANCH_NAME }}
       - name: Verify Commit Times & Lag
         run: |
-          GH_HEAD_HASH=$(git rev-parse HEAD)
-
-          # %ct extracts the Committer Date as a UNIX timestamp
-          GH_COMMIT_TIME=$(git show -s --format=%ct $GH_HEAD_HASH)
-
           # Check if the current GitHub HEAD exists in Upstream
+          GH_HEAD_HASH=$(git rev-parse HEAD)
           if ! git merge-base --is-ancestor $GH_HEAD_HASH upstream/${{ env.BRANCH_NAME }}; then
-             echo "::warning::GitHub HEAD ($GH_HEAD_HASH) is not an ancestor of Upstream HEAD. Has the mirror diverged or rebased?"
-             exit 1
+              echo "::error::GitHub HEAD ($GH_HEAD_HASH) is not an ancestor of Upstream HEAD. Has the mirror diverged or rebased?"
+              exit 1
           fi
 
-          # Check the total time lag between the Upstream HEAD and GitHub HEAD
-          UPSTREAM_HEAD_TIME=$(git show -s --format=%ct upstream/${{ env.BRANCH_NAME }})
-          TIME_DIFF=$((UPSTREAM_HEAD_TIME - GH_COMMIT_TIME))
+          # Get the hash of the most recent upstream commit that is older than MAX_TIME_LAG_SECONDS
+          WANT_COMMIT=$(git rev-list -n 1 --before="${{ env.MAX_TIME_LAG_SECONDS }} seconds ago" upstream/${{ env.BRANCH_NAME }})
 
-          echo "Time difference between Upstream HEAD and GitHub HEAD is $TIME_DIFF seconds."
+          # This should not happen.
+          if [ -z "$WANT_COMMIT" ]; then
+              echo "::error::Could not find an upstream commit older than ${{ env.MAX_TIME_LAG_SECONDS }} seconds."
+              exit 1
+          fi
 
-          if [ "$TIME_DIFF" -gt "${{ env.MAX_TIME_LAG_SECONDS }}" ]; then
-            echo "::error::Time lag is too high! ($TIME_DIFF seconds > ${{ env.MAX_TIME_LAG_SECONDS }} seconds)"
-            exit 1
+          echo "Latest upstream commit as of ${{ env.MAX_TIME_LAG_SECONDS }} seconds ago: $WANT_COMMIT"
+
+          if git merge-base --is-ancestor $WANT_COMMIT $GH_HEAD_HASH; then
+              echo "GitHub HEAD is up-to-date with upstream as of ${{ env.MAX_TIME_LAG_SECONDS }} seconds ago."
+              exit 0
+          else
+              echo "::error::GitHub HEAD ($GH_HEAD_HASH) is behind the upstream commit from ${{ env.MAX_TIME_LAG_SECONDS }} seconds ago ($WANT_COMMIT)."
+              echo "The import may be stuck or delayed."
+              exit 1
           fi
