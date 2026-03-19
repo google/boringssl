@@ -120,6 +120,20 @@ impl<M> TlsCredentialBuilder<M> {
         assert_eq!(rc, 1);
         self
     }
+
+    fn get_credential_methods(&mut self) -> &mut methods::RustCredentialMethods {
+        let methods = unsafe {
+            // Safety: the validity of the handle `self.0` is witnessed by `self`.
+            bssl_sys::SSL_CREDENTIAL_get_ex_data(self.ptr(), *methods::TLS_CREDENTIAL_METHOD)
+        };
+        if methods.is_null() {
+            panic!("context method goes missing")
+        }
+        unsafe {
+            // Safety: `methods` must be constructed by `new_inner`
+            &mut *(methods as *mut methods::RustCredentialMethods)
+        }
+    }
 }
 
 impl TlsCredentialBuilder<X509Mode> {
@@ -184,6 +198,30 @@ where
             bssl_sys::SSL_CREDENTIAL_set1_signing_algorithm_prefs(self.ptr(), ptr, len)
         });
         Ok(self)
+    }
+
+    /// Set private key delegate.
+    ///
+    /// This will override the `TlsConnection` private key delegate.
+    pub fn with_private_key_delegate<T: 'static + PrivateKeyDelegate>(
+        &mut self,
+        key_method: Option<T>,
+    ) -> &mut Self {
+        let cred = self.ptr();
+        if let Some(key_method) = key_method {
+            unsafe {
+                // Safety: we only install our own vtable.
+                bssl_sys::SSL_CREDENTIAL_set_private_key_method(cred, methods::PRIVATE_KEY_METHODS);
+            }
+            self.get_credential_methods().private_key_methods = Some(Box::new(key_method) as _);
+        } else {
+            unsafe {
+                // Safety: we only uninstall the vtable.
+                bssl_sys::SSL_CREDENTIAL_set_private_key_method(cred, core::ptr::null());
+            }
+            self.get_credential_methods().private_key_methods.take();
+        }
+        self
     }
 
     /// Set a private key.
@@ -520,6 +558,142 @@ crypto_buffer_wrapper! {
     pub struct DelegatedCredential
 }
 
+/// Private key operation result.
+pub enum PrivateKeyOperationResult {
+    /// Private key operation is still in-flight.
+    Pending,
+    /// Private key operation has successfully completed, with a result of a certain size.
+    Success(usize),
+    /// Private key operation has failed.
+    Error,
+}
+
+/// Signature operation parameters.
+#[non_exhaustive]
+pub struct SignatureOperation<'a> {
+    /// Output location of the signature.
+    pub output: &'a mut [u8],
+    /// Input message to be signed.
+    pub message: &'a [u8],
+    /// Signature algorithm to use.
+    pub algorithm: SignatureAlgorithm,
+}
+
+/// Decryption operation parameters.
+#[non_exhaustive]
+pub struct DecryptionOperation<'a> {
+    /// Output location of the plaintext.
+    pub output: &'a mut [u8],
+    /// Input ciphertext.
+    pub ciphertext: &'a [u8],
+}
+
+/// Private key operation delegate.
+///
+/// This protocol allows for asynchronous signing and decryption operations.
+/// BoringSSL will call one of [`Self::sign`] or [`Self::decrypt`] for operation initiation,
+/// and call [`Self::complete`] to poll for completion as long as
+/// [`PrivateKeyOperationResult::Pending`] is returned.
+pub trait PrivateKeyDelegate: Send + Sync {
+    /// Sign operation.
+    ///
+    /// The underlying task will be immediately polled once as optimisation,
+    /// in case the operation becomes ready instantly.
+    fn sign(&self, sign_op: SignatureOperation<'_>) -> Box<dyn PrivateKeyOperation>;
+    /// Decryption operation.
+    ///
+    /// The underlying task will be immediately polled once as optimisation,
+    /// in case the operation becomes ready instantly.
+    fn decrypt(&self, decrypt_op: DecryptionOperation<'_>) -> Box<dyn PrivateKeyOperation>;
+}
+
+// NOTE: only `Send` bound is necessary; BoringSSL will not drive an operation from
+// multiple threads.
+/// An outstanding private key operation.
+pub trait PrivateKeyOperation: Send {
+    /// Try to complete the operation.
+    ///
+    /// To complete the operation, the implementation should write the results into `output` and
+    /// signal success by returning [`PrivateKeyOperationResult::Success`] with the number of bytes
+    /// written to the `output`.
+    fn complete(
+        &mut self,
+        context: Option<&mut Context<'_>>,
+        output: &mut [u8],
+    ) -> PrivateKeyOperationResult;
+}
+
+// NOTE: we require `Send + Sync + Unpin` mostly due to practicality of working with
+// async futures.
+/// Asynchronous privatge key operation delegate.
+///
+/// This is the `async` analogue of [`PrivateKeyDelegate`].
+pub trait AsyncPrivateKeyDelegate: Send + Sync + Unpin {
+    /// The future to drive the signing operation.
+    type SignOp: 'static + Unpin + Send + Sync + Future<Output = Option<Vec<u8>>>;
+    /// The future to drive the decryption operation.
+    type DecryptOp: 'static + Unpin + Send + Sync + Future<Output = Option<Vec<u8>>>;
+    /// Sign operation.
+    ///
+    /// The underlying future will be immediately polled once as optimisation,
+    /// in case the operation becomes ready immediately.
+    fn sign(&self, message: &[u8], algorithm: SignatureAlgorithm) -> Self::SignOp;
+    /// Decryption operations.
+    ///
+    /// The underlying future will be immediately polled once as optimisation,
+    /// in case the operation becomes ready immediately.
+    fn decrypt(&self, ciphertext: &[u8]) -> Self::DecryptOp;
+}
+
+/// A convenient asynchronous private key decrypter adapter.
+pub struct AsyncPrivateKeyDelegateAdapter<Inner>(pub Inner);
+
+impl<Inner> PrivateKeyDelegate for AsyncPrivateKeyDelegateAdapter<Inner>
+where
+    Inner: AsyncPrivateKeyDelegate,
+{
+    fn sign(&self, sign_op: SignatureOperation<'_>) -> Box<dyn PrivateKeyOperation> {
+        Box::new(AsyncPrivateKeyOperationAdapter(
+            self.0.sign(sign_op.message, sign_op.algorithm),
+        ))
+    }
+
+    fn decrypt(&self, decrypt_op: DecryptionOperation<'_>) -> Box<dyn PrivateKeyOperation> {
+        Box::new(AsyncPrivateKeyOperationAdapter(
+            self.0.decrypt(decrypt_op.ciphertext),
+        ))
+    }
+}
+
+struct AsyncPrivateKeyOperationAdapter<Fut>(Fut);
+
+impl<Fut> PrivateKeyOperation for AsyncPrivateKeyOperationAdapter<Fut>
+where
+    Fut: Unpin + Send + Sync + Future<Output = Option<Vec<u8>>>,
+{
+    fn complete(
+        &mut self,
+        context: Option<&mut Context<'_>>,
+        output: &mut [u8],
+    ) -> PrivateKeyOperationResult {
+        let Some(cx) = context else {
+            return PrivateKeyOperationResult::Error;
+        };
+        match Pin::new(&mut self.0).poll(cx) {
+            Poll::Ready(None) => PrivateKeyOperationResult::Error,
+            Poll::Ready(Some(res)) => {
+                if res.len() > output.len() {
+                    PrivateKeyOperationResult::Error
+                } else {
+                    output[..res.len()].copy_from_slice(&res);
+                    PrivateKeyOperationResult::Success(res.len())
+                }
+            }
+            Poll::Pending => PrivateKeyOperationResult::Pending,
+        }
+    }
+}
+
 bssl_macros::bssl_enum! {
     /// [IANA] designation of TLS signature algorithms.
     ///
@@ -800,7 +974,7 @@ impl<'a> Iterator for CertificateChainIterator<'a> {
 
 impl ExactSizeIterator for CertificateChainIterator<'_> {
     fn len(&self) -> usize {
-        self.len
+        self.len - self.curr
     }
 }
 

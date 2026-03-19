@@ -23,18 +23,28 @@ use once_cell::sync::Lazy;
 use crate::{
     EarlyCallbackMethods,
     Methods,
+    PrivateKeyMethods,
     VerifyCertificateMethods,
     context::{
         DtlsMode,
         QuicMode,
         TlsMode, //
     },
-    credentials::VerifyCertificate,
-    credentials::early_callback::EarlyCallback,
+    credentials::{
+        PrivateKeyDelegate,
+        VerifyCertificate,
+        early_callback::EarlyCallback,
+        methods::{
+            complete,
+            decrypt,
+            sign, //
+        }, //
+    },
     methods::drop_box_rust_methods, //
 };
 
 pub(crate) struct RustContextMethods<M> {
+    pub(crate) private_key_methods: Option<Box<dyn PrivateKeyDelegate>>,
     pub(crate) verify_certificate_methods: Option<Box<dyn VerifyCertificate>>,
     pub(crate) early_callback_handler: Option<Box<dyn EarlyCallback<M>>>,
     _p: PhantomData<fn() -> M>,
@@ -45,6 +55,7 @@ pub(crate) struct RustContextMethods<M> {
 impl<M> RustContextMethods<M> {
     pub fn new() -> Self {
         Self {
+            private_key_methods: None,
             verify_certificate_methods: None,
             early_callback_handler: None,
             _p: PhantomData,
@@ -65,6 +76,12 @@ impl<M: HasTlsContextMethod> Methods for RustContextMethods<M> {
             // Safety: `ctx` is originated from `Box::into_raw`
             Some(&mut *(methods as *mut RustContextMethods<_>))
         }
+    }
+}
+
+impl<M: HasTlsContextMethod> PrivateKeyMethods for RustContextMethods<M> {
+    fn private_key_methods(&self) -> Option<&dyn PrivateKeyDelegate> {
+        self.private_key_methods.as_deref()
     }
 }
 
@@ -124,4 +141,36 @@ impl HasTlsContextMethod for QuicMode {
         static TLS_CONTEXT_METHOD: Lazy<c_int> = Lazy::new(register_tls_context_vtable::<QuicMode>);
         *TLS_CONTEXT_METHOD
     }
+}
+
+pub(super) trait HasPrivateKeyMethods {
+    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD;
+}
+
+impl HasPrivateKeyMethods for TlsMode {
+    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
+        &bssl_sys::SSL_PRIVATE_KEY_METHOD {
+            sign: Some(sign::<RustContextMethods<TlsMode>>),
+            decrypt: Some(decrypt::<RustContextMethods<TlsMode>>),
+            complete: Some(complete::<RustContextMethods<TlsMode>>),
+        } as _
+    };
+}
+impl HasPrivateKeyMethods for DtlsMode {
+    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
+        &bssl_sys::SSL_PRIVATE_KEY_METHOD {
+            sign: Some(sign::<RustContextMethods<DtlsMode>>),
+            decrypt: Some(decrypt::<RustContextMethods<DtlsMode>>),
+            complete: Some(complete::<RustContextMethods<DtlsMode>>),
+        } as _
+    };
+}
+impl HasPrivateKeyMethods for QuicMode {
+    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
+        &bssl_sys::SSL_PRIVATE_KEY_METHOD {
+            sign: Some(sign::<RustContextMethods<QuicMode>>),
+            decrypt: Some(decrypt::<RustContextMethods<QuicMode>>),
+            complete: Some(complete::<RustContextMethods<QuicMode>>),
+        } as _
+    };
 }

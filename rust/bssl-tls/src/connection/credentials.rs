@@ -31,22 +31,22 @@ use bssl_x509::{
 
 use super::{
     Client,
+    TlsConnection,
+    TlsConnectionBuilder,
+    lifecycle::{
+        EstablishedTlsConnection,
+        TlsConnectionInHandshake, //
+    },
+    methods::HasPrivateKeyMethods,
     methods::HasTlsConnectionMethod, //
 };
 use crate::{
     check_lib_error,
     config::ConfigurationError,
-    connection::{
-        TlsConnection,
-        TlsConnectionBuilder,
-        lifecycle::{
-            EstablishedTlsConnection,
-            TlsConnectionInHandshake, //
-        }, //
-    }, //
     credentials::{
         CertificateType,
         CertificateVerificationMode,
+        PrivateKeyDelegate,
         SignatureAlgorithm,
         TlsCredential,
         VerifyCertificate,
@@ -57,6 +57,53 @@ use crate::{
     has_duplicates, //
 };
 
+/// # Asynchronous private key operations
+impl<R, M> TlsConnectionBuilder<R, M>
+where
+    M: HasPrivateKeyMethods + HasTlsConnectionMethod,
+{
+    /// Set the private key delegate.
+    ///
+    /// This will override the [`crate::context::TlsContext`] private key delegate.
+    pub fn with_private_key_delegate(
+        &mut self,
+        key_method: Option<Box<dyn PrivateKeyDelegate>>,
+    ) -> &mut Self {
+        self.in_handshake().set_private_key_delegate(key_method);
+        self
+    }
+}
+
+/// # Asynchronous private key operations
+impl<R, M> TlsConnectionInHandshake<'_, R, M>
+where
+    M: HasPrivateKeyMethods + HasTlsConnectionMethod,
+{
+    /// Set the private key delegate.
+    ///
+    /// This will override the [`crate::context::TlsContext`] private key delegate.
+    pub fn set_private_key_delegate(
+        &mut self,
+        key_method: Option<Box<dyn PrivateKeyDelegate>>,
+    ) -> &mut Self {
+        let ctx = self.ptr();
+        if key_method.is_some() {
+            unsafe {
+                // Safety: we only install our own vtable.
+                bssl_sys::SSL_set_private_key_method(ctx, <M as HasPrivateKeyMethods>::METHODS);
+            }
+        } else {
+            unsafe {
+                // Safety: we only uninstall the vtable.
+                bssl_sys::SSL_set_private_key_method(ctx, core::ptr::null());
+            }
+        }
+        self.get_connection_methods().private_key_delegate = key_method;
+        self
+    }
+}
+
+/// # Certificate verification
 impl<R, M> TlsConnectionBuilder<R, M>
 where
     M: HasTlsConnectionMethod,
@@ -70,7 +117,13 @@ where
             .set_certificate_verification_mode(mode);
         self
     }
+}
 
+/// # Custom certificate verification
+impl<R, M> TlsConnectionBuilder<R, M>
+where
+    M: HasPrivateKeyMethods + HasTlsConnectionMethod,
+{
     /// Configure the certificate verifier.
     ///
     /// See [`VerifyCertificate`] for how to implement a custom verifier.

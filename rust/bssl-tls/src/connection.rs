@@ -18,7 +18,10 @@ use alloc::boxed::Box;
 use core::{
     ffi::c_int,
     marker::PhantomData,
-    mem::forget,
+    mem::{
+        forget,
+        transmute, //
+    },
     ptr::NonNull,
     task::Waker, //
 };
@@ -28,7 +31,10 @@ use crate::{
         ConnectionMode,
         ProtocolVersion, //
     },
-    connection::methods::waker_data_ref_from_ssl,
+    connection::{
+        lifecycle::TlsConnectionInHandshake,
+        methods::waker_data_ref_from_ssl, //
+    },
     context::TlsMode,
     errors::{
         Error,
@@ -111,6 +117,17 @@ where
     pub fn disable_session(&mut self) -> &mut Self {
         self.as_in_handshake().disable_session();
         self
+    }
+
+    fn in_handshake(&mut self) -> TlsConnectionInHandshake<'_, R, M> {
+        unsafe {
+            // Safety:
+            // - the connection is still technically in handshake phase, so it is safe for internal
+            //   use to configure the handshake through the associated methods.
+            // - `TlsConnection` is a transparent wrapper around `NonNull<bssl_sys::SSL>`.
+            // - the `Role` and `Mode` are matching.
+            TlsConnectionInHandshake(transmute(&mut self.ptr))
+        }
     }
 
     /// Set the session for resumption.

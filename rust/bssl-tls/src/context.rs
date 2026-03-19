@@ -36,7 +36,10 @@ use crate::{
         TlsConnectionBuilder,
         methods::HasTlsConnectionMethod, //
     },
-    context::methods::HasTlsContextMethod,
+    context::methods::{
+        HasPrivateKeyMethods,
+        HasTlsContextMethod, //
+    },
     errors::Error,
     has_duplicates, //
 };
@@ -62,7 +65,10 @@ pub enum QuicMode {}
 pub(crate) trait HasBasicIo {}
 
 /// A collection of supported mode of operations.
-pub trait SupportedMode: HasTlsContextMethod + HasTlsConnectionMethod {}
+pub trait SupportedMode:
+    HasTlsContextMethod + HasTlsConnectionMethod + HasPrivateKeyMethods
+{
+}
 
 impl SupportedMode for TlsMode {}
 impl SupportedMode for DtlsMode {}
