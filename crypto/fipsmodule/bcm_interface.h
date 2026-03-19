@@ -628,6 +628,9 @@ OPENSSL_EXPORT bcm_infallible
 BCM_mlkem768_public_from_private(MLKEM768_public_key *out_public_key,
                                  const MLKEM768_private_key *private_key);
 
+OPENSSL_EXPORT const MLKEM768_public_key *BCM_mlkem768_public_of_private(
+    const MLKEM768_private_key *private_key);
+
 OPENSSL_EXPORT bcm_infallible
 BCM_mlkem768_encap(uint8_t out_ciphertext[MLKEM768_CIPHERTEXT_BYTES],
                    uint8_t out_shared_secret[MLKEM_SHARED_SECRET_BYTES],
@@ -700,6 +703,9 @@ BCM_mlkem1024_private_key_from_seed(MLKEM1024_private_key *out_private_key,
 OPENSSL_EXPORT bcm_infallible
 BCM_mlkem1024_public_from_private(MLKEM1024_public_key *out_public_key,
                                   const MLKEM1024_private_key *private_key);
+
+OPENSSL_EXPORT const MLKEM1024_public_key *BCM_mlkem1024_public_of_private(
+    const MLKEM1024_private_key *private_key);
 
 OPENSSL_EXPORT bcm_infallible
 BCM_mlkem1024_encap(uint8_t out_ciphertext[MLKEM1024_CIPHERTEXT_BYTES],

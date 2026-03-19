@@ -891,6 +891,10 @@ public_key<RANK768> *public_key_768_from_external(
     MLKEM768_public_key *external) {
   return reinterpret_cast<public_key<RANK768> *>(external);
 }
+const MLKEM768_public_key *public_key_768_to_external(
+    const public_key<RANK768> *public_key) {
+  return reinterpret_cast<const MLKEM768_public_key *>(public_key);
+}
 
 static_assert(sizeof(MLKEM1024_public_key) >= sizeof(public_key<RANK1024>));
 static_assert(alignof(MLKEM1024_public_key) >= alignof(public_key<RANK1024>));
@@ -902,6 +906,11 @@ const public_key<RANK1024> *public_key_1024_from_external(
 public_key<RANK1024> *public_key_1024_from_external(
     MLKEM1024_public_key *external) {
   return reinterpret_cast<public_key<RANK1024> *>(external);
+}
+
+const MLKEM1024_public_key *public_key_1024_to_external(
+    const public_key<RANK1024> *public_key) {
+  return reinterpret_cast<const MLKEM1024_public_key *>(public_key);
 }
 
 static_assert(sizeof(MLKEM768_private_key) >= sizeof(private_key<RANK768>));
@@ -1235,6 +1244,20 @@ bcm_infallible bssl::BCM_mlkem1024_public_from_private(
       mlkem::private_key_1024_from_external(private_key);
   *pub = priv->pub;
   return bcm_infallible::approved;
+}
+
+const MLKEM768_public_key *bssl::BCM_mlkem768_public_of_private(
+    const MLKEM768_private_key *private_key) {
+  const mlkem::private_key<RANK768> *const priv =
+      mlkem::private_key_768_from_external(private_key);
+  return mlkem::public_key_768_to_external(&priv->pub);
+}
+
+const MLKEM1024_public_key *bssl::BCM_mlkem1024_public_of_private(
+    const MLKEM1024_private_key *private_key) {
+  const mlkem::private_key<RANK1024> *const priv =
+      mlkem::private_key_1024_from_external(private_key);
+  return mlkem::public_key_1024_to_external(&priv->pub);
 }
 
 // Calls |MLKEM768_encap_external_entropy| with random bytes from
