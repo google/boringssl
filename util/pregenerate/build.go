@@ -329,8 +329,16 @@ func MakeBuildFiles(targets map[string]build.Target) []*Task {
 	}
 }
 
-// addGeneratedHeader adds a generated `header` to `targetsOut`.
-func addGeneratedHeader(targetsOut map[string]build.Target, header string) {
+// addGeneratedPublicHeader adds a generated public `header` to `targetsOut`.
+func addGeneratedPublicHeader(targetsOut map[string]build.Target, header string) {
+	target := targetsOut["crypto"]
+	target.Hdrs = append(target.Hdrs, header)
+	slices.Sort(target.Hdrs)
+	targetsOut["crypto"] = target
+}
+
+// addGeneratedInternalHeader adds a generated internal `header` to `targetsOut`.
+func addGeneratedInternalHeader(targetsOut map[string]build.Target, header string) {
 	target := targetsOut["crypto"]
 	target.InternalHdrs = append(target.InternalHdrs, header)
 	slices.Sort(target.InternalHdrs)
@@ -346,10 +354,10 @@ func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string, target
 		syms, err = CollectAsmGlobals(allAsmSrcs)
 	}
 	var once sync.Once
-	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols_internal_c.h")
-	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols_internal_S.h")
-	addGeneratedHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_win_asm.inc")
-	addGeneratedHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc")
+	addGeneratedInternalHeader(targetsOut, "include/openssl/prefix_symbols_internal_c.h")
+	addGeneratedInternalHeader(targetsOut, "include/openssl/prefix_symbols_internal_S.h")
+	addGeneratedInternalHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_win_asm.inc")
+	addGeneratedInternalHeader(targetsOut, "gen/boringssl_prefix_symbols_internal_x86_64_win_asm.inc")
 	return []*Task{
 		NewSimpleTask("prefix_symbols_internal", "include/openssl/prefix_symbols_internal_c.h", func() ([]byte, error) {
 			once.Do(buildHeadersOnce)
@@ -372,7 +380,7 @@ func MakeCollectAsmGlobalTasks(perlAsmTasks []*Task, allAsmSrcs []string, target
 
 // MakePrefixingIncludes returns the tasks to generate the header files for symbol prefixing.
 func MakePrefixingIncludes(in map[string]InputTarget, targetsOut map[string]build.Target) []*Task {
-	addGeneratedHeader(targetsOut, "include/openssl/prefix_symbols.h")
+	addGeneratedPublicHeader(targetsOut, "include/openssl/prefix_symbols.h")
 	return []*Task{
 		NewSimpleTask("prefix_symbols", "include/openssl/prefix_symbols.h", func() ([]byte, error) {
 			var headers []string
