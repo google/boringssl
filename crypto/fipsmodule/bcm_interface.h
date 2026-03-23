@@ -644,6 +644,11 @@ BCM_mlkem768_decap(uint8_t out_shared_secret[MLKEM_SHARED_SECRET_BYTES],
 OPENSSL_EXPORT bcm_status BCM_mlkem768_marshal_public_key(
     CBB *out, const MLKEM768_public_key *public_key);
 
+// BCM_mlkem768_public_keys_equal returns one if |a| and |b| are equal and zero
+// otherwise.
+int BCM_mlkem768_public_keys_equal(const MLKEM768_public_key *a,
+                                   const MLKEM768_public_key *b);
+
 OPENSSL_EXPORT bcm_status
 BCM_mlkem768_parse_public_key(MLKEM768_public_key *out_public_key, CBS *in);
 
@@ -719,6 +724,11 @@ BCM_mlkem1024_decap(uint8_t out_shared_secret[MLKEM_SHARED_SECRET_BYTES],
 
 OPENSSL_EXPORT bcm_status BCM_mlkem1024_marshal_public_key(
     CBB *out, const MLKEM1024_public_key *public_key);
+
+// BCM_mlkem1024_public_keys_equal returns one if |a| and |b| are equal and zero
+// otherwise.
+int BCM_mlkem1024_public_keys_equal(const MLKEM1024_public_key *a,
+                                    const MLKEM1024_public_key *b);
 
 OPENSSL_EXPORT bcm_status
 BCM_mlkem1024_parse_public_key(MLKEM1024_public_key *out_public_key, CBS *in);
