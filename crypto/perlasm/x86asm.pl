@@ -291,8 +291,9 @@ $comment source tree. Do not edit by hand.
 ___
     if ($win32) {
         print <<___ unless $masm;
+\%ifdef BORINGSSL_PREFIX
 \%include "boringssl_prefix_symbols_internal_x86_win_asm.inc"
-
+\%endif
 \%ifidn __OUTPUT_FORMAT__, win32
 ___
         print @out;

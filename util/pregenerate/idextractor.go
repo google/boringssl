@@ -205,26 +205,23 @@ func BuildCRenamingInclude(syms cSymbolData) []byte {
 #define OPENSSL_HEADER_PREFIX_SYMBOLS_H
 
 
-#include <openssl/opensslconf.h>  // For BORINGSSL_ALWAYS_USE_STATIC_INLINE.
+#define BORINGSSL_ADD_PREFIX_CONCAT_INNER(a, b) a##_##b
+#define BORINGSSL_ADD_PREFIX_CONCAT(a, b) \
+  BORINGSSL_ADD_PREFIX_CONCAT_INNER(a, b)
+#define BORINGSSL_ADD_PREFIX(s) BORINGSSL_ADD_PREFIX_CONCAT(BORINGSSL_PREFIX, s)
 
-#if defined(BORINGSSL_PREFIX)
-
-#if defined(__USER_LABEL_PREFIX__)
-#define BORINGSSL_USER_LABEL_PREFIX __USER_LABEL_PREFIX__
-#else
-#define BORINGSSL_USER_LABEL_PREFIX
-#endif
-
-#define BORINGSSL_CONCAT_INNER(a, b) a##b
-#define BORINGSSL_CONCAT(a, b) BORINGSSL_CONCAT_INNER(a, b)
-#define BORINGSSL_ADD_PREFIX(s) BORINGSSL_CONCAT(BORINGSSL_PREFIX, BORINGSSL_CONCAT(_, s))
-#define BORINGSSL_ADD_USER_LABEL_AND_PREFIX(s) BORINGSSL_CONCAT(BORINGSSL_CONCAT(BORINGSSL_USER_LABEL_PREFIX, BORINGSSL_PREFIX), BORINGSSL_CONCAT(_, s))
+#if defined(__APPLE__)
+#define BORINGSSL_SYMBOL_INNER(s) _##s
+#define BORINGSSL_SYMBOL(s) BORINGSSL_SYMBOL_INNER(s)
+#else  // __APPLE__
+#define BORINGSSL_SYMBOL(s) s
+#endif  // __APPLE__
 
 `)
-	output.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME) && !defined(__ASSEMBLER__)\n")
+	output.WriteString("#if defined(__PRAGMA_REDEFINE_EXTNAME)\n")
 	output.WriteString("\n")
 	for _, sym := range slices.Sorted(maps.Keys(syms.externDeclarations)) {
-		fmt.Fprintf(&output, "#pragma redefine_extname %s BORINGSSL_ADD_USER_LABEL_AND_PREFIX(%s)\n", sym, sym)
+		fmt.Fprintf(&output, "#pragma redefine_extname %s BORINGSSL_SYMBOL(BORINGSSL_ADD_PREFIX(%s))\n", sym, sym)
 	}
 	output.WriteString("\n")
 	output.WriteString("#else  // __PRAGMA_REDEFINE_EXTNAME\n")
@@ -243,8 +240,6 @@ func BuildCRenamingInclude(syms cSymbolData) []byte {
 	output.WriteString("\n")
 	output.WriteString("#endif  // !BORINGSSL_ALWAYS_USE_STATIC_INLINE\n")
 	output.WriteString(`
-#endif  // BORINGSSL_PREFIX
-
 #endif  // OPENSSL_HEADER_PREFIX_SYMBOLS_H
 `)
 	return output.Bytes()
