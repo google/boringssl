@@ -99,6 +99,34 @@ cq_group = luci.cq_group(
     name = "main-cq",
     watch = cq.refset(REPO_URL, refs = ["refs/heads/.+"]),
     retry_config = cq.RETRY_ALL_FAILURES,
+    post_actions = [
+      # Vote +1 on Presubmit-BoringSSL-Verified for successful dry runs.
+      cq.post_action_gerrit_label_votes(
+        name = "presubmit-verification-success",
+        conditions = [
+          cq.post_action_triggering_condition(
+            mode = cq.MODE_DRY_RUN,
+            statuses = [cq.STATUS_SUCCEEDED],
+          )
+        ],
+        labels = {
+          "Presubmit-BoringSSL-Verified": 1,
+        },
+      ),
+      # Vote -1 on Presubmit-BoringSSL-Verified for failed dry runs.
+      cq.post_action_gerrit_label_votes(
+        name = "presubmit-verification-failure",
+        conditions = [
+          cq.post_action_triggering_condition(
+            mode = cq.MODE_DRY_RUN,
+            statuses = [cq.STATUS_FAILED, cq.STATUS_CANCELLED],
+          )
+        ],
+        labels = {
+          "Presubmit-BoringSSL-Verified": -1,
+        },
+      ),
+    ],
 )
 
 poller = luci.gitiles_poller(
