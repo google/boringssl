@@ -49,6 +49,14 @@ impl TryFrom<c_int> for ProtocolVersion {
     }
 }
 
+bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone)]
+    pub(crate) struct ConnectionMode: u32 {
+        /// Deny session creation.
+        const MODE_NO_SESSION_CREATION = bssl_sys::SSL_MODE_NO_SESSION_CREATION as u32;
+    }
+}
+
 bssl_enum! {
     /// Key exchange groups for TLS or DTLS
     #[derive(Clone, Copy, PartialEq, Eq)]

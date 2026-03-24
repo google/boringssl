@@ -31,7 +31,7 @@ use core::{
 };
 
 use crate::{
-    config::ProtocolVersion,
+    config::{ConnectionMode, ProtocolVersion},
     connection::methods::waker_data_ref_from_ssl,
     context::TlsMode,
     errors::{
@@ -101,6 +101,16 @@ where
             ptr,
             _p: PhantomData,
         }
+    }
+
+    /// Disable session creation.
+    pub fn disable_session(&mut self) -> &mut Self {
+        let ptr = self.ptr();
+        unsafe {
+            // Safety: the validity of the handle `ptr` is witnessed by `self`.
+            bssl_sys::SSL_set_mode(ptr, ConnectionMode::MODE_NO_SESSION_CREATION.bits());
+        }
+        self
     }
 }
 
