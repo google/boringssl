@@ -15,8 +15,14 @@
 //! TLS Connection transport settings
 //!
 
+use core::mem::{MaybeUninit, transmute};
+
 use crate::{
+    check_lib_error,
+    check_tls_error,
+    config::ConfigurationError,
     connection::{
+        TlsConnectionBuilder,
         TlsConnectionRef,
         methods::HasTlsConnectionMethod, //
     },
@@ -73,6 +79,60 @@ where
         Ok(self)
     }
 
+    /// **For DTLS only**, trigger timeout handling on the connection.
+    ///
+    /// On success, this method call returns `true` when a timeout is hit and successfully handled;
+    /// `false` when no timeout has expired yet.
+    pub fn dtlsv1_handle_timeout(&mut self) -> Result<bool, Error> {
+        let conn = self.ptr();
+        let rc = unsafe {
+            // Safety: the connection handle here is still valid.
+            bssl_sys::DTLSv1_handle_timeout(conn)
+        };
+        if rc == 0 {
+            return Ok(false);
+        }
+        let _ = check_tls_error!(conn, rc);
+        Ok(true)
+    }
+
+    /// **For DTLS only**, get connection's remaining timeout.
+    ///
+    /// If a timeout is in effect, this method call returns the remaining seconds,
+    /// followed by the remaining microseconds.
+    pub fn dtlsv1_get_timeout(&self) -> Option<(i64, i64)> {
+        #[cfg(windows)]
+        #[repr(C)]
+        struct timeval {
+            tv_sec: core::ffi::c_long,
+            tv_usec: core::ffi::c_long,
+        }
+        #[cfg(not(windows))]
+        use bssl_sys::timeval;
+
+        let mut timeval = MaybeUninit::<timeval>::zeroed();
+        let rc = unsafe {
+            // Safety:
+            // - the validity of the handle `self.0` is witnessed by `self`;
+            // - the buffer for timeval is valid.
+            // - on Windows, the timeval structure should match the winsock2.h definition precisely.
+            bssl_sys::DTLSv1_get_timeout(self.ptr(), transmute(timeval.as_mut_ptr()))
+        };
+        match rc {
+            1 => {
+                let timeval = unsafe {
+                    // Safety: timeval is now valid as per BoringSSL specification.
+                    timeval.assume_init()
+                };
+                Some((timeval.tv_sec as i64, timeval.tv_usec as i64))
+            }
+            0 => None,
+            rc => {
+                unreachable!("BoringSSL should never return {rc} when calling dtlsv1_get_timeout")
+            }
+        }
+    }
+
     /// Check if the underlying **transport** has closed its write end.
     pub fn is_write_closed(&self) -> bool {
         self.get_connection_methods_ref()
@@ -95,5 +155,35 @@ where
             .bio
             .as_ref()
             .map_or(true, |bio| bio.as_ref().read_eos || bio.as_ref().write_eos)
+    }
+}
+
+/// # Transport configurations
+///
+/// These are the methods to configure the underlying IO drivers and transport configurations.
+impl<R, M> TlsConnectionBuilder<R, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// **For DTLS only**, set connection's Maximum Transmission Unit.
+    pub fn with_mtu(&mut self, mtu: u32) -> Result<&mut Self, Error> {
+        let conn = self.ptr();
+        let mtu = mtu
+            .try_into()
+            .map_err(|_| Error::Configuration(ConfigurationError::InvalidParameters))?;
+        check_lib_error!(unsafe {
+            // Safety: `conn` is still valid.
+            bssl_sys::SSL_set_mtu(conn, mtu)
+        });
+        Ok(self)
+    }
+
+    /// **For DTLS only**, set connection's handshake timeout in milliseconds.
+    pub fn with_dtlsv1_initial_timeout(&mut self, milliseconds: u32) -> Result<&mut Self, Error> {
+        unsafe {
+            // Safety: the validity of the handle `self.0` is witnessed by `self`.
+            bssl_sys::DTLSv1_set_initial_timeout_duration(self.ptr(), milliseconds);
+        }
+        Ok(self)
     }
 }
