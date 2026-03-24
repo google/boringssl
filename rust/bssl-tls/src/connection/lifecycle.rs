@@ -84,6 +84,14 @@ impl<R, M> TlsConnectionRef<R, M> {
     }
 }
 
+impl<R> TlsConnectionRef<R, TlsMode> {
+    /// Inspect if the connection is suspended for which reason, after invocation of I/O methods.
+    pub fn take_pending_reason(&mut self) -> Option<TlsRetryReason> {
+        let methods = self.get_connection_methods();
+        methods.take_pending_reason()
+    }
+}
+
 /// A handle to the connection that is valid only during handshake.
 #[repr(transparent)]
 pub struct TlsConnectionInHandshake<'a, R, M>(pub(crate) &'a mut TlsConnectionRef<R, M>);

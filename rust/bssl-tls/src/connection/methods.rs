@@ -25,17 +25,38 @@ use once_cell::sync::Lazy;
 use crate::{
     Methods, abort_on_panic,
     context::{QuicMode, TlsMode},
+    errors::TlsRetryReason,
+    io::RustBioHandle,
     methods::drop_box_rust_methods,
 };
 
 /// The associated state to the [`super::TlsConnection`].
 pub(super) struct RustConnectionMethods<Mode> {
+    /// A handle to a `BIO` managed by this crate.
+    pub bio: Option<RustBioHandle>,
+    /// A mailbox to propagate IO retrying reasons.
+    pub pending_reason: Option<TlsRetryReason>,
     _p: PhantomData<fn() -> Mode>,
 }
 
 impl<M> RustConnectionMethods<M> {
     pub fn new() -> Self {
-        Self { _p: PhantomData }
+        Self {
+            bio: None,
+            pending_reason: None,
+            _p: PhantomData,
+        }
+    }
+
+    pub fn take_pending_reason(&mut self) -> Option<TlsRetryReason> {
+        self.pending_reason.take()
+    }
+
+    /// Propagate waker to the handlers.
+    pub fn set_waker(&mut self, waker: &Waker) {
+        if let Some(bio) = &mut self.bio {
+            bio.set_waker(waker);
+        }
     }
 }
 

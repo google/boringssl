@@ -41,6 +41,7 @@ pub mod context;
 pub mod credentials;
 pub mod errors;
 mod ffi;
+pub mod io;
 mod methods;
 #[macro_use]
 #[doc(hidden)]

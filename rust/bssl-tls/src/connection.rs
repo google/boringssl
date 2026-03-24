@@ -16,6 +16,7 @@
 
 use alloc::boxed::Box;
 use core::{
+    ffi::c_int,
     marker::PhantomData,
     mem::transmute,
     ops::{Deref, DerefMut},
@@ -24,12 +25,17 @@ use core::{
 };
 
 use crate::{
-    config::ProtocolVersion, connection::methods::waker_data_ref_from_ssl, context::TlsMode,
+    config::ProtocolVersion,
+    connection::methods::waker_data_ref_from_ssl,
+    context::TlsMode,
+    errors::{Error, TlsRetryReason},
+    io::IoStatus,
 };
 
 mod credentials;
 pub mod lifecycle;
 pub(crate) mod methods;
+pub mod transport;
 
 /// Server role - the connection runs as a server.
 pub enum Server {}
@@ -108,7 +114,26 @@ where
     }
 }
 
-#[allow(unused)]
+impl<R, M> TlsConnectionRef<R, M> {
+    #[allow(unused)]
+    pub(crate) fn categorise_error_for_io(&self, rc: c_int) -> Result<IoStatus, Error> {
+        let reason = unsafe {
+            // Safety: we only want to extract the last I/O error on an existing valid connection.
+            bssl_sys::SSL_get_error(self.ptr(), rc)
+        };
+        let res = match TlsRetryReason::try_from(reason) {
+            Ok(TlsRetryReason::PeerCloseNotify) => Ok(IoStatus::EndOfStream),
+            Ok(reason) => Ok(IoStatus::Retry(reason)),
+            Err(_) => Err(Error::extract_lib_err()),
+        };
+        unsafe {
+            // Safety: we only clear the error on the current thread.
+            bssl_sys::ERR_clear_error();
+        }
+        res
+    }
+}
+
 impl<R, M> TlsConnectionRef<R, M>
 where
     M: methods::HasTlsConnectionMethod,
@@ -146,6 +171,8 @@ where
         } else {
             *waker_data = Some(waker.clone());
         }
+        let methods = self.get_connection_methods();
+        methods.set_waker(waker);
     }
 }
 
