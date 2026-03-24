@@ -48,6 +48,7 @@ use crate::{
 
 mod credentials;
 mod methods;
+mod sessions;
 
 /// TLS or DTLS mode
 pub enum TlsMode {}
