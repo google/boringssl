@@ -28,6 +28,7 @@ use core::{
 };
 
 use crate::{
+    alerts::AlertDescription,
     check_tls_error,
     connection::{
         methods::HasTlsConnectionMethod, //
@@ -123,6 +124,41 @@ impl<R, M> TlsConnectionRef<R, M> {
         };
         let code = i32::try_from(code).ok()?;
         TlsPendingData::try_from(code).ok()
+    }
+}
+
+/// # Alerts
+impl<R, M> TlsConnectionRef<R, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// Send fatal alert.
+    ///
+    /// This would usually lead to termination of the connection.
+    pub fn send_fatal_alert(
+        &mut self,
+        alert: AlertDescription,
+    ) -> Result<Option<TlsRetryReason>, Error> {
+        Ok(check_tls_error!(self.ptr(), {
+            // Safety: `self.0` is still a valid handle and `alert` is valid by construction.
+            bssl_sys::SSL_send_fatal_alert(self.ptr(), alert as u8)
+        }))
+    }
+
+    /// Send fatal alert asynchronously.
+    pub fn async_send_fatal_alert<'a>(
+        &'a mut self,
+        alert: AlertDescription,
+    ) -> impl 'a + Send + Future<Output = Result<(), Error>> {
+        poll_fn(move |cx| {
+            self.set_waker(cx.waker());
+            match self.send_fatal_alert(alert) {
+                Ok(Some(TlsRetryReason::WantRead | TlsRetryReason::WantWrite)) => Poll::Pending,
+                Ok(None) => Poll::Ready(Ok(())),
+                Ok(Some(reason)) => unreachable!("unexpected retry reason {reason:?}"),
+                Err(e) => Poll::Ready(Err(e)),
+            }
+        })
     }
 }
 

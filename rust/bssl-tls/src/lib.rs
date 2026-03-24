@@ -35,6 +35,7 @@ extern crate core;
 
 use core::panic::AssertUnwindSafe;
 
+pub mod alerts;
 pub mod config;
 pub mod connection;
 pub mod context;
