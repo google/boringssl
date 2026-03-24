@@ -14,8 +14,25 @@
 
 //! TLS credentials
 
-use alloc::boxed::Box;
-use core::{ffi::c_int, marker::PhantomData, mem::forget, ptr::NonNull};
+use alloc::{boxed::Box, vec, vec::Vec};
+use core::{
+    ffi::{CStr, c_int},
+    fmt::Debug,
+    marker::PhantomData,
+    mem::forget,
+    ptr::{NonNull, null_mut},
+};
+
+use bssl_x509::{errors::PemReason, keys::PrivateKey};
+
+use crate::{
+    check_lib_error,
+    config::ConfigurationError,
+    context::CertificateCache,
+    crypto_buffer_wrapper,
+    errors::{Error, IoError},
+    ffi::{Alloc, Bio, sanitize_slice, slice_into_ffi_raw_parts},
+};
 
 pub(crate) mod methods;
 
@@ -24,6 +41,10 @@ pub struct TlsCredentialBuilder<Mode>(NonNull<bssl_sys::SSL_CREDENTIAL>, Phantom
 
 /// X.509 credential
 pub enum X509Mode {}
+
+pub(crate) trait NeedsPrivateKey {}
+
+impl NeedsPrivateKey for X509Mode {}
 
 // Safety: At this type state, the credential handle is exclusively owned.
 unsafe impl<M> Send for TlsCredentialBuilder<M> {}
@@ -71,6 +92,56 @@ impl TlsCredentialBuilder<X509Mode> {
             PhantomData,
         );
         this.set_ex_data()
+    }
+}
+
+impl<M> TlsCredentialBuilder<M>
+where
+    M: NeedsPrivateKey,
+{
+    /// Set a private key.
+    ///
+    /// **NOTE**: Call this method after setting the certificates with
+    /// [`Self::with_certificate_chain`].
+    ///
+    /// This method errs when the private key does not match the public key in the leaf certificate
+    /// as configured through [`Self::with_certificate_chain`].
+    pub fn with_private_key(&mut self, mut key: PrivateKey) -> Result<&mut Self, Error> {
+        let rc = unsafe {
+            // Safety:
+            // - both `key.0` and `self.0` are still valid.
+            // - `bssl-tls` uses the same BoringSSL as that is linked to `bssl-sys` and `bssl-x509`.
+            // - the `EVP_PKEY` handle will outlive `key` because this call will claim ownership.
+            bssl_sys::SSL_CREDENTIAL_set1_private_key(self.ptr(), key.as_mut_ptr())
+        };
+        if rc != 1 {
+            Err(Error::Configuration(ConfigurationError::MismatchingKeyPair))
+        } else {
+            Ok(self)
+        }
+    }
+}
+
+impl TlsCredentialBuilder<X509Mode> {
+    /// Set certificate chain.
+    ///
+    /// The leaf, also known as end-entity, certificate **must come first** in `certs`.
+    /// This method returns [`ConfigurationError::InvalidParameters`] if `certs` are empty.
+    pub fn with_certificate_chain(&mut self, certs: &[Certificate]) -> Result<&mut Self, Error> {
+        if certs.is_empty() {
+            return Err(Error::Configuration(ConfigurationError::InvalidParameters));
+        }
+        let certs: &[*mut bssl_sys::CRYPTO_BUFFER] = unsafe {
+            // Safety: `Certificate` is a `repr(transparent)` wrapper around
+            // `*mut bssl_sys::CRYPTO_BUFFER`.
+            core::mem::transmute(certs)
+        };
+        let (ptr, len) = slice_into_ffi_raw_parts(certs);
+        check_lib_error!(unsafe {
+            // Safety
+            bssl_sys::SSL_CREDENTIAL_set1_cert_chain(self.ptr(), ptr, len)
+        });
+        Ok(self)
     }
 }
 
@@ -129,6 +200,185 @@ impl Drop for TlsCredential {
     }
 }
 
+crypto_buffer_wrapper! {
+    /// A dumb handle to a **possibly valid** TLS certificate.
+    pub struct Certificate
+}
+
+impl Certificate {
+    /// Parse certificates from PEM-encoded blocks.
+    ///
+    /// The parsing will skip anything that is not a certificate or empty.
+    /// However, this method does not verify if the content is actually a valid, correctly signed
+    /// DER-encoded X.509 certificate.
+    /// The method returns at the first error encountered.
+    pub fn parse_all_from_pem(
+        cert: &[u8],
+        cache: Option<&CertificateCache>,
+    ) -> Result<Vec<Self>, Error> {
+        let mut bio = Bio::from_bytes(cert).unwrap();
+        let mut res = vec![];
+        loop {
+            match Self::parse_one(&mut bio, cache) {
+                Ok((cert, eos)) => {
+                    res.push(cert);
+                    if eos {
+                        return Ok(res);
+                    }
+                }
+                Err(Error::PemReason(PemReason::NoStartLine)) => return Ok(res),
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    /// Parse the first certificate from the PEM-encoded data.
+    pub fn parse_one_from_pem(
+        cert: &[u8],
+        cache: Option<&CertificateCache>,
+    ) -> Result<Self, Error> {
+        let mut bio = Bio::from_bytes(cert)?;
+        let (cert, _) = Self::parse_one(&mut bio, cache)?;
+        Ok(cert)
+    }
+
+    fn parse_one(bio: &mut Bio, cache: Option<&CertificateCache>) -> Result<(Self, bool), Error> {
+        loop {
+            let mut name = null_mut();
+            let mut header = null_mut();
+            let mut data = null_mut();
+            let mut len = 0;
+            let ret = unsafe {
+                // Safety:
+                // - `name`, `header`, `data` and `len` are valid and aligned.
+                // - `bio` is still valid.
+                bssl_sys::PEM_read_bio(
+                    bio.ptr(),
+                    &raw mut name,
+                    &raw mut header,
+                    &raw mut data,
+                    &raw mut len,
+                )
+            };
+            let eof = unsafe {
+                // Safety: `bio` is still valid.
+                bssl_sys::BIO_eof(bio.ptr()) != 0
+            };
+            let name = Alloc(name);
+            let header = Alloc(header);
+            let data = Alloc(data);
+            if name.0.is_null() || header.0.is_null() || data.0.is_null() || ret == 0 {
+                return Err(Error::extract_lib_err());
+            }
+            if len == 0 {
+                continue;
+            }
+            let Ok(len) = usize::try_from(len) else {
+                return Err(Error::Io(IoError::TooLong));
+            };
+            let buf = unsafe {
+                // Safety:
+                // - `name.0` is NUL-terminated by BoringSSL invariant.
+                // - the lifetime of `buf` is outlived by `name.0`.
+                CStr::from_ptr(name.0)
+            };
+            if buf.to_bytes() != b"CERTIFICATE" {
+                continue;
+            }
+            let Some(contents) = (unsafe {
+                // Safety: the slice is only used within the loop and we will copy the contents
+                // when constructing the certificate object.
+                sanitize_slice(data.0, len)
+            }) else {
+                return Err(Error::Io(IoError::TooLong));
+            };
+            let cert = Certificate::from_bytes(contents, cache)?;
+            return Ok((cert, eof));
+        }
+    }
+
+    /// Extract the DER encoded certificate.
+    pub fn as_der_bytes(&self) -> &[u8] {
+        let (data, len) = unsafe {
+            // Safety: `self.0` is still valid.
+            (
+                bssl_sys::CRYPTO_BUFFER_data(self.ptr()),
+                bssl_sys::CRYPTO_BUFFER_len(self.ptr()),
+            )
+        };
+        if data.is_null() || len == 0 || len >= isize::MAX as usize {
+            return &[];
+        }
+        unsafe {
+            // Safety: `data` will be outlived by `self`
+            core::slice::from_raw_parts(data, len)
+        }
+    }
+}
+
+crypto_buffer_wrapper! {
+    /// A dumb handle to a **possibly valid** OCSP Response.
+    pub struct OcspResponse
+}
+
+crypto_buffer_wrapper! {
+    /// A dumb handle to a **possibly valid** certificate property list.
+    pub struct CertificatePropertyList
+}
+
+crypto_buffer_wrapper! {
+    /// A dumb handle to a **possibly valid** certificate timestamp list.
+    ///
+    /// This list must contain at least one Signed Certificate Timestamp, or SCT for short,
+    /// serialised as *[SignedCertificateTimestampList]*.
+    ///
+    /// The list begins with a length encoded as a big-endian 16-byte unsigned integer.
+    /// Thereon follows a simple concatenation of SCTs.
+    /// Each SCT is prefixed with a length encoded as a big-endian 16-byte unsigned integer.
+    ///
+    /// [SignedCertificateTimestampList]: <https://tools.ietf.org/html/rfc6962#section-3.3>
+    pub struct SignedCertificateTimestampList
+}
+
+crypto_buffer_wrapper! {
+    /// A dumb handle to a **possibly valid** delegated credential.
+    ///
+    /// By construction we do not validate if the contained bytes actually conforms to
+    /// the structure of `DelegatedCredential` as stipulated by [RFC 9345].
+    ///
+    /// [RFC 9345]: <https://tools.ietf.org/html/rfc9345>
+    pub struct DelegatedCredential
+}
+
+bssl_macros::bssl_enum! {
+    /// [IANA] designation of TLS signature algorithms.
+    ///
+    /// [IANA]: https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum SignatureAlgorithm: u16 {
+        /// IANA entry `rsa_pkcs1_sha256`
+        RsaPkcs1Sha256 = bssl_sys::SSL_SIGN_RSA_PKCS1_SHA256 as u16,
+        /// IANA entry `rsa_pkcs1_sha384`
+        RsaPkcs1Sha384 = bssl_sys::SSL_SIGN_RSA_PKCS1_SHA384 as u16,
+        /// IANA entry `rsa_pkcs1_sha512`
+        RsaPkcs1Sha512 = bssl_sys::SSL_SIGN_RSA_PKCS1_SHA512 as u16,
+        /// IANA entry `ecdsa_secp256r1_sha256`
+        EcdsaSecp256r1Sha256 = bssl_sys::SSL_SIGN_ECDSA_SECP256R1_SHA256 as u16,
+        /// IANA entry `ecdsa_secp384r1_sha384`
+        EcdsaSecp384r1Sha384 = bssl_sys::SSL_SIGN_ECDSA_SECP384R1_SHA384 as u16,
+        /// IANA entry `ecdsa_secp521r1_sha512`
+        EcdsaSecp521r1Sha512 = bssl_sys::SSL_SIGN_ECDSA_SECP521R1_SHA512 as u16,
+        /// IANA entry `rsa_pss_rsae_sha256`
+        RsaPssRsaeSha256 = bssl_sys::SSL_SIGN_RSA_PSS_RSAE_SHA256 as u16,
+        /// IANA entry `rsa_pss_rsae_sha384`
+        RsaPssRsaeSha384 = bssl_sys::SSL_SIGN_RSA_PSS_RSAE_SHA384 as u16,
+        /// IANA entry `rsa_pss_rsae_sha512`
+        RsaPssRsaeSha512 = bssl_sys::SSL_SIGN_RSA_PSS_RSAE_SHA512 as u16,
+        /// IANA entry `ed25519`
+        Ed25519 = bssl_sys::SSL_SIGN_ED25519 as u16,
+    }
+}
+
 bssl_macros::bssl_enum! {
     /// Certificate verification mode
     pub enum CertificateVerificationMode: i8 {
@@ -156,3 +406,6 @@ impl TryFrom<c_int> for CertificateVerificationMode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

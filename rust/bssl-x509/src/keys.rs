@@ -161,7 +161,10 @@ impl PrivateKey {
 
     /// This method releases ownership of the internal key handle.
     ///
-    /// This method should only be used for cross-language interoperability.
+    /// # Safety
+    /// - This method should only be used for cross-language interoperability,
+    ///   so the function that accepts an `EVP_PKEY*` handle must uses exactly the same
+    ///   BoringSSL as this crate is linked to.
     pub fn into_raw(self) -> *mut bssl_sys::EVP_PKEY {
         let ptr = self.ptr();
         core::mem::forget(self);

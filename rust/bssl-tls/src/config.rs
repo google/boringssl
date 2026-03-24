@@ -92,6 +92,8 @@ pub enum ConfigurationError {
     PskTooLong,
     /// Value is out of range.
     ValueOutOfRange,
+    /// Mismatching private and public key pair.
+    MismatchingKeyPair,
     /// IP address is invalid.
     /// It should either be 4 bytes for IPv4 addresses or 16 bytes for IPv6 addresses.
     InvalidIp,
@@ -110,6 +112,9 @@ impl core::fmt::Display for ConfigurationError {
                 f.write_str("session ID context data is too large")
             }
             ConfigurationError::PskTooLong => f.write_str("preshared key is too long"),
+            ConfigurationError::MismatchingKeyPair => {
+                f.write_str("mismatching private and public key pair")
+            }
             ConfigurationError::ValueOutOfRange => f.write_str("value is out of range"),
             ConfigurationError::InvalidIp => f.write_str("invalid IP address"),
             ConfigurationError::InvalidParameters => f.write_str("invalid parameters"),
