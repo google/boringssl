@@ -47,6 +47,11 @@ mod methods;
 #[doc(hidden)]
 mod macros;
 
+fn has_duplicates<T: Ord + Eq>(list: &[T]) -> bool {
+    let mut seen = alloc::collections::BTreeSet::new();
+    list.iter().any(|elem| !seen.insert(elem))
+}
+
 #[allow(unused)]
 pub(crate) trait Methods {
     /// Safety: `ssl` must outlive `'a` and it must be passed in from BoringSSL
