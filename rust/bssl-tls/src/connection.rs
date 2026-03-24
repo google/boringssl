@@ -45,6 +45,7 @@ use crate::{
 };
 
 mod credentials;
+pub mod io;
 pub mod lifecycle;
 pub(crate) mod methods;
 pub mod transport;
@@ -102,9 +103,15 @@ where
         let data = Box::into_raw(Box::new(methods::RustConnectionMethods::<M>::new())) as _;
         unsafe {
             // Safety:
+            // - the validity of the handle `ptr` is witnessed by `self`.
             // - `M::registration` will return a valid ex-data index.
             // - `data` should be valid by non-null invariant.
             bssl_sys::SSL_set_ex_data(ptr.as_ptr(), idx, data);
+            // Safety: the validity of the handle `ptr` is witnessed by `self`.
+            bssl_sys::SSL_set_mode(
+                ptr.as_ptr(),
+                ConnectionMode::ACCEPT_MOVING_WRITE_BUFFER.bits(),
+            );
         }
         Self {
             ptr,
@@ -178,7 +185,7 @@ impl<R, M> DerefMut for TlsConnection<R, M> {
 unsafe impl<R, M> Send for TlsConnectionRef<R, M> {}
 
 impl<R, M> TlsConnectionRef<R, M> {
-    #[allow(unused)]
+    /// Call this method whenever I/O is performed on the connection.
     pub(crate) fn categorise_error_for_io(&self, rc: c_int) -> Result<IoStatus, Error> {
         let reason = unsafe {
             // Safety: we only want to extract the last I/O error on an existing valid connection.

@@ -16,9 +16,9 @@ use core::{
     marker::PhantomData,
     mem::MaybeUninit,
     ptr::{
-        NonNull,
         null,
         null_mut, //
+        NonNull,
     },
     slice::{
         from_raw_parts,
@@ -224,7 +224,6 @@ impl<'a> ReceiveBuffer<'a> {
     /// - all reads into the byte under the returned pointer and those [`Self::remaining`]
     ///   bytes following it must be proceeded by at least one write; otherwise, it is **undefined
     ///   behaviour**.
-    #[allow(unused)]
     pub(crate) unsafe fn head(&mut self) -> *mut u8 {
         debug_assert!(self.cursor <= self.capacity && self.cursor <= isize::MAX as usize);
         unsafe {
@@ -240,7 +239,6 @@ impl<'a> ReceiveBuffer<'a> {
     /// # Safety
     /// The bytes in between [`Self::head`] and `Self::head() + bytes` must have been filled
     /// by the caller before calling this method.
-    #[allow(unused)]
     pub(crate) unsafe fn advance(&mut self, bytes: usize) {
         self.cursor += bytes;
         debug_assert!(self.cursor <= self.capacity);

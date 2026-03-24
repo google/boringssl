@@ -60,6 +60,10 @@ impl<M> RustConnectionMethods<M> {
         }
     }
 
+    pub fn set_pending_reason(&mut self, reason: TlsRetryReason) {
+        self.pending_reason = Some(reason);
+    }
+
     pub fn take_pending_reason(&mut self) -> Option<TlsRetryReason> {
         self.pending_reason.take()
     }

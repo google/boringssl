@@ -20,8 +20,8 @@ macro_rules! check_tls_error {
         unsafe {
             // Safety: we have exclusive access to the connection state.
             match ::bssl_sys::SSL_get_error($tls, $e) {
-                0 => {}
-                rc => return Err($crate::errors::Error::extract_tls_err(rc)),
+                0 => None,
+                rc => Some($crate::errors::Error::extract_tls_err(rc)?),
             }
         }
     };

@@ -45,6 +45,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "std")]
+pub mod stdio;
+
 /// A wrapper around a `dyn AbstractSocket`, delegating BIO methods to the
 /// underlying `AbstractSocket` implementations.
 ///
@@ -63,7 +66,7 @@ pub(crate) struct RustBio {
     io_err: Option<Box<dyn core::error::Error + Send + Sync>>,
 }
 
-/// Safety: `socket` field is a exclusively owned `Box<dyn AbstractSocket>` pointer,
+/// Safety: `socket` field is an exclusively owned `Box<dyn AbstractSocket>` pointer,
 /// and `AbstractSocket: Send + Sync`.
 unsafe impl Send for RustBio {}
 unsafe impl Sync for RustBio {}
@@ -168,6 +171,10 @@ impl RustBio {
         Ok(RustBioHandle(bio))
     }
 
+    pub fn take_io_err(&mut self) -> Option<Box<dyn core::error::Error + Send + Sync>> {
+        self.io_err.take()
+    }
+
     fn transform_result(
         &mut self,
         res: AbstractSocketResult,
@@ -185,7 +192,7 @@ impl RustBio {
     }
 }
 
-/// A exclusively owned handle to a BIO constructed by this crate.
+/// An exclusively owned handle to a BIO constructed by this crate.
 pub(crate) struct RustBioHandle(NonNull<bssl_sys::BIO>);
 
 impl RustBioHandle {

@@ -54,6 +54,9 @@ bitflags::bitflags! {
     pub(crate) struct ConnectionMode: u32 {
         /// Deny session creation.
         const MODE_NO_SESSION_CREATION = bssl_sys::SSL_MODE_NO_SESSION_CREATION as u32;
+        /// Allow moving write buffer.
+        /// This is indispensable for async I/O because the future could be freely cancelled.
+        const ACCEPT_MOVING_WRITE_BUFFER = bssl_sys::SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER as u32;
     }
 }
 
