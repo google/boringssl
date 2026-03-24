@@ -18,7 +18,7 @@ use core::{
     ptr::null, //
 };
 
-use bssl_x509::store::X509Store;
+use bssl_x509::{params::CertificateVerificationParams, store::X509Store};
 
 use super::{
     Client,
@@ -36,10 +36,12 @@ use crate::{
     }, //
     credentials::{
         CertificateVerificationMode,
+        SignatureAlgorithm,
         TlsCredential, //
     },
     errors::Error,
-    ffi::slice_into_ffi_raw_parts, //
+    ffi::slice_into_ffi_raw_parts,
+    has_duplicates, //
 };
 
 impl<R, M> TlsConnectionBuilder<R, M> {
@@ -103,6 +105,23 @@ where
 
 /// # Certificate verification
 impl<M> TlsConnectionInHandshake<'_, Client, M> {
+    /// Enable signed certificate timestamps.
+    ///
+    /// This method will instruct the client connections to request Signed Certificate Timestamps.
+    /// See [RFC 6962] for more information.
+    ///
+    /// [RFC 6962]: <https://datatracker.ietf.org/doc/html/rfc6962>
+    pub fn enable_signed_certificate_timestamps(&mut self) -> &mut Self {
+        unsafe {
+            // Safety: the validity of the handle `self.0` is witnessed by `self`.
+            bssl_sys::SSL_enable_signed_cert_timestamps(self.ptr());
+        }
+        self
+    }
+}
+
+/// # Certificate verification
+impl<M> TlsConnectionInHandshake<'_, Client, M> {
     /// Set certificate verification store.
     pub fn set_certificate_store(&mut self, store: &X509Store) -> &mut Self {
         unsafe {
@@ -113,6 +132,30 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
             bssl_sys::SSL_set1_verify_cert_store(self.ptr(), store.as_mut_ptr());
         }
         self
+    }
+
+    /// Set a preference list of signature algorithms.
+    ///
+    /// This method returns [`ConfigurationError::InvalidParameters`] if the list of algorithms
+    /// contains duplicate entries.
+    pub fn set_certificate_verification_preferences(
+        &mut self,
+        algs: &[SignatureAlgorithm],
+    ) -> Result<&mut Self, Error> {
+        let algs: &[u16] = unsafe {
+            // Safety: `SignatureAlgorithm` has a `repr(u16)` and maps to preferences correctly
+            // by construction.
+            core::mem::transmute(algs)
+        };
+        if has_duplicates(algs) {
+            return Err(Error::Configuration(ConfigurationError::InvalidParameters));
+        }
+        let (prefs, prefs_len) = slice_into_ffi_raw_parts(algs);
+        check_lib_error!(unsafe {
+            // Safety: the validity of the handle `self.0` is witnessed by `self`.
+            bssl_sys::SSL_set_verify_algorithm_prefs(self.ptr(), prefs, prefs_len)
+        });
+        Ok(self)
     }
 }
 
@@ -127,6 +170,45 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
             // - the validity of the handle `self.0` is witnessed by `self`.
             // - the host name string has been sanitised for internal NUL-bytes and NUL-terminated.
             bssl_sys::SSL_set1_host(self.ptr(), host_name.as_ptr())
+        });
+        Ok(self)
+    }
+}
+
+/// # Certificate verification.
+impl<R, M> TlsConnectionInHandshake<'_, R, M> {
+    /// Set depth of a potential certificate chain acceptable.
+    pub fn set_verify_depth(&mut self, depth: u16) -> Result<&mut Self, Error> {
+        let depth = depth
+            .try_into()
+            .map_err(|_| Error::Configuration(ConfigurationError::ValueOutOfRange))?;
+        unsafe {
+            // Safety: the validity of the handle `self.0` is witnessed by `self`.
+            bssl_sys::SSL_set_verify_depth(self.ptr(), depth);
+        }
+        Ok(self)
+    }
+
+    /// Get certificate verification depth.
+    ///
+    /// This method returns [`None`] if the depth is set but does not fit in a [`u16`].
+    pub fn get_verify_depth(&self) -> Option<u16> {
+        unsafe {
+            // Safety: the validity and state of the handle `self.0` is witnessed by `self`.
+            bssl_sys::SSL_get_verify_depth(self.ptr()).try_into().ok()
+        }
+    }
+
+    /// Set certificate verification parameters.
+    pub fn set_certificate_verification_params(
+        &mut self,
+        params: &CertificateVerificationParams,
+    ) -> Result<&mut Self, Error> {
+        check_lib_error!(unsafe {
+            // Safety:
+            // - the validity of the handle `self.0` is witnessed by `self`.
+            // - `SSL_set1_param` claims shared ownership of `params` by bumping ref-count.
+            bssl_sys::SSL_set1_param(self.ptr(), params.as_ptr())
         });
         Ok(self)
     }

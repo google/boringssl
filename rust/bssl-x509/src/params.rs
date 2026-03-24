@@ -154,7 +154,7 @@ impl CertificateVerificationParams {
     ///
     /// The handle **must** outlive the use sites.
     /// Verify the callsite contract to honour the lifetime contracts.
-    pub unsafe fn as_raw(&self) -> *mut bssl_sys::X509_VERIFY_PARAM {
+    pub unsafe fn as_ptr(&self) -> *mut bssl_sys::X509_VERIFY_PARAM {
         self.ptr()
     }
 

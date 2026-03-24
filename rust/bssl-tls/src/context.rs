@@ -246,7 +246,7 @@ where
         }
         if has_duplicates(groups) {
             return Err(Error::Configuration(
-                ConfigurationError::DuplicatedKeyExchangeGroup,
+                ConfigurationError::DuplicatedParameters,
             ));
         }
 

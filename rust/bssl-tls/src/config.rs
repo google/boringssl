@@ -93,8 +93,8 @@ bitflags::bitflags! {
 /// Configuration errors
 #[derive(Debug)]
 pub enum ConfigurationError {
-    /// Some key exchange group is specified twice.
-    DuplicatedKeyExchangeGroup,
+    /// Some parameters are specified twice in the list.
+    DuplicatedParameters,
     /// Some string is not acceptable.
     InvalidString,
     /// Session ID context data is too large.
@@ -115,9 +115,7 @@ pub enum ConfigurationError {
 impl core::fmt::Display for ConfigurationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            ConfigurationError::DuplicatedKeyExchangeGroup => {
-                f.write_str("duplicated key exchange group")
-            }
+            ConfigurationError::DuplicatedParameters => f.write_str("duplicated parameters"),
             ConfigurationError::InvalidString => f.write_str("invalid string"),
             ConfigurationError::SessionIdContextTooLarge => {
                 f.write_str("session ID context data is too large")

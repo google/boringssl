@@ -52,7 +52,8 @@ use crate::{
         Bio,
         sanitize_slice,
         slice_into_ffi_raw_parts, //
-    }, //
+    },
+    has_duplicates, //
 };
 
 pub(crate) mod methods;
@@ -120,6 +121,30 @@ impl<M> TlsCredentialBuilder<M>
 where
     M: NeedsPrivateKey,
 {
+    /// Set [`SignatureAlgorithm`] preferences.
+    ///
+    /// This controls which signature algorithms will be used with this credential.
+    pub fn with_signing_algorithm_preferences(
+        &mut self,
+        algs: &[SignatureAlgorithm],
+    ) -> Result<&mut Self, Error> {
+        let algs: &[u16] = unsafe {
+            // Safety: `SignatureAlgorithm` has a `repr(u16)`
+            core::mem::transmute(algs)
+        };
+        if has_duplicates(algs) {
+            return Err(Error::Configuration(
+                ConfigurationError::DuplicatedParameters,
+            ));
+        }
+        let (ptr, len) = slice_into_ffi_raw_parts(algs);
+        check_lib_error!(unsafe {
+            // Safety
+            bssl_sys::SSL_CREDENTIAL_set1_signing_algorithm_prefs(self.ptr(), ptr, len)
+        });
+        Ok(self)
+    }
+
     /// Set a private key.
     ///
     /// **NOTE**: Call this method after setting the certificates with
@@ -162,6 +187,39 @@ impl TlsCredentialBuilder<X509Mode> {
             // Safety
             bssl_sys::SSL_CREDENTIAL_set1_cert_chain(self.ptr(), ptr, len)
         });
+        Ok(self)
+    }
+
+    /// Set Online Certificate Status Protocol Response.
+    pub fn with_ocsp_response(&mut self, ocsp: &OcspResponse) -> Result<&mut Self, Error> {
+        check_lib_error!(unsafe {
+            // Safety: both `self.0` and `ocsp.0` are still live witnessed by the wrapper types.
+            bssl_sys::SSL_CREDENTIAL_set1_ocsp_response(self.ptr(), ocsp.ptr())
+        });
+        Ok(self)
+    }
+
+    /// Set Signed Certificate Timestamp List.
+    pub fn with_scts(&mut self, scts: &SignedCertificateTimestampList) -> Result<&mut Self, Error> {
+        check_lib_error!(unsafe {
+            // Safety: both `self.0` and `scts.0` are still live.
+            bssl_sys::SSL_CREDENTIAL_set1_signed_cert_timestamp_list(self.ptr(), scts.ptr())
+        });
+        Ok(self)
+    }
+
+    /// Enforce a check if the peer supports the issuer of the configured certificate chain.
+    ///
+    /// This setting can be used for certificate chains that may not be usable by all peers.
+    /// This scenario could happen with chains with fewer cross-signs or issued from a newer CA.
+    /// When in force, the credential list is tried in order, so more specific credentials that
+    /// enable issuer matching should generally be ordered before less specific credentials that
+    /// do not.
+    pub fn must_match_issuer(&mut self, match_: bool) -> Result<&mut Self, Error> {
+        unsafe {
+            // Safety: `self.0` is still valid.
+            bssl_sys::SSL_CREDENTIAL_set_must_match_issuer(self.ptr(), if match_ { 1 } else { 0 });
+        }
         Ok(self)
     }
 }
