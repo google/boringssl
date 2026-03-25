@@ -14,13 +14,17 @@
 
 //! TLS Connection lifecycle controls
 
-use core::ops::{Deref, DerefMut};
+use core::{
+    future::poll_fn,
+    ops::{Deref, DerefMut},
+    task::Poll,
+};
 
 use crate::{
     check_tls_error,
     connection::{Client, Server, TlsConnectionRef, methods::HasTlsConnectionMethod},
-    context::TlsMode,
-    errors::Error,
+    context::{SupportedMode, TlsMode},
+    errors::{Error, TlsRetryReason},
 };
 
 /// # Connection initialisation state
@@ -112,6 +116,22 @@ where
     }
 }
 
+/// # Handshake
+impl<R, M> TlsConnectionInHandshake<'_, R, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// Continue the handshake.
+    ///
+    /// Call this method after the initial [`Self::accept`] or [`Self::connect`],
+    /// should the handshake be suspended.
+    pub fn do_handshake(&mut self) -> Result<&mut Self, Error> {
+        let conn = self.ptr();
+        check_tls_error!(conn, bssl_sys::SSL_do_handshake(conn));
+        Ok(self)
+    }
+}
+
 impl<M> TlsConnectionInHandshake<'_, Server, M>
 where
     M: HasTlsConnectionMethod,
@@ -151,5 +171,30 @@ impl<R, M> Deref for EstablishedTlsConnection<'_, R, M> {
 impl<R, M> DerefMut for EstablishedTlsConnection<'_, R, M> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.0
+    }
+}
+
+impl<R, M> TlsConnectionInHandshake<'_, R, M>
+where
+    M: SupportedMode,
+{
+    /// Perform asynchronous handshake, until completion or until pending on non-I/O operations.
+    ///
+    /// The caller needs to ensure that any pending operations during the handshake are resolved.
+    pub fn async_handshake(&mut self) -> impl Send + Future<Output = Result<(), Error>> + '_ {
+        poll_fn(move |cx| {
+            self.set_waker(cx.waker());
+            match self.do_handshake() {
+                Ok(_) => Poll::Ready(Ok(())),
+                Err(Error::TlsRetry(r)) => {
+                    if matches!(r, TlsRetryReason::WantRead | TlsRetryReason::WantWrite) {
+                        Poll::Pending
+                    } else {
+                        Poll::Ready(Err(Error::TlsRetry(r)))
+                    }
+                }
+                Err(e) => Poll::Ready(Err(e)),
+            }
+        })
     }
 }

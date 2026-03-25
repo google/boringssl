@@ -132,7 +132,6 @@ where
     M: methods::HasTlsConnectionMethod,
 {
     /// This method sets up waker for BIO and various handlers.
-    #[allow(unused)]
     pub(crate) fn set_waker(&mut self, waker: &Waker) {
         let waker_data = unsafe {
             // Safety:

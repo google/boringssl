@@ -89,7 +89,6 @@ pub(crate) unsafe fn waker_data_from_ssl(ssl: NonNull<bssl_sys::SSL>) -> Option<
 /// - `ssl` must be a `SSL` object constructed by [`crate::connection::TlsConnection`] and
 ///   outlives `'a`.
 /// - `ssl` must be exclusively owned.
-#[allow(unused)]
 pub(super) unsafe fn waker_data_ref_from_ssl<'a>(
     ssl: NonNull<bssl_sys::SSL>,
 ) -> &'a mut Option<Waker> {
