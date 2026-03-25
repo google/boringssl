@@ -556,6 +556,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         BoolFlag("-fips-202205", &TestConfig::fips_202205),
         BoolFlag("-wpa-202304", &TestConfig::wpa_202304),
         BoolFlag("-cnsa-202407", &TestConfig::cnsa_202407),
+        BoolFlag("-cnsa1-202603", &TestConfig::cnsa1_202603),
+        BoolFlag("-cnsa2-202603", &TestConfig::cnsa2_202603),
         SetValueFlag("-expect-peer-match-trust-anchor",
                      &TestConfig::expect_peer_match_trust_anchor, true),
         SetValueFlag("-expect-no-peer-match-trust-anchor",
@@ -2399,27 +2401,6 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
   if (enable_ech_grease) {
     SSL_set_enable_ech_grease(ssl.get(), 1);
   }
-  if (static_cast<int>(fips_202205) + static_cast<int>(wpa_202304) +
-          static_cast<int>(cnsa_202407) >
-      1) {
-    fprintf(stderr, "Multiple policy options given\n");
-    return nullptr;
-  }
-  if (fips_202205 && !SSL_set_compliance_policy(
-                         ssl.get(), ssl_compliance_policy_fips_202205)) {
-    fprintf(stderr, "SSL_set_compliance_policy failed\n");
-    return nullptr;
-  }
-  if (wpa_202304 && !SSL_set_compliance_policy(
-                        ssl.get(), ssl_compliance_policy_wpa3_192_202304)) {
-    fprintf(stderr, "SSL_set_compliance_policy failed\n");
-    return nullptr;
-  }
-  if (cnsa_202407 && !SSL_set_compliance_policy(
-                         ssl.get(), ssl_compliance_policy_cnsa_202407)) {
-    fprintf(stderr, "SSL_set_compliance_policy failed\n");
-    return nullptr;
-  }
   if (!ech_config_list.empty() &&
       !SSL_set1_ech_config_list(ssl.get(), ech_config_list.data(),
                                 ech_config_list.size())) {
@@ -2629,5 +2610,31 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
     return nullptr;
   }
 
+  // The compliance policy must be the last thing configured to have defined
+  // behavior.
+  struct {
+    const bool *setting;
+    ssl_compliance_policy_t policy;
+  } compliance_options[] = {
+      {&fips_202205, ssl_compliance_policy_fips_202205},
+      {&wpa_202304, ssl_compliance_policy_wpa3_192_202304},
+      {&cnsa_202407, ssl_compliance_policy_cnsa_202407},
+      {&cnsa1_202603, ssl_compliance_policy_cnsa1_202603},
+      {&cnsa2_202603, ssl_compliance_policy_cnsa2_202603},
+  };
+  bool set_compliance_option = false;
+  for (const auto &option : compliance_options) {
+    if (*option.setting) {
+      if (set_compliance_option) {
+        fprintf(stderr, "Multiple policy options given\n");
+        return nullptr;
+      }
+      if (!SSL_set_compliance_policy(ssl.get(), option.policy)) {
+        fprintf(stderr, "SSL_set_compliance_policy failed\n");
+        return nullptr;
+      }
+      set_compliance_option = true;
+    }
+  }
   return ssl;
 }

@@ -6270,13 +6270,38 @@ enum ssl_compliance_policy_t BORINGSSL_ENUM_INT {
   // The cipher suite configuration mini-language can be used to similarly
   // configure prior TLS versions if they are enabled.
   ssl_compliance_policy_cnsa_202407,
+
+  // ssl_compliance_policy_cnsa1_202603 configures a TLS connection to use:
+  //   * TLS 1.2 or TLS 1.3.
+  //   * For TLS 1.2, only TLS_ECDHE_[ECDSA|RSA]_WITH_AES_256_GCM_SHA384.
+  //   * For TLS 1.3, only AES-256-GCM.
+  //   * ML-KEM-1024 or P-384 for key agreement, preferring ML-KEM-1024 if the
+  //     client supports it.
+  //   * For handshake signatures, only ECDSA with P-384 and SHA-384, or RSA
+  //     with SHA-384.
+  //
+  // Note: this setting aids with compliance with CNSA requirements but does not
+  // guarantee it. Careful reading of RFC 9151 is recommended.
+  ssl_compliance_policy_cnsa1_202603,
+
+  // ssl_compliance_policy_cnsa2_202603 configures a TLS connection to use:
+  //   * Only TLS 1.3, with AES-256-GCM.
+  //   * Only ML-KEM-1024 for key agreement.
+  //   * For handshake signatures, only ECDSA with P-384 and SHA-384, or RSA
+  //     with SHA-384.
+  //
+  // Note: this setting aids with compliance with CNSA requirements but does not
+  // guarantee it. Careful reading of draft-becker-cnsa2-tls-profile is
+  // recommended.
+  ssl_compliance_policy_cnsa2_202603,
 };
 
 // SSL_CTX_set_compliance_policy configures various aspects of |ctx| based on
 // the given policy requirements. Subsequently calling other functions that
 // configure |ctx| may override |policy|, or may not. This should be the final
-// configuration function called in order to have defined behaviour. It's a
-// fatal error if |policy| is |ssl_compliance_policy_none|.
+// configuration function called in order to have defined behaviour matching the
+// configuration profile documented for |policy| above. It's a fatal error if
+// |policy| is |ssl_compliance_policy_none|.
 OPENSSL_EXPORT int SSL_CTX_set_compliance_policy(
     SSL_CTX *ctx, enum ssl_compliance_policy_t policy);
 
