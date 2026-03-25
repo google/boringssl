@@ -71,7 +71,7 @@ impl<'a> X509Verifier<'a> {
     /// Creates a new `X509Verifier`.
     pub fn new(
         cert: &'a X509Certificate,
-        untrusted: &[X509Certificate],
+        untrusted: &'a [X509Certificate],
         store: &'a X509Store,
     ) -> Result<Self, PkiError> {
         let chain = CertificateStack::from_borrowed(untrusted);
