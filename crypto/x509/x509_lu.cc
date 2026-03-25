@@ -507,8 +507,12 @@ int X509_STORE_CTX_get1_issuer(X509 **out_issuer, X509_STORE_CTX *ctx,
   int idx = X509_OBJECT_idx_by_subject(store->objs.get(), X509_LU_X509, xn);
   if (idx != -1) {  // should be true as we've had at least one match
     // Look through all matching certs for suitable issuer
-    for (X509_OBJECT *pobj : store->objs.get()) {
-      // See if we've run past the matches
+    for (size_t i = idx; i < sk_X509_OBJECT_num(store->objs.get()); i++) {
+      X509_OBJECT *pobj = sk_X509_OBJECT_value(store->objs.get(), i);
+      // See if we've run past the matches.
+      //
+      // This works because the objects are sorted by type, then subject
+      // name, using |x509_object_cmp|.
       if (pobj->type != X509_LU_X509) {
         return 0;
       }
