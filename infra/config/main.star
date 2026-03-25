@@ -119,7 +119,7 @@ cq_group = luci.cq_group(
         conditions = [
           cq.post_action_triggering_condition(
             mode = cq.MODE_DRY_RUN,
-            statuses = [cq.STATUS_FAILED, cq.STATUS_CANCELLED],
+            statuses = [cq.STATUS_FAILED],
           )
         ],
         labels = {
