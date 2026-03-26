@@ -15,6 +15,8 @@
 #include <openssl/evp.h>
 
 #include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include <type_traits>
 
@@ -23,8 +25,10 @@
 #include <openssl/evp_errors.h>
 #include <openssl/mlkem.h>
 #include <openssl/nid.h>
+#include <openssl/span.h>
 
 #include "../fipsmodule/bcm_interface.h"
+#include "../internal.h"
 #include "../mem_internal.h"
 #include "internal.h"
 

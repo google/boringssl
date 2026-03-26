@@ -23,6 +23,7 @@
 #include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
+#include <openssl/span.h>
 #include <openssl/x509.h>
 
 #include "../crypto/bytestring/internal.h"

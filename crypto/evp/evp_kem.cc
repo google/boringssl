@@ -14,8 +14,12 @@
 
 #include <openssl/evp.h>
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <openssl/err.h>
 
+#include "../internal.h"
 #include "internal.h"
 
 using namespace bssl;
