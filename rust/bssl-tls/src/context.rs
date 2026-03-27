@@ -212,6 +212,19 @@ where
         }
         Ok(TlsConnection::from_ssl(conn))
     }
+
+    /// Expose the fully built BoringSSL's `SSL_CTX` pointer.
+    ///
+    /// # Safety
+    /// - `SSL_CTX` is **not fully thread-safe**; interface with this handle only behind a mutex.
+    /// - interacting with the `ex_data` of the `SSL_CTX` instance that this method returns is
+    ///   **undefined behaviour**.
+    /// - `self` must outlive all uses of the returned handle.
+    /// - this handle must be used with functions from the BoringSSL library this crate is linked
+    ///   to; otherwise, this is **undefined behaviour**.
+    pub fn as_mut_ptr(&mut self) -> *mut bssl_sys::SSL_CTX {
+        self.ptr()
+    }
 }
 
 /// Safety: at this type state, most of the underlying context is immutable,
