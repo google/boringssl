@@ -30,8 +30,10 @@
 #include "../mem_internal.h"
 
 
-// Define a custom stack type for testing.
-using TEST_INT = int;
+// Define a custom stack type for testing. Its first member is a key for
+// sorting/comparison, and its second member is a tag so we can tell different
+// elements apart, in order to test stable sorting.
+using TEST_INT = std::pair<int, int>;
 DEFINE_STACK_OF(TEST_INT)
 
 BSSL_NAMESPACE_BEGIN
@@ -40,14 +42,16 @@ static void TEST_INT_free(TEST_INT *x) { Delete(x); }
 
 BORINGSSL_MAKE_DELETER(TEST_INT, TEST_INT_free)
 
-static UniquePtr<TEST_INT> TEST_INT_new(int x) {
+static UniquePtr<TEST_INT> TEST_INT_new(int x, int y) {
   UniquePtr<TEST_INT> ret(New<TEST_INT>());
   if (!ret) {
     return nullptr;
   }
-  *ret = x;
+  *ret = std::make_pair(x, y);
   return ret;
 }
+
+static UniquePtr<TEST_INT> TEST_INT_new(int x) { return TEST_INT_new(x, 0); }
 
 namespace {
 
@@ -62,17 +66,18 @@ using ShallowStack = std::unique_ptr<STACK_OF(TEST_INT), ShallowStackDeleter>;
 static const int kNull = INT_MIN;
 
 static void ExpectStackEquals(const STACK_OF(TEST_INT) *sk,
-                              const std::vector<int> &vec) {
+                              const std::vector<std::pair<int, int>> &vec) {
   EXPECT_EQ(vec.size(), sk_TEST_INT_num(sk));
   for (size_t i = 0; i < vec.size(); i++) {
     SCOPED_TRACE(i);
     const TEST_INT *obj = sk_TEST_INT_value(sk, i);
-    if (vec[i] == kNull) {
+    if (vec[i].first == kNull) {
       EXPECT_FALSE(obj);
     } else {
       EXPECT_TRUE(obj);
       if (obj) {
-        EXPECT_EQ(vec[i], *obj);
+        EXPECT_EQ(vec[i].first, obj->first);
+        EXPECT_EQ(vec[i].second, obj->second);
       }
     }
   }
@@ -82,12 +87,22 @@ static void ExpectStackEquals(const STACK_OF(TEST_INT) *sk,
   EXPECT_FALSE(sk_TEST_INT_value(sk, vec.size() + 1));
 }
 
+static void ExpectStackEquals(const STACK_OF(TEST_INT) *sk,
+                              const std::vector<int> &vec) {
+  std::vector<std::pair<int, int>> pairs;
+  for (int i : vec) {
+    pairs.emplace_back(i, 0);
+  }
+  ExpectStackEquals(sk, pairs);
+}
+
 TEST(StackTest, Basic) {
   UniquePtr<STACK_OF(TEST_INT)> sk(sk_TEST_INT_new_null());
   ASSERT_TRUE(sk);
 
   // The stack starts out empty.
-  ExpectStackEquals(sk.get(), {});
+  std::vector<int> empty;
+  ExpectStackEquals(sk.get(), empty);
 
   // Removing elements from an empty stack does nothing.
   EXPECT_FALSE(sk_TEST_INT_pop(sk.get()));
@@ -139,15 +154,15 @@ TEST(StackTest, Basic) {
 
   // Test removing elements from various places.
   UniquePtr<TEST_INT> removed(sk_TEST_INT_pop(sk.get()));
-  EXPECT_EQ(8, *removed);
+  EXPECT_EQ(8, removed->first);
   ExpectStackEquals(sk.get(), {0, 1, 2, 3, 6, 4, 5, 7});
 
   removed.reset(sk_TEST_INT_shift(sk.get()));
-  EXPECT_EQ(0, *removed);
+  EXPECT_EQ(0, removed->first);
   ExpectStackEquals(sk.get(), {1, 2, 3, 6, 4, 5, 7});
 
   removed.reset(sk_TEST_INT_delete(sk.get(), 2));
-  EXPECT_EQ(3, *removed);
+  EXPECT_EQ(3, removed->first);
   ExpectStackEquals(sk.get(), {1, 2, 6, 4, 5, 7});
 
   // Objects may also be deleted by pointer.
@@ -168,7 +183,8 @@ TEST(StackTest, Basic) {
   UniquePtr<STACK_OF(TEST_INT)> copy(sk_TEST_INT_deep_copy(
       sk.get(),
       [](const TEST_INT *x) -> TEST_INT * {
-        return x == nullptr ? nullptr : TEST_INT_new(*x).release();
+        return x == nullptr ? nullptr
+                            : TEST_INT_new(x->first, x->second).release();
       },
       TEST_INT_free));
   ASSERT_TRUE(copy);
@@ -186,7 +202,9 @@ TEST(StackTest, Basic) {
   EXPECT_FALSE(sk_TEST_INT_deep_copy(
       sk.get(),
       [](const TEST_INT *x) -> TEST_INT * {
-        return x == nullptr || *x == 4 ? nullptr : TEST_INT_new(*x).release();
+        return x == nullptr || x->first == 4
+                   ? nullptr
+                   : TEST_INT_new(x->first, x->second).release();
       },
       TEST_INT_free));
 
@@ -194,7 +212,7 @@ TEST(StackTest, Basic) {
   ShallowStack shallow2(sk_TEST_INT_dup(sk.get()));
   ASSERT_TRUE(shallow2);
   sk_TEST_INT_zero(shallow2.get());
-  ExpectStackEquals(shallow2.get(), {});
+  ExpectStackEquals(shallow2.get(), empty);
 }
 
 TEST(StackTest, BigStack) {
@@ -214,12 +232,13 @@ TEST(StackTest, BigStack) {
 
 static uint64_t g_compare_count = 0;
 
+// Compares the first member of the pair only.
 static int compare(const TEST_INT *const *a, const TEST_INT *const *b) {
   g_compare_count++;
-  if (**a < **b) {
+  if ((*a)->first < (*b)->first) {
     return -1;
   }
-  if (**a > **b) {
+  if ((*a)->first > (*b)->first) {
     return 1;
   }
   return 0;
@@ -230,21 +249,39 @@ static int compare_reverse(const TEST_INT *const *a, const TEST_INT *const *b) {
 }
 
 TEST(StackTest, Sorted) {
-  std::vector<int> vec_sorted = {0, 1, 2, 3, 4, 5, 6};
-  std::vector<int> vec = vec_sorted;
+  // This test creates a stack containing three copies of each number in `vec`,
+  // differing in their second member.
+  std::vector<int> vec = {0, 1, 2, 3, 4, 5, 6};
+  // This vector holds the expected order after sorting.
+  std::vector<std::pair<int, int>> vec_sorted;
+  for (int first : vec) {
+    for (int second : {0, 1, 2}) {
+      vec_sorted.emplace_back(first, second);
+    }
+  }
+  // This vector holds the expected order after removing elements and reversing.
+  std::vector<std::pair<int, int>> vec_rev_sorted;
+  for (int first : {6, 5, 4, 3, 2, 1}) {
+    for (int second : {0, 1, 2}) {
+      vec_rev_sorted.emplace_back(first, second);
+    }
+  }
+
   do {
     UniquePtr<STACK_OF(TEST_INT)> sk(sk_TEST_INT_new(compare));
     ASSERT_TRUE(sk);
-    for (int v : vec) {
-      auto value = TEST_INT_new(v);
-      ASSERT_TRUE(value);
-      ASSERT_TRUE(PushToStack(sk.get(), std::move(value)));
+    for (int second : {0, 1, 2}) {
+      for (int first : vec) {
+        auto value = TEST_INT_new(first, second);
+        ASSERT_TRUE(value);
+        ASSERT_TRUE(PushToStack(sk.get(), std::move(value)));
+      }
     }
 
     // The stack is not (known to be) sorted.
     EXPECT_FALSE(sk_TEST_INT_is_sorted(sk.get()));
 
-    // With a comparison function, find matches by value.
+    // With a comparison function, find matches by value of the first member.
     auto ten = TEST_INT_new(10);
     ASSERT_TRUE(ten);
     size_t index;
@@ -253,10 +290,12 @@ TEST(StackTest, Sorted) {
     auto three = TEST_INT_new(3);
     ASSERT_TRUE(three);
     ASSERT_TRUE(sk_TEST_INT_find(sk.get(), &index, three.get()));
-    EXPECT_EQ(3, *sk_TEST_INT_value(sk.get(), index));
+    EXPECT_EQ(3, sk_TEST_INT_value(sk.get(), index)->first);
 
     sk_TEST_INT_sort(sk.get());
     EXPECT_TRUE(sk_TEST_INT_is_sorted(sk.get()));
+
+    // The elements were sorted stably.
     ExpectStackEquals(sk.get(), vec_sorted);
 
     // Sorting an already-sorted list is a no-op.
@@ -272,27 +311,30 @@ TEST(StackTest, Sorted) {
 
     ASSERT_TRUE(three);
     ASSERT_TRUE(sk_TEST_INT_find(sk.get(), &index, three.get()));
-    EXPECT_EQ(3u, index);
+    EXPECT_EQ(index / 3, 3u);
 
     // Copies preserve comparison and sorted information.
     UniquePtr<STACK_OF(TEST_INT)> copy(sk_TEST_INT_deep_copy(
         sk.get(),
         [](const TEST_INT *x) -> TEST_INT * {
-          return TEST_INT_new(*x).release();
+          return TEST_INT_new(x->first, x->second).release();
         },
         TEST_INT_free));
     ASSERT_TRUE(copy);
     EXPECT_TRUE(sk_TEST_INT_is_sorted(copy.get()));
     ASSERT_TRUE(sk_TEST_INT_find(copy.get(), &index, three.get()));
-    EXPECT_EQ(3u, index);
+    EXPECT_EQ(index / 3, 3u);
 
     ShallowStack copy2(sk_TEST_INT_dup(sk.get()));
     ASSERT_TRUE(copy2);
     EXPECT_TRUE(sk_TEST_INT_is_sorted(copy2.get()));
     ASSERT_TRUE(sk_TEST_INT_find(copy2.get(), &index, three.get()));
-    EXPECT_EQ(3u, index);
+    EXPECT_EQ(index / 3, 3u);
 
     // Removing elements does not affect sortedness.
+    // Remove all the elements with first member 0.
+    TEST_INT_free(sk_TEST_INT_delete(sk.get(), 2));
+    TEST_INT_free(sk_TEST_INT_delete(sk.get(), 1));
     TEST_INT_free(sk_TEST_INT_delete(sk.get(), 0));
     EXPECT_TRUE(sk_TEST_INT_is_sorted(sk.get()));
     EXPECT_TRUE(sk_TEST_INT_is_sorted(sk.get()));
@@ -301,12 +343,13 @@ TEST(StackTest, Sorted) {
     sk_TEST_INT_set_cmp_func(sk.get(), compare_reverse);
     EXPECT_FALSE(sk_TEST_INT_is_sorted(sk.get()));
     ASSERT_TRUE(sk_TEST_INT_find(sk.get(), &index, three.get()));
-    EXPECT_EQ(2u, index);
+    EXPECT_EQ(6u, index);
 
     sk_TEST_INT_sort(sk.get());
-    ExpectStackEquals(sk.get(), {6, 5, 4, 3, 2, 1});
+    EXPECT_TRUE(sk_TEST_INT_is_sorted(sk.get()));
+    ExpectStackEquals(sk.get(), vec_rev_sorted);
     ASSERT_TRUE(sk_TEST_INT_find(sk.get(), &index, three.get()));
-    EXPECT_EQ(3u, index);
+    EXPECT_EQ(index / 3, 3u);
 
     // Inserting a new element invalidates sortedness.
     auto tmp = TEST_INT_new(10);
@@ -314,7 +357,7 @@ TEST(StackTest, Sorted) {
     ASSERT_TRUE(PushToStack(sk.get(), std::move(tmp)));
     EXPECT_FALSE(sk_TEST_INT_is_sorted(sk.get()));
     ASSERT_TRUE(sk_TEST_INT_find(sk.get(), &index, ten.get()));
-    EXPECT_EQ(6u, index);
+    EXPECT_EQ(18u, index);
   } while (std::next_permutation(vec.begin(), vec.end()));
 }
 
@@ -411,7 +454,7 @@ TEST(StackTest, DeleteIf) {
 
   auto keep_only_multiples = [](TEST_INT *x, void *data) {
     auto d = static_cast<const int *>(data);
-    if (*x % *d == 0) {
+    if (x->first % *d == 0) {
       return 0;
     }
     TEST_INT_free(x);
@@ -438,7 +481,8 @@ TEST(StackTest, DeleteIf) {
   // Delete everything.
   d = 16;
   sk_TEST_INT_delete_if(sk.get(), keep_only_multiples, &d);
-  ExpectStackEquals(sk.get(), {});
+  std::vector<int> empty;
+  ExpectStackEquals(sk.get(), empty);
   EXPECT_TRUE(sk_TEST_INT_is_sorted(sk.get()));
 }
 
@@ -511,11 +555,11 @@ TEST(StackTest, Sort) {
       sk_TEST_INT_sort(sk.get());
       std::vector<int> result;
       for (const TEST_INT *v : sk.get()) {
-        result.push_back(*v);
+        result.push_back(v->first);
       }
 
       // The result must match the STL's version.
-      std::sort(vec.begin(), vec.end());
+      std::stable_sort(vec.begin(), vec.end());
       EXPECT_EQ(vec, result);
     }
   }
