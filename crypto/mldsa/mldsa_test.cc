@@ -25,6 +25,7 @@
 #include <openssl/mem.h>
 #include <openssl/span.h>
 
+#include "../bytestring/internal.h"
 #include "../fipsmodule/bcm_interface.h"
 #include "../internal.h"
 #include "../test/file_test.h"
@@ -39,8 +40,11 @@ namespace {
   struct MLDSA##kl##Traits {                                                  \
     using PublicKey = MLDSA##kl##_public_key;                                 \
     using PrivateKey = MLDSA##kl##_private_key;                               \
+    using Prehash = MLDSA##kl##_prehash;                                      \
+                                                                              \
     static constexpr size_t kPublicKeyBytes = MLDSA##kl##_PUBLIC_KEY_BYTES;   \
     static constexpr size_t kSignatureBytes = MLDSA##kl##_SIGNATURE_BYTES;    \
+                                                                              \
     static constexpr auto PrivateKeyFromSeed =                                \
         &MLDSA##kl##_private_key_from_seed;                                   \
     static constexpr auto ParsePrivateKey =                                   \
@@ -52,11 +56,18 @@ namespace {
         &BCM_mldsa##kl##_generate_key_external_entropy;                       \
     static constexpr auto Sign = &MLDSA##kl##_sign;                           \
     static constexpr auto SignInternal = &BCM_mldsa##kl##_sign_internal;      \
+    static constexpr auto SignMuInternal = &BCM_mldsa##kl##_sign_mu_internal; \
+                                                                              \
     static constexpr auto PublicFromPrivate =                                 \
         &MLDSA##kl##_public_from_private;                                     \
     static constexpr auto ParsePublicKey = &MLDSA##kl##_parse_public_key;     \
+    static constexpr auto MarshalPublicKey = &MLDSA##kl##_marshal_public_key; \
     static constexpr auto Verify = &MLDSA##kl##_verify;                       \
     static constexpr auto VerifyInternal = &BCM_mldsa##kl##_verify_internal;  \
+                                                                              \
+    static constexpr auto PrehashInit = &MLDSA##kl##_prehash_init;            \
+    static constexpr auto PrehashUpdate = &MLDSA##kl##_prehash_update;        \
+    static constexpr auto PrehashFinalize = &MLDSA##kl##_prehash_finalize;    \
   };
 
 MAKE_MLDSA_TRAITS(44)
@@ -438,54 +449,93 @@ TEST(MLDSATest, KeyGenTests87) {
 }
 
 template <typename Traits>
-void MLDSAWycheproofSignTest(FileTest *t) {
-  std::vector<uint8_t> private_key_bytes, msg, expected_signature, context;
-  ASSERT_TRUE(t->GetInstructionBytes(&private_key_bytes, "privateKey"));
-  ASSERT_TRUE(t->GetBytes(&expected_signature, "sig"));
+void MLDSAWycheproofSignCommon(FileTest *t, typename Traits::PrivateKey *priv) {
+  std::vector<uint8_t> public_key, msg, mu, sig, context;
+  ASSERT_TRUE(t->GetInstructionBytes(&public_key, "publicKey"));
+  ASSERT_TRUE(t->GetBytes(&sig, "sig"));
   if (t->HasAttribute("ctx")) {
     t->GetBytes(&context, "ctx");
   }
   WycheproofResult result;
   ASSERT_TRUE(GetWycheproofResult(t, &result));
   bool expect_valid = result.IsValid();
-  // TODO(davidben): Test private to public key calculation.
-  t->IgnoreInstruction("publicKey");
-  // TODO(davidben): Test mu.
-  t->IgnoreAttribute("mu");
 
-  // Some tests are mu-only.
-  if (!t->HasAttribute("msg")) {
-    return;
-  }
-  ASSERT_TRUE(t->GetBytes(&msg, "msg"));
-
-  CBS cbs;
-  CBS_init(&cbs, private_key_bytes.data(), private_key_bytes.size());
-  auto priv = std::make_unique<typename Traits::PrivateKey>();
-  if (!bcm_success(Traits::ParsePrivateKey(priv.get(), &cbs))) {
-    EXPECT_FALSE(expect_valid);
-    return;
-  }
+  // The provided public key should match.
+  auto pub = std::make_unique<typename Traits::PublicKey>();
+  ASSERT_TRUE(Traits::PublicFromPrivate(pub.get(), priv));
+  ScopedCBB pub_cbb;
+  ASSERT_TRUE(CBB_init(pub_cbb.get(), Traits::kPublicKeyBytes));
+  ASSERT_TRUE(Traits::MarshalPublicKey(pub_cbb.get(), pub.get()));
+  EXPECT_EQ(Bytes(CBBAsSpan(pub_cbb.get())), Bytes(public_key));
 
   // Unfortunately we need to reimplement the context length check here because
   // we are using the internal function in order to pass in an all-zero
   // randomizer.
   if (context.size() > 255) {
     EXPECT_FALSE(expect_valid);
+    t->IgnoreAttribute("msg");
     return;
   }
 
   // At this point, there are more signing error conditions.
   ASSERT_TRUE(expect_valid);
 
+  // All tests provide mu.
+  ASSERT_TRUE(t->GetBytes(&mu, "mu"));
   const uint8_t zero_randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES] = {0};
-  std::vector<uint8_t> signature(Traits::kSignatureBytes);
-  const uint8_t context_prefix[2] = {0, static_cast<uint8_t>(context.size())};
-  EXPECT_TRUE(bcm_success(
-      Traits::SignInternal(signature.data(), priv.get(), msg.data(), msg.size(),
-                           context_prefix, sizeof(context_prefix),
-                           context.data(), context.size(), zero_randomizer)));
-  EXPECT_EQ(Bytes(signature), Bytes(expected_signature));
+  std::vector<uint8_t> computed_sig(Traits::kSignatureBytes);
+  ASSERT_EQ(mu.size(), size_t{MLDSA_MU_BYTES});
+  EXPECT_TRUE(bcm_success(Traits::SignMuInternal(computed_sig.data(), priv,
+                                                 mu.data(), zero_randomizer)));
+  EXPECT_EQ(Bytes(computed_sig), Bytes(sig));
+
+  // Some tests provide the input message.
+  if (t->HasAttribute("msg")) {
+    ASSERT_TRUE(t->GetBytes(&msg, "msg"));
+    const uint8_t context_prefix[2] = {0, static_cast<uint8_t>(context.size())};
+    EXPECT_TRUE(bcm_success(
+        Traits::SignInternal(computed_sig.data(), priv, msg.data(), msg.size(),
+                             context_prefix, sizeof(context_prefix),
+                             context.data(), context.size(), zero_randomizer)));
+    EXPECT_EQ(Bytes(computed_sig), Bytes(sig));
+
+    typename Traits::Prehash state;
+    ASSERT_TRUE(
+        Traits::PrehashInit(&state, pub.get(), context.data(), context.size()));
+    Traits::PrehashUpdate(&state, msg.data(), msg.size());
+    uint8_t computed_mu[MLDSA_MU_BYTES];
+    Traits::PrehashFinalize(computed_mu, &state);
+    EXPECT_EQ(Bytes(computed_mu), Bytes(mu));
+  }
+}
+
+void IgnoreWycheproofSignatureAttributes(FileTest *t) {
+  // When the private key is bad, Wycheproof sometimes still provides signature
+  // inputs, but we don't get far enough to load them.
+  t->IgnoreInstruction("publicKey");
+  t->IgnoreAttribute("ctx");
+  t->IgnoreAttribute("msg");
+  t->IgnoreAttribute("mu");
+  t->IgnoreAttribute("sig");
+}
+
+template <typename Traits>
+void MLDSAWycheproofSignTest(FileTest *t) {
+  std::vector<uint8_t> private_key_bytes;
+  ASSERT_TRUE(t->GetInstructionBytes(&private_key_bytes, "privateKey"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+
+  CBS cbs;
+  CBS_init(&cbs, private_key_bytes.data(), private_key_bytes.size());
+  auto priv = std::make_unique<typename Traits::PrivateKey>();
+  if (!bcm_success(Traits::ParsePrivateKey(priv.get(), &cbs))) {
+    EXPECT_FALSE(result.IsValid());
+    IgnoreWycheproofSignatureAttributes(t);
+    return;
+  }
+
+  MLDSAWycheproofSignCommon<Traits>(t, priv.get());
 }
 
 TEST(MLDSATest, WycheproofSignTests44) {
@@ -508,51 +558,21 @@ TEST(MLDSATest, WycheproofSignTests87) {
 
 template <typename Traits>
 void MLDSASigGenFromSeedTest(FileTest *t) {
-  std::vector<uint8_t> private_seed_bytes, msg, expected_signature, context;
-  ASSERT_TRUE(t->GetInstructionBytes(&private_seed_bytes, "privateSeed"));
-  ASSERT_TRUE(t->GetBytes(&expected_signature, "sig"));
-  if (t->HasAttribute("ctx")) {
-    t->GetBytes(&context, "ctx");
-  }
+  std::vector<uint8_t> private_seed;
+  ASSERT_TRUE(t->GetInstructionBytes(&private_seed, "privateSeed"));
   WycheproofResult result;
   ASSERT_TRUE(GetWycheproofResult(t, &result));
-  bool expect_valid =
-      result.IsValid({"ValidSignature", "ManySteps", "BoundaryCondition"});
   t->IgnoreInstruction("privateKeyPkcs8");
-  // TODO(davidben): Test seed to public key calculation.
-  t->IgnoreInstruction("publicKey");
-  // TODO(davidben): Test mu.
-  t->IgnoreAttribute("mu");
 
-  // Some tests are mu-only.
-  if (!t->HasAttribute("msg")) {
-    return;
-  }
-  ASSERT_TRUE(t->GetBytes(&msg, "msg"));
-
-  // Unfortunately we need to reimplement the context length check here because
-  // we are using the internal function in order to pass in an all-zero
-  // randomizer.
   auto priv = std::make_unique<typename Traits::PrivateKey>();
-  if (context.size() > 255 ||
-      !Traits::PrivateKeyFromSeed(priv.get(), private_seed_bytes.data(),
-                                  private_seed_bytes.size())) {
-    EXPECT_FALSE(expect_valid);
+  if (!Traits::PrivateKeyFromSeed(priv.get(), private_seed.data(),
+                                  private_seed.size())) {
+    EXPECT_FALSE(result.IsValid());
+    IgnoreWycheproofSignatureAttributes(t);
     return;
   }
 
-  // There are no more signing error conditions.
-  EXPECT_TRUE(expect_valid);
-
-  const uint8_t zero_randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES] = {0};
-  std::vector<uint8_t> signature(Traits::kSignatureBytes);
-  const uint8_t context_prefix[2] = {0, static_cast<uint8_t>(context.size())};
-  EXPECT_TRUE(bcm_success(
-      Traits::SignInternal(signature.data(), priv.get(), msg.data(), msg.size(),
-                           context_prefix, sizeof(context_prefix),
-                           context.data(), context.size(), zero_randomizer)));
-
-  EXPECT_EQ(Bytes(signature), Bytes(expected_signature));
+  MLDSAWycheproofSignCommon<Traits>(t, priv.get());
 }
 
 TEST(MLDSATest, WycheproofSignWithSeedTests44) {
