@@ -79,7 +79,7 @@ func printAttribute(w io.Writer, key string, valueAny any, isInstruction bool) e
 			}
 		}
 	default:
-		panic(fmt.Sprintf("Unknown type for %q: %T", key, valueAny))
+		return fmt.Errorf("Unknown type for %q: %T", key, valueAny)
 	}
 	return nil
 }
