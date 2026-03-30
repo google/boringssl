@@ -45,6 +45,10 @@ func sortedKeys(m map[string]any) []string {
 }
 
 func printAttribute(w io.Writer, key string, valueAny any, isInstruction bool) error {
+	if valueAny == nil {
+		// Skip keys with value null.
+		return nil
+	}
 	switch value := valueAny.(type) {
 	case float64:
 		if float64(int(value)) != value {

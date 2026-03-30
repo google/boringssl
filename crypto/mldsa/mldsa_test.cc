@@ -476,22 +476,29 @@ template <
 void MLDSAWycheproofSignTest(FileTest *t) {
   std::vector<uint8_t> private_key_bytes, msg, expected_signature, context;
   ASSERT_TRUE(t->GetInstructionBytes(&private_key_bytes, "privateKey"));
-  ASSERT_TRUE(t->GetBytes(&msg, "msg"));
   ASSERT_TRUE(t->GetBytes(&expected_signature, "sig"));
   if (t->HasAttribute("ctx")) {
     t->GetBytes(&context, "ctx");
   }
-  std::string result;
-  ASSERT_TRUE(t->GetAttribute(&result, "result"));
-  t->IgnoreAttribute("flags");
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid();
+  // TODO(davidben): Test private to public key calculation.
+  t->IgnoreInstruction("publicKey");
+  // TODO(davidben): Test mu.
+  t->IgnoreAttribute("mu");
+
+  // Some tests are mu-only.
+  if (!t->HasAttribute("msg")) {
+    return;
+  }
+  ASSERT_TRUE(t->GetBytes(&msg, "msg"));
 
   CBS cbs;
   CBS_init(&cbs, private_key_bytes.data(), private_key_bytes.size());
   auto priv = std::make_unique<PrivateKey>();
-  const int priv_ok = bcm_success(ParsePrivateKey(priv.get(), &cbs));
-
-  if (!priv_ok) {
-    ASSERT_TRUE(result != "valid");
+  if (!bcm_success(ParsePrivateKey(priv.get(), &cbs))) {
+    EXPECT_FALSE(expect_valid);
     return;
   }
 
@@ -499,9 +506,12 @@ void MLDSAWycheproofSignTest(FileTest *t) {
   // we are using the internal function in order to pass in an all-zero
   // randomizer.
   if (context.size() > 255) {
-    ASSERT_TRUE(result != "valid");
+    EXPECT_FALSE(expect_valid);
     return;
   }
+
+  // At this point, there are more signing error conditions.
+  ASSERT_TRUE(expect_valid);
 
   const uint8_t zero_randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES] = {0};
   std::vector<uint8_t> signature(SignatureBytes);
@@ -510,7 +520,6 @@ void MLDSAWycheproofSignTest(FileTest *t) {
                                        msg.size(), context_prefix,
                                        sizeof(context_prefix), context.data(),
                                        context.size(), zero_randomizer)));
-
   EXPECT_EQ(Bytes(signature), Bytes(expected_signature));
 }
 
@@ -549,33 +558,38 @@ template <typename PrivateKey,
 void MLDSASigGenFromSeedTest(FileTest *t) {
   std::vector<uint8_t> private_seed_bytes, msg, expected_signature, context;
   ASSERT_TRUE(t->GetInstructionBytes(&private_seed_bytes, "privateSeed"));
-  ASSERT_TRUE(t->GetBytes(&msg, "msg"));
   ASSERT_TRUE(t->GetBytes(&expected_signature, "sig"));
-  EXPECT_EQ(private_seed_bytes.size(), static_cast<size_t>(MLDSA_SEED_BYTES));
   if (t->HasAttribute("ctx")) {
     t->GetBytes(&context, "ctx");
   }
   WycheproofResult result;
   ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid =
+      result.IsValid({"ValidSignature", "ManySteps", "BoundaryCondition"});
   t->IgnoreInstruction("privateKeyPkcs8");
-  t->IgnoreAttribute("flags");
+  // TODO(davidben): Test seed to public key calculation.
+  t->IgnoreInstruction("publicKey");
+  // TODO(davidben): Test mu.
+  t->IgnoreAttribute("mu");
 
-  auto priv = std::make_unique<PrivateKey>();
+  // Some tests are mu-only.
+  if (!t->HasAttribute("msg")) {
+    return;
+  }
+  ASSERT_TRUE(t->GetBytes(&msg, "msg"));
 
   // Unfortunately we need to reimplement the context length check here because
   // we are using the internal function in order to pass in an all-zero
   // randomizer.
-  const int ok = bcm_success(PrivateKeyFromSeed(
-                     priv.get(), private_seed_bytes.data())) == 1 &&
-                 (context.size() <= 255);
-
-  int expected_valid =
-      result.IsValid({"ValidSignature", "ManySteps", "BoundaryCondition"}) ? 1
-                                                                           : 0;
-  EXPECT_EQ(ok, expected_valid);
-  if (!expected_valid) {
+  auto priv = std::make_unique<PrivateKey>();
+  if (private_seed_bytes.size() != 32 || context.size() > 255 ||
+      !bcm_success(PrivateKeyFromSeed(priv.get(), private_seed_bytes.data()))) {
+    EXPECT_FALSE(expect_valid);
     return;
   }
+
+  // There are no more signing error conditions.
+  EXPECT_TRUE(expect_valid);
 
   const uint8_t zero_randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES] = {0};
   std::vector<uint8_t> signature(SignatureBytes);
@@ -625,28 +639,22 @@ void MLDSAWycheproofVerifyTest(FileTest *t) {
   if (t->HasAttribute("ctx")) {
     t->GetBytes(&context, "ctx");
   }
-  std::string result, flags;
-  ASSERT_TRUE(t->GetAttribute(&result, "result"));
-  ASSERT_TRUE(t->GetAttribute(&flags, "flags"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid();
 
   CBS cbs;
   CBS_init(&cbs, public_key_bytes.data(), public_key_bytes.size());
   auto pub = std::make_unique<PublicKey>();
-  const int pub_ok = ParsePublicKey(pub.get(), &cbs);
-
-  if (!pub_ok) {
-    EXPECT_EQ(flags, "IncorrectPublicKeyLength");
+  if (!ParsePublicKey(pub.get(), &cbs)) {
+    EXPECT_FALSE(expect_valid);
     return;
   }
 
   const int sig_ok =
       Verify(pub.get(), signature.data(), signature.size(), msg.data(),
              msg.size(), context.data(), context.size());
-  if (!sig_ok) {
-    EXPECT_EQ(result, "invalid");
-  } else {
-    EXPECT_EQ(result, "valid");
-  }
+  EXPECT_EQ(sig_ok, expect_valid ? 1 : 0);
 }
 
 TEST(MLDSATest, WycheproofVerifyTests65) {

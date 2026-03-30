@@ -223,10 +223,10 @@ TEST(X25519Test, Wycheproof) {
 
         uint8_t secret[32];
         int ret = ctwrapX25519(secret, priv.data(), pub.data());
-        EXPECT_EQ(ret, result.IsValid({"NonCanonicalPublic", "Twist",
-                                       "SpecialPublicKey", "EdgeCaseShared",
-                                       "EdgeCaseMultiplication",
-                                       "SmallPublicKey", "LowOrderPublic"})
+        EXPECT_EQ(ret, result.IsValid(
+                           {"NonCanonicalPublic", "Twist", "SpecialPublicKey",
+                            "EdgeCaseShared", "EdgeCaseMultiplication",
+                            "SmallPublicKey", "LowOrderPublic", "Ktv"})
                            ? 1
                            : 0);
         EXPECT_EQ(Bytes(secret), Bytes(shared));
