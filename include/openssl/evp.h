@@ -771,7 +771,7 @@ OPENSSL_EXPORT int EVP_PKEY_sign_init(EVP_PKEY_CTX *ctx);
 // signature. The actual signature may be smaller.
 //
 // It returns one on success or zero on error. (Note: this differs from
-// OpenSSL, which can also return negative values to indicate an error. )
+// OpenSSL, which can also return negative values to indicate an error.)
 OPENSSL_EXPORT int EVP_PKEY_sign(EVP_PKEY_CTX *ctx, uint8_t *sig,
                                  size_t *sig_len, const uint8_t *digest,
                                  size_t digest_len);
