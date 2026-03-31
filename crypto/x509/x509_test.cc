@@ -9737,31 +9737,24 @@ TEST(X509Test, X509StoreGet1IssuerMultipleMatches) {
   UniquePtr<X509> issuer_ok = CertFromPEM(kIntermediatePEM);
   ASSERT_TRUE(issuer_ok);
 
-  // |issuer_fail| has the same name but a different SKID, so it won't match the
-  // AKID in |cert|, thereby failing validation in
-  // |x509_check_issued_with_callback| via |X509_check_issued|.
-  UniquePtr<X509> issuer_fail(X509_dup(issuer_ok.get()));
-  ASSERT_TRUE(issuer_fail);
-  int loc =
-      X509_get_ext_by_NID(issuer_fail.get(), NID_subject_key_identifier, -1);
-  ASSERT_GE(loc, 0);
-  UniquePtr<X509_EXTENSION> ext(X509_delete_ext(issuer_fail.get(), loc));
-  ASSERT_TRUE(ext);
-
-  // Add a different SKID. 00 sorts before the original.
-  const uint8_t kTag[] = {0x00, 0x00, 0x00};
-  UniquePtr<ASN1_OCTET_STRING> skid(ASN1_OCTET_STRING_new());
-  ASSERT_TRUE(skid);
-  ASSERT_TRUE(ASN1_OCTET_STRING_set(skid.get(), kTag, sizeof(kTag)));
-  ASSERT_TRUE(X509_add1_ext_i2d(issuer_fail.get(), NID_subject_key_identifier,
-                                skid.get(), 0, 0));
-
-  // Sign it. The certificate will be rejected anyway, but it must be signed by
-  // _some_ key to be able to be added - otherwise its |cert_hash| will match
-  // |issuer_ok|'s and |X509_STORE_add_cert| will not even store it.
+  // Make certificates with the same issuer but the wrong SKID. They must be
+  // signed by *some* key, but it doesn't matter which.
   UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kRSAKey);
   ASSERT_TRUE(key);
-  ASSERT_TRUE(X509_sign(issuer_fail.get(), key.get(), EVP_sha256()));
+  auto make_wrong_skid = [&](Span<const uint8_t> skid) -> UniquePtr<X509> {
+    UniquePtr<X509> ret(X509_dup(issuer_ok.get()));
+    if (ret == nullptr) {
+      return nullptr;
+    }
+    X509_EXTENSION_free(X509_delete_ext(
+        ret.get(),
+        X509_get_ext_by_NID(ret.get(), NID_subject_key_identifier, -1)));
+    if (!AddSubjectKeyIdentifier(ret.get(), skid) ||
+        !X509_sign(ret.get(), key.get(), EVP_sha256())) {
+      return nullptr;
+    }
+    return ret;
+  };
 
   // Find an unrelated certificate that sorts _before_ the others.
   // "O=BoringSSL TESTING, CN=Root CA" sorts before "O=BoringSSL TESTING,
@@ -9769,23 +9762,44 @@ TEST(X509Test, X509StoreGet1IssuerMultipleMatches) {
   UniquePtr<X509> unrelated_before = CertFromPEM(kRootCAPEM);
   ASSERT_TRUE(unrelated_before);
 
-  // Create a store, adding |unrelated_before|, then |issuer_fail|, then
-  // |issuer_ok|. |X509_OBJECT_idx_by_subject| will get |issuer_fail|.
+  // Create a store, adding |unrelated_before|, |issuer_ok|, and several
+  // certificates with the right name and wrong SKID.
   UniquePtr<X509_STORE> store(X509_STORE_new());
   ASSERT_TRUE(store);
   ASSERT_TRUE(X509_STORE_add_cert(store.get(), unrelated_before.get()));
-  ASSERT_TRUE(X509_STORE_add_cert(store.get(), issuer_fail.get()));
+  for (uint8_t i = 0; i < 64; i++) {
+    uint8_t skid[1] = {i};
+    UniquePtr<X509> issuer_wrong = make_wrong_skid(skid);
+    ASSERT_TRUE(issuer_wrong);
+    ASSERT_TRUE(X509_STORE_add_cert(store.get(), issuer_wrong.get()));
+  }
   ASSERT_TRUE(X509_STORE_add_cert(store.get(), issuer_ok.get()));
+  for (uint8_t i = 64; i < 128; i++) {
+    uint8_t skid[1] = {i};
+    UniquePtr<X509> issuer_wrong = make_wrong_skid(skid);
+    ASSERT_TRUE(issuer_wrong);
+    ASSERT_TRUE(X509_STORE_add_cert(store.get(), issuer_wrong.get()));
+  }
+
+  // Verify a certificate using the store. It should find the correct issuer.
   UniquePtr<X509_STORE_CTX> ctx(X509_STORE_CTX_new());
   ASSERT_TRUE(ctx);
   ASSERT_TRUE(X509_STORE_CTX_init(ctx.get(), store.get(), cert.get(), nullptr));
+  X509_STORE_CTX_set_time_posix(ctx.get(), /*flags=*/0, kReferenceTime);
+  EXPECT_EQ(X509_verify_cert(ctx.get()), 1)
+      << "Certificate verification failed: "
+      << X509_STORE_CTX_get_error(ctx.get());
 
-  // Validate that a lookup by issuer name will return |issuer_fail|.
-  X509_NAME *xn = X509_get_issuer_name(cert.get());
+  // Validate that a lookup by issuer name will not return |issuer_ok|,
+  // otherwise the test may flakily fail to flag a regression. It is not
+  // well-defined which issuer should be returned, but we use a stable sort, so
+  // this is currently reliable. If we ever change this, we can remove this
+  // check and rely on there being several bad certificates.
   X509_OBJECT obj;
-  ASSERT_EQ(1,
-            X509_STORE_CTX_get_by_subject(ctx.get(), X509_LU_X509, xn, &obj));
-  ASSERT_EQ(0, X509_cmp(X509_OBJECT_get0_X509(&obj), issuer_fail.get()));
+  ASSERT_EQ(
+      1, X509_STORE_CTX_get_by_subject(ctx.get(), X509_LU_X509,
+                                       X509_get_issuer_name(cert.get()), &obj));
+  EXPECT_NE(0, X509_cmp(X509_OBJECT_get0_X509(&obj), issuer_ok.get()));
   X509_OBJECT_free_contents(&obj);
 
   // Check that by actually looking up using the certificate and not just its
