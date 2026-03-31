@@ -203,6 +203,24 @@ TEST(VerifySignedDataTest, Ecdsa384) {
   RunTestCase(SUCCESS, "ecdsa-prime256v1-sha512.pem");
 }
 
+TEST(VerifySignedDataTest, Mldsa44) { RunTestCase(SUCCESS, "mldsa-44.pem"); }
+
+TEST(VerifySignedDataTest, Mldsa65) { RunTestCase(SUCCESS, "mldsa-65.pem"); }
+
+TEST(VerifySignedDataTest, Mldsa87) { RunTestCase(SUCCESS, "mldsa-87.pem"); }
+
+TEST(VerifySignedDataTest, Mldsa44NullParams) {
+  RunTestCase(FAILURE, "mldsa-44-spki-params-null.pem");
+}
+
+TEST(VerifySignedDataTest, Mldsa65NullParams) {
+  RunTestCase(FAILURE, "mldsa-65-spki-params-null.pem");
+}
+
+TEST(VerifySignedDataTest, Mldsa87NullParams) {
+  RunTestCase(FAILURE, "mldsa-87-spki-params-null.pem");
+}
+
 TEST(VerifySignedDataTestWithCache, TestVerifyCache) {
   MockSignatureVerifyCache verify_cache;
   // Trivially, with no cache, all stats should be 0.
