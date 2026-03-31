@@ -61,7 +61,7 @@ impl<M> RustConnectionMethods<M> {
 }
 
 impl<Mode: HasTlsConnectionMethod> Methods for RustConnectionMethods<Mode> {
-    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a mut Self> {
+    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self> {
         unsafe {
             // Safety: `ssl` is originated from `TlsConnection::from_ssl`.
             let methods = bssl_sys::SSL_get_ex_data(ssl, Mode::registration());

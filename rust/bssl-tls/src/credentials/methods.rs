@@ -38,7 +38,7 @@ pub(super) static TLS_CREDENTIAL_METHOD: Lazy<c_int> = Lazy::new(|| unsafe {
 pub(crate) struct RustCredentialMethods {}
 
 impl Methods for RustCredentialMethods {
-    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a mut Self> {
+    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self> {
         unsafe {
             // Safety: `ssl` is valid per BoringSSL invariant.
             let cred = bssl_sys::SSL_get0_selected_credential(ssl);
@@ -51,7 +51,7 @@ impl Methods for RustCredentialMethods {
                 return None;
             }
             // Safety: `cred` is originated from `Box::into_raw`.
-            Some(&mut *(methods as *mut RustCredentialMethods))
+            Some(&*(methods as *mut RustCredentialMethods))
         }
     }
 }

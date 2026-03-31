@@ -51,7 +51,7 @@ mod macros;
 pub(crate) trait Methods {
     /// Safety: `ssl` must outlive `'a` and it must be passed in from BoringSSL
     /// through vtable calls.
-    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a mut Self>;
+    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self>;
 }
 
 #[inline]

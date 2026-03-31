@@ -33,7 +33,7 @@ impl<M> RustContextMethods<M> {
 }
 
 impl<M: HasTlsContextMethod> Methods for RustContextMethods<M> {
-    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a mut Self> {
+    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self> {
         unsafe {
             // Safety: `ssl` must be still valid by BoringSSL invariant.
             let ctx = bssl_sys::SSL_get_SSL_CTX(ssl);
