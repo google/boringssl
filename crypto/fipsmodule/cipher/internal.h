@@ -360,17 +360,17 @@ inline bool ForEachBlockRange(Span<IVec> ivecs, const FWhole &f_whole,
       in.Append(Span(collect_from_head.*ReadFrom, collect_from_head.len));
       if (collect_from_rest.empty()) {
         // Nothing left - so this is the final block.
+        auto finalout = Span(out).first(in.size());
         MutableIVec finalvec = {};
         finalvec.len = in.size();
         finalvec.*ReadFrom = in.data();
         if constexpr (WriteOut) {
-          finalvec.out = out;
+          finalvec.out = finalout.data();
         }
         if (!call_func(f_final, finalvec)) {
           return false;
         }
-        maybe_copy_to_iovec(Span(out).first(in.size()), current_range_head,
-                            current_range_rest);
+        maybe_copy_to_iovec(finalout, current_range_head, current_range_rest);
         return true;
       }
       collect_from_head = collect_from_rest.front();
