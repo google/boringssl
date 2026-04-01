@@ -204,8 +204,8 @@ func BuildCRenamingInclude(syms cSymbolData) []byte {
 #ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_H
 #define OPENSSL_HEADER_PREFIX_SYMBOLS_H
 
-
 #include <openssl/opensslconf.h>  // For BORINGSSL_ALWAYS_USE_STATIC_INLINE.
+
 
 #if defined(BORINGSSL_PREFIX)
 
