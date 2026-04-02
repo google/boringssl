@@ -65,6 +65,7 @@
 #define OPENSSL_NO_SSL3_METHOD
 #define OPENSSL_NO_STATIC_ENGINE
 #define OPENSSL_NO_STORE
+#define OPENSSL_NO_UI_CONSOLE
 #define OPENSSL_NO_WHIRLPOOL
 
 // We do not implement OpenSSL's CMS API, except for a tiny subset. Projects
