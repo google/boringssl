@@ -280,7 +280,7 @@ bool ssl_compare_public_and_private_key(const EVP_PKEY *pubkey,
     return true;
   }
 
-  if (EVP_PKEY_cmp(pubkey, privkey) != 1) {
+  if (EVP_PKEY_eq(pubkey, privkey) != 1) {
     if (EVP_PKEY_id(pubkey) != EVP_PKEY_id(privkey)) {
       OPENSSL_PUT_ERROR(X509, X509_R_KEY_TYPE_MISMATCH);
     } else {

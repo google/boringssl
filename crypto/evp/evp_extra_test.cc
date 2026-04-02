@@ -790,15 +790,15 @@ TEST(EVPExtraTest, Ed25519) {
   free_der.reset(der);
   EXPECT_EQ(Bytes(kPrivateKeyPKCS8), Bytes(der, der_len));
 
-  // Test EVP_PKEY_cmp.
-  EXPECT_EQ(1, EVP_PKEY_cmp(pubkey.get(), privkey.get()));
+  // Test EVP_PKEY_eq.
+  EXPECT_EQ(1, EVP_PKEY_eq(pubkey.get(), privkey.get()));
 
   static const uint8_t kZeros[32] = {0};
   UniquePtr<EVP_PKEY> pubkey2(
       EVP_PKEY_from_raw_public_key(EVP_pkey_ed25519(), kZeros, sizeof(kZeros)));
   ASSERT_TRUE(pubkey2);
-  EXPECT_EQ(0, EVP_PKEY_cmp(pubkey.get(), pubkey2.get()));
-  EXPECT_EQ(0, EVP_PKEY_cmp(privkey.get(), pubkey2.get()));
+  EXPECT_EQ(0, EVP_PKEY_eq(pubkey.get(), pubkey2.get()));
+  EXPECT_EQ(0, EVP_PKEY_eq(privkey.get(), pubkey2.get()));
 
   // Ed25519 may not be used streaming.
   ScopedEVP_MD_CTX ctx;
@@ -957,7 +957,7 @@ TEST(EVPExtraTest, ECKeygen) {
     ExpectECGroupAndKey(pkey2.get(), NID_X9_62_prime256v1);
 
     // The two keys should compare as different.
-    EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), pkey2.get()), 0);
+    EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey2.get()), 0);
 
     // Keys of different groups should also compare as different.
     ctx.reset(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
@@ -972,7 +972,7 @@ TEST(EVPExtraTest, ECKeygen) {
     ASSERT_TRUE(EVP_PKEY_keygen(ctx.get(), &raw));
     UniquePtr<EVP_PKEY> pkey3(raw);
     ExpectECGroupAndKey(pkey3.get(), NID_secp384r1);
-    EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), pkey3.get()), 0);
+    EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey3.get()), 0);
 
     // The algorithm-based API provides a much, much easier keygen API.
     pkey.reset(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
@@ -1028,8 +1028,8 @@ TEST(EVPExtraTest, DHKeygen) {
     EXPECT_FALSE(DH_get0_q(dh));
     EXPECT_TRUE(DH_get0_pub_key(dh));
     EXPECT_TRUE(DH_get0_priv_key(dh));
-    EXPECT_EQ(1, EVP_PKEY_cmp_parameters(params.get(), pkey.get()));
-    EXPECT_EQ(0, EVP_PKEY_cmp(params.get(), pkey.get()));
+    EXPECT_EQ(1, EVP_PKEY_parameters_eq(params.get(), pkey.get()));
+    EXPECT_EQ(0, EVP_PKEY_eq(params.get(), pkey.get()));
 
     // Generate a second key.
     ctx.reset(EVP_PKEY_CTX_new(params.get(), nullptr));
@@ -1041,9 +1041,9 @@ TEST(EVPExtraTest, DHKeygen) {
     ASSERT_TRUE(EVP_PKEY_keygen(ctx.get(), &raw));
     UniquePtr<EVP_PKEY> pkey2(raw);
 
-    EXPECT_EQ(1, EVP_PKEY_cmp_parameters(params.get(), pkey2.get()));
-    EXPECT_EQ(1, EVP_PKEY_cmp_parameters(pkey.get(), pkey2.get()));
-    EXPECT_EQ(0, EVP_PKEY_cmp(pkey.get(), pkey2.get()));
+    EXPECT_EQ(1, EVP_PKEY_parameters_eq(params.get(), pkey2.get()));
+    EXPECT_EQ(1, EVP_PKEY_parameters_eq(pkey.get(), pkey2.get()));
+    EXPECT_EQ(0, EVP_PKEY_eq(pkey.get(), pkey2.get()));
   }
 }
 
@@ -1111,14 +1111,14 @@ TEST(EVPExtraTest, MLDSAKeyGen) {
 
     EXPECT_EQ(EVP_PKEY_id(pkey2.get()), alg.type);
     CheckSignAndVerify(pkey2.get());
-    EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), pkey2.get()), 0);
+    EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey2.get()), 0);
 
     // The less messy API should also work.
     UniquePtr<EVP_PKEY> pkey3(EVP_PKEY_generate_from_alg(alg.alg));
     ASSERT_TRUE(pkey3);
     EXPECT_EQ(EVP_PKEY_id(pkey3.get()), alg.type);
     CheckSignAndVerify(pkey3.get());
-    EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), pkey3.get()), 0);
+    EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey3.get()), 0);
   }
 }
 
@@ -1209,7 +1209,7 @@ TEST(EVPExtraTest, Parameters) {
   UniquePtr<EVP_PKEY> rsa2 = LoadExampleRSAKey();
   ASSERT_TRUE(rsa2);
   // Two null parameters should compare as equal.
-  EXPECT_EQ(1, EVP_PKEY_cmp_parameters(rsa.get(), rsa2.get()));
+  EXPECT_EQ(1, EVP_PKEY_parameters_eq(rsa.get(), rsa2.get()));
 
   // EC keys have parameters, but it is possible to initialize an |EVP_PKEY|
   // with a completely empty |EC_KEY|.
@@ -1230,23 +1230,23 @@ TEST(EVPExtraTest, Parameters) {
   ASSERT_TRUE(p384);
   EXPECT_FALSE(EVP_PKEY_missing_parameters(p384.get()));
 
-  EXPECT_EQ(1, EVP_PKEY_cmp_parameters(p256.get(), p256_2.get()));
-  EXPECT_EQ(0, EVP_PKEY_cmp_parameters(p256.get(), p384.get()));
+  EXPECT_EQ(1, EVP_PKEY_parameters_eq(p256.get(), p256_2.get()));
+  EXPECT_EQ(0, EVP_PKEY_parameters_eq(p256.get(), p384.get()));
 
   // Copying parameters onto a curve-less EC key works.
   ASSERT_TRUE(EVP_PKEY_copy_parameters(ec_no_params.get(), p256.get()));
-  EXPECT_EQ(1, EVP_PKEY_cmp_parameters(p256.get(), ec_no_params.get()));
+  EXPECT_EQ(1, EVP_PKEY_parameters_eq(p256.get(), ec_no_params.get()));
 
   // No-op copies silently succeed.
   ASSERT_TRUE(EVP_PKEY_copy_parameters(ec_no_params.get(), p256.get()));
-  EXPECT_EQ(1, EVP_PKEY_cmp_parameters(p256.get(), ec_no_params.get()));
+  EXPECT_EQ(1, EVP_PKEY_parameters_eq(p256.get(), ec_no_params.get()));
 
   // Copying parameters onto a type-less key works.
   UniquePtr<EVP_PKEY> pkey(EVP_PKEY_new());
   ASSERT_TRUE(pkey);
   ASSERT_TRUE(EVP_PKEY_copy_parameters(pkey.get(), p256.get()));
   EXPECT_EQ(EVP_PKEY_EC, EVP_PKEY_id(pkey.get()));
-  EXPECT_EQ(1, EVP_PKEY_cmp_parameters(p256.get(), pkey.get()));
+  EXPECT_EQ(1, EVP_PKEY_parameters_eq(p256.get(), pkey.get()));
 
   // |EVP_PKEY_copy_parameters| cannot change a key's type or curve.
   EXPECT_FALSE(EVP_PKEY_copy_parameters(rsa.get(), p256.get()));
@@ -1259,12 +1259,12 @@ TEST(EVPExtraTest, CompareDifferentTypes) {
   UniquePtr<EVP_PKEY> rsa = ParsePrivateKey(EVP_PKEY_RSA, kExampleRSAKeyDER);
   UniquePtr<EVP_PKEY> dsa = ParsePrivateKey(EVP_PKEY_DSA, kExampleDSAKeyDER);
   UniquePtr<EVP_PKEY> ec = ParsePrivateKey(EVP_PKEY_EC, kExampleECKeyDER);
-  EXPECT_EQ(EVP_PKEY_cmp(rsa.get(), dsa.get()), 0);
-  EXPECT_EQ(EVP_PKEY_cmp(rsa.get(), ec.get()), 0);
-  EXPECT_EQ(EVP_PKEY_cmp(dsa.get(), ec.get()), 0);
-  EXPECT_EQ(EVP_PKEY_cmp_parameters(rsa.get(), dsa.get()), 0);
-  EXPECT_EQ(EVP_PKEY_cmp_parameters(rsa.get(), ec.get()), 0);
-  EXPECT_EQ(EVP_PKEY_cmp_parameters(dsa.get(), ec.get()), 0);
+  EXPECT_EQ(EVP_PKEY_eq(rsa.get(), dsa.get()), 0);
+  EXPECT_EQ(EVP_PKEY_eq(rsa.get(), ec.get()), 0);
+  EXPECT_EQ(EVP_PKEY_eq(dsa.get(), ec.get()), 0);
+  EXPECT_EQ(EVP_PKEY_parameters_eq(rsa.get(), dsa.get()), 0);
+  EXPECT_EQ(EVP_PKEY_parameters_eq(rsa.get(), ec.get()), 0);
+  EXPECT_EQ(EVP_PKEY_parameters_eq(dsa.get(), ec.get()), 0);
 }
 
 TEST(EVPExtraTest, RawKeyUnsupported) {
@@ -1449,9 +1449,9 @@ TEST(EVPExtraTest, HalfEmptyX25519) {
   ASSERT_TRUE(real_key);
 
   // A half-empty key cannot be compared.
-  EXPECT_FALSE(EVP_PKEY_cmp(half_empty.get(), half_empty.get()));
-  EXPECT_FALSE(EVP_PKEY_cmp(half_empty.get(), real_key.get()));
-  EXPECT_FALSE(EVP_PKEY_cmp(real_key.get(), half_empty.get()));
+  EXPECT_FALSE(EVP_PKEY_eq(half_empty.get(), half_empty.get()));
+  EXPECT_FALSE(EVP_PKEY_eq(half_empty.get(), real_key.get()));
+  EXPECT_FALSE(EVP_PKEY_eq(real_key.get(), half_empty.get()));
 
   // A half-empty cannot be the peer in a Diffie-Hellman operation.
   ctx.reset(EVP_PKEY_CTX_new(real_key.get(), nullptr));

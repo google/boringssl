@@ -106,7 +106,7 @@ int EVP_PKEY_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
 
   // Once set, parameters may not change.
   if (!EVP_PKEY_missing_parameters(to_impl)) {
-    if (EVP_PKEY_cmp_parameters(to_impl, from_impl) == 1) {
+    if (EVP_PKEY_parameters_eq(to_impl, from_impl) == 1) {
       return 1;
     }
     OPENSSL_PUT_ERROR(EVP, EVP_R_DIFFERENT_PARAMETERS);

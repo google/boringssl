@@ -56,7 +56,7 @@ int X509_REQ_check_private_key(const X509_REQ *x, const EVP_PKEY *k) {
     return 0;
   }
 
-  if (EVP_PKEY_cmp(xk, k) == 1) {
+  if (EVP_PKEY_eq(xk, k) == 1) {
     return 1;
   }
 

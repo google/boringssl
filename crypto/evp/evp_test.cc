@@ -455,7 +455,7 @@ bool ImportKey(FileTest *t, KeyMap *key_map, KeyRole key_role) {
     CheckRSAParam(t, "RSAParamIQMP", pkey.get(), RSA_get0_iqmp);
 
     // All keys must compare equal.
-    EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), keys.front().second.get()), 1);
+    EXPECT_EQ(EVP_PKEY_eq(pkey.get(), keys.front().second.get()), 1);
 
     // The key must re-encode correctly.
     bssl::ScopedCBB cbb;
@@ -481,8 +481,8 @@ bool ImportKey(FileTest *t, KeyMap *key_map, KeyRole key_role) {
     EXPECT_TRUE(public_copy);
     EXPECT_TRUE(EVP_PKEY_has_public(public_copy.get()));
     EXPECT_FALSE(EVP_PKEY_has_private(public_copy.get()));
-    EXPECT_EQ(EVP_PKEY_cmp(public_copy.get(), pkey.get()), 1);
-    EXPECT_EQ(EVP_PKEY_cmp_parameters(public_copy.get(), pkey.get()), 1);
+    EXPECT_EQ(EVP_PKEY_eq(public_copy.get(), pkey.get()), 1);
+    EXPECT_EQ(EVP_PKEY_parameters_eq(public_copy.get(), pkey.get()), 1);
     // Check that the copied public key serializes the same.
     bssl::ScopedCBB cbb_public, cbb_public_copy;
     if (!CBB_init(cbb_public.get(), 0) ||

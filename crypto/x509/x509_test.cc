@@ -2957,7 +2957,7 @@ TEST(X509Test, SignCSR) {
       // Check the signature was over the new public key.
       UniquePtr<EVP_PKEY> copy_pubkey(X509_REQ_get_pubkey(copy.get()));
       ASSERT_TRUE(copy_pubkey);
-      EXPECT_EQ(1, EVP_PKEY_cmp(pkey.get(), copy_pubkey.get()));
+      EXPECT_EQ(1, EVP_PKEY_eq(pkey.get(), copy_pubkey.get()));
     }
   }
 }
@@ -3610,9 +3610,8 @@ wr6JtaX2G+pOmwcSPymZC4u2TncAP7KHgS8UGcMw8CE=
         // Expect a placeholder key.
         EXPECT_FALSE(info->x_pkey->dec_pkey);
       } else {
-        // EVP_PKEY_cmp returns one if the keys are equal.
         ASSERT_TRUE(info->x_pkey->dec_pkey);
-        EXPECT_EQ(1, EVP_PKEY_cmp(expected->key, info->x_pkey->dec_pkey));
+        EXPECT_EQ(1, EVP_PKEY_eq(expected->key, info->x_pkey->dec_pkey));
       }
     } else {
       EXPECT_EQ(nullptr, info->x_pkey);
@@ -8237,7 +8236,7 @@ TEST(X509Test, PublicKeyCache) {
 
   UniquePtr<EVP_PKEY> key2(X509_PUBKEY_get(pub));
   ASSERT_TRUE(key2);
-  EXPECT_EQ(1, EVP_PKEY_cmp(key.get(), key2.get()));
+  EXPECT_EQ(1, EVP_PKEY_eq(key.get(), key2.get()));
 
   // Replace |pub| with different (garbage) values.
   ASSERT_TRUE(X509_PUBKEY_set0_param(pub, OBJ_nid2obj(NID_subject_alt_name),
@@ -9617,7 +9616,7 @@ TEST(X509Test, NonDefaultKeyType) {
   // The public key can be extracted from |cert|.
   const EVP_PKEY *cert_pkey = X509_get0_pubkey(cert.get());
   ASSERT_TRUE(cert_pkey);
-  EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), cert_pkey), 1);
+  EXPECT_EQ(EVP_PKEY_eq(pkey.get(), cert_pkey), 1);
   // |X509_check_private_key| should work.
   EXPECT_EQ(X509_check_private_key(cert.get(), pkey.get()), 1);
 #endif
@@ -9638,7 +9637,7 @@ TEST(X509Test, NonDefaultKeyType) {
   // The public key can be extracted from |cert|.
   const EVP_PKEY *cert_pkey = X509_get0_pubkey(cert_with_key.get());
   ASSERT_TRUE(cert_pkey);
-  EXPECT_EQ(EVP_PKEY_cmp(pkey.get(), cert_pkey), 1);
+  EXPECT_EQ(EVP_PKEY_eq(pkey.get(), cert_pkey), 1);
   // |X509_check_private_key| should work.
   EXPECT_EQ(X509_check_private_key(cert_with_key.get(), pkey.get()), 1);
 

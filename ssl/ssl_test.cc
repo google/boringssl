@@ -10218,7 +10218,7 @@ TEST(SSLTest, CertificatesFromFile) {
     ASSERT_TRUE(ctx.get());
     ASSERT_TRUE(SSL_CTX_use_PrivateKey_file(ctx.get(), file.path().c_str(),
                                             SSL_FILETYPE_PEM));
-    EXPECT_EQ(EVP_PKEY_cmp(SSL_CTX_get0_privatekey(ctx.get()), key.get()), 1);
+    EXPECT_EQ(EVP_PKEY_eq(SSL_CTX_get0_privatekey(ctx.get()), key.get()), 1);
   }
   {
     TemporaryFile file;
@@ -10227,7 +10227,7 @@ TEST(SSLTest, CertificatesFromFile) {
     ASSERT_TRUE(ctx.get());
     ASSERT_TRUE(SSL_CTX_use_RSAPrivateKey_file(ctx.get(), file.path().c_str(),
                                                SSL_FILETYPE_PEM));
-    EXPECT_EQ(EVP_PKEY_cmp(SSL_CTX_get0_privatekey(ctx.get()), key.get()), 1);
+    EXPECT_EQ(EVP_PKEY_eq(SSL_CTX_get0_privatekey(ctx.get()), key.get()), 1);
   }
 
   // Empty files are errors.
