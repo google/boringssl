@@ -585,6 +585,7 @@ boringssl_crypto_headers := \
   include/openssl/opensslconf.h \
   include/openssl/opensslv.h \
   include/openssl/ossl_typ.h \
+  include/openssl/params.h \
   include/openssl/pem.h \
   include/openssl/pkcs12.h \
   include/openssl/pkcs7.h \
@@ -669,6 +670,7 @@ boringssl_crypto_internal_headers := \
   crypto/md5/internal.h \
   crypto/mem_internal.h \
   crypto/obj/obj_dat.h \
+  crypto/params_internal.h \
   crypto/pem/internal.h \
   crypto/pkcs7/internal.h \
   crypto/pkcs8/internal.h \

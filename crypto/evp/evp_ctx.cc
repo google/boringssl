@@ -19,9 +19,11 @@
 #include <openssl/digest.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
+#include <openssl/params.h>
 
 #include "../internal.h"
 #include "../mem_internal.h"
+#include "../params_internal.h"
 #include "internal.h"
 
 
@@ -477,7 +479,7 @@ int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey) {
 }
 
 int EVP_PKEY_encapsulate_init(EVP_PKEY_CTX *ctx, const OSSL_PARAM *params) {
-  if (params != nullptr) {
+  if (params != nullptr && !IsEndParam(*params)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PARAMETERS);
     return 0;
   }
@@ -511,7 +513,7 @@ int EVP_PKEY_encapsulate(EVP_PKEY_CTX *ctx, uint8_t *out_ciphertext,
 }
 
 int EVP_PKEY_decapsulate_init(EVP_PKEY_CTX *ctx, const OSSL_PARAM *params) {
-  if (params != nullptr) {
+  if (params != nullptr && !IsEndParam(*params)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PARAMETERS);
     return 0;
   }

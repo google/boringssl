@@ -31,6 +31,7 @@
 #include <openssl/ec.h>
 #include <openssl/ec_key.h>
 #include <openssl/err.h>
+#include <openssl/params.h>
 #include <openssl/pkcs8.h>
 #include <openssl/rsa.h>
 #include <openssl/span.h>
@@ -1485,6 +1486,27 @@ TEST(EVPExtraTest, TrailingData) {
   EXPECT_FALSE(pkey);
   EXPECT_TRUE(
       ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP, EVP_R_DECODE_ERROR));
+}
+
+// Tests that EVP_PKEY_(en|de)capsulate_init correctly handles the stub
+// OSSL_PARAM struct.
+TEST(EVPExtraTest, EncapsulateDecapsulateOsslParam) {
+  OSSL_PARAM kOneEndParam[] = {OSSL_PARAM_END};
+  OSSL_PARAM kTwoEndParams[] = {OSSL_PARAM_END, OSSL_PARAM_END};
+  OSSL_PARAM kNotEndParam[] = {{"foo", 0, nullptr, 0, 0}};
+  UniquePtr<EVP_PKEY> pkey(EVP_PKEY_generate_from_alg(EVP_pkey_ml_kem_768()));
+  UniquePtr<EVP_PKEY_CTX> ctx;
+
+  for (const auto init_func :
+       {&EVP_PKEY_encapsulate_init, &EVP_PKEY_decapsulate_init}) {
+    ctx.reset(EVP_PKEY_CTX_new(pkey.get(), nullptr));
+    EXPECT_TRUE(init_func(ctx.get(), nullptr));
+    EXPECT_TRUE(init_func(ctx.get(), kOneEndParam));
+    EXPECT_TRUE(init_func(ctx.get(), kTwoEndParams));
+    EXPECT_FALSE(init_func(ctx.get(), kNotEndParam));
+    EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
+                            EVP_R_INVALID_PARAMETERS));
+  }
 }
 
 }  // namespace

@@ -917,7 +917,8 @@ OPENSSL_EXPORT int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **out_pkey);
 
 // EVP_PKEY_encapsulate_init initialises an |EVP_PKEY_CTX| for an encapsulate
 // operation. It should be called before |EVP_PKEY_encapsulate|. |params| is
-// included for OpenSSL compatibility, but this parameter should be NULL.
+// included for OpenSSL compatibility, but this parameter should be NULL or have
+// |OSSL_PARAM_END| as its first element.
 //
 // It returns one on success or zero on error.
 OPENSSL_EXPORT int EVP_PKEY_encapsulate_init(EVP_PKEY_CTX *ctx,
@@ -949,7 +950,8 @@ OPENSSL_EXPORT int EVP_PKEY_encapsulate(EVP_PKEY_CTX *ctx,
 
 // EVP_PKEY_decapsulate_init initialises an |EVP_PKEY_CTX| for a decapsulate
 // operation. It should be called before |EVP_PKEY_decapsulate|. |params| is
-// included for OpenSSL compatibility, but this parameter should be NULL.
+// included for OpenSSL compatibility, but this parameter should be NULL or have
+// |OSSL_PARAM_END| as its first element.
 //
 // It returns one on success or zero on error.
 OPENSSL_EXPORT int EVP_PKEY_decapsulate_init(EVP_PKEY_CTX *ctx,
