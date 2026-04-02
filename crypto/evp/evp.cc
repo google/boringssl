@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
 #include <openssl/nid.h>
@@ -375,6 +376,10 @@ void OpenSSL_add_all_ciphers() {}
 void OpenSSL_add_all_digests() {}
 
 void EVP_cleanup() {}
+
+int EVP_default_properties_is_fips_enabled(OSSL_LIB_CTX *libctx) {
+  return FIPS_mode();
+}
 
 int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const uint8_t *in,
                                    size_t len) {

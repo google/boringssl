@@ -18,6 +18,7 @@
 
 #include <openssl/blake2.h>
 #include <openssl/bytestring.h>
+#include <openssl/evp_errors.h>
 #include <openssl/md4.h>
 #include <openssl/md5.h>
 #include <openssl/nid.h>
@@ -217,6 +218,33 @@ const EVP_MD *EVP_get_digestbyname(const char *name) {
   }
 
   return nullptr;
+}
+
+EVP_MD *EVP_MD_fetch(OSSL_LIB_CTX *libctx, const char *name,
+                     const char *propq) {
+  EVP_MD *ret = const_cast<EVP_MD *>(EVP_get_digestbyname(name));
+  if (ret == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+  }
+  return ret;
+}
+
+int EVP_MD_up_ref(EVP_MD *md) { return 1; }
+
+void EVP_MD_free(EVP_MD *md) {}
+
+int EVP_Q_digest(OSSL_LIB_CTX *libctx, const char *name, const char *propq,
+                 const void *in, size_t in_len, uint8_t *out, size_t *out_len) {
+  const EVP_MD *md = EVP_MD_fetch(libctx, name, propq);
+  if (md == nullptr) {
+    return 0;
+  }
+  unsigned len_u;
+  if (!EVP_Digest(in, in_len, out, &len_u, md, nullptr)) {
+    return 0;
+  }
+  *out_len = len_u;
+  return 1;
 }
 
 static void blake2b256_init(EVP_MD_CTX *ctx) {

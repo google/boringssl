@@ -1228,22 +1228,28 @@ OPENSSL_EXPORT void OpenSSL_add_all_digests(void);
 // EVP_cleanup does nothing.
 OPENSSL_EXPORT void EVP_cleanup(void);
 
+// EVP_default_properties_is_fips_enabled calls |FIPS_mode|.
+OPENSSL_EXPORT int EVP_default_properties_is_fips_enabled(OSSL_LIB_CTX *libctx);
+
 OPENSSL_EXPORT void EVP_CIPHER_do_all_sorted(
     void (*callback)(const EVP_CIPHER *cipher, const char *name,
                      const char *unused, void *arg),
     void *arg);
 
-OPENSSL_EXPORT void EVP_MD_do_all_sorted(void (*callback)(const EVP_MD *cipher,
+OPENSSL_EXPORT void EVP_MD_do_all_sorted(void (*callback)(const EVP_MD *md,
                                                           const char *name,
                                                           const char *unused,
                                                           void *arg),
                                          void *arg);
 
-OPENSSL_EXPORT void EVP_MD_do_all(void (*callback)(const EVP_MD *cipher,
+OPENSSL_EXPORT void EVP_MD_do_all(void (*callback)(const EVP_MD *md,
                                                    const char *name,
                                                    const char *unused,
                                                    void *arg),
                                   void *arg);
+
+OPENSSL_EXPORT void EVP_MD_do_all_provided(
+    OSSL_LIB_CTX *libctx, void (*callback)(EVP_MD *md, void *arg), void *arg);
 
 // i2d_PrivateKey marshals a private key from |key| to type-specific format, as
 // described in |i2d_SAMPLE|.

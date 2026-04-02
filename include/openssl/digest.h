@@ -258,7 +258,7 @@ OPENSSL_EXPORT int EVP_add_digest(const EVP_MD *digest);
 
 // EVP_get_digestbyname returns an |EVP_MD| given a human readable name in
 // |name|, or NULL if the name is unknown.
-OPENSSL_EXPORT const EVP_MD *EVP_get_digestbyname(const char *);
+OPENSSL_EXPORT const EVP_MD *EVP_get_digestbyname(const char *name);
 
 // EVP_dss1 returns the value of EVP_sha1(). This was provided by OpenSSL to
 // specify the original DSA signatures, which were fixed to use SHA-1. Note,
@@ -292,6 +292,23 @@ OPENSSL_EXPORT void EVP_MD_CTX_set_flags(EVP_MD_CTX *ctx, int flags);
 // EVP_MD_nid calls |EVP_MD_type|.
 OPENSSL_EXPORT int EVP_MD_nid(const EVP_MD *md);
 
+// EVP_MD_fetch behaves like |EVP_get_digestbyname|. |libctx| and |propq| are
+// ignored. Although it returns a non-const pointer, |EVP_MD|s in BoringSSL are
+// static and do not need to be freed.
+OPENSSL_EXPORT EVP_MD *EVP_MD_fetch(OSSL_LIB_CTX *libctx, const char *name,
+                                    const char *propq);
+
+// EVP_MD_up_ref returns one. |EVP_MD|s in BoringSSL are static.
+OPENSSL_EXPORT int EVP_MD_up_ref(EVP_MD *md);
+
+// EVP_MD_free does nothing. |EVP_MD|s in BoringSSL are static.
+OPENSSL_EXPORT void EVP_MD_free(EVP_MD *md);
+
+// EVP_Q_digest behaves like |EVP_Digest| but specifies the digest by a string
+// |name|. |libctx| and |propq| are ignored.
+OPENSSL_EXPORT int EVP_Q_digest(OSSL_LIB_CTX *libctx, const char *name,
+                                const char *propq, const void *in,
+                                size_t in_len, uint8_t *out, size_t *out_len);
 
 // Internal constants and structures (hidden).
 
