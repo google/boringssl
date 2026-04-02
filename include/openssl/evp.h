@@ -61,11 +61,9 @@ OPENSSL_EXPORT int EVP_PKEY_up_ref(EVP_PKEY *pkey);
 // an error to attempt to duplicate, export, or compare an opaque key.
 OPENSSL_EXPORT int EVP_PKEY_is_opaque(const EVP_PKEY *pkey);
 
-// EVP_PKEY_cmp compares |a| and |b| and returns one if their public keys are
+// EVP_PKEY_eq compares |a| and |b| and returns one if their public keys are
 // equal and zero otherwise.
-//
-// WARNING: this differs from the traditional return value of a "cmp" function.
-OPENSSL_EXPORT int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b);
+OPENSSL_EXPORT int EVP_PKEY_eq(const EVP_PKEY *a, const EVP_PKEY *b);
 
 // EVP_PKEY_copy_parameters sets the parameters of |to| to equal the parameters
 // of |from|. It returns one on success and zero on error.
@@ -75,13 +73,10 @@ OPENSSL_EXPORT int EVP_PKEY_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from);
 // parameters or zero if not, or if the algorithm doesn't take parameters.
 OPENSSL_EXPORT int EVP_PKEY_missing_parameters(const EVP_PKEY *pkey);
 
-// EVP_PKEY_cmp_parameters compares the parameters of |a| and |b|. It returns
-// one if they match and zero otherwise. In algorithms that do not use
-// parameters, this function returns one; null parameters are vacuously equal.
-//
-// WARNING: this differs from the traditional return value of a "cmp" function.
-OPENSSL_EXPORT int EVP_PKEY_cmp_parameters(const EVP_PKEY *a,
-                                           const EVP_PKEY *b);
+// EVP_PKEY_parameters_eq compares the parameters of |a| and |b|. It returns one
+// if they match and zero otherwise. In algorithms that do not use parameters,
+// this function returns one; null parameters are vacuously equal.
+OPENSSL_EXPORT int EVP_PKEY_parameters_eq(const EVP_PKEY *a, const EVP_PKEY *b);
 
 // EVP_PKEY_size returns the maximum size, in bytes, of a signature signed by
 // |pkey|. For an RSA key, this returns the number of bytes needed to represent
@@ -1453,6 +1448,19 @@ OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_new_raw_private_key(int type, ENGINE *unused,
 OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_new_raw_public_key(int type, ENGINE *unused,
                                                      const uint8_t *in,
                                                      size_t len);
+
+// EVP_PKEY_cmp calls |EVP_PKEY_eq|. It returns one if public keys are equal and
+// zero otherwise.
+//
+// WARNING: This differs from the traditional return value of a "cmp" function.
+OPENSSL_EXPORT int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b);
+
+// EVP_PKEY_cmp_parameters calls |EVP_PKEY_parameters_eq|. It returns one if
+// parameters are equal and zero otherwise.
+//
+// WARNING: This differs from the traditional return value of a "cmp" function.
+OPENSSL_EXPORT int EVP_PKEY_cmp_parameters(const EVP_PKEY *a,
+                                           const EVP_PKEY *b);
 
 
 // Preprocessor compatibility section (hidden).

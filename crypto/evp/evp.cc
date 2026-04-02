@@ -67,9 +67,9 @@ int EVP_PKEY_is_opaque(const EVP_PKEY *pkey) {
   return 0;
 }
 
-int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b) {
+int EVP_PKEY_eq(const EVP_PKEY *a, const EVP_PKEY *b) {
   // This also checks that |EVP_PKEY_id| matches.
-  if (!EVP_PKEY_cmp_parameters(a, b)) {
+  if (!EVP_PKEY_parameters_eq(a, b)) {
     return 0;
   }
 
@@ -78,6 +78,10 @@ int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b) {
   return a_impl->ameth != nullptr && a_impl->ameth->pub_equal != nullptr &&
          a_impl->pkey != nullptr && b_impl->pkey != nullptr &&
          a_impl->ameth->pub_equal(a_impl, b_impl);
+}
+
+int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b) {
+  return EVP_PKEY_eq(a, b);
 }
 
 int EVP_PKEY_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
@@ -324,7 +328,7 @@ int EVP_PKEY_get_raw_public_key(const EVP_PKEY *pkey, uint8_t *out,
   return impl->ameth->get_pub_raw(impl, out, out_len);
 }
 
-int EVP_PKEY_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b) {
+int EVP_PKEY_parameters_eq(const EVP_PKEY *a, const EVP_PKEY *b) {
   if (EVP_PKEY_id(a) != EVP_PKEY_id(b)) {
     return 0;
   }
@@ -337,6 +341,10 @@ int EVP_PKEY_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b) {
   // If the algorithm does not use parameters, the two null value compare as
   // vacuously equal.
   return 1;
+}
+
+int EVP_PKEY_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b) {
+  return EVP_PKEY_parameters_eq(a, b);
 }
 
 int EVP_PKEY_CTX_set_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD *md) {
