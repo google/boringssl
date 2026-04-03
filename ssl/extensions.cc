@@ -574,7 +574,7 @@ static bool ext_sni_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
 
 // Encrypted ClientHello (ECH)
 //
-// https://tools.ietf.org/html/draft-ietf-tls-esni-13
+// https://www.rfc-editor.org/rfc/rfc9849.html
 
 static bool ext_ech_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
                                     CBB *out_compressible,
@@ -2274,7 +2274,7 @@ static bool ext_early_data_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
   // If offering ECH, the extension only applies to ClientHelloInner, but we
   // send the extension in both ClientHellos. This ensures that, if the server
   // handshakes with ClientHelloOuter, it can skip past early data. See
-  // draft-ietf-tls-esni-13, section 6.1.
+  // RFC 9849, section 6.1.
   if (!CBB_add_u16(out_compressible, TLSEXT_TYPE_early_data) ||  //
       !CBB_add_u16(out_compressible, 0) ||                       //
       !CBB_flush(out_compressible)) {

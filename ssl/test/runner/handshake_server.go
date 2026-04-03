@@ -470,7 +470,7 @@ type echDecryptError struct {
 
 func (hs *serverHandshakeState) decryptClientHello(helloOuter *clientHelloMsg) (helloInner *clientHelloMsg, err error) {
 	// ClientHelloOuterAAD is ClientHelloOuter with the payload replaced by
-	// zeros. See draft-ietf-tls-esni-13, section 5.2.
+	// zeros. See RFC 9849, section 5.2.
 	aad := make([]byte, len(helloOuter.raw)-4)
 	copy(aad, helloOuter.raw[4:helloOuter.echPayloadStart])
 	copy(aad[helloOuter.echPayloadEnd-4:], helloOuter.raw[helloOuter.echPayloadEnd:])

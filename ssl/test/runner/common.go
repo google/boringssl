@@ -370,7 +370,7 @@ const (
 	keyUpdateRequested    = 1
 )
 
-// draft-ietf-tls-esni-13, sections 7.2 and 7.2.1.
+// RFC 9849, sections 7.2 and 7.2.1.
 const echAcceptConfirmationLength = 8
 
 // Temporary value; pre RFC.

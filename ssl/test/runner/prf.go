@@ -409,8 +409,8 @@ func (h *finishedHash) deriveSecret(label []byte) []byte {
 }
 
 // echAcceptConfirmation computes the ECH accept confirmation signal, as defined
-// in sections 7.2 and 7.2.1 of draft-ietf-tls-esni-13. The transcript hash is
-// computed by concatenating |h| with |extraMessages|.
+// in sections 7.2 and 7.2.1 of RFC 9849. The transcript hash is computed by
+// concatenating |h| with |extraMessages|.
 func (h *finishedHash) echAcceptConfirmation(clientRandom, label, extraMessages []byte) []byte {
 	secret, err := hkdf.Extract(h.hashAlg.New, clientRandom, h.zeroSecret())
 	if err != nil {

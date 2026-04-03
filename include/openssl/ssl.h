@@ -4421,7 +4421,7 @@ OPENSSL_EXPORT const char *SSL_early_data_reason_string(
 //
 // ECH support in BoringSSL is still experimental and under development.
 //
-// See https://tools.ietf.org/html/draft-ietf-tls-esni-13.
+// See RFC 9849.
 
 // SSL_set_enable_ech_grease configures whether the client will send a GREASE
 // ECH extension when no supported ECHConfig is available.
