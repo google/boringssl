@@ -23,8 +23,8 @@
 #include <openssl/buf.h>
 #include <openssl/pem.h>
 #include <openssl/span.h>
-#include <openssl/ssl3.h>
-#include <openssl/tls1.h>
+#include <openssl/ssl3.h>  // IWYU pragma: export
+#include <openssl/tls1.h>  // IWYU pragma: export
 #include <openssl/x509.h>
 
 #if !defined(OPENSSL_WINDOWS)
