@@ -15,8 +15,10 @@
 #include <limits.h>
 #include <stdio.h>
 
+#include <algorithm>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -1261,6 +1263,92 @@ TEST(ASN1Test, UTCTimeZoneOffsets) {
   EXPECT_TRUE(ASN1_TIME_diff(&days, &secs, s.get(), g.get()));
   EXPECT_EQ(days, 0);
   EXPECT_EQ(secs, 0);
+}
+
+TEST(ASN1Test, ToGeneralizedTime) {
+  static const struct {
+    int type;
+    std::string_view in;
+    std::optional<std::string_view> expected;
+  } kTests[] = {
+      // UTCTime is converted.
+      {V_ASN1_UTCTIME, "500101000000Z", "19500101000000Z"},
+      {V_ASN1_UTCTIME, "700101000000Z", "19700101000000Z"},
+      {V_ASN1_UTCTIME, "990101000000Z", "19990101000000Z"},
+      {V_ASN1_UTCTIME, "000101000000Z", "20000101000000Z"},
+      {V_ASN1_UTCTIME, "490101000000Z", "20490101000000Z"},
+
+      // GeneralizedTime is left as-is.
+      {V_ASN1_GENERALIZEDTIME, "00000101000000Z", "00000101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "19490101000000Z", "19490101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "19500101000000Z", "19500101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "19700101000000Z", "19700101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "19990101000000Z", "19990101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "20000101000000Z", "20000101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "20490101000000Z", "20490101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "20500101000000Z", "20500101000000Z"},
+      {V_ASN1_GENERALIZEDTIME, "99991231235959Z", "99991231235959Z"},
+
+      // For now, UTCTime with offsets are tolerated, but not GeneralizedTime.
+      {V_ASN1_UTCTIME, "000101000000-0400", "20000101000000-0400"},
+      {V_ASN1_GENERALIZEDTIME, "20000101000000-0400", std::nullopt},
+
+      // Invalid strings are rejected.
+      {V_ASN1_OCTET_STRING, "000101000000-0400", std::nullopt},
+      {V_ASN1_UTCTIME, "", std::nullopt},
+      {V_ASN1_UTCTIME, "not a time", std::nullopt},
+      {V_ASN1_UTCTIME, "000101000000", std::nullopt},
+      {V_ASN1_UTCTIME, "000101000000Znope", std::nullopt},
+      {V_ASN1_UTCTIME, "000101000000-040000", std::nullopt},
+      {V_ASN1_GENERALIZEDTIME, "", std::nullopt},
+      {V_ASN1_GENERALIZEDTIME, "not a time", std::nullopt},
+      {V_ASN1_GENERALIZEDTIME, "20000101000000", std::nullopt},
+      {V_ASN1_GENERALIZEDTIME, "20000101000000Znope", std::nullopt},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(t.type);
+    SCOPED_TRACE(t.in);
+
+    // Test the basic API.
+    UniquePtr<ASN1_STRING> str(ASN1_STRING_type_new(t.type));
+    ASSERT_TRUE(str);
+    ASSERT_TRUE(ASN1_STRING_set(str.get(), t.in.data(), t.in.size()));
+    UniquePtr<ASN1_GENERALIZEDTIME> gen(
+        ASN1_TIME_to_generalizedtime(str.get(), nullptr));
+    if (t.expected.has_value()) {
+      ASSERT_TRUE(gen);
+      EXPECT_EQ(ASN1_STRING_type(gen.get()), V_ASN1_GENERALIZEDTIME);
+      EXPECT_EQ(ASN1StringToStringView(gen.get()), *t.expected);
+    } else {
+      EXPECT_FALSE(gen);
+      return;
+    }
+
+    // Test returning a new value through the out parameter.
+    ASN1_GENERALIZEDTIME *out = nullptr;
+    gen.reset(ASN1_TIME_to_generalizedtime(str.get(), &out));
+    ASSERT_TRUE(gen);
+    EXPECT_EQ(gen.get(), out);
+    EXPECT_EQ(ASN1_STRING_type(gen.get()), V_ASN1_GENERALIZEDTIME);
+    EXPECT_EQ(ASN1StringToStringView(gen.get()), *t.expected);
+
+    // Test writing to a pre-existing object.
+    gen.reset(ASN1_GENERALIZEDTIME_new());
+    ASSERT_TRUE(ASN1_STRING_set(gen.get(), "test", -1));
+    out = gen.get();
+    ASSERT_EQ(gen.get(), ASN1_TIME_to_generalizedtime(str.get(), &out));
+    EXPECT_EQ(ASN1_STRING_type(gen.get()), V_ASN1_GENERALIZEDTIME);
+    EXPECT_EQ(ASN1StringToStringView(gen.get()), *t.expected);
+
+    // The function should not assume the input is NUL-terminated.
+    void *copy = OPENSSL_memdup(t.in.data(), t.in.size());
+    ASSERT_TRUE(t.in.empty() || copy != nullptr);
+    ASN1_STRING_set0(str.get(), copy, static_cast<int>(t.in.size()));
+    gen.reset(ASN1_TIME_to_generalizedtime(str.get(), nullptr));
+    ASSERT_TRUE(gen);
+    EXPECT_EQ(ASN1_STRING_type(gen.get()), V_ASN1_GENERALIZEDTIME);
+    EXPECT_EQ(ASN1StringToStringView(gen.get()), *t.expected);
+  }
 }
 
 TEST(ASN1Test, AdjTime) {
