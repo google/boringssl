@@ -25,7 +25,7 @@ on the OCTET STRING representing BasicOCSPResponse.
 
 import base64
 import glob
-import os
+import os.path
 import re
 import subprocess
 import tempfile

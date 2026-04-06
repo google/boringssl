@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2017 The Chromium Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +17,22 @@ files in the script's parent directory.
 
 """
 
+import base64
+import datetime
+import hashlib
+import subprocess
+import tempfile
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
+
 from pyasn1.codec.der import decoder, encoder
 from pyasn1_modules import rfc2560, rfc2459
 from pyasn1.type import univ, useful
-import hashlib, datetime
-import subprocess
-import os
 
-from OpenSSL import crypto
-
-import base64
-
-NEXT_SERIAL = 0
+NEXT_SERIAL = 1
 
 # 1/1/2017 00:00 GMT
 CERT_DATE = datetime.datetime(2017, 1, 1, 0, 0)
@@ -52,46 +56,54 @@ sha256rsaoid = univ.ObjectIdentifier('1.2.840.113549.1.1.11')
 def SigAlgOid(sig_alg):
   if sig_alg == 'sha1':
     return sha1rsaoid
-  return sha256rsaoid
+  if sig_alg == 'sha256':
+    return sha256rsaoid
+  raise ValueError(f"Unrecognized sig_alg: {sig_alg}")
 
 
 def CreateCert(name, signer=None, ocsp=False):
   global NEXT_SERIAL
-  pkey = crypto.PKey()
-  pkey.generate_key(crypto.TYPE_RSA, 1024)
-  cert = crypto.X509()
-  cert.set_version(2)
-  cert.get_subject().CN = name
-  cert.set_pubkey(pkey)
-  cert.set_serial_number(NEXT_SERIAL)
-  NEXT_SERIAL += 1
-  cert.set_notBefore(CERT_DATE.strftime('%Y%m%d%H%M%SZ'))
-  cert.set_notAfter(CERT_EXPIRE.strftime('%Y%m%d%H%M%SZ'))
-  if ocsp:
-    cert.add_extensions(
-        [crypto.X509Extension('extendedKeyUsage', False, 'OCSPSigning')])
+  private_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+  subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+
   if signer:
-    cert.set_issuer(signer[1].get_subject())
-    cert.sign(signer[2], 'sha1')
+    issuer = signer[1].subject
+    issuer_key = signer[2]
   else:
-    cert.set_issuer(cert.get_subject())
-    cert.sign(pkey, 'sha1')
-  asn1cert = decoder.decode(
-      crypto.dump_certificate(crypto.FILETYPE_ASN1, cert),
-      asn1Spec=rfc2459.Certificate())[0]
-  if not signer:
-    signer = [asn1cert]
-  return (asn1cert, cert, pkey, signer[0])
+    issuer = subject
+    issuer_key = private_key
+
+  builder = x509.CertificateBuilder()
+  builder = builder.subject_name(subject)
+  builder = builder.issuer_name(issuer)
+  builder = builder.public_key(private_key.public_key())
+  builder = builder.serial_number(NEXT_SERIAL)
+  NEXT_SERIAL += 1
+  builder = builder.not_valid_before(CERT_DATE)
+  builder = builder.not_valid_after(CERT_EXPIRE)
+  if ocsp:
+    builder = builder.add_extension(
+        x509.ExtendedKeyUsage([ExtendedKeyUsageOID.OCSP_SIGNING]),
+        critical=False)
+  cert = builder.sign(issuer_key, hashes.SHA256())
+  der_cert = cert.public_bytes(serialization.Encoding.DER)
+  asn1cert = decoder.decode(der_cert, asn1Spec=rfc2459.Certificate())[0]
+
+  if signer:
+    signer_cert = signer[0]
+  else:
+    signer_cert = asn1cert
+  return (asn1cert, cert, private_key, signer_cert)
 
 
 def CreateExtension(oid='1.2.3.4', critical=False):
   ext = rfc2459.Extension()
   ext.setComponentByName('extnID', univ.ObjectIdentifier(oid))
-  ext.setComponentByName('extnValue', 'DEADBEEF')
+  ext.setComponentByName('extnValue', b'DEADBEEF')
   if critical:
-    ext.setComponentByName('critical', univ.Boolean('True'))
+    ext.setComponentByName('critical', univ.Boolean(True))
   else:
-    ext.setComponentByName('critical', univ.Boolean('False'))
+    ext.setComponentByName('critical', univ.Boolean(False))
 
   return ext
 
@@ -236,9 +248,17 @@ def Create(signer=None,
   basic.setComponentByName('tbsResponseData', tbs)
   basic.setComponentByName('signatureAlgorithm', sa)
   if not signature:
-    signature = crypto.sign(signer[2], encoder.encode(tbs), sigAlg)
+    if sigAlg == 'sha1':
+      hash_alg = hashes.SHA1()
+    elif sigAlg == 'sha256':
+      hash_alg = hashes.SHA256()
+    else:
+      raise ValueError(f"Unrecognized signature algorithm: {sigAlg}")
+    signature = signer[2].sign(encoder.encode(tbs), padding.PKCS1v15(),
+                               hash_alg)
+
   basic.setComponentByName('signature',
-                           univ.BitString("'%s'H" % (signature.encode('hex'))))
+                           univ.BitString(hexValue=signature.hex()))
   if certs:
     cs = basic.setComponentByName('certs').getComponentByName('certs')
     for i in range(len(certs)):
@@ -254,52 +274,39 @@ def Create(signer=None,
 
 
 def MakePemBlock(der, name):
-  b64 = base64.b64encode(der)
-  wrapped = '\n'.join(b64[pos:pos + 64] for pos in xrange(0, len(b64), 64))
+  b64 = base64.b64encode(der).decode('ascii')
+  wrapped = '\n'.join(b64[pos:pos + 64] for pos in range(0, len(b64), 64))
   return '-----BEGIN %s-----\n%s\n-----END %s-----' % (name, wrapped, name)
-
-
-def WriteStringToFile(data, path):
-  with open(path, "w") as f:
-    f.write(data)
-
-
-def ReadFileToString(path):
-  with open(path, 'r') as f:
-    return f.read()
 
 
 def CreateOCSPRequestDer(issuer_cert_pem, cert_pem):
   '''Uses OpenSSL to generate a basic OCSPRequest for |cert_pem|.'''
 
-  issuer_path = "tmp_issuer.pem"
-  cert_path = "tmp_cert.pem"
-  request_path = "tmp_request.der"
+  with tempfile.NamedTemporaryFile(
+      delete_on_close=False, prefix="issuer_", suffix=".pem"
+  ) as issuer, tempfile.NamedTemporaryFile(
+      delete_on_close=False, prefix="cert_", suffix=".pem"
+  ) as cert, tempfile.NamedTemporaryFile(
+      delete_on_close=False, prefix="request_", suffix=".der"
+  ) as request:
+    issuer.write(issuer_cert_pem.encode('utf-8'))
+    issuer.close()
+    cert.write(cert_pem.encode('utf-8'))
+    cert.close()
+    request.close()
 
-  WriteStringToFile(issuer_cert_pem, issuer_path)
-  WriteStringToFile(cert_pem, cert_path)
+    p = subprocess.run([
+        "openssl", "ocsp", "-no_nonce", "-issuer", issuer.name, "-cert",
+        cert.name, "-reqout", request.name
+    ], capture_output=True, check=True)
 
-  p = subprocess.Popen(["openssl", "ocsp", "-no_nonce", "-issuer", issuer_path,
-                        "-cert", cert_path, "-reqout", request_path],
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
-  stdout_data, stderr_data = p.communicate()
-
-  os.remove(issuer_path)
-  os.remove(cert_path)
-
-  result = None
-  if p.returncode == 0:
-    result = ReadFileToString(request_path)
-
-  os.remove(request_path)
-  return result
+    with open(request.name, "rb") as f:
+      return f.read()
 
 
 def Store(fname, description, ca, data):
-  ca_cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, ca[1])
-  cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, CERT[1])
+  ca_cert_pem = ca[1].public_bytes(serialization.Encoding.PEM).decode('ascii')
+  cert_pem = CERT[1].public_bytes(serialization.Encoding.PEM).decode('ascii')
 
   ocsp_request_der = CreateOCSPRequestDer(ca_cert_pem, cert_pem)
 
@@ -309,7 +316,8 @@ def Store(fname, description, ca, data):
       ca_cert_pem.replace('CERTIFICATE', 'CA CERTIFICATE'),
       cert_pem,
       MakePemBlock(ocsp_request_der, "OCSP REQUEST"))
-  open('%s.pem' % fname, 'w').write(out)
+  with open('%s.pem' % fname, 'w') as f:
+    f.write(out)
 
 
 Store(
@@ -337,7 +345,7 @@ Store(
     'bad_signature',
     'Has an invalid signature',
     CA,
-    Create(signature='\xde\xad\xbe\xef'))
+    Create(signature=b'\xde\xad\xbe\xef'))
 Store('ocsp_sign_direct', 'Signed directly by the issuer', CA,
       Create(signer=CA, certs=[]))
 Store('ocsp_sign_indirect', 'Signed indirectly through an intermediate', CA,
