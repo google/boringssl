@@ -768,6 +768,11 @@ endif()
 add_executable(bssl ${BSSL_SOURCES})
 target_link_libraries(bssl ssl crypto)
 
+if(BUILD_TESTING)
+  add_executable(generate_mldsa_certs pki/testdata/verify_unittest/generate_mldsa_certs.cc)
+  target_link_libraries(generate_mldsa_certs crypto)
+endif()
+
 if(FUZZ)
   # TODO(crbug.com/42290412): Drive this build with build.json and flatten.
   add_subdirectory(fuzz)

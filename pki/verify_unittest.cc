@@ -52,6 +52,15 @@ static std::string GetTestdata(std::string_view filename) {
                                     std::string(filename));
 }
 
+static ::testing::AssertionResult ReadTestCertPem(const std::string &file_name,
+                                                  std::string *out_cert) {
+  PemBlockMapping mappings[] = {
+      {"CERTIFICATE", out_cert},
+  };
+  return ReadTestDataFromPemFile("testdata/verify_unittest/" + file_name,
+                                 mappings);
+}
+
 TEST(VerifyTest, GoogleChain) {
   const std::string leaf = GetTestdata("google-leaf.der");
   const std::string intermediate1 = GetTestdata("google-intermediate1.der");
@@ -147,15 +156,38 @@ TEST(VerifyTest, DepthLimit) {
       << error.DiagnosticString();
 }
 
+TEST(VerifyTest, MldsaAlgorithms) {
+  std::string root, intermediate, leaf;
+  ASSERT_TRUE(ReadTestCertPem("mldsa-root.pem", &root));
+  ASSERT_TRUE(ReadTestCertPem("mldsa-intermediate.pem", &intermediate));
+  ASSERT_TRUE(ReadTestCertPem("mldsa-leaf.pem", &leaf));
+
+  std::string diagnostic;
+  std::unique_ptr<VerifyTrustStore> trust_store =
+      VerifyTrustStore::FromDER(root, &diagnostic);
+  ASSERT_TRUE(trust_store) << diagnostic;
+
+  CertificateVerifyOptions opts;
+  opts.leaf_cert = leaf;
+  opts.intermediates = {intermediate};
+  opts.trust_store = trust_store.get();
+  // April 6, 2026 (00:00Z) is the time used to generate the test certs; use
+  // that time for verification.
+  opts.time = 1775458800;
+
+  VerifyError error;
+  ASSERT_TRUE(CertificateVerify(opts, &error)) << error.DiagnosticString();
+}
+
 class VerifyMTCTest : public ::testing::Test {
  public:
   VerifyMTCTest() = default;
 
   void SetUp() override {
-    ASSERT_TRUE(ReadTestCert("mtc-leaf.pem", &generic_cert_));
-    ASSERT_TRUE(ReadTestCert("mtc-leaf-bitflip.pem", &bitflip_cert_));
-    ASSERT_TRUE(ReadTestCert("mtc-leaf-b.pem", &leaf_b_));
-    ASSERT_TRUE(ReadTestCert("mtc-leaf-c.pem", &leaf_c_));
+    ASSERT_TRUE(ReadTestCertPem("mtc-leaf.pem", &generic_cert_));
+    ASSERT_TRUE(ReadTestCertPem("mtc-leaf-bitflip.pem", &bitflip_cert_));
+    ASSERT_TRUE(ReadTestCertPem("mtc-leaf-b.pem", &leaf_b_));
+    ASSERT_TRUE(ReadTestCertPem("mtc-leaf-c.pem", &leaf_c_));
 
     ASSERT_TRUE(
         CreateTrustedSubtree("Rrynt7BBSfI4WMZ1u1+XOJSNaWnYOdUDjn7VbdF+kQY=", 8,
@@ -166,15 +198,6 @@ class VerifyMTCTest : public ::testing::Test {
     ASSERT_TRUE(
         CreateTrustedSubtree("FxyVwc4letskl3WVKXWqlPBvUZsl5NiD5sW7Wr50k+4=", 16,
                              24, &leaf_c_subtree_));
-  }
-
-  ::testing::AssertionResult ReadTestCert(const std::string &file_name,
-                                          std::string *out_cert) {
-    PemBlockMapping mappings[] = {
-        {"CERTIFICATE", out_cert},
-    };
-    return ReadTestDataFromPemFile("testdata/verify_unittest/" + file_name,
-                                   mappings);
   }
 
   bool CreateTrustedSubtree(const std::string &hash_b64, uint64_t start,

@@ -125,6 +125,12 @@ bool SimplePathBuilderDelegate::IsPublicKeyAcceptable(EVP_PKEY *public_key,
     return true;
   }
 
+  if (pkey_id == EVP_PKEY_ML_DSA_44 || pkey_id == EVP_PKEY_ML_DSA_65 ||
+      pkey_id == EVP_PKEY_ML_DSA_87) {
+    // ML-DSA keys are acceptable.
+    return true;
+  }
+
   // Unexpected key type.
   return false;
 }
