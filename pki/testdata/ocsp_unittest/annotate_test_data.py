@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2016 The Chromium Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,11 +23,12 @@ on the OCTET STRING representing BasicOCSPResponse.
 
 """
 
+import base64
 import glob
 import os
 import re
-import base64
 import subprocess
+import tempfile
 
 
 def Transform(file_data):
@@ -72,30 +73,31 @@ def GenerateCommentForBlock(block_name, block_data):
 
     # If pretty printing succeeded, return it.
     if p.returncode == 0:
-      stdout_data = stdout_data.strip()
+      stdout_data = stdout_data.decode('utf-8').strip()
       return '$ openssl x509 -text < [%s]\n%s' % (block_name, stdout_data)
 
   # Try pretty printing as OCSP Response.
   if block_name == "OCSP RESPONSE":
-    tmp_file_path = "tmp_ocsp.der"
-    WriteStringToFile(block_data, tmp_file_path)
-    p = subprocess.Popen(["openssl", "ocsp", "-noverify", "-resp_text",
-                          "-respin", tmp_file_path],
-                          stdin=subprocess.PIPE,
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE)
-    stdout_data, stderr_data = p.communicate(block_data)
-    os.remove(tmp_file_path)
+    with tempfile.NamedTemporaryFile(delete_on_close=False, prefix="ocsp",
+                                     suffix=".der") as tmp:
+      tmp.write(block_data)
+      tmp.close()
+      p = subprocess.Popen(["openssl", "ocsp", "-noverify", "-resp_text",
+                            "-respin", tmp.name],
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+      stdout_data, stderr_data = p.communicate(block_data)
 
     # If pretty printing succeeded, return it.
     if p.returncode == 0:
-      stdout_data = stdout_data.strip()
+      stdout_data = stdout_data.decode('utf-8').strip()
       # May contain embedded CERTIFICATE pem blocks. Escape these since
       # CERTIFICATE already has meaning in the test file.
       stdout_data = stdout_data.replace("-----", "~~~~~")
       return '$ openssl ocsp -resp_text -respin <([%s])\n%s' % (block_name,
                                                                 stdout_data)
-    print 'Error pretty printing OCSP response:\n',stderr_data
+    print('Error pretty printing OCSP response:\n', stderr_data.decode('utf-8'))
 
   # Otherwise try pretty printing using asn1parse.
 
@@ -103,8 +105,8 @@ def GenerateCommentForBlock(block_name, block_data):
                        stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                        stderr=subprocess.PIPE)
   stdout_data, stderr_data = p.communicate(input=block_data)
-  generated_comment = '$ openssl asn1parse -i < [%s]\n%s' % (block_name,
-                                                             stdout_data)
+  generated_comment = '$ openssl asn1parse -i < [%s]\n%s' % (
+      block_name, stdout_data.decode('utf-8'))
 
   # The OCTET STRING encoded BasicOCSPResponse is also parsed out using
   #'openssl asn1parse'.
@@ -114,7 +116,7 @@ def GenerateCommentForBlock(block_name, block_data):
       response = response.replace('\n', '')
       if len(response) % 2 != 0:
         response = '0' + response
-      response = GenerateCommentForBlock('INNER', response.decode('hex'))
+      response = GenerateCommentForBlock('INNER', bytes.fromhex(response))
       response = response.split('\n', 1)[1]
       response = response.replace(': ', ':      ')
       generated_comment += '\n%s' % (response)
@@ -162,7 +164,7 @@ def WrapTextToLineWidth(text, column_width):
 
 
 def EncodeDataForPem(data):
-  result = base64.b64encode(data)
+  result = base64.b64encode(data).decode('utf-8')
   return WrapTextToLineWidth(result, 75)
 
 
@@ -215,12 +217,12 @@ def WriteStringToFile(data, path):
 
 def main():
   for path in GetPemFilePaths():
-    print "Processing %s ..." % (path)
+    print("Processing %s ..." % (path))
     original_data = ReadFileToString(path)
     transformed_data = Transform(original_data)
     if original_data != transformed_data:
       WriteStringToFile(transformed_data, path)
-      print "Rewrote %s" % (path)
+      print("Rewrote %s" % (path))
 
 
 if __name__ == "__main__":
