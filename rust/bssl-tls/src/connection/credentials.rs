@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use alloc::ffi::CString;
+use core::{ffi::CStr, ptr::null};
 
 use bssl_x509::store::X509Store;
 
@@ -20,9 +21,10 @@ use super::{Client, methods::HasTlsConnectionMethod};
 use crate::{
     check_lib_error,
     config::ConfigurationError,
-    connection::lifecycle::TlsConnectionInHandshake,
+    connection::lifecycle::{EstablishedTlsConnection, TlsConnectionInHandshake},
     credentials::{CertificateVerificationMode, TlsCredential},
     errors::Error,
+    ffi::slice_into_ffi_raw_parts,
 };
 
 /// # Custom certificate verification
@@ -110,5 +112,48 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
             bssl_sys::SSL_set1_host(self.ptr(), host_name.as_ptr())
         });
         Ok(self)
+    }
+}
+
+impl<'a, R, M> EstablishedTlsConnection<'a, R, M> {
+    /// Export keying material from this connection into a buffer of a chosen length,
+    /// as per [RFC 5705].
+    ///
+    /// To derive the same value, both sides of a connection must use the same output length, label
+    /// and context.
+    /// - In TLS 1.2 and earlier, using a zero-length context and using no context would give
+    /// different output.
+    /// - In TLS 1.3 and later, the output length controls the derivation so that a truncated
+    /// longer export will not match a shorter export.
+    ///
+    /// [RFC 5705]: <https://datatracker.ietf.org/doc/html/rfc5705>
+    pub fn export_keying_material(
+        &self,
+        label: &CStr,
+        context: Option<&[u8]>,
+        output: &mut [u8],
+    ) -> Result<(), Error> {
+        let (context, context_len, use_context) = if let Some(context) = context {
+            let (context, context_len) = slice_into_ffi_raw_parts(context);
+            (context, context_len, 1)
+        } else {
+            (null(), 0, 0)
+        };
+        let (output, output_len) = crate::ffi::mut_slice_into_ffi_raw_parts(output);
+        check_lib_error!(unsafe {
+            // Safety:
+            // - the validity of the handle `self.0` is witnessed by `self`.
+            bssl_sys::SSL_export_keying_material(
+                self.ptr(),
+                output,
+                output_len,
+                label.as_ptr(),
+                label.count_bytes(),
+                context,
+                context_len,
+                use_context,
+            )
+        });
+        Ok(())
     }
 }

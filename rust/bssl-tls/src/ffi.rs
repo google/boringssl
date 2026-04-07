@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use core::{
-    ptr::null,
+    ptr::{null, null_mut},
     slice::{from_raw_parts, from_raw_parts_mut},
 };
 
@@ -26,6 +26,14 @@ pub(crate) fn slice_into_ffi_raw_parts<T>(slice: &[T]) -> (*const T, usize) {
         (null(), 0)
     } else {
         (slice.as_ptr(), slice.len())
+    }
+}
+
+pub(crate) fn mut_slice_into_ffi_raw_parts<T>(slice: &mut [T]) -> (*mut T, usize) {
+    if slice.is_empty() {
+        (null_mut(), 0)
+    } else {
+        (slice.as_mut_ptr(), slice.len())
     }
 }
 
