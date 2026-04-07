@@ -101,3 +101,9 @@ This document collects links to useful references. It is currently incomplete, b
 * [iOS ARMv7](https://developer.apple.com/documentation/xcode/writing-armv7-code-for-ios)
 * [Apple ARM64](https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms)
 * [Windows ARM64](https://learn.microsoft.com/en-us/cpp/build/arm64-windows-abi-conventions)
+
+## Implementation Techniques
+
+* [BearSSL - Constant-Time Crypto](https://www.bearssl.org/constanttime.html)
+* [Analyzing and Comparing Montgomery Multiplication Algorithms](https://www.microsoft.com/en-us/research/wp-content/uploads/1996/01/j37acmon.pdf)
+* [Scalar-multiplication algorithms](https://cryptojedi.org/peter/data/eccss-20130911b.pdf)
