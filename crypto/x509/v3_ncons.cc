@@ -525,15 +525,6 @@ static int nc_email(const ASN1_IA5STRING *eml, const ASN1_IA5STRING *base,
 
   CBS base_local, base_domain;
   bool base_has_at = CBS_get_until_first(&base_cbs, &base_local, '@');
-  if (base_has_at && CBS_len(&base_local) == 0) {
-    // OpenSSL ignores a stray leading @.
-    // This is a difference to libpki, which does not have this exception!
-    //
-    // TODO: crbug.com/500243591 - This is not in RFC5280. Document, or remove
-    // this block?
-    base_has_at = false;
-    CBS_skip(&base_cbs, 1);
-  }
   if (base_has_at) {
     CBS_skip(&base_cbs, 1);
     base_domain = base_cbs;
