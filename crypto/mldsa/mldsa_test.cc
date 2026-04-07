@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -36,38 +37,42 @@
 BSSL_NAMESPACE_BEGIN
 namespace {
 
-#define MAKE_MLDSA_TRAITS(kl)                                                 \
-  struct MLDSA##kl##Traits {                                                  \
-    using PublicKey = MLDSA##kl##_public_key;                                 \
-    using PrivateKey = MLDSA##kl##_private_key;                               \
-    using Prehash = MLDSA##kl##_prehash;                                      \
-                                                                              \
-    static constexpr size_t kPublicKeyBytes = MLDSA##kl##_PUBLIC_KEY_BYTES;   \
-    static constexpr size_t kSignatureBytes = MLDSA##kl##_SIGNATURE_BYTES;    \
-                                                                              \
-    static constexpr auto PrivateKeyFromSeed =                                \
-        &MLDSA##kl##_private_key_from_seed;                                   \
-    static constexpr auto ParsePrivateKey =                                   \
-        &BCM_mldsa##kl##_parse_private_key;                                   \
-    static constexpr auto MarshalPrivateKey =                                 \
-        &BCM_mldsa##kl##_marshal_private_key;                                 \
-    static constexpr auto GenerateKey = &MLDSA##kl##_generate_key;            \
-    static constexpr auto GenerateKeyExternalEntropy =                        \
-        &BCM_mldsa##kl##_generate_key_external_entropy;                       \
-    static constexpr auto Sign = &MLDSA##kl##_sign;                           \
-    static constexpr auto SignInternal = &BCM_mldsa##kl##_sign_internal;      \
-    static constexpr auto SignMuInternal = &BCM_mldsa##kl##_sign_mu_internal; \
-                                                                              \
-    static constexpr auto PublicFromPrivate =                                 \
-        &MLDSA##kl##_public_from_private;                                     \
-    static constexpr auto ParsePublicKey = &MLDSA##kl##_parse_public_key;     \
-    static constexpr auto MarshalPublicKey = &MLDSA##kl##_marshal_public_key; \
-    static constexpr auto Verify = &MLDSA##kl##_verify;                       \
-    static constexpr auto VerifyInternal = &BCM_mldsa##kl##_verify_internal;  \
-                                                                              \
-    static constexpr auto PrehashInit = &MLDSA##kl##_prehash_init;            \
-    static constexpr auto PrehashUpdate = &MLDSA##kl##_prehash_update;        \
-    static constexpr auto PrehashFinalize = &MLDSA##kl##_prehash_finalize;    \
+// Arguments are templated to avoid needing to repeat the underlying function's
+// type signature. We cannot use p_mldsa.cc's pattern because, on Windows,
+// cross-dll function pointers are not constexpr.
+#define TRAIT_METHOD(method_name, function_name)       \
+  template <typename... Args>                          \
+  static auto method_name(Args... args) {              \
+    return function_name(std::forward<Args>(args)...); \
+  }
+
+#define MAKE_MLDSA_TRAITS(kl)                                               \
+  struct MLDSA##kl##Traits {                                                \
+    using PublicKey = MLDSA##kl##_public_key;                               \
+    using PrivateKey = MLDSA##kl##_private_key;                             \
+    using Prehash = MLDSA##kl##_prehash;                                    \
+                                                                            \
+    static constexpr size_t kPublicKeyBytes = MLDSA##kl##_PUBLIC_KEY_BYTES; \
+    static constexpr size_t kSignatureBytes = MLDSA##kl##_SIGNATURE_BYTES;  \
+    TRAIT_METHOD(PrivateKeyFromSeed, MLDSA##kl##_private_key_from_seed)     \
+    TRAIT_METHOD(ParsePrivateKey, BCM_mldsa##kl##_parse_private_key)        \
+    TRAIT_METHOD(MarshalPrivateKey, BCM_mldsa##kl##_marshal_private_key)    \
+    TRAIT_METHOD(GenerateKey, MLDSA##kl##_generate_key)                     \
+    TRAIT_METHOD(GenerateKeyExternalEntropy,                                \
+                 BCM_mldsa##kl##_generate_key_external_entropy)             \
+    TRAIT_METHOD(Sign, MLDSA##kl##_sign)                                    \
+    TRAIT_METHOD(SignInternal, BCM_mldsa##kl##_sign_internal)               \
+    TRAIT_METHOD(SignMuInternal, BCM_mldsa##kl##_sign_mu_internal)          \
+                                                                            \
+    TRAIT_METHOD(PublicFromPrivate, MLDSA##kl##_public_from_private)        \
+    TRAIT_METHOD(ParsePublicKey, MLDSA##kl##_parse_public_key)              \
+    TRAIT_METHOD(MarshalPublicKey, MLDSA##kl##_marshal_public_key)          \
+    TRAIT_METHOD(Verify, MLDSA##kl##_verify)                                \
+    TRAIT_METHOD(VerifyInternal, BCM_mldsa##kl##_verify_internal)           \
+                                                                            \
+    TRAIT_METHOD(PrehashInit, MLDSA##kl##_prehash_init)                     \
+    TRAIT_METHOD(PrehashUpdate, MLDSA##kl##_prehash_update)                 \
+    TRAIT_METHOD(PrehashFinalize, MLDSA##kl##_prehash_finalize)             \
   };
 
 MAKE_MLDSA_TRAITS(44)
