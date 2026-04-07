@@ -42,8 +42,8 @@
 #include <openssl/target.h>  // IWYU pragma: export
 
 #if defined(BORINGSSL_PREFIX)
-#include <openssl/prefix_symbols.h>
-#endif  // BORINGSSL_PREFIX
+#include <openssl/prefix_symbols.h>  // IWYU pragma: export
+#endif
 
 #if defined(__cplusplus)
 extern "C" {

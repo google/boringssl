@@ -61,7 +61,7 @@
 #endif
 
 #if defined(BORINGSSL_PREFIX)
-#include <openssl/prefix_symbols_internal_c.h>
+#include <openssl/prefix_symbols_internal_c.h>  // IWYU pragma: export
 #endif
 
 

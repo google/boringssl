@@ -80,6 +80,8 @@ func BuildAsmGlobalsCHeader(syms []string) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, "//")
 	output.WriteString(`
+// IWYU pragma: private
+
 #ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H
 #define OPENSSL_HEADER_PREFIX_SYMBOLS_INTERNAL_C_H
 

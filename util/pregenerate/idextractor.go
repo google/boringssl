@@ -201,6 +201,8 @@ func BuildCRenamingInclude(syms cSymbolData) []byte {
 	var output bytes.Buffer
 	writeHeader(&output, "//")
 	output.WriteString(`
+// IWYU pragma: private
+
 #ifndef OPENSSL_HEADER_PREFIX_SYMBOLS_H
 #define OPENSSL_HEADER_PREFIX_SYMBOLS_H
 
