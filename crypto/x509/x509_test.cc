@@ -2367,12 +2367,6 @@ TEST(X509Test, NameConstraints) {
           // DN attribute is only supported for emails.
           continue;
         }
-        /*
-        if (t.name == "bäd-chäräcter@not-an-email.example") {
-          // X509_NAME_add_entry_by_NID refuses bad characters outright.
-          continue;
-        }
-        */
       }
       for (bool exclude : {false, true}) {
         SCOPED_TRACE(exclude);
