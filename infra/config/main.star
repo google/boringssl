@@ -379,7 +379,7 @@ def cq_builder(
         ),
         service_account = "boringssl-try-builder@chops-service-accounts.iam.gserviceaccount.com",
         dimensions = dimensions,
-        execution_timeout = host.get("execution_timeout", DEFAULT_TIMEOUT),
+        execution_timeout = execution_timeout,
         caches = host.get("caches"),
         properties = properties,
     )
