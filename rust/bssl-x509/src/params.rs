@@ -70,7 +70,6 @@ bssl_enum! {
 
 bitflags::bitflags! {
     /// Flags for X.509 certificate verification.
-    #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct VerificationFlags: c_ulong {
         /// Use check time.
@@ -106,7 +105,6 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// Flags for X.509 host checking.
-    #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct HostFlags: c_uint {
         /// Disable wildcard matching for DNS names.
