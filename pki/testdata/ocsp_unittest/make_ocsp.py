@@ -63,7 +63,7 @@ def SigAlgOid(sig_alg):
 
 def CreateCert(name, signer=None, ocsp=False):
   global NEXT_SERIAL
-  private_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+  private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
   subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
 
   if signer:
@@ -132,7 +132,7 @@ def GetKeyHash(c):
   rid = rfc2560.ResponderID()
   spk = c[0].getComponentByName('tbsCertificate').getComponentByName(
       'subjectPublicKeyInfo').getComponentByName('subjectPublicKey')
-  keyHash = hashlib.sha1(encoder.encode(spk)[4:]).digest()
+  keyHash = hashlib.sha1(spk.asOctets()).digest()
   rid.setComponentByName('byKey', keyHash)
   return rid
 
@@ -151,9 +151,8 @@ def CreateSingleResponse(cert=CERT,
   name_hash = hashlib.sha1(
       encoder.encode(issuer_tbs.getComponentByName('subject'))).digest()
   key_hash = hashlib.sha1(
-      encoder.encode(
-          issuer_tbs.getComponentByName('subjectPublicKeyInfo')
-          .getComponentByName('subjectPublicKey'))[4:]).digest()
+      issuer_tbs.getComponentByName('subjectPublicKeyInfo')
+      .getComponentByName('subjectPublicKey').asOctets()).digest()
   sn = tbs.getComponentByName('serialNumber')
 
   ha = cid.setComponentByName('hashAlgorithm').getComponentByName(

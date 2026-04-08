@@ -37,10 +37,10 @@ std::string GetFilePath(const std::string &file_name) {
 std::shared_ptr<const ParsedCertificate> ParseCertificate(
     std::string_view data) {
   CertErrors errors;
+  auto bytes = StringAsBytes(data);
   return ParsedCertificate::Create(
       bssl::UniquePtr<CRYPTO_BUFFER>(
-          CRYPTO_BUFFER_new(reinterpret_cast<const uint8_t *>(data.data()),
-                            data.size(), nullptr)),
+          CRYPTO_BUFFER_new(bytes.data(), bytes.size(), nullptr)),
       {}, &errors);
 }
 
