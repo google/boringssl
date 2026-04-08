@@ -18,7 +18,10 @@ use alloc::boxed::Box;
 use core::{
     ffi::c_int,
     marker::PhantomData,
-    mem::transmute,
+    mem::{
+        forget,
+        transmute, //
+    },
     ops::{
         Deref,
         DerefMut, //
@@ -48,6 +51,59 @@ pub enum Server {}
 /// Client role - the connection runs as a client.
 pub enum Client {}
 
+/// A TLS connection builder.
+pub struct TlsConnectionBuilder<Role, Mode = TlsMode> {
+    ptr: NonNull<bssl_sys::SSL>,
+    _p: PhantomData<fn() -> (Role, Mode)>,
+}
+
+unsafe impl<R, M> Send for TlsConnectionBuilder<R, M> {}
+
+impl<R, M> Drop for TlsConnectionBuilder<R, M> {
+    fn drop(&mut self) {
+        unsafe {
+            // Safety: the validity of `self.ptr()` is witnessed by `self`.
+            bssl_sys::SSL_free(self.ptr());
+        }
+    }
+}
+
+impl<R, M> TlsConnectionBuilder<R, M> {
+    fn ptr(&mut self) -> *mut bssl_sys::SSL {
+        self.ptr.as_ptr()
+    }
+}
+
+impl<R, M> TlsConnectionBuilder<R, M>
+where
+    M: methods::HasTlsConnectionMethod,
+{
+    /// Finalise the connection, so that a handshake can be run.
+    pub fn build(self) -> TlsConnection<R, M> {
+        let ptr = self.ptr;
+        forget(self);
+        TlsConnection {
+            ptr,
+            _p: PhantomData,
+        }
+    }
+
+    pub(crate) fn from_ssl(ptr: NonNull<bssl_sys::ssl_st>) -> Self {
+        let idx = M::registration();
+        let data = Box::into_raw(Box::new(methods::RustConnectionMethods::<M>::new())) as _;
+        unsafe {
+            // Safety:
+            // - `M::registration` will return a valid ex-data index.
+            // - `data` should be valid by non-null invariant.
+            bssl_sys::SSL_set_ex_data(ptr.as_ptr(), idx, data);
+        }
+        Self {
+            ptr,
+            _p: PhantomData,
+        }
+    }
+}
+
 /// TLS Connection
 ///
 /// `Role` is expected to be either [`Server`] or [`Client`] and
@@ -66,7 +122,7 @@ unsafe impl<R, M> Send for TlsConnection<R, M> {}
 impl<R, M> Drop for TlsConnection<R, M> {
     fn drop(&mut self) {
         unsafe {
-            // Safety: the connection is still held as valid.
+            // Safety: the connection handle is still valid.
             bssl_sys::SSL_free(self.ptr());
         }
     }
@@ -99,26 +155,6 @@ impl<R, M> DerefMut for TlsConnection<R, M> {
 /// Safety: all internal states of `bssl_sys::SSL` that this connection are either exclusively owned
 /// or reference-counted but immutable, including `SSL_SESSION`s and `SSL_CTX`s.
 unsafe impl<R, M> Send for TlsConnectionRef<R, M> {}
-
-impl<R, M> TlsConnection<R, M>
-where
-    M: methods::HasTlsConnectionMethod,
-{
-    pub(crate) fn from_ssl(ptr: NonNull<bssl_sys::ssl_st>) -> Self {
-        let idx = M::registration();
-        let data = Box::into_raw(Box::new(methods::RustConnectionMethods::<M>::new())) as _;
-        unsafe {
-            // Safety:
-            // - `M::registration` will return a valid ex-data index.
-            // - `data` should be valid by non-null invariant.
-            bssl_sys::SSL_set_ex_data(ptr.as_ptr(), idx, data);
-        }
-        Self {
-            ptr,
-            _p: PhantomData,
-        }
-    }
-}
 
 impl<R, M> TlsConnectionRef<R, M> {
     #[allow(unused)]

@@ -27,9 +27,12 @@ use super::{
 use crate::{
     check_lib_error,
     config::ConfigurationError,
-    connection::lifecycle::{
-        EstablishedTlsConnection,
-        TlsConnectionInHandshake, //
+    connection::{
+        TlsConnectionBuilder,
+        lifecycle::{
+            EstablishedTlsConnection,
+            TlsConnectionInHandshake, //
+        }, //
     }, //
     credentials::{
         CertificateVerificationMode,
@@ -39,13 +42,9 @@ use crate::{
     ffi::slice_into_ffi_raw_parts, //
 };
 
-/// # Custom certificate verification
-impl<M> TlsConnectionInHandshake<'_, Client, M>
-where
-    M: HasTlsConnectionMethod,
-{
+impl<R, M> TlsConnectionBuilder<R, M> {
     /// Configure the certificate verification mode.
-    pub fn set_certificate_verification_mode(
+    pub fn with_certificate_verification_mode(
         &mut self,
         mode: CertificateVerificationMode,
     ) -> &mut Self {
@@ -57,7 +56,13 @@ where
         }
         self
     }
+}
 
+/// # Custom certificate verification
+impl<M> TlsConnectionInHandshake<'_, Client, M>
+where
+    M: HasTlsConnectionMethod,
+{
     /// Get the certificate verification mode set by [`Self::set_certificate_verification_mode`].
     pub fn get_certificate_verification_mode(&self) -> Option<CertificateVerificationMode> {
         unsafe {

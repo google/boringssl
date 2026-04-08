@@ -29,7 +29,7 @@ use crate::{
     connection::{
         Client,
         Server,
-        TlsConnection,
+        TlsConnectionBuilder,
         methods::HasTlsConnectionMethod, //
     },
     context::methods::HasTlsContextMethod,
@@ -200,29 +200,40 @@ where
     }
 
     /// Make a new client-half connection inheriting the configuration of this context
+    ///
+    /// By default, this method will configure the connection to request certificates
+    /// from the server.
+    /// To override this default, use
+    /// [`TlsConnectionBuilder::with_certificate_verification_mode`].
     pub fn new_client_connection(
         &self,
         compliance_policy: Option<CompliancePolicy>,
-    ) -> Result<TlsConnection<Client, M>, Error> {
+    ) -> Result<TlsConnectionBuilder<Client, M>, Error> {
         let conn = self.new_connection(compliance_policy);
         unsafe {
             // Safety: the connection is still valid here
             bssl_sys::SSL_set_connect_state(conn.as_ptr());
         }
-        Ok(TlsConnection::from_ssl(conn))
+        let mut builder = TlsConnectionBuilder::from_ssl(conn);
+        // The safe default is that the client should perform at least
+        // some certification verification.
+        builder.with_certificate_verification_mode(
+            crate::credentials::CertificateVerificationMode::PeerCertRequested,
+        );
+        Ok(builder)
     }
 
     /// Make a new server-half connection inheriting the configuration of this context
     pub fn new_server_connection(
         &self,
         compliance_policy: Option<CompliancePolicy>,
-    ) -> Result<TlsConnection<Server, M>, Error> {
+    ) -> Result<TlsConnectionBuilder<Server, M>, Error> {
         let conn = self.new_connection(compliance_policy);
         unsafe {
             // Safety: the connection is still valid here
             bssl_sys::SSL_set_accept_state(conn.as_ptr());
         }
-        Ok(TlsConnection::from_ssl(conn))
+        Ok(TlsConnectionBuilder::from_ssl(conn))
     }
 
     /// Expose the fully built BoringSSL's `SSL_CTX` pointer.
