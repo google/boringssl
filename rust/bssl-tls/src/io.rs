@@ -66,11 +66,6 @@ pub(crate) struct RustBio {
     io_err: Option<Box<dyn core::error::Error + Send + Sync>>,
 }
 
-/// Safety: `socket` field is an exclusively owned `Box<dyn AbstractSocket>` pointer,
-/// and `AbstractSocket: Send + Sync`.
-unsafe impl Send for RustBio {}
-unsafe impl Sync for RustBio {}
-
 fn _assert_rust_bio()
 where
     RustBio: Send + Unpin,
@@ -276,7 +271,7 @@ pub enum AbstractSocketResult {
 }
 
 /// Abstract reader.
-pub trait AbstractReader: Send + Sync + Unpin {
+pub trait AbstractReader: Send {
     /// Read data from the socket.
     fn read(
         &mut self,
@@ -286,7 +281,7 @@ pub trait AbstractReader: Send + Sync + Unpin {
 }
 
 /// Abstract writer.
-pub trait AbstractWriter: Send + Sync + Unpin {
+pub trait AbstractWriter: Send {
     /// Write data to the socket.
     fn write(&mut self, async_ctx: Option<&mut Context<'_>>, buffer: &[u8])
     -> AbstractSocketResult;
