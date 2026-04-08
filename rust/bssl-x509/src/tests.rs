@@ -19,6 +19,7 @@ const PEM: &[u8] = include_bytes!("./tests/consolidated.pem");
 const TRUNCATED: &[u8] = include_bytes!("./tests/truncated.pem");
 const TRUNCATED_ONE: &[u8] = include_bytes!("./tests/truncated-one.pem");
 const PEM_WITH_PASS: &[u8] = include_bytes!("./tests/BoringSSLTestCA.key");
+const PUBKEY: &[u8] = include_bytes!("./tests/BoringSSLTestCA-PubKey.pem");
 const SERVER_CERT: &[u8] = include_bytes!("./tests/BoringSSLServerTest-RSA.crt");
 const SERIAL_NUMBERS: &[&[u8]] = &[
     &[
@@ -124,14 +125,18 @@ fn parse_ca_cert() {
 }
 
 #[test]
-fn parse_pem_key_with_pass() {
+fn parse_pem_privkey_with_pass() {
     assert!(keys::PrivateKey::from_pem(&PEM_WITH_PASS, || b"Try again!").is_err());
     let key = keys::PrivateKey::from_pem(&PEM_WITH_PASS, || b"BoringSSL is awesome!").unwrap();
-    let ca_cert = certificates::X509Certificate::parse_all_from_pem(CA_CERT)
-        .unwrap()
-        .pop()
-        .unwrap();
+    let ca_cert = certificates::X509Certificate::parse_one_from_pem(CA_CERT).unwrap();
     assert!(ca_cert.matches_private_key(&key));
+}
+
+#[test]
+fn parse_pem_pubkey() {
+    let pubkey = keys::PublicKey::from_pem(PUBKEY).unwrap();
+    let ca_cert = certificates::X509Certificate::parse_one_from_pem(CA_CERT).unwrap();
+    assert_eq!(ca_cert.public_key().unwrap().to_der(), pubkey.to_der());
 }
 
 #[test]

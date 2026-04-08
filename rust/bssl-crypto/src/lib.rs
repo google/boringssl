@@ -445,7 +445,7 @@ where
 /// Calls `func` with a `CBB` pointer and returns a [Buffer] of the ultimate
 /// contents of that CBB.
 #[allow(clippy::unwrap_used)]
-fn cbb_to_buffer<F: FnOnce(*mut bssl_sys::CBB)>(initial_capacity: usize, func: F) -> Buffer {
+pub fn cbb_to_buffer<F: FnOnce(*mut bssl_sys::CBB)>(initial_capacity: usize, func: F) -> Buffer {
     // Safety: type checking ensures that `cbb` is the correct size.
     let mut cbb = unsafe {
         initialized_struct_fallible(|cbb| bssl_sys::CBB_init(cbb, initial_capacity) == 1)

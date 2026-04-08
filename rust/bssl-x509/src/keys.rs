@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Private keys
+//! Private and public keys
 //!
 //! The private keys processed here can be paired with certificates to perform further
 //! authentication.
@@ -27,13 +27,31 @@
 //!     pem, /*password_callback=*/ || b"BoringSSL is awesome!").unwrap();
 //! assert!(crt.matches_private_key(&key));
 //! ```
+//!
+//! The public keys can be derived from [`crate::certificates::X509Certificate`] or [`PrivateKey`]s.
+//!
+//! ```rust
+//! # use bssl_x509::certificates::X509Certificate;
+//! # use bssl_x509::keys::PrivateKey;
+//! # let pem = include_bytes!("tests/BoringSSLTestCA.key");
+//! # let crt = include_bytes!("tests/BoringSSLTestCA.crt");
+//! # let crt = X509Certificate::parse_one_from_pem(crt).unwrap();
+//! # let key = PrivateKey::from_pem(
+//! #     pem, /*password_callback=*/ || b"BoringSSL is awesome!").unwrap();
+//! assert_eq!(
+//!     crt.public_key().unwrap().to_der(),
+//!     key.to_public_key().to_der()
+//! );
+//! ```
 
-use core::ffi::{c_char, c_int, c_void};
-use core::panic::AssertUnwindSafe;
-use core::ptr::NonNull;
-use core::ptr::null_mut;
+use core::{
+    ffi::{c_char, c_int, c_void},
+    mem::transmute,
+    panic::AssertUnwindSafe,
+    ptr::{NonNull, null_mut},
+};
 
-use bssl_crypto::FfiSlice;
+use bssl_crypto::{FfiSlice, cbb_to_buffer};
 use bssl_macros::bssl_enum;
 
 use crate::ffi::maybe_panic;
@@ -61,13 +79,14 @@ bssl_enum! {
 }
 
 /// A private key.
+#[repr(transparent)]
 pub struct PrivateKey(NonNull<bssl_sys::EVP_PKEY>);
 // Safety: `PrivateKey` is locked as immutable at this type state.
 unsafe impl Send for PrivateKey {}
 unsafe impl Sync for PrivateKey {}
 
 impl PrivateKey {
-    /// Parse a `PrivateKey` from PEM encoding.
+    /// Parse a [`PrivateKey`] from PEM encoding.
     pub fn from_pem<'a, F: 'a + FnMut() -> &'a [u8]>(
         pem: &[u8],
         mut password_callback: F,
@@ -113,11 +132,9 @@ impl PrivateKey {
 
         let evp_pkey = unsafe {
             // Safety:
-            // - the BIO is still valid;
-            // - the `&raw mut priv_key` pointer is not null, so the function will allocate
-            //   a new structure;
-            // - the return value can be discarded since we provided a location to hold the handle,
-            //   whose lifetime will be managed from this function.
+            // - the BIO is still valid.
+            // - the `priv_key` pointer is null, so the function will allocate
+            //   a new structure.
             bssl_sys::PEM_read_bio_PrivateKey(
                 bio.ptr(),
                 &raw mut priv_key,
@@ -151,18 +168,48 @@ impl PrivateKey {
         ptr
     }
 
+    /// This method returns the internal key handle.
+    /// # Safety
+    /// - This method should only be used for cross-language interoperability,
+    ///   so the function that accepts an `EVP_PKEY*` handle must uses exactly the same
+    ///   BoringSSL as this crate is linked to.
+    /// - The caller must ensure that all future uses of the key handle does not mutate the content.
+    /// - All subsequent uses of the returned handle must be outlived by `self`.
+    /// - All subsequent uses of the returned handle must not race with uses of `self`.
+    ///   unless only refcount is adjusted, one must use locks when necessary.
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut bssl_sys::EVP_PKEY {
+        self.ptr()
+    }
+
     pub(crate) fn ptr(&self) -> *mut bssl_sys::EVP_PKEY {
         self.0.as_ptr()
     }
 
-    /// Extract the handle
+    /// Encode the private key to a DER-encoded `PrivateKeyInfo` structure as per [RFC 5208].
     ///
-    /// # Safety
-    ///
-    /// `self` **must** outlive the uses of the returned handle.
-    /// Verify the callsite contract to honour the lifetime contracts.
-    pub unsafe fn as_raw(&self) -> *mut bssl_sys::EVP_PKEY {
-        self.ptr()
+    /// [RFC 5208]: <https://datatracker.ietf.org/doc/html/rfc5208#section-5>
+    pub fn private_key_to_der(&self) -> Vec<u8> {
+        cbb_to_buffer(0, |cbb| unsafe {
+            // Safety: this call does not mutate the private key internals
+            // and only allocation happens.
+            assert_eq!(1, bssl_sys::EVP_marshal_private_key(cbb, self.ptr()))
+        })
+        .as_ref()
+        .to_vec()
+    }
+
+    /// Get the public key.
+    pub fn to_public_key(&self) -> &PublicKey {
+        unsafe {
+            // Safety: `self.0` is still valid.
+            debug_assert_eq!(1, bssl_sys::EVP_PKEY_has_public(self.ptr()));
+        }
+        unsafe {
+            // Safety:
+            // - the `EVP_PKEY*` in `PrivateKey` always contains a public key.
+            // - `PublicKey` is a transparent wrapper of `EVP_PKEY*`
+            transmute(self)
+        }
     }
 }
 
@@ -177,6 +224,79 @@ impl Clone for PrivateKey {
 }
 
 impl Drop for PrivateKey {
+    fn drop(&mut self) {
+        unsafe {
+            // Safety: `self.0` is still valid at dropping.
+            bssl_sys::EVP_PKEY_free(self.ptr());
+        }
+    }
+}
+
+/// A public key.
+#[repr(transparent)]
+pub struct PublicKey(pub(crate) NonNull<bssl_sys::EVP_PKEY>);
+// Safety: `PublicKey` is locked as immutable at this type state.
+unsafe impl Send for PublicKey {}
+unsafe impl Sync for PublicKey {}
+
+impl PublicKey {
+    /// Parse a [`PublicKey`] from PEM encoding.
+    pub fn from_pem(pem: &[u8]) -> Result<Self, PkiError> {
+        let mut bio = Bio::from_bytes(pem)?;
+
+        let mut pub_key = null_mut();
+        let evp_pkey = unsafe {
+            // Safety:
+            // - the BIO is still valid.
+            // - the `pub_key` pointer is null, so the function will allocate
+            //   a new structure.
+            bssl_sys::PEM_read_bio_PUBKEY(bio.ptr(), &raw mut pub_key, None, null_mut())
+        };
+        NonNull::new(evp_pkey)
+            .map(Self)
+            .ok_or_else(PkiError::extract_lib_err)
+    }
+
+    /// Serialize the public key into a DER-encoded `SubjectPublicKeyInfo` structure.
+    pub fn to_der(&self) -> Vec<u8> {
+        cbb_to_buffer(0, |cbb| unsafe {
+            // Safety: this call does not mutate the private key internals
+            // and only allocation happens.
+            assert_eq!(1, bssl_sys::EVP_marshal_public_key(cbb, self.ptr()))
+        })
+        .as_ref()
+        .to_vec()
+    }
+
+    pub(crate) fn ptr(&self) -> *mut bssl_sys::EVP_PKEY {
+        self.0.as_ptr()
+    }
+
+    /// This method returns the internal key handle.
+    /// # Safety
+    /// - This method should only be used for cross-language interoperability,
+    ///   so the function that accepts an `EVP_PKEY*` handle must uses exactly the same
+    ///   BoringSSL as this crate is linked to.
+    /// - The caller must ensure that all future uses of the key handle does not mutate the content.
+    /// - All subsequent uses of the returned handle must be outlived by `self`.
+    /// - All subsequent uses of the returned handle must not race with uses of `self`.
+    ///   unless only refcount is adjusted, one must use locks when necessary.
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut bssl_sys::EVP_PKEY {
+        self.ptr()
+    }
+}
+
+impl Clone for PublicKey {
+    fn clone(&self) -> Self {
+        unsafe {
+            // Safety: `self.0` is still valid at cloning.
+            bssl_sys::EVP_PKEY_up_ref(self.ptr());
+        }
+        Self(self.0)
+    }
+}
+
+impl Drop for PublicKey {
     fn drop(&mut self) {
         unsafe {
             // Safety: `self.0` is still valid at dropping.

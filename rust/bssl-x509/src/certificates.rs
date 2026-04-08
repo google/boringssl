@@ -75,7 +75,7 @@ use core::{
 use crate::{
     errors::{PemReason, PkiError, X509Error},
     ffi::{Bio, sanitize_slice, slice_into_ffi_raw_parts},
-    keys::PrivateKey,
+    keys::{PrivateKey, PublicKey},
 };
 
 bssl_macros::bssl_enum! {
@@ -656,5 +656,16 @@ impl X509Certificate {
         };
         let san = san as *mut bssl_sys::GENERAL_NAMES;
         NonNull::new(san).map(GeneralNames)
+    }
+
+    /// Get the public key of the certificate.
+    pub fn public_key(&self) -> Option<PublicKey> {
+        let key = unsafe {
+            // Safety:
+            // - `self` witnesses the validity of the `X509` handle.
+            // - this call will bump the ref-count for us.
+            bssl_sys::X509_get_pubkey(self.ptr())
+        };
+        NonNull::new(key).map(PublicKey)
     }
 }
