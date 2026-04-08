@@ -30,7 +30,7 @@ from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 
 from pyasn1.codec.der import decoder, encoder
 from pyasn1_modules import rfc2560, rfc2459
-from pyasn1.type import univ, useful
+from pyasn1.type import namedtype, univ, useful
 
 NEXT_SERIAL = 1
 
@@ -44,6 +44,8 @@ REVOKE_DATE = datetime.datetime(2017, 2, 1, 0, 0)
 THIS_DATE = datetime.datetime(2017, 3, 1, 0, 0)
 # 3/2/2017 00:00 GMT
 PRODUCED_DATE = datetime.datetime(2017, 3, 2, 0, 0)
+# 3/5/2017 00:00 GMT
+VERIFY_DATE = datetime.datetime(2017, 3, 5, 0, 0)
 # 6/1/2017 00:00 GMT
 NEXT_DATE = datetime.datetime(2017, 6, 1, 0, 0)
 
@@ -141,7 +143,8 @@ def GetKeyHash(c):
 
 def CreateSingleResponse(cert=CERT,
                          status=0,
-                         next=None,
+                         this_update=THIS_DATE,
+                         next_update=None,
                          revoke_time=None,
                          reason=None,
                          extensions=[]):
@@ -185,15 +188,23 @@ def CreateSingleResponse(cert=CERT,
 
   sr.setComponentByName('thisUpdate',
                         useful.GeneralizedTime(
-                            THIS_DATE.strftime('%Y%m%d%H%M%SZ')))
-  if next:
-    sr.setComponentByName('nextUpdate', next.strftime('%Y%m%d%H%M%SZ'))
+                            this_update.strftime('%Y%m%d%H%M%SZ')))
+  if next_update:
+    sr.setComponentByName('nextUpdate', next_update.strftime('%Y%m%d%H%M%SZ'))
   if extensions:
     elist = sr.setComponentByName('singleExtensions').getComponentByName(
         'singleExtensions')
     for i in range(len(extensions)):
       elist.setComponentByPosition(i, extensions[i])
   return sr
+
+
+class BadBasicOCSPResponse(univ.Sequence):
+  componentType = namedtype.NamedTypes(
+    namedtype.NamedType('tbsResponseData', univ.Any()),
+    namedtype.NamedType('signatureAlgorithm', rfc2459.AlgorithmIdentifier()),
+    namedtype.NamedType('signature', univ.BitString()),
+  )
 
 
 def Create(signer=None,
@@ -205,37 +216,42 @@ def Create(signer=None,
            responses=None,
            extensions=None,
            certs=None,
-           sigAlg='sha1'):
+           sigAlg='sha1',
+           produced_at=PRODUCED_DATE,
+           invalid_response_data=False):
   ocsp = rfc2560.OCSPResponse()
   ocsp.setComponentByName('responseStatus', response_status)
 
   if response_status != 0:
-    return ocsp
-
-  tbs = rfc2560.ResponseData()
-  if version != 1:
-    tbs.setComponentByName('version', version)
+    return encoder.encode(ocsp)
 
   if not signer:
     signer = CA
-  if not responder:
-    responder = GetName(signer)
-  tbs.setComponentByName('responderID', responder)
-  tbs.setComponentByName('producedAt',
-                         useful.GeneralizedTime(
-                             PRODUCED_DATE.strftime('%Y%m%d%H%M%SZ')))
-  rlist = tbs.setComponentByName('responses').getComponentByName('responses')
-  if responses == None:
-    responses = [CreateSingleResponse(CERT, 0)]
-  if responses:
-    for i in range(len(responses)):
-      rlist.setComponentByPosition(i, responses[i])
 
-  if extensions:
-    elist = tbs.setComponentByName('responseExtensions').getComponentByName(
-        'responseExtensions')
-    for i in range(len(extensions)):
-      elist.setComponentByPosition(i, extensions[i])
+  if invalid_response_data:
+    tbs = univ.OctetString(b'invalid')
+  else:
+    tbs = rfc2560.ResponseData()
+    if version != 1:
+      tbs.setComponentByName('version', version)
+    if not responder:
+      responder = GetName(signer)
+    tbs.setComponentByName('responderID', responder)
+    tbs.setComponentByName('producedAt',
+                          useful.GeneralizedTime(
+                              produced_at.strftime('%Y%m%d%H%M%SZ')))
+    rlist = tbs.setComponentByName('responses').getComponentByName('responses')
+    if responses == None:
+      responses = [CreateSingleResponse(CERT, 0)]
+    if responses:
+      for i in range(len(responses)):
+        rlist.setComponentByPosition(i, responses[i])
+
+    if extensions:
+      elist = tbs.setComponentByName('responseExtensions').getComponentByName(
+          'responseExtensions')
+      for i in range(len(extensions)):
+        elist.setComponentByPosition(i, extensions[i])
 
   sa = rfc2459.AlgorithmIdentifier()
   sa.setComponentByName('algorithm', SigAlgOid(sigAlg))
@@ -245,7 +261,10 @@ def Create(signer=None,
   # type for 'parameters'. (Which is an ugly hack, but lets the script work.)
   sa.setComponentByName('parameters', univ.Null())
 
-  basic = rfc2560.BasicOCSPResponse()
+  if invalid_response_data:
+    basic = BadBasicOCSPResponse()
+  else:
+    basic = rfc2560.BasicOCSPResponse()
   basic.setComponentByName('tbsResponseData', tbs)
   basic.setComponentByName('signatureAlgorithm', sa)
   if not signature:
@@ -271,7 +290,7 @@ def Create(signer=None,
   rbytes.setComponentByName('response', encoder.encode(basic))
 
   ocsp.setComponentByName('responseBytes', rbytes)
-  return ocsp
+  return encoder.encode(ocsp)
 
 
 def MakePemBlock(der, name):
@@ -305,7 +324,7 @@ def CreateOCSPRequestDer(issuer_cert_pem, cert_pem):
       return f.read()
 
 
-def Store(fname, description, ca, data):
+def Store(fname, description, ca, data_der):
   ca_cert_pem = ca[1].public_bytes(serialization.Encoding.PEM).decode('ascii')
   cert_pem = CERT[1].public_bytes(serialization.Encoding.PEM).decode('ascii')
 
@@ -313,7 +332,7 @@ def Store(fname, description, ca, data):
 
   out = ('%s\n%s\n%s\n\n%s\n%s') % (
       description,
-      MakePemBlock(encoder.encode(data), "OCSP RESPONSE"),
+      MakePemBlock(data_der, "OCSP RESPONSE"),
       ca_cert_pem.replace('CERTIFICATE', 'CA CERTIFICATE'),
       cert_pem,
       MakePemBlock(ocsp_request_der, "OCSP REQUEST"))
@@ -395,7 +414,7 @@ Store(
     'good_response_next_update',
     'Is a valid response for the cert until nextUpdate',
     CA,
-    Create(responses=[CreateSingleResponse(CERT, 0, next=NEXT_DATE)]))
+    Create(responses=[CreateSingleResponse(CERT, 0, next_update=NEXT_DATE)]))
 Store(
     'revoke_response',
     'Is a REVOKE response for the cert',
@@ -463,3 +482,55 @@ Store(
 
 Store('missing_response', 'Missing a response for the cert', CA,
       Create(response_status=0, responses=[]))
+
+Store('stale_response', 'nextUpdate is before the current time', CA,
+      Create(responses=[
+          CreateSingleResponse(
+              CERT,
+              status=0,
+              this_update=VERIFY_DATE - datetime.timedelta(days=2),
+              next_update=VERIFY_DATE - datetime.timedelta(days=1),
+          ),
+      ]))
+
+Store('future_response', 'thisUpdate is after the current time', CA,
+      Create(responses=[
+          CreateSingleResponse(
+              CERT,
+              status=0,
+              this_update=VERIFY_DATE + datetime.timedelta(days=1),
+          ),
+      ]))
+
+Store('old_response', 'thisUpdate is over a week before the current time', CA,
+      Create(responses=[
+          CreateSingleResponse(
+              CERT,
+              status=0,
+              this_update=VERIFY_DATE - datetime.timedelta(days=8),
+          ),
+      ]))
+
+Store('produced_early_response', 'producedAt is before the cert\'s notBefore',
+      CA,
+      Create(responses=[CreateSingleResponse(CERT, 0)],
+             produced_at=CERT_DATE - datetime.timedelta(days=1)))
+
+Store('produced_late_response', 'producedAt is after the cert\'s notAfter',
+      CA,
+      Create(responses=[CreateSingleResponse(CERT, 0)],
+             produced_at=CERT_EXPIRE + datetime.timedelta(days=1)))
+
+Store('invalid_response', 'OCSPResponse cannot be parsed', CA, b'invalid')
+
+Store('invalid_response_data', 'ResponseData cannot be parsed', CA,
+      Create(invalid_response_data=True))
+
+Store(
+    'multiple_response_good_revoked',
+    'Has both a good and a revoked response for the cert',
+    CA,
+    Create(responses=[
+        CreateSingleResponse(CERT, 0),
+        CreateSingleResponse(CERT, 1),
+    ]))
