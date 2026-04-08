@@ -47,6 +47,13 @@ use crate::{
 
 #[cfg(feature = "std")]
 pub mod stdio;
+/// Synchronous I/O adapters.
+pub mod sync_io;
+/// Tokio-based async I/O adapters.
+#[cfg(feature = "tokio_net")]
+pub mod tokio;
+#[cfg(all(unix, feature = "std"))]
+pub mod unix;
 
 /// A wrapper around a `dyn AbstractSocket`, delegating BIO methods to the
 /// underlying `AbstractSocket` implementations.
