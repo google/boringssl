@@ -61,9 +61,10 @@ def SigAlgOid(sig_alg):
   raise ValueError(f"Unrecognized sig_alg: {sig_alg}")
 
 
-def CreateCert(name, signer=None, ocsp=False):
+def CreateCert(name, key_path, signer=None, ocsp=False):
   global NEXT_SERIAL
-  private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+  with open(key_path, 'rb') as f:
+    private_key = serialization.load_pem_private_key(f.read(), password=None)
   subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
 
   if signer:
@@ -108,12 +109,13 @@ def CreateExtension(oid='1.2.3.4', critical=False):
   return ext
 
 
-ROOT_CA = CreateCert('Test CA', None)
-CA = CreateCert('Test Intermediate CA', ROOT_CA)
-CA_LINK = CreateCert('Test OCSP Signer', CA, True)
-CA_BADLINK = CreateCert('Test False OCSP Signer', CA, False)
-CERT = CreateCert('Test Cert', CA)
-JUNK_CERT = CreateCert('Random Cert', None)
+ROOT_CA = CreateCert('Test CA', 'root.key', None)
+CA = CreateCert('Test Intermediate CA', 'intermediate.key', ROOT_CA)
+CA_LINK = CreateCert('Test OCSP Signer', 'ocsp_signer.key', CA, True)
+CA_BADLINK = CreateCert('Test False OCSP Signer', 'bad_ocsp_signer.key', CA,
+                        False)
+CERT = CreateCert('Test Cert', 'cert.key', CA)
+JUNK_CERT = CreateCert('Random Cert', 'cert2.key', None)
 EXTENSION = CreateExtension()
 
 
