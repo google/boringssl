@@ -126,10 +126,10 @@ const std::map<std::string, AlgorithmInfo> kAllAlgorithms = {
      {EVP_pkey_ml_dsa_87(), /*kem=*/nullptr, EVP_PKEY_ML_DSA_87, true}},
 
     {"ML-KEM-768",
-     {EVP_pkey_ml_kem_768(), EVP_kem_ml_kem_768(), EVP_PKEY_ML_KEM_768, false}},
+     {EVP_pkey_ml_kem_768(), EVP_kem_ml_kem_768(), EVP_PKEY_ML_KEM_768, true}},
     {"ML-KEM-1024",
      {EVP_pkey_ml_kem_1024(), EVP_kem_ml_kem_1024(), EVP_PKEY_ML_KEM_1024,
-      false}},
+      true}},
 };
 
 using KeyMap = std::map<std::string, bssl::UniquePtr<EVP_PKEY>>;

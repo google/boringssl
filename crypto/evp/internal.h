@@ -347,6 +347,8 @@ inline auto GetDefaultEVPAlgorithms() {
       EVP_pkey_ml_dsa_44(),
       EVP_pkey_ml_dsa_65(),
       EVP_pkey_ml_dsa_87(),
+      EVP_pkey_ml_kem_768(),
+      EVP_pkey_ml_kem_1024(),
       // TODO(crbug.com/438761503): Remove DSA from this set, after callers that
       // need DSA pass in |EVP_pkey_dsa| explicitly.
       EVP_pkey_dsa(),

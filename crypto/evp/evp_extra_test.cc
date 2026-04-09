@@ -1509,5 +1509,54 @@ TEST(EVPExtraTest, EncapsulateDecapsulateOsslParam) {
   }
 }
 
+// Test that APIs using the non-alg-based APIs also work when expected.
+TEST(EVPExtraTest, NewRawKey) {
+  struct {
+    int type;
+    const EVP_PKEY_ALG *alg;
+    bool supports_raw_private_key;
+  } kTests[] = {
+      {EVP_PKEY_X25519, EVP_pkey_x25519(), true},
+      {EVP_PKEY_ED25519, EVP_pkey_ed25519(), true},
+      // ML-KEM and ML-DSA do not support raw private keys, only raw public
+      // keys. OpenSSL interprets "raw private key" as the less efficient
+      // semi-expanded representation, instead of seeds.
+      {EVP_PKEY_ML_DSA_44, EVP_pkey_ml_dsa_44(), false},
+      {EVP_PKEY_ML_DSA_65, EVP_pkey_ml_dsa_65(), false},
+      {EVP_PKEY_ML_DSA_87, EVP_pkey_ml_dsa_87(), false},
+      {EVP_PKEY_ML_KEM_768, EVP_pkey_ml_kem_768(), false},
+      {EVP_PKEY_ML_KEM_1024, EVP_pkey_ml_kem_1024(), false},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(t.type);
+    UniquePtr<EVP_PKEY> pkey(EVP_PKEY_generate_from_alg(t.alg));
+    ASSERT_TRUE(pkey);
+
+    {
+      size_t len;
+      ASSERT_TRUE(EVP_PKEY_get_raw_public_key(pkey.get(), nullptr, &len));
+      std::vector<uint8_t> raw(len);
+      ASSERT_TRUE(EVP_PKEY_get_raw_public_key(pkey.get(), raw.data(), &len));
+      raw.resize(len);
+      UniquePtr<EVP_PKEY> pkey2(
+          EVP_PKEY_new_raw_public_key(t.type, nullptr, raw.data(), raw.size()));
+      ASSERT_TRUE(pkey2);
+      EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey2.get()), 1);
+    }
+
+    if (t.supports_raw_private_key) {
+      size_t len;
+      ASSERT_TRUE(EVP_PKEY_get_raw_private_key(pkey.get(), nullptr, &len));
+      std::vector<uint8_t> raw(len);
+      ASSERT_TRUE(EVP_PKEY_get_raw_private_key(pkey.get(), raw.data(), &len));
+      raw.resize(len);
+      UniquePtr<EVP_PKEY> pkey2(EVP_PKEY_new_raw_private_key(
+          t.type, nullptr, raw.data(), raw.size()));
+      ASSERT_TRUE(pkey2);
+      EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey2.get()), 1);
+    }
+  }
+}
+
 }  // namespace
 BSSL_NAMESPACE_END

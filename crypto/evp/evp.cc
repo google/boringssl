@@ -264,32 +264,24 @@ EVP_PKEY *EVP_PKEY_from_raw_public_key(const EVP_PKEY_ALG *alg,
 
 EVP_PKEY *EVP_PKEY_new_raw_private_key(int type, ENGINE *unused,
                                        const uint8_t *in, size_t len) {
-  // To avoid pulling in all key types, look for specifically the key types that
-  // support |set_priv_raw|.
-  switch (type) {
-    case EVP_PKEY_X25519:
-      return EVP_PKEY_from_raw_private_key(EVP_pkey_x25519(), in, len);
-    case EVP_PKEY_ED25519:
-      return EVP_PKEY_from_raw_private_key(EVP_pkey_ed25519(), in, len);
-    default:
-      OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
-      return nullptr;
+  for (const EVP_PKEY_ALG *alg : GetDefaultEVPAlgorithms()) {
+    if (alg->method && alg->method->pkey_id == type) {
+      return EVP_PKEY_from_raw_private_key(alg, in, len);
+    }
   }
+  OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+  return nullptr;
 }
 
 EVP_PKEY *EVP_PKEY_new_raw_public_key(int type, ENGINE *unused,
                                       const uint8_t *in, size_t len) {
-  // To avoid pulling in all key types, look for specifically the key types that
-  // support |set_pub_raw|.
-  switch (type) {
-    case EVP_PKEY_X25519:
-      return EVP_PKEY_from_raw_public_key(EVP_pkey_x25519(), in, len);
-    case EVP_PKEY_ED25519:
-      return EVP_PKEY_from_raw_public_key(EVP_pkey_ed25519(), in, len);
-    default:
-      OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
-      return nullptr;
+  for (const EVP_PKEY_ALG *alg : GetDefaultEVPAlgorithms()) {
+    if (alg->method && alg->method->pkey_id == type) {
+      return EVP_PKEY_from_raw_public_key(alg, in, len);
+    }
   }
+  OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+  return nullptr;
 }
 
 int EVP_PKEY_get_raw_private_key(const EVP_PKEY *pkey, uint8_t *out,
