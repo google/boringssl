@@ -2174,6 +2174,7 @@ func statusPrinter(doneChan chan *testresult.Results, statusChan chan statusMsg,
 					if *allowUnimplemented {
 						testOutput.AddSkip(msg.test.name)
 					} else {
+						fmt.Printf("UNIMPLEMENTED (%s)\n%s\n", msg.test.name, msg.err)
 						testOutput.AddResult(msg.test.name, "SKIP", nil)
 					}
 				} else {
