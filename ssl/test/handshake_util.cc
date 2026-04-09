@@ -128,9 +128,9 @@ int CheckIdempotentError(const char *name, SSL *ssl,
       fprintf(stderr, "Wanted: %d %d %s\n", ret, ssl_err, buf);
       ERR_error_string_n(err2, buf, sizeof(buf));
       fprintf(stderr, "Got:    %d %d %s\n", ret2, ssl_err2, buf);
-      // runner treats exit code 90 as always failing. Otherwise, it may
+      // runner treats kExitCodeMustFail as always failing. Otherwise, it may
       // accidentally consider the result an expected protocol failure.
-      exit(90);
+      exit(kExitCodeMustFail);
     }
   }
   return ret;
@@ -236,6 +236,8 @@ static bool Proxy(BIO *socket, bool async, int control, int rfd, int wfd) {
         return true;
       case kControlMsgError:
         return false;
+      case kControlMsgUnimplemented:
+        exit(kExitCodeUnimplemented);
       case kControlMsgWantRead:
         break;
       default:
@@ -591,6 +593,8 @@ static bool RequestHandshakeHint(const TestConfig *config, bool is_resume,
     case kControlMsgError:
       *out_has_hints = false;
       break;
+    case kControlMsgUnimplemented:
+      exit(kExitCodeUnimplemented);
     default:
       fprintf(stderr, "Unknown control message from handshaker: %c\n", msg);
       return false;
