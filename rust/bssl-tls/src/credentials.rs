@@ -182,6 +182,33 @@ impl<M> TlsCredentialBuilder<M> {
     }
 }
 
+/// Supported hash algorithms for TLS 1.3 PSK
+///
+/// See [RFC 9258] § 5.1.
+///
+/// [RFC 9258]: <https://datatracker.ietf.org/doc/html/rfc9258#section-5.1>
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum PskHash {
+    /// SHA-256
+    Sha256,
+    /// SHA-384
+    Sha384,
+}
+
+impl PskHash {
+    pub(crate) fn as_evp_md(&self) -> *const bssl_sys::EVP_MD {
+        match self {
+            PskHash::Sha256 => unsafe {
+                // Safety: `EVP_sha256` returns a valid pointer to a static `EVP_MD`.
+                bssl_sys::EVP_sha256()
+            },
+            PskHash::Sha384 => unsafe {
+                // Safety: `EVP_sha384` returns a valid pointer to a static `EVP_MD`.
+                bssl_sys::EVP_sha384()
+            },
+        }
+    }
+}
 /// A completely constructed TLS credential.
 pub struct TlsCredential(NonNull<bssl_sys::SSL_CREDENTIAL>);
 
@@ -199,6 +226,39 @@ impl TlsCredential {
         let ptr = self.0.as_ptr();
         forget(self);
         ptr
+    }
+
+    /// Create a new pre-shared key credential for TLS 1.3.
+    ///
+    /// See [RFC 9258](https://datatracker.ietf.org/doc/html/rfc9258) for details.
+    pub fn new_pre_shared_key(
+        key: &[u8],
+        identity: &[u8],
+        hash: PskHash,
+        context: &[u8],
+    ) -> Result<Self, Error> {
+        let (key_ptr, key_len) = slice_into_ffi_raw_parts(key);
+        let (id_ptr, id_len) = slice_into_ffi_raw_parts(identity);
+        let (ctx_ptr, ctx_len) = slice_into_ffi_raw_parts(context);
+        let cred = unsafe {
+            // Safety:
+            // - `key_ptr` and `key_len` are valid for the duration of the call.
+            // - `id_ptr` and `id_len` are valid for the duration of the call.
+            // - `hash.as_ptr()` returns a valid static `EVP_MD` pointer.
+            // - `ctx_ptr` and `ctx_len` are valid for the duration of the call.
+            // - The function returns a newly allocated `SSL_CREDENTIAL` or NULL.
+            bssl_sys::SSL_CREDENTIAL_new_pre_shared_key(
+                key_ptr,
+                key_len,
+                id_ptr,
+                id_len,
+                hash.as_evp_md(),
+                ctx_ptr,
+                ctx_len,
+            )
+        };
+        let cred = NonNull::new(cred).ok_or_else(|| Error::extract_lib_err())?;
+        Ok(TlsCredential(cred))
     }
 }
 
