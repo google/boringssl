@@ -216,13 +216,18 @@ where
     /// Expose the fully built BoringSSL's `SSL_CTX` pointer.
     ///
     /// # Safety
-    /// - `SSL_CTX` is **not fully thread-safe**; interface with this handle only behind a mutex.
+    /// - `SSL_CTX` is **not fully thread-safe**; do not invoke any BoringSSL mutating functions
+    ///   on the returned handle; otherwise, it is **undefined behaviour**.
     /// - interacting with the `ex_data` of the `SSL_CTX` instance that this method returns is
     ///   **undefined behaviour**.
-    /// - `self` must outlive all uses of the returned handle.
+    /// - `self` must outlive all uses of the returned handle;
     /// - this handle must be used with functions from the BoringSSL library this crate is linked
-    ///   to; otherwise, this is **undefined behaviour**.
-    pub fn as_mut_ptr(&mut self) -> *mut bssl_sys::SSL_CTX {
+    ///   to; otherwise, it is **undefined behaviour**.
+    /// 
+    /// # Recommendation
+    /// If the handle is used to interface BoringSSL library functions, please consider using a
+    /// corresponding Rust safe binding or contact BoringSSL Authors for support.
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut bssl_sys::SSL_CTX {
         self.ptr()
     }
 }
