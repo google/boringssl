@@ -77,6 +77,35 @@ macro_rules! crypto_buffer_wrapper {
             }
         }
 
+        impl ::core::ops::Deref for $name {
+            type Target = [u8];
+            fn deref(&self) -> &Self::Target {
+                let (data, len) = unsafe {
+                    // Safety: `self` witnesses the validity of the underlying handle.
+                    (
+                        ::bssl_sys::CRYPTO_BUFFER_data(self.ptr()),
+                        ::bssl_sys::CRYPTO_BUFFER_len(self.ptr()),
+                    )
+                };
+                if data.is_null() || len == 0 || len > isize::MAX as usize {
+                    &[]
+                } else {
+                    unsafe {
+                        // Safety:
+                        // - `data` is 1-size and 1-align and `len` is valid by BoringSSL invariant.
+                        // - `len` is sanitised to be within bound.
+                        ::core::slice::from_raw_parts(data, len)
+                    }
+                }
+            }
+        }
+
+        impl ::core::convert::AsRef<[u8]> for $name {
+            fn as_ref(&self) -> &[u8] {
+                &self
+            }
+        }
+
         impl $name {
             /// **NOTE: we do not sanitise or validate the input bytes.**
             #[inline(always)]
