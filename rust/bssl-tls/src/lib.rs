@@ -45,6 +45,10 @@ mod ffi;
 pub mod io;
 mod methods;
 pub mod sessions;
+#[cfg(feature = "std")]
+/// Synchronous I/O high-level APIs.
+pub mod sync_io;
+
 #[macro_use]
 #[doc(hidden)]
 mod macros;

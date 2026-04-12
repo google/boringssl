@@ -30,10 +30,6 @@ use bssl_tls::{
     },
     errors::Error, //
 };
-use bssl_tls_tokio::{
-    TokioDatagramIo,
-    new_std_datagram_with_tokio, //
-};
 use bssl_x509::{
     certificates::X509Certificate,
     keys::PrivateKey,
@@ -41,9 +37,15 @@ use bssl_x509::{
     store::X509StoreBuilder, //
 };
 
-const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
-const RSA_SERVER_CERT: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
-const RSA_SERVER_KEY: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
+use super::{
+    CA,
+    RSA_SERVER_CERT,
+    RSA_SERVER_KEY, //
+};
+use crate::{
+    TokioDatagramIo,
+    new_std_datagram_with_tokio, //
+};
 
 fn dumb_dtls_server_client() -> Result<
     (
@@ -140,6 +142,7 @@ async fn async_ping_pong(
     Ok(())
 }
 
+#[cfg(unix)]
 #[tokio::test]
 #[ignore = "https://crbug.com/532601068"]
 async fn async_dtls() -> Result<(), Error> {
@@ -151,6 +154,7 @@ async fn async_dtls() -> Result<(), Error> {
     async_ping_pong(server_conn, client_conn).await
 }
 
+#[cfg(unix)]
 #[tokio::test]
 #[ignore = "https://crbug.com/532601068"]
 async fn async_dtls_over_fd() -> Result<(), Error> {

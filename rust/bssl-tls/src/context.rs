@@ -416,6 +416,19 @@ where
     }
 }
 
+#[cfg(feature = "std")]
+impl TlsContextBuilder<TlsMode> {
+    /// Builds and returns a synchronous `TlsConnector` using the configured context.
+    pub fn build_connector(self) -> crate::sync_io::TlsConnector {
+        crate::sync_io::TlsConnector::new(self.build())
+    }
+
+    /// Builds and returns a synchronous `TlsAcceptor` using the configured context.
+    pub fn build_acceptor(self) -> crate::sync_io::TlsAcceptor {
+        crate::sync_io::TlsAcceptor::new(self.build())
+    }
+}
+
 impl<M> Drop for TlsContextBuilder<M> {
     fn drop(&mut self) {
         unsafe {

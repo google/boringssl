@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg(unix)]
-
 use bssl_tls::{
     connection::{
         Client,
@@ -27,26 +25,27 @@ use bssl_tls::{
     },
     errors::Error, //
 };
-use bssl_tls_tokio::{
-    TokioIo,
-    TokioTlsConnection, //
-};
 use bssl_x509::{
     certificates::X509Certificate,
     keys::PrivateKey,
     params::Trust,
     store::X509StoreBuilder, //
 };
+use futures::future::FutureExt;
 use tokio::io::{
     AsyncReadExt,
     AsyncWriteExt, //
 };
 
-use futures::future::FutureExt;
-
-const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
-const RSA_SERVER_CERT: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
-const RSA_SERVER_KEY: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
+use super::{
+    CA,
+    RSA_SERVER_CERT,
+    RSA_SERVER_KEY, //
+};
+use crate::{
+    TokioIo,
+    TokioTlsConnection, //
+};
 
 fn dumb_server_client() -> Result<(TlsConnection<Server>, TlsConnection<Client>), Error> {
     let ca = Certificate::parse_one_from_pem(CA, None)?;
@@ -78,6 +77,7 @@ fn dumb_server_client() -> Result<(TlsConnection<Server>, TlsConnection<Client>)
     Ok((server_conn, client_conn))
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn tokio_io() -> Result<(), Error> {
     let (server_conn, client_conn) = dumb_server_client()?;
