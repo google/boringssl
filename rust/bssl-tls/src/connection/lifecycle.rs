@@ -258,7 +258,8 @@ where
 {
     /// Perform asynchronous handshake, until completion or until pending on non-I/O operations.
     ///
-    /// The caller needs to ensure that any pending operations during the handshake are resolved.
+    /// The caller needs to ensure that any pending operations during the handshake are resolved,
+    /// before polling [`async_handshake`] again.
     pub fn async_handshake(&mut self) -> impl Send + Future<Output = Result<(), Error>> + '_ {
         poll_fn(move |cx| {
             self.set_waker(cx.waker());
@@ -271,6 +272,26 @@ where
                         Poll::Ready(Err(Error::TlsRetry(r)))
                     }
                 }
+                Err(e) => Poll::Ready(Err(e)),
+            }
+        })
+    }
+
+    /// Perform asynchronous handshake, until completion, knowing that all possible pending reasons
+    /// will resolve themselves.
+    ///
+    /// The caller needs to ensure that any pending operations due to asynchronous operations such as
+    /// certificate verification and private key operations will eventually resolve and wake up
+    /// the handshake task.
+    /// Otherwise the handshake task will never complete.
+    pub fn async_nonstop_handshake(
+        &mut self,
+    ) -> impl Send + Future<Output = Result<(), Error>> + '_ {
+        poll_fn(move |cx| {
+            self.set_waker(cx.waker());
+            match self.do_handshake() {
+                Ok(_) => Poll::Ready(Ok(())),
+                Err(Error::TlsRetry(_)) => Poll::Pending,
                 Err(e) => Poll::Ready(Err(e)),
             }
         })
