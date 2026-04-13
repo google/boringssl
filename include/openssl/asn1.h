@@ -901,18 +901,10 @@ OPENSSL_EXPORT int i2c_ASN1_BIT_STRING(const ASN1_BIT_STRING *in,
 // |ASN1_BIT_STRING*|.
 DECLARE_ASN1_ITEM(ASN1_BIT_STRING)
 
-// ASN1_BIT_STRING_num_bytes computes the length of |str| in bytes. If |str|'s
-// bit length is a multiple of 8, it sets |*out| to the byte length and returns
-// one. Otherwise, it returns zero.
-//
-// This function may be used with |ASN1_STRING_get0_data| to interpret |str| as
-// a byte string.
-//
-// TODO(crbug.com/42290311): This function dates to BIT STRING implicit
-// truncation and tries to account for the byte length differing from
-// |ASN1_STRING_length|. Remove this and replace with a simpler API.
-OPENSSL_EXPORT int ASN1_BIT_STRING_num_bytes(const ASN1_BIT_STRING *str,
-                                             size_t *out);
+// ASN1_BIT_STRING_unused_bits returns the number of unused bits in the last
+// byte of |str|. If |str| is empty (i.e. |ASN1_STRING_length| is zero), this
+// always returns zero. Otherwise it returns a number between 0 and 7.
+OPENSSL_EXPORT uint8_t ASN1_BIT_STRING_unused_bits(const ASN1_BIT_STRING *str);
 
 // ASN1_BIT_STRING_set calls |ASN1_STRING_set|. It leaves flags unchanged, so
 // the caller must set the number of unused bits.
@@ -1782,6 +1774,19 @@ OPENSSL_EXPORT int ASN1_object_size(int constructed, int length, int tag);
 // we continue to set it in various codepaths, in case code is querying |flags|
 // manually, even though it does nothing.
 #define ASN1_STRING_FLAG_BITS_LEFT 0x08
+
+// ASN1_BIT_STRING_num_bytes computes the length of |str| in bytes. If |str|'s
+// bit length is a multiple of 8, it sets |*out| to the byte length and returns
+// one. Otherwise, it returns zero.
+//
+// This function may be used with |ASN1_STRING_get0_data| to interpret |str| as
+// a byte string.
+//
+// This function is no longer necessary. The byte length is always equal to
+// |ASN1_STRING_length| and callers can check for a whole number of bytes by
+// checking if |ASN1_BIT_STRING_unused_bits| is zero.
+OPENSSL_EXPORT int ASN1_BIT_STRING_num_bytes(const ASN1_BIT_STRING *str,
+                                             size_t *out);
 
 // ASN1_STRING_set_default_mask does nothing.
 OPENSSL_EXPORT void ASN1_STRING_set_default_mask(unsigned long mask);

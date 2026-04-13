@@ -104,15 +104,6 @@ void asn1_string_init(ASN1_STRING *str, int type);
 // freeing |str| itself.
 void asn1_string_cleanup(ASN1_STRING *str);
 
-// asn1_bit_string_length returns the number of bytes in |str| and sets
-// |*out_padding_bits| to the number of padding bits.
-//
-// TODO(crbug.com/42290311): This function dates to BIT STRING implicit
-// truncation and tries to account for the byte length differing from
-// |ASN1_STRING_length|. Remove this and replace with a simpler API.
-int asn1_bit_string_length(const ASN1_BIT_STRING *str,
-                           uint8_t *out_padding_bits);
-
 // The following functions parse a DER-encoded ASN.1 value of the specified
 // type from |cbs| and write the result to |*out|. If |tag| is non-zero, the
 // value is implicitly tagged with |tag|. On success, they return one and

@@ -788,25 +788,29 @@ TEST(ASN1Test, ParseASN1Object) {
 }
 
 TEST(ASN1Test, BitString) {
-  const size_t kNotWholeBytes = static_cast<size_t>(-1);
   const struct {
     std::vector<uint8_t> in;
-    size_t num_bytes;
+    int num_bytes;
+    uint8_t unused_bits;
   } kValidInputs[] = {
       // Empty bit string
-      {{0x03, 0x01, 0x00}, 0},
+      {{0x03, 0x01, 0x00}, 0, 0},
       // 0b1
-      {{0x03, 0x02, 0x07, 0x80}, kNotWholeBytes},
+      {{0x03, 0x02, 0x07, 0x80}, 1, 7},
       // 0b1010
-      {{0x03, 0x02, 0x04, 0xa0}, kNotWholeBytes},
+      {{0x03, 0x02, 0x04, 0xa0}, 1, 4},
       // 0b1010101
-      {{0x03, 0x02, 0x01, 0xaa}, kNotWholeBytes},
+      {{0x03, 0x02, 0x01, 0xaa}, 1, 1},
       // 0b10101010
-      {{0x03, 0x02, 0x00, 0xaa}, 1},
+      {{0x03, 0x02, 0x00, 0xaa}, 1, 0},
       // Bits 0 and 63 are set
-      {{0x03, 0x09, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}, 8},
+      {{0x03, 0x09, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+       8,
+       0},
       // 64 zero bits
-      {{0x03, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 8},
+      {{0x03, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+       8,
+       0},
   };
   for (const auto &test : kValidInputs) {
     SCOPED_TRACE(Bytes(test.in));
@@ -817,13 +821,16 @@ TEST(ASN1Test, BitString) {
     ASSERT_TRUE(val);
     TestSerialize(val.get(), i2d_ASN1_BIT_STRING, test.in);
 
+    EXPECT_EQ(ASN1_STRING_length(val.get()), test.num_bytes);
+    EXPECT_EQ(ASN1_BIT_STRING_unused_bits(val.get()), test.unused_bits);
+
     // Check the byte count.
     size_t num_bytes;
-    if (test.num_bytes == kNotWholeBytes) {
+    if (test.unused_bits != 0) {
       EXPECT_FALSE(ASN1_BIT_STRING_num_bytes(val.get(), &num_bytes));
     } else {
       ASSERT_TRUE(ASN1_BIT_STRING_num_bytes(val.get(), &num_bytes));
-      EXPECT_EQ(num_bytes, test.num_bytes);
+      EXPECT_EQ(num_bytes, static_cast<size_t>(test.num_bytes));
     }
   }
 

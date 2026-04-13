@@ -42,21 +42,16 @@ int ASN1_BIT_STRING_set(ASN1_BIT_STRING *x, const unsigned char *d,
   return ASN1_STRING_set(x, d, len);
 }
 
-int bssl::asn1_bit_string_length(const ASN1_BIT_STRING *str,
-                                 uint8_t *out_padding_bits) {
-  int len = str->length;
+uint8_t ASN1_BIT_STRING_unused_bits(const ASN1_BIT_STRING *str) {
   // If the string is already empty, it cannot have padding bits.
-  *out_padding_bits = len == 0 ? 0 : str->flags & 0x07;
-  return len;
+  return str->length == 0 ? 0 : str->flags & 0x07;
 }
 
 int ASN1_BIT_STRING_num_bytes(const ASN1_BIT_STRING *str, size_t *out) {
-  uint8_t padding_bits;
-  int len = asn1_bit_string_length(str, &padding_bits);
-  if (padding_bits != 0) {
+  if (ASN1_BIT_STRING_unused_bits(str) != 0) {
     return 0;
   }
-  *out = len;
+  *out = str->length;
   return 1;
 }
 
@@ -65,8 +60,8 @@ int i2c_ASN1_BIT_STRING(const ASN1_BIT_STRING *a, unsigned char **pp) {
     return 0;
   }
 
-  uint8_t bits;
-  int len = asn1_bit_string_length(a, &bits);
+  uint8_t bits = ASN1_BIT_STRING_unused_bits(a);
+  int len = ASN1_STRING_length(a);
   if (len > INT_MAX - 1) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_OVERFLOW);
     return 0;

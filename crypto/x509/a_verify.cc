@@ -39,22 +39,18 @@ int bssl::x509_verify_signature(const X509_ALGOR *sigalg,
     return 0;
   }
 
-  size_t sig_len;
-  if (signature->type == V_ASN1_BIT_STRING) {
-    if (!ASN1_BIT_STRING_num_bytes(signature, &sig_len)) {
-      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_BIT_STRING_BITS_LEFT);
-      return 0;
-    }
-  } else {
-    sig_len = static_cast<size_t>(ASN1_STRING_length(signature));
+  if (signature->type == V_ASN1_BIT_STRING &&
+      ASN1_BIT_STRING_unused_bits(signature) != 0) {
+    OPENSSL_PUT_ERROR(X509, X509_R_INVALID_BIT_STRING_BITS_LEFT);
+    return 0;
   }
 
   ScopedEVP_MD_CTX ctx;
   if (!x509_digest_verify_init(ctx.get(), sigalg, pkey)) {
     return 0;
   }
-  if (!EVP_DigestVerify(ctx.get(), ASN1_STRING_get0_data(signature), sig_len,
-                        in.data(), in.size())) {
+  if (!EVP_DigestVerify(ctx.get(), ASN1_STRING_get0_data(signature),
+                        ASN1_STRING_length(signature), in.data(), in.size())) {
     OPENSSL_PUT_ERROR(X509, ERR_R_EVP_LIB);
     return 0;
   }
