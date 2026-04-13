@@ -103,9 +103,12 @@ func (k *kts) Process(vectorSet []byte, m Transactable) (any, error) {
 			return nil, fmt.Errorf("unsupported scheme %q in test group %d", group.Scheme, group.ID)
 		}
 
-		if group.KeyGen != "rsakpg1-basic" && group.KeyGen != "rsakpg1-crt" {
+		switch group.KeyGen {
+		case "rsakpg1-basic", "rsakpg1-crt", "rsakpg2-basic", "rsakpg2-crt":
+			// Supported key generation method.
+		default:
 			return nil, fmt.Errorf(
-				"unsupported key generation method %q in test group %d - only fixed public exponent (rsakpg1-basic or rsakpg1-crt) are supported", group.KeyGen, group.ID)
+				"unsupported key generation method %q in test group %d", group.KeyGen, group.ID)
 		}
 
 		if group.OutputBits%8 != 0 {
@@ -205,7 +208,7 @@ func (k *kts) processResponder(m Transactable, responses *[]ktsTestResponse, has
 	cmd := fmt.Sprintf("KTS-IFC/%s/responder", hashAlg)
 	var args [][]byte
 
-	if keyGen == "rsakpg1-basic" {
+	if keyGen == "rsakpg1-basic" || keyGen == "rsakpg2-basic" {
 		dBytes, err := hex.DecodeString(test.IutD)
 		if err != nil {
 			return fmt.Errorf("invalid IutD: %v", err)
