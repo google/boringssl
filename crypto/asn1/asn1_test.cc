@@ -47,6 +47,14 @@
 
 BSSL_NAMESPACE_BEGIN
 
+static Span<const uint8_t> ASN1StringToBytes(const ASN1_STRING *str) {
+  return Span(ASN1_STRING_get0_data(str), ASN1_STRING_length(str));
+}
+
+static std::string_view ASN1StringToStringView(const ASN1_STRING *str) {
+  return BytesAsStringView(ASN1StringToBytes(str));
+}
+
 // |obj| and |i2d_func| require different template parameters because C++ may
 // deduce, say, |ASN1_STRING*| via |obj| and |const ASN1_STRING*| via
 // |i2d_func|. Template argument deduction then fails. The language is not able
@@ -996,6 +1004,21 @@ TEST(ASN1Test, SetBitString) {
   EXPECT_FALSE(set1(val.get(), {0x00, 0x00}, 8));
   EXPECT_FALSE(set1(val.get(), {0x00, 0x00}, -1));
   EXPECT_FALSE(set1(val.get(), {}, 1));
+
+  // |ASN1_STRING_set| and |ASN1_STRING_set0| should clear the count of unused
+  // bits, rather then carry it over.
+  ASSERT_TRUE(set1(val.get(), {0xf0}, 4));
+  static const uint8_t kBytes[] = {0x00, 0x01, 0x02};
+  ASSERT_TRUE(ASN1_STRING_set(val.get(), kBytes, sizeof(kBytes)));
+  EXPECT_EQ(ASN1_BIT_STRING_unused_bits(val.get()), 0);
+  EXPECT_EQ(Bytes(ASN1StringToBytes(val.get())), Bytes(kBytes));
+
+  ASSERT_TRUE(set1(val.get(), {0xf0}, 4));
+  void *copy = OPENSSL_memdup(kBytes, sizeof(kBytes));
+  ASSERT_NE(copy, nullptr);
+  ASN1_STRING_set0(val.get(), copy, sizeof(kBytes));
+  EXPECT_EQ(ASN1_BIT_STRING_unused_bits(val.get()), 0);
+  EXPECT_EQ(Bytes(ASN1StringToBytes(val.get())), Bytes(kBytes));
 }
 
 TEST(ASN1Test, StringToUTF8) {
@@ -1057,12 +1080,6 @@ TEST(ASN1Test, StringToUTF8) {
       ERR_clear_error();
     }
   }
-}
-
-static std::string_view ASN1StringToStringView(const ASN1_STRING *str) {
-  return std::string_view(
-      reinterpret_cast<const char *>(ASN1_STRING_get0_data(str)),
-      ASN1_STRING_length(str));
 }
 
 static bool ASN1Time_check_posix(const ASN1_TIME *s, int64_t t) {

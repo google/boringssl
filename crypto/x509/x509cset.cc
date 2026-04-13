@@ -218,10 +218,5 @@ int X509_CRL_set1_signature_algo(X509_CRL *crl, const X509_ALGOR *algo) {
 
 int X509_CRL_set1_signature_value(X509_CRL *crl, const uint8_t *sig,
                                   size_t sig_len) {
-  if (!ASN1_STRING_set(crl->signature, sig, sig_len)) {
-    return 0;
-  }
-  crl->signature->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);
-  crl->signature->flags |= ASN1_STRING_FLAG_BITS_LEFT;
-  return 1;
+  return ASN1_STRING_set(crl->signature, sig, sig_len);
 }

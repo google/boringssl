@@ -500,13 +500,7 @@ int X509_set1_signature_algo(X509 *x509, const X509_ALGOR *algo) {
 }
 
 int X509_set1_signature_value(X509 *x509, const uint8_t *sig, size_t sig_len) {
-  auto *impl = FromOpaque(x509);
-  if (!ASN1_STRING_set(&impl->signature, sig, sig_len)) {
-    return 0;
-  }
-  impl->signature.flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);
-  impl->signature.flags |= ASN1_STRING_FLAG_BITS_LEFT;
-  return 1;
+  return ASN1_STRING_set(&FromOpaque(x509)->signature, sig, sig_len);
 }
 
 void X509_get0_signature(const ASN1_BIT_STRING **psig, const X509_ALGOR **palg,

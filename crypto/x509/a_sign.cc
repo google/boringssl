@@ -96,7 +96,5 @@ int bssl::x509_sign_to_bit_string(EVP_MD_CTX *ctx, ASN1_BIT_STRING *out,
   uint8_t *sig_data;
   sig.Release(&sig_data, &sig_len);
   ASN1_STRING_set0(out, sig_data, static_cast<int>(sig_len));
-  out->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);
-  out->flags |= ASN1_STRING_FLAG_BITS_LEFT;
   return static_cast<int>(sig_len);
 }

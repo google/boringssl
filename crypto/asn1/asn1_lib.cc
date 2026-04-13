@@ -266,6 +266,7 @@ int ASN1_STRING_set(ASN1_STRING *str, const void *_data, ossl_ssize_t len_s) {
     }
   }
   str->length = (int)len;
+  str->flags &= ~0x07;  // Clear unused bits if this is a BIT STRING.
   if (data != nullptr) {
     OPENSSL_memcpy(str->data, data, len);
     // Historically, OpenSSL would NUL-terminate most (but not all)
@@ -281,6 +282,7 @@ void ASN1_STRING_set0(ASN1_STRING *str, void *data, int len) {
   OPENSSL_free(str->data);
   str->data = reinterpret_cast<uint8_t *>(data);
   str->length = len;
+  str->flags &= ~0x07;  // Clear unused bits if this is a BIT STRING.
 }
 
 ASN1_STRING *ASN1_STRING_new() {

@@ -555,12 +555,20 @@ OPENSSL_EXPORT int ASN1_STRING_cmp(const ASN1_STRING *a, const ASN1_STRING *b);
 // |data|. It returns one on success and zero on error. If |data| is NULL, it
 // updates the length and allocates the buffer as needed, but does not
 // initialize the contents.
+//
+// If |str| is a BIT STRING, this function sets the number of unused bits to
+// zero. |ASN1_BIT_STRING_set1| may be used to set a BIT STRING that is not a
+// whole number of bytes.
 OPENSSL_EXPORT int ASN1_STRING_set(ASN1_STRING *str, const void *data,
                                    ossl_ssize_t len);
 
 // ASN1_STRING_set0 sets the contents of |str| to |len| bytes from |data|. It
 // takes ownership of |data|, which must have been allocated with
 // |OPENSSL_malloc|.
+//
+// If |str| is a BIT STRING, this function sets the number of unused bits to
+// zero. |ASN1_BIT_STRING_set1| may be used to set a BIT STRING that is not a
+// whole number of bytes.
 OPENSSL_EXPORT void ASN1_STRING_set0(ASN1_STRING *str, void *data, int len);
 
 // The following functions call |ASN1_STRING_type_new| with the corresponding
@@ -906,11 +914,7 @@ DECLARE_ASN1_ITEM(ASN1_BIT_STRING)
 // always returns zero. Otherwise it returns a number between 0 and 7.
 OPENSSL_EXPORT uint8_t ASN1_BIT_STRING_unused_bits(const ASN1_BIT_STRING *str);
 
-// ASN1_BIT_STRING_set calls |ASN1_STRING_set|. It leaves flags unchanged, so
-// the caller must set the number of unused bits.
-//
-// TODO(crbug.com/42290311): This function, and |ASN1_STRING_set|, should reset
-// the number of unused bits.
+// ASN1_BIT_STRING_set calls |ASN1_STRING_set|.
 OPENSSL_EXPORT int ASN1_BIT_STRING_set(ASN1_BIT_STRING *str, const uint8_t *data,
                                        ossl_ssize_t length);
 
