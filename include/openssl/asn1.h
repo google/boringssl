@@ -911,9 +911,17 @@ OPENSSL_EXPORT uint8_t ASN1_BIT_STRING_unused_bits(const ASN1_BIT_STRING *str);
 //
 // TODO(crbug.com/42290311): This function, and |ASN1_STRING_set|, should reset
 // the number of unused bits.
-OPENSSL_EXPORT int ASN1_BIT_STRING_set(ASN1_BIT_STRING *str,
-                                       const unsigned char *d,
+OPENSSL_EXPORT int ASN1_BIT_STRING_set(ASN1_BIT_STRING *str, const uint8_t *data,
                                        ossl_ssize_t length);
+
+// ASN1_BIT_STRING_set1 sets |str| to a BIT STRING containing |length| bytes
+// from |data|. It returns one on success and zero on error. The least
+// significant |unused_bits| of the last byte of |data| are removed from the bit
+// string. The removed bits must all be zero. |unused_bits| must be between 0
+// and 7, and must be 0 if |length| is zero.
+OPENSSL_EXPORT int ASN1_BIT_STRING_set1(ASN1_BIT_STRING *str,
+                                        const uint8_t *data, size_t length,
+                                        int unused_bits);
 
 // ASN1_BIT_STRING_set_bit sets bit |n| of |str| to one if |value| is non-zero
 // and zero if |value| is zero, resizing |str| as needed. It then truncates

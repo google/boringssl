@@ -967,6 +967,35 @@ TEST(ASN1Test, SetBitString) {
       ASN1_STRING_set(val.get(), kBytesf000, sizeof(kBytesf000)));
   static const uint8_t kBitStringf000[] = {0x03, 0x03, 0x00, 0xf0, 0x00};
   TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitStringf000);
+
+  // A thin wrapper to simplify getting pointer/length pairs to call the
+  // function.
+  auto set1 = [](ASN1_BIT_STRING *s, const std::vector<uint8_t> &data,
+                 int unused_bits) {
+    return ASN1_BIT_STRING_set1(s, data.data(), data.size(), unused_bits);
+  };
+
+  // Setting a count of unused bits works.
+  ASSERT_TRUE(set1(val.get(), {0xf0}, 4));
+  static const uint8_t kBitString1111[] = {0x03, 0x02, 0x04, 0xf0};
+  TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitString1111);
+
+  ASSERT_TRUE(set1(val.get(), {0xf0}, 0));
+  static const uint8_t kBitString11110000[] = {0x03, 0x02, 0x00, 0xf0};
+  TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitString11110000);
+
+  ASSERT_TRUE(set1(val.get(), {}, 0));
+  static const uint8_t kBitStringEmpty[] = {0x03, 0x01, 0x00};
+  TestSerialize(val.get(), i2d_ASN1_BIT_STRING, kBitStringEmpty);
+
+  // All unused bits must be zero.
+  EXPECT_FALSE(set1(val.get(), {0xff}, 1));
+  EXPECT_FALSE(set1(val.get(), {0xf0}, 5));
+
+  // Invalid unused bit counts.
+  EXPECT_FALSE(set1(val.get(), {0x00, 0x00}, 8));
+  EXPECT_FALSE(set1(val.get(), {0x00, 0x00}, -1));
+  EXPECT_FALSE(set1(val.get(), {}, 1));
 }
 
 TEST(ASN1Test, StringToUTF8) {

@@ -37,9 +37,29 @@ static void set_unused_bits(ASN1_BIT_STRING *str, uint8_t unused_bits) {
   str->flags |= ASN1_STRING_FLAG_BITS_LEFT | unused_bits;
 }
 
-int ASN1_BIT_STRING_set(ASN1_BIT_STRING *x, const unsigned char *d,
+int ASN1_BIT_STRING_set(ASN1_BIT_STRING *str, const uint8_t *data,
                         ossl_ssize_t len) {
-  return ASN1_STRING_set(x, d, len);
+  return ASN1_STRING_set(str, data, len);
+}
+
+int ASN1_BIT_STRING_set1(ASN1_BIT_STRING *str, const uint8_t *data,
+                         size_t length, int unused_bits) {
+  if (unused_bits < 0 || unused_bits > 7) {
+    OPENSSL_PUT_ERROR(ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT);
+    return 0;
+  }
+  const uint8_t unused_bits_mask = (1 << unused_bits) - 1;
+  if ((length > 0 && (data[length - 1] & unused_bits_mask) != 0) ||
+      (length == 0 && unused_bits != 0)) {
+    OPENSSL_PUT_ERROR(ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT);
+    return 0;
+  }
+  if (!ASN1_STRING_set(str, data, length)) {
+    return 0;
+  }
+  str->type = V_ASN1_BIT_STRING;
+  set_unused_bits(str, unused_bits);
+  return 1;
 }
 
 uint8_t ASN1_BIT_STRING_unused_bits(const ASN1_BIT_STRING *str) {
@@ -122,13 +142,7 @@ static int asn1_parse_bit_string_contents(Span<const uint8_t> in,
     }
   }
 
-  if (!ASN1_STRING_set(out, CBS_data(&cbs), CBS_len(&cbs))) {
-    return 0;
-  }
-
-  out->type = V_ASN1_BIT_STRING;
-  set_unused_bits(out, padding);
-  return 1;
+  return ASN1_BIT_STRING_set1(out, CBS_data(&cbs), CBS_len(&cbs), padding);
 }
 
 ASN1_BIT_STRING *c2i_ASN1_BIT_STRING(ASN1_BIT_STRING **a,
