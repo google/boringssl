@@ -47,7 +47,7 @@ pub(crate) unsafe fn sanitize_slice<'a, T>(input: *const T, len: usize) -> Optio
     if len == 0 || input.is_null() {
         return Some(&[]);
     }
-    if !input.is_aligned() || len.checked_mul(size_of::<T>())? >= isize::MAX as usize {
+    if !input.is_aligned() || len.checked_mul(size_of::<T>())? > isize::MAX as usize {
         return None;
     }
     unsafe {
@@ -71,7 +71,7 @@ pub(crate) unsafe fn sanitise_mut_slice<'a, T>(
     if capacity == 0 || out.is_null() || !out.is_aligned() {
         return Some(&mut []);
     }
-    if capacity.checked_mul(size_of::<T>())? >= isize::MAX as usize {
+    if capacity.checked_mul(size_of::<T>())? > isize::MAX as usize {
         return None;
     }
     unsafe {
