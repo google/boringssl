@@ -27,6 +27,7 @@ env:
 
 jobs:
   check-mirror:
+    if: github.repository == 'google/boringssl'
     runs-on: ubuntu-latest
     permissions: read-all
     steps:
