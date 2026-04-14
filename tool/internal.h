@@ -126,6 +126,7 @@ std::string_view TrimSpace(std::string_view s);
 
 bool ReadAll(std::vector<uint8_t> *out, FILE *in);
 bool WriteToFile(const std::string &path, bssl::Span<const uint8_t> in);
+UniquePtr<EVP_PKEY> LoadPrivateKeyFile(const std::string &file);
 
 bool Ciphers(const std::vector<std::string> &args);
 bool Client(const std::vector<std::string> &args);

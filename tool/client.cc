@@ -27,10 +27,8 @@
 #include <openssl/bytestring.h>
 #include <openssl/digest.h>
 #include <openssl/err.h>
-#include <openssl/pem.h>
 #include <openssl/ssl.h>
 
-#include "../crypto/internal.h"
 #include "internal.h"
 #include "transport_common.h"
 
@@ -221,6 +219,17 @@ static const struct argument kArguments[] = {
         "Use a SHA-384 PSK instead of a SHA-256 PSK.",
     },
     {
+        "-rpk-key",
+        kOptionalArgument,
+        "PEM-encoded file containing the private key to use for a Raw Public "
+        "Key (RFC 7250) client certificate if the server requests one.",
+    },
+    {
+        "-accept-cert-types",
+        kOptionalArgument,
+        "A comma-separated list of cert types to accept from the server.",
+    },
+    {
         "-debug",
         kBooleanArgument,
         "Print debug information about the handshake",
@@ -231,16 +240,6 @@ static const struct argument kArguments[] = {
         "",
     },
 };
-
-static bssl::UniquePtr<EVP_PKEY> LoadPrivateKey(const std::string &file) {
-  bssl::UniquePtr<BIO> bio(BIO_new(BIO_s_file()));
-  if (!bio || !BIO_read_filename(bio.get(), file.c_str())) {
-    return nullptr;
-  }
-  bssl::UniquePtr<EVP_PKEY> pkey(PEM_read_bio_PrivateKey(bio.get(), nullptr,
-                                 nullptr, nullptr));
-  return pkey;
-}
 
 static int NextProtoSelectCallback(SSL* ssl, uint8_t** out, uint8_t* outlen,
                                    const uint8_t* in, unsigned inlen, void* arg) {
@@ -552,7 +551,7 @@ bool Client(const std::vector<std::string> &args) {
 
   if (args_map.count("-channel-id-key") != 0) {
     bssl::UniquePtr<EVP_PKEY> pkey =
-        LoadPrivateKey(args_map["-channel-id-key"]);
+        LoadPrivateKeyFile(args_map["-channel-id-key"]);
     if (!pkey || !SSL_CTX_set1_tls_channel_id(ctx.get(), pkey.get())) {
       return false;
     }
@@ -573,6 +572,19 @@ bool Client(const std::vector<std::string> &args) {
         args_map.count("-cert") != 0 ? args_map["-cert"] : key;
     if (!SSL_CTX_use_certificate_chain_file(ctx.get(), cert.c_str())) {
       fprintf(stderr, "Failed to load cert chain: %s\n", cert.c_str());
+      return false;
+    }
+  }
+
+  if (args_map.count("-rpk-key") != 0) {
+    UniquePtr<EVP_PKEY> pkey = LoadPrivateKeyFile(args_map["-rpk-key"]);
+    if (!pkey) {
+      return false;
+    }
+    UniquePtr<SSL_CREDENTIAL> cred(
+        SSL_CREDENTIAL_new_raw_public_key(pkey.get()));
+    if (!cred || !SSL_CTX_add1_credential(ctx.get(), cred.get())) {
+      fprintf(stderr, "Failed to add RPK\n");
       return false;
     }
   }
@@ -625,6 +637,7 @@ bool Client(const std::vector<std::string> &args) {
     SSL_CTX_set_permute_extensions(ctx.get(), 1);
   }
 
+  // Configure accepted roots.
   if (args_map.count("-root-certs") != 0) {
     if (!SSL_CTX_load_verify_locations(
             ctx.get(), args_map["-root-certs"].c_str(), nullptr)) {
@@ -634,7 +647,6 @@ bool Client(const std::vector<std::string> &args) {
     }
     SSL_CTX_set_verify(ctx.get(), SSL_VERIFY_PEER, nullptr);
   }
-
   if (args_map.count("-root-cert-dir") != 0) {
     if (!SSL_CTX_load_verify_locations(
             ctx.get(), nullptr, args_map["-root-cert-dir"].c_str())) {
@@ -643,6 +655,15 @@ bool Client(const std::vector<std::string> &args) {
       return false;
     }
     SSL_CTX_set_verify(ctx.get(), SSL_VERIFY_PEER, nullptr);
+  }
+  // Otherwise, just require the server to send any cert.
+  if (args_map.count("-root-certs") == 0 &&
+      args_map.count("-root-cert-dir") == 0) {
+    SSL_CTX_set_custom_verify(
+        ctx.get(), SSL_VERIFY_PEER,
+        [](SSL *ssl, uint8_t *out_alert) -> ssl_verify_result_t {
+          return ssl_verify_ok;
+        });
   }
 
   if (args_map.count("-request-trust-anchors") != 0) {
@@ -675,6 +696,17 @@ bool Client(const std::vector<std::string> &args) {
 
   if (args_map.count("-early-data") != 0) {
     SSL_CTX_set_early_data_enabled(ctx.get(), 1);
+  }
+
+  if (args_map.count("-accept-cert-types") != 0) {
+    auto accepted_client_cert_types =
+        CertificateTypesFromString(args_map["-accept-cert-types"]);
+    if (!accepted_client_cert_types.has_value() ||
+        !SSL_CTX_set1_accepted_peer_cert_types(
+            ctx.get(), accepted_client_cert_types->data(),
+            accepted_client_cert_types->size())) {
+      return false;
+    }
   }
 
   if (args_map.count("-debug") != 0) {

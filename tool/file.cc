@@ -21,8 +21,10 @@
 #include <algorithm>
 #include <vector>
 
-#include "internal.h"
+#include <openssl/bio.h>
+#include <openssl/pem.h>
 
+#include "internal.h"
 
 BSSL_NAMESPACE_BEGIN
 
@@ -67,6 +69,15 @@ bool WriteToFile(const std::string &path, bssl::Span<const uint8_t> in) {
     return false;
   }
   return true;
+}
+
+UniquePtr<EVP_PKEY> LoadPrivateKeyFile(const std::string &file) {
+  UniquePtr<BIO> bio(BIO_new(BIO_s_file()));
+  if (!bio || !BIO_read_filename(bio.get(), file.c_str())) {
+    return nullptr;
+  }
+  return UniquePtr<EVP_PKEY>(
+      PEM_read_bio_PrivateKey(bio.get(), nullptr, nullptr, nullptr));
 }
 
 BSSL_NAMESPACE_END

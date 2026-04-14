@@ -135,6 +135,18 @@ static const struct argument kArguments[] = {
         "Use a SHA-384 PSK instead of a SHA-256 PSK.",
     },
     {
+        "-rpk-key",
+        kOptionalArgument,
+        "PEM-encoded file containing the private key to use for a Raw Public "
+        "Key (RFC 7250) certificate if the client supports it, in which case "
+        "the server will automatically offer it.",
+    },
+    {
+        "-accept-cert-types",
+        kOptionalArgument,
+        "A comma-separated list of cert types to accept from the client.",
+    },
+    {
         "",
         kOptionalArgument,
         "",
@@ -296,6 +308,7 @@ bool Server(const std::vector<std::string> &args) {
   }
 
   // Server authentication is required.
+  bool installed_cred = false;
   if (args_map.count("-key") != 0) {
     std::string key = args_map["-key"];
     if (!SSL_CTX_use_PrivateKey_file(ctx.get(), key.c_str(),
@@ -309,8 +322,22 @@ bool Server(const std::vector<std::string> &args) {
       fprintf(stderr, "Failed to load cert chain: %s\n", cert.c_str());
       return false;
     }
-  } else if (auto psk_hex = args_map.find("-psk-hex");
-             psk_hex != args_map.end()) {
+    installed_cred = true;
+  }
+  if (args_map.count("-rpk-key") != 0) {
+    UniquePtr<EVP_PKEY> pkey = LoadPrivateKeyFile(args_map["-rpk-key"]);
+    if (!pkey) {
+      return false;
+    }
+    UniquePtr<SSL_CREDENTIAL> cred(
+        SSL_CREDENTIAL_new_raw_public_key(pkey.get()));
+    if (!cred || !SSL_CTX_add1_credential(ctx.get(), cred.get())) {
+      fprintf(stderr, "Failed to add RPK\n");
+      return false;
+    }
+    installed_cred = true;
+  }
+  if (auto psk_hex = args_map.find("-psk-hex"); psk_hex != args_map.end()) {
     auto psk = DecodeHex(psk_hex->second);
     if (!psk) {
       fprintf(stderr, "Could not convert PSK from hex\n");
@@ -335,7 +362,10 @@ bool Server(const std::vector<std::string> &args) {
       fprintf(stderr, "Failed to load PSK\n");
       return false;
     }
-  } else {
+    installed_cred = true;
+  }
+  // Install a default self-signed credential.
+  if (!installed_cred) {
     bssl::UniquePtr<EVP_PKEY> evp_pkey = MakeKeyPairForSelfSignedCert();
     if (!evp_pkey) {
       return false;
@@ -447,11 +477,22 @@ bool Server(const std::vector<std::string> &args) {
   }
 
   if (args_map.count("-require-any-client-cert") != 0) {
-    SSL_CTX_set_verify(
-        ctx.get(), SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
-    SSL_CTX_set_cert_verify_callback(
-        ctx.get(), [](X509_STORE_CTX *store, void *arg) -> int { return 1; },
-        nullptr);
+    SSL_CTX_set_custom_verify(
+        ctx.get(), SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+        [](SSL *ssl, uint8_t *out_alert) -> ssl_verify_result_t {
+          return ssl_verify_ok;
+        });
+  }
+
+  if (args_map.count("-accept-cert-types") != 0) {
+    auto accepted_client_cert_types =
+        CertificateTypesFromString(args_map["-accept-cert-types"]);
+    if (!accepted_client_cert_types.has_value() ||
+        !SSL_CTX_set1_accepted_peer_cert_types(
+            ctx.get(), accepted_client_cert_types->data(),
+            accepted_client_cert_types->size())) {
+      return false;
+    }
   }
 
   Listener listener;
