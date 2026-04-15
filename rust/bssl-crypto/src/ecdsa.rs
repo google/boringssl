@@ -242,7 +242,7 @@ impl<C: ec::Curve> PrivateKey<C> {
     // Caller must make sure that the group of the key matches `C`,
     // or else it panics.
     pub(crate) fn from_ec_key(key: ec::Key) -> Self {
-        assert_eq!(key.get_group().unwrap(), C::group());
+        assert_eq!(key.get_group(), Some(C::group()));
         Self {
             key,
             marker: PhantomData,
