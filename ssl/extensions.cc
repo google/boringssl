@@ -309,6 +309,11 @@ static const uint16_t kVerifySignatureAlgorithms[] = {
 // algorithms for signing.
 static const uint16_t kSignSignatureAlgorithms[] = {
     // List our preferred algorithms first.
+    SSL_SIGN_ML_DSA_44,
+    SSL_SIGN_ML_DSA_65,
+    SSL_SIGN_ML_DSA_87,
+
+    // Classical signature algorithms.
     SSL_SIGN_ED25519,
     SSL_SIGN_ECDSA_SECP256R1_SHA256,
     SSL_SIGN_RSA_PSS_RSAE_SHA256,

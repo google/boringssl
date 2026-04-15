@@ -1,12 +1,12 @@
 module boringssl.googlesource.com/boringssl.git
 
-go 1.24.0
-
-toolchain go1.24.8
+go 1.25.0
 
 require (
 	cloud.google.com/go/storage v1.59.2
 	filippo.io/edwards25519 v1.2.0
+	// TODO(crbug.com/505771670): Replace with crypto/mldsa once that exists.
+	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e
 	github.com/hexops/gotextdiff v1.0.3
 	golang.org/x/crypto v0.43.0
 	golang.org/x/net v0.46.0

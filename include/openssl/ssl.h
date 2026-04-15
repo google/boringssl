@@ -1154,6 +1154,9 @@ OPENSSL_EXPORT int SSL_set_ocsp_response(SSL *ssl, const uint8_t *response,
 #define SSL_SIGN_RSA_PSS_RSAE_SHA384 0x0805
 #define SSL_SIGN_RSA_PSS_RSAE_SHA512 0x0806
 #define SSL_SIGN_ED25519 0x0807
+#define SSL_SIGN_ML_DSA_44 0x0904
+#define SSL_SIGN_ML_DSA_65 0x0905
+#define SSL_SIGN_ML_DSA_87 0x0906
 
 // SSL_SIGN_RSA_PKCS1_SHA256_LEGACY is a backport of RSASSA-PKCS1-v1_5 with
 // SHA-256 to TLS 1.3. It is disabled by default and only defined for client

@@ -22,6 +22,7 @@ import (
 
 	"boringssl.googlesource.com/boringssl.git/ssl/test/runner/hpke"
 	"boringssl.googlesource.com/boringssl.git/ssl/test/runner/spake2plus"
+	"filippo.io/mldsa"
 	"golang.org/x/crypto/cryptobyte"
 )
 
@@ -2351,7 +2352,7 @@ func (hs *serverHandshakeState) processCertsFromClient(certificates [][]byte) (c
 	certs := make([]*x509.Certificate, len(certificates))
 	var err error
 	for i, asn1Data := range certificates {
-		if certs[i], err = x509.ParseCertificate(asn1Data); err != nil {
+		if certs[i], err = ParseX509Certificate(asn1Data); err != nil {
 			c.sendAlert(alertBadCertificate)
 			return nil, errors.New("tls: failed to parse client certificate: " + err.Error())
 		}
@@ -2386,7 +2387,7 @@ func (hs *serverHandshakeState) processCertsFromClient(certificates [][]byte) (c
 	if len(certs) > 0 {
 		pub := certs[0].PublicKey
 		switch pub.(type) {
-		case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey:
+		case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey, *mldsa.PublicKey:
 			break
 		default:
 			c.sendAlert(alertUnsupportedCertificate)

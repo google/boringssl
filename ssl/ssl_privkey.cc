@@ -34,8 +34,16 @@
 BSSL_NAMESPACE_BEGIN
 
 bool ssl_is_key_type_supported(int key_type) {
-  return key_type == EVP_PKEY_RSA || key_type == EVP_PKEY_EC ||
-         key_type == EVP_PKEY_ED25519;
+  switch (key_type) {
+    case EVP_PKEY_RSA:
+    case EVP_PKEY_EC:
+    case EVP_PKEY_ED25519:
+    case EVP_PKEY_ML_DSA_44:
+    case EVP_PKEY_ML_DSA_65:
+    case EVP_PKEY_ML_DSA_87:
+      return true;
+  }
+  return false;
 }
 
 typedef struct {
@@ -99,6 +107,16 @@ static const SSL_SIGNATURE_ALGORITHM kSignatureAlgorithms[] = {
     {SSL_SIGN_ED25519, EVP_PKEY_ED25519, NID_undef, nullptr,
      /*is_rsa_pss=*/false, /*tls12_ok=*/true, /*tls13_ok=*/true,
      /*client_only=*/false},
+
+    {SSL_SIGN_ML_DSA_44, EVP_PKEY_ML_DSA_44, NID_undef, nullptr,
+     /*is_rsa_pss=*/false, /*tls12_ok=*/false, /*tls13_ok=*/true,
+     /*client_only=*/false},
+    {SSL_SIGN_ML_DSA_65, EVP_PKEY_ML_DSA_65, NID_undef, nullptr,
+     /*is_rsa_pss=*/false, /*tls12_ok=*/false, /*tls13_ok=*/true,
+     /*client_only=*/false},
+    {SSL_SIGN_ML_DSA_87, EVP_PKEY_ML_DSA_87, NID_undef, nullptr,
+     /*is_rsa_pss=*/false, /*tls12_ok=*/false, /*tls13_ok=*/true,
+     /*client_only=*/false},
 };
 
 static const SSL_SIGNATURE_ALGORITHM *get_signature_algorithm(uint16_t sigalg) {
@@ -116,8 +134,9 @@ bssl::UniquePtr<EVP_PKEY> ssl_parse_peer_subject_public_key_info(
   // code elimination, but for now we just specify every algorithm that might be
   // reachable from libssl.
   const EVP_PKEY_ALG *const algs[] = {
-      EVP_pkey_rsa(),     EVP_pkey_ec_p256(), EVP_pkey_ec_p384(),
-      EVP_pkey_ec_p521(), EVP_pkey_ed25519(),
+      EVP_pkey_rsa(),       EVP_pkey_ec_p256(),   EVP_pkey_ec_p384(),
+      EVP_pkey_ec_p521(),   EVP_pkey_ed25519(),   EVP_pkey_ml_dsa_44(),
+      EVP_pkey_ml_dsa_65(), EVP_pkey_ml_dsa_87(),
   };
   return bssl::UniquePtr<EVP_PKEY>(EVP_PKEY_from_subject_public_key_info(
       spki.data(), spki.size(), algs, std::size(algs)));
@@ -481,6 +500,9 @@ static const SignatureAlgorithmName kSignatureAlgorithmNames[] = {
     {SSL_SIGN_RSA_PSS_RSAE_SHA384, "rsa_pss_rsae_sha384"},
     {SSL_SIGN_RSA_PSS_RSAE_SHA512, "rsa_pss_rsae_sha512"},
     {SSL_SIGN_ED25519, "ed25519"},
+    {SSL_SIGN_ML_DSA_44, "mldsa44"},
+    {SSL_SIGN_ML_DSA_65, "mldsa65"},
+    {SSL_SIGN_ML_DSA_87, "mldsa87"},
 };
 
 const char *SSL_get_signature_algorithm_name(uint16_t sigalg,
@@ -645,6 +667,9 @@ static constexpr struct {
     {EVP_PKEY_EC, NID_sha384, SSL_SIGN_ECDSA_SECP384R1_SHA384},
     {EVP_PKEY_EC, NID_sha512, SSL_SIGN_ECDSA_SECP521R1_SHA512},
     {EVP_PKEY_ED25519, NID_undef, SSL_SIGN_ED25519},
+    {EVP_PKEY_ML_DSA_44, NID_undef, SSL_SIGN_ML_DSA_44},
+    {EVP_PKEY_ML_DSA_65, NID_undef, SSL_SIGN_ML_DSA_65},
+    {EVP_PKEY_ML_DSA_87, NID_undef, SSL_SIGN_ML_DSA_87},
 };
 
 static bool parse_sigalg_pairs(Array<uint16_t> *out, const int *values,

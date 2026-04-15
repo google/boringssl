@@ -329,6 +329,11 @@ const (
 	signatureEd25519 signatureAlgorithm = 0x0807
 	signatureEd448   signatureAlgorithm = 0x0808
 
+	// ML-DSA algorithms (draft-ietf-tls-mldsa-02)
+	signatureMLDSA44 signatureAlgorithm = 0x0904
+	signatureMLDSA65 signatureAlgorithm = 0x0905
+	signatureMLDSA87 signatureAlgorithm = 0x0906
+
 	// draft-ietf-tls-tls13-pkcs1-00
 	signatureRSAPKCS1WithSHA256Legacy signatureAlgorithm = 0x0420
 

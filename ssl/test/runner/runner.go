@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"boringssl.googlesource.com/boringssl.git/util/testresult"
+	"filippo.io/mldsa"
 	"golang.org/x/crypto/cryptobyte"
 )
 
@@ -139,6 +140,10 @@ var (
 
 	ed25519Key ed25519.PrivateKey
 
+	mldsa44Key *mldsa.PrivateKey
+	mldsa65Key *mldsa.PrivateKey
+	mldsa87Key *mldsa.PrivateKey
+
 	channelIDKey ecdsa.PrivateKey
 )
 
@@ -187,6 +192,21 @@ func initKeys() {
 	}
 	ed25519Key = k.(ed25519.PrivateKey)
 
+	for _, k := range []struct {
+		params *mldsa.Parameters
+		key    **mldsa.PrivateKey
+	}{
+		{mldsa.MLDSA44(), &mldsa44Key},
+		{mldsa.MLDSA65(), &mldsa65Key},
+		{mldsa.MLDSA87(), &mldsa87Key},
+	} {
+		key, err := mldsa.GenerateKey(k.params)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to generate ML-DSA test key: %s", err))
+		}
+		*k.key = key
+	}
+
 	channelIDKeyPath = writeTempKeyFile(&channelIDKey)
 }
 
@@ -214,6 +234,9 @@ var (
 	ecdsaP384Certificate Credential
 	ecdsaP521Certificate Credential
 	ed25519Certificate   Credential
+	mldsa44Certificate   Credential
+	mldsa65Certificate   Credential
+	mldsa87Certificate   Credential
 	garbageCertificate   Credential
 	pssCertificate       Credential
 )
@@ -230,6 +253,9 @@ func initCertificates() {
 		{"ECDSA P-384", &ecdsaP384Key, &ecdsaP384Certificate},
 		{"ECDSA P-521", &ecdsaP521Key, &ecdsaP521Certificate},
 		{"Ed25519", ed25519Key, &ed25519Certificate},
+		{"ML-DSA 44", mldsa44Key, &mldsa44Certificate},
+		{"ML-DSA 65", mldsa65Key, &mldsa65Certificate},
+		{"ML-DSA 87", mldsa87Key, &mldsa87Certificate},
 	} {
 		// For each test key, make a self-signed root that issues a leaf, using
 		// the same algorithm.

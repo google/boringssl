@@ -36,8 +36,10 @@
 #include <openssl/crypto.h>
 #include <openssl/curve25519.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/hpke.h>
+#include <openssl/nid.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
@@ -6888,6 +6890,7 @@ TEST(SSLTest, SigAlgs) {
       {{1, 2, 3}, false, {}},
       {{NID_sha256, EVP_PKEY_ED25519}, false, {}},
       {{NID_sha256, EVP_PKEY_RSA, NID_sha256, EVP_PKEY_RSA}, false, {}},
+      {{NID_sha256, EVP_PKEY_ML_DSA_44}, false, {}},
 
       {{NID_sha256, EVP_PKEY_RSA}, true, {SSL_SIGN_RSA_PKCS1_SHA256}},
       {{NID_sha512, EVP_PKEY_RSA}, true, {SSL_SIGN_RSA_PKCS1_SHA512}},
@@ -6896,6 +6899,9 @@ TEST(SSLTest, SigAlgs) {
       {{NID_undef, EVP_PKEY_ED25519, NID_sha384, EVP_PKEY_EC},
        true,
        {SSL_SIGN_ED25519, SSL_SIGN_ECDSA_SECP384R1_SHA384}},
+      {{NID_undef, EVP_PKEY_ML_DSA_44}, true, {SSL_SIGN_ML_DSA_44}},
+      {{NID_undef, EVP_PKEY_ML_DSA_65}, true, {SSL_SIGN_ML_DSA_65}},
+      {{NID_undef, EVP_PKEY_ML_DSA_87}, true, {SSL_SIGN_ML_DSA_87}},
   };
 
   UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
@@ -6952,6 +6958,9 @@ TEST(SSLTest, SigAlgsList) {
        {SSL_SIGN_ECDSA_SECP256R1_SHA256, SSL_SIGN_RSA_PSS_RSAE_SHA256}},
       {"RSA-PSS+SHA256", true, {SSL_SIGN_RSA_PSS_RSAE_SHA256}},
       {"PSS+SHA256", true, {SSL_SIGN_RSA_PSS_RSAE_SHA256}},
+      {"mldsa44:mldsa65:mldsa87",
+       true,
+       {SSL_SIGN_ML_DSA_44, SSL_SIGN_ML_DSA_65, SSL_SIGN_ML_DSA_87}},
   };
 
   UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
