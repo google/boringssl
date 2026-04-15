@@ -32,6 +32,7 @@
 #include <openssl/md5.h>
 #include <openssl/mem.h>
 #include <openssl/nid.h>
+#include <openssl/pool.h>
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 

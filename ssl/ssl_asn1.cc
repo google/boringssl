@@ -15,9 +15,12 @@
 
 #include <openssl/ssl.h>
 
+#include <assert.h>
 #include <limits.h>
 #include <string.h>
 
+#include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include <openssl/bytestring.h>

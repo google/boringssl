@@ -24,6 +24,7 @@
 #include <openssl/evp.h>
 #include <openssl/hkdf.h>
 #include <openssl/mem.h>
+#include <openssl/pool.h>
 #include <openssl/stack.h>
 #include <openssl/x509.h>
 

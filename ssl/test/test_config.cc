@@ -30,9 +30,12 @@
 
 #include <openssl/aead.h>
 #include <openssl/base64.h>
+#include <openssl/bytestring.h>
+#include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/hpke.h>
 #include <openssl/rand.h>
+#include <openssl/sha2.h>
 #include <openssl/span.h>
 #include <openssl/ssl.h>
 

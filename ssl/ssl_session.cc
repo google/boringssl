@@ -26,6 +26,7 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/mem.h>
+#include <openssl/pool.h>
 #include <openssl/rand.h>
 
 #include "../crypto/internal.h"

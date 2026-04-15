@@ -22,6 +22,7 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/pool.h>
 #include <openssl/rand.h>
 
 #include "../crypto/internal.h"
