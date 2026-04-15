@@ -610,9 +610,10 @@ static std::optional<uint16_t> hkdf_md_to_kdf_id(const EVP_MD *hkdf_md) {
   }
 }
 
-std::optional<SSLImportedPSK> tls13_derive_imported_psk(
-    const SSL_HANDSHAKE *hs, SSL_CREDENTIAL *cred, uint16_t protocol,
-    const EVP_MD *hkdf_md) {
+std::optional<SSLImportedPSK> tls13_derive_imported_psk(const SSL_HANDSHAKE *hs,
+                                                        SSLCredential *cred,
+                                                        uint16_t protocol,
+                                                        const EVP_MD *hkdf_md) {
   assert(cred->type == SSLCredentialType::kPreSharedKey);
 
   std::optional<uint16_t> target_kdf = hkdf_md_to_kdf_id(hkdf_md);
@@ -665,7 +666,7 @@ std::optional<SSLImportedPSK> tls13_derive_imported_psk(
 }
 
 bool tls13_compare_imported_psk_identity(Span<const uint8_t> id,
-                                         const SSL_CREDENTIAL *cred,
+                                         const SSLCredential *cred,
                                          uint16_t protocol,
                                          const EVP_MD *hkdf_md) {
   assert(cred->type == SSLCredentialType::kPreSharedKey);

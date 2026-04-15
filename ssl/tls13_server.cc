@@ -259,7 +259,7 @@ static bool add_new_session_tickets(SSL_HANDSHAKE *hs, bool *out_sent_tickets) {
 
 bool ssl_check_tls13_credential_ignoring_issuer(
     SSL_HANDSHAKE *hs, Span<const uint8_t> allowed_cert_types,
-    const SSL_CREDENTIAL *cred, uint16_t *out_sigalg) {
+    const SSLCredential *cred, uint16_t *out_sigalg) {
   assert(!allowed_cert_types.empty());
   const auto is_cert_type_allowed = [&](uint8_t cert_type) {
     return std::find(allowed_cert_types.begin(), allowed_cert_types.end(),
@@ -296,7 +296,7 @@ bool ssl_check_tls13_credential_ignoring_issuer(
 
 static bool check_signature_credential(SSL_HANDSHAKE *hs,
                                        Span<const uint8_t> allowed_cert_types,
-                                       const SSL_CREDENTIAL *cred,
+                                       const SSLCredential *cred,
                                        uint16_t *out_sigalg) {
   return ssl_check_tls13_credential_ignoring_issuer(hs, allowed_cert_types,
                                                     cred, out_sigalg) &&
@@ -306,7 +306,7 @@ static bool check_signature_credential(SSL_HANDSHAKE *hs,
 }
 
 static bool check_pake_credential(SSL_HANDSHAKE *hs,
-                                  const SSL_CREDENTIAL *cred) {
+                                  const SSLCredential *cred) {
   assert(cred->type == SSLCredentialType::kSPAKE2PlusV1Server);
   // Look for a client PAKE share that matches |cred|.
   if (hs->pake_share == nullptr ||
@@ -320,7 +320,7 @@ static bool check_pake_credential(SSL_HANDSHAKE *hs,
   return true;
 }
 
-static bool check_psk_credential(SSL_HANDSHAKE *hs, const SSL_CREDENTIAL *cred,
+static bool check_psk_credential(SSL_HANDSHAKE *hs, const SSLCredential *cred,
                                  const std::optional<SSLOfferedPSKs> &psks) {
   assert(cred->type == SSLCredentialType::kPreSharedKey);
   SSL *const ssl = hs->ssl;
@@ -397,7 +397,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   }
 
   // Select the credential to use.
-  Array<SSL_CREDENTIAL *> creds;
+  Array<SSLCredential *> creds;
   if (!ssl_get_full_credential_list(hs, &creds)) {
     return ssl_hs_error;
   }
@@ -412,7 +412,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
     return ssl_hs_error;
   }
-  for (SSL_CREDENTIAL *cred : creds) {
+  for (SSLCredential *cred : creds) {
     ERR_clear_error();
     if (cred->type == SSLCredentialType::kSPAKE2PlusV1Server) {
       if (check_pake_credential(hs, cred)) {

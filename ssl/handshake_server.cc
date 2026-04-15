@@ -223,7 +223,7 @@ struct TLS12ServerParams {
 };
 
 static TLS12ServerParams choose_params(SSL_HANDSHAKE *hs,
-                                       const SSL_CREDENTIAL *cred,
+                                       const SSLCredential *cred,
                                        Span<const uint8_t> allowed_cert_types,
                                        const STACK_OF(SSL_CIPHER) *client_pref,
                                        bool has_ecdhe_group) {
@@ -744,7 +744,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   if (client_pref == nullptr) {
     return ssl_hs_error;
   }
-  Array<SSL_CREDENTIAL *> creds;
+  Array<SSLCredential *> creds;
   if (!ssl_get_full_credential_list(hs, &creds)) {
     return ssl_hs_error;
   }
@@ -762,7 +762,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
                            client_pref.get(), has_ecdhe_group);
   } else {
     // Select the first credential which works.
-    for (SSL_CREDENTIAL *cred : creds) {
+    for (SSLCredential *cred : creds) {
       ERR_clear_error();
       params = choose_params(hs, cred, *allowed_cert_types, client_pref.get(),
                              has_ecdhe_group);

@@ -1264,7 +1264,7 @@ static enum ssl_hs_wait_t do_read_server_hello_done(SSL_HANDSHAKE *hs) {
   return ssl_hs_ok;
 }
 
-static bool check_credential(SSL_HANDSHAKE *hs, const SSL_CREDENTIAL *cred,
+static bool check_credential(SSL_HANDSHAKE *hs, const SSLCredential *cred,
                              uint16_t *out_sigalg) {
   bool cert_type_ok = false;
   if (hs->client_cert_type == TLSEXT_cert_type_x509) {
@@ -1332,14 +1332,14 @@ static enum ssl_hs_wait_t do_send_client_certificate(SSL_HANDSHAKE *hs) {
     }
   }
 
-  Array<SSL_CREDENTIAL *> creds;
+  Array<SSLCredential *> creds;
   if (!ssl_get_full_credential_list(hs, &creds)) {
     return ssl_hs_error;
   }
 
   // Select the credential, if any, to use.
   bool may_proceed_anonymously = true;
-  for (SSL_CREDENTIAL *cred : creds) {
+  for (SSLCredential *cred : creds) {
     if (!cred->UsesPrivateKey()) {
       // Non-certificate credentials (e.g. PSKs) do not participate in deciding
       // whether to error or proceed anonymously.

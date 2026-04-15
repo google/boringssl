@@ -211,7 +211,7 @@ enum ssl_private_key_result_t ssl_private_key_sign(
     SSL_HANDSHAKE *hs, uint8_t *out, size_t *out_len, size_t max_out,
     uint16_t sigalg, Span<const uint8_t> in) {
   SSL *const ssl = hs->ssl;
-  const SSL_CREDENTIAL *const cred = hs->credential.get();
+  const SSLCredential *const cred = hs->credential.get();
   SSL_HANDSHAKE_HINTS *const hints = hs->hints.get();
   Array<uint8_t> spki;
   if (hints) {
@@ -299,7 +299,7 @@ enum ssl_private_key_result_t ssl_private_key_decrypt(SSL_HANDSHAKE *hs,
                                                       size_t max_out,
                                                       Span<const uint8_t> in) {
   SSL *const ssl = hs->ssl;
-  const SSL_CREDENTIAL *const cred = hs->credential.get();
+  const SSLCredential *const cred = hs->credential.get();
   assert(!hs->can_release_private_key);
   if (cred->key_method != nullptr) {
     enum ssl_private_key_result_t ret;
@@ -597,19 +597,20 @@ static bool set_sigalg_prefs(Array<uint16_t> *out, Span<const uint16_t> prefs) {
 int SSL_CREDENTIAL_set1_signing_algorithm_prefs(SSL_CREDENTIAL *cred,
                                                 const uint16_t *prefs,
                                                 size_t num_prefs) {
-  if (!cred->UsesPrivateKey()) {
+  auto *cred_impl = FromOpaque(cred);
+  if (!cred_impl->UsesPrivateKey()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
   // Delegated credentials are constrained to a single algorithm, so there is no
   // need to configure this.
-  if (cred->type == SSLCredentialType::kDelegated) {
+  if (cred_impl->type == SSLCredentialType::kDelegated) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
-  return set_sigalg_prefs(&cred->sigalgs, Span(prefs, num_prefs));
+  return set_sigalg_prefs(&cred_impl->sigalgs, Span(prefs, num_prefs));
 }
 
 int SSL_CTX_set_signing_algorithm_prefs(SSL_CTX *ctx, const uint16_t *prefs,

@@ -48,7 +48,6 @@
 #include "../crypto/mem_internal.h"
 #include "../crypto/spake2plus/internal.h"
 
-
 #if defined(OPENSSL_WINDOWS)
 // Windows defines struct timeval in winsock2.h.
 #include <winsock2.h>
@@ -56,6 +55,8 @@
 #include <sys/time.h>
 #endif
 
+
+DECLARE_OPAQUE_STRUCT(ssl_credential_st, SSLCredential)
 
 BSSL_NAMESPACE_BEGIN
 
@@ -1227,7 +1228,7 @@ bool tls13_derive_session_psk(SSL_SESSION *session, Span<const uint8_t> nonce,
 
 struct SSLImportedPSK {
   static constexpr bool kAllowUniquePtr = true;
-  UniquePtr<SSL_CREDENTIAL> credential;
+  UniquePtr<SSLCredential> credential;
   Array<uint8_t> imported_identity;
   InplaceVector<uint8_t, SSL_MAX_MD_SIZE> ipskx;
   uint16_t protocol = 0;
@@ -1240,7 +1241,7 @@ struct SSLImportedPSK {
 // |DTLS1_3_VERSION|) of the target protocol. It returns the imported PSK on
 // success and std::nullopt on error.
 std::optional<SSLImportedPSK> tls13_derive_imported_psk(const SSL_HANDSHAKE *hs,
-                                                        SSL_CREDENTIAL *cred,
+                                                        SSLCredential *cred,
                                                         uint16_t protocol,
                                                         const EVP_MD *hkdf_md);
 
@@ -1248,7 +1249,7 @@ std::optional<SSLImportedPSK> tls13_derive_imported_psk(const SSL_HANDSHAKE *hs,
 // imported identity for the specified target protocol and target KDF. This
 // allows matching against PSK identities without deriving imported PSK keys.
 bool tls13_compare_imported_psk_identity(Span<const uint8_t> id,
-                                         const SSL_CREDENTIAL *cred,
+                                         const SSLCredential *cred,
                                          uint16_t protocol,
                                          const EVP_MD *hkdf_md);
 
@@ -1414,18 +1415,17 @@ enum class SSLCredentialType {
   kRawPublicKey,
 };
 
-BSSL_NAMESPACE_END
-
-// SSL_CREDENTIAL is exported to C, so it must be defined outside the namespace.
-struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
-  explicit ssl_credential_st(bssl::SSLCredentialType type);
-  ssl_credential_st(const ssl_credential_st &) = delete;
-  ssl_credential_st &operator=(const ssl_credential_st &) = delete;
+class SSLCredential : public ssl_credential_st,
+                      public RefCounted<SSLCredential> {
+ public:
+  explicit SSLCredential(SSLCredentialType type);
+  SSLCredential(const SSLCredential &) = delete;
+  SSLCredential &operator=(const SSLCredential &) = delete;
 
   // Dup returns a copy of the credential, or nullptr on error. The |ex_data|
   // values are not copied. This is only used on the legacy credential, whose
   // |ex_data| is inaccessible.
-  bssl::UniquePtr<SSL_CREDENTIAL> Dup() const;
+  UniquePtr<SSLCredential> Dup() const;
 
   // ClearCertAndKey erases any certificate and private key on the credential.
   void ClearCertAndKey();
@@ -1445,8 +1445,7 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
   // certificates unmodified. It returns true on success and false on error. If
   // |discard_key_on_mismatch| is true and the private key is inconsistent with
   // the new leaf certificate, it is silently discarded.
-  bool SetLeafCert(bssl::UniquePtr<CRYPTO_BUFFER> leaf,
-                   bool discard_key_on_mismatch);
+  bool SetLeafCert(UniquePtr<CRYPTO_BUFFER> leaf, bool discard_key_on_mismatch);
 
   // ClearIntermediateCerts clears intermediate certificates in the certificate
   // chain, while preserving the leaf.
@@ -1455,23 +1454,23 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
   // AppendIntermediateCert appends |cert| to the certificate chain. If there is
   // no leaf certificate configured, it leaves a placeholder null in |chain|. It
   // returns one on success and zero on error.
-  bool AppendIntermediateCert(bssl::UniquePtr<CRYPTO_BUFFER> cert);
+  bool AppendIntermediateCert(UniquePtr<CRYPTO_BUFFER> cert);
 
   // ChainContainsIssuer returns true if |dn| is a byte for byte match with the
   // issuer of any certificate in |chain|, false otherwise.
-  bool ChainContainsIssuer(bssl::Span<const uint8_t> dn) const;
+  bool ChainContainsIssuer(Span<const uint8_t> dn) const;
 
   // type is the credential type and determines which other fields apply.
-  bssl::SSLCredentialType type;
+  SSLCredentialType type;
 
   // pubkey is the cached public key of the credential. Unlike |privkey|, it is
   // always present and is extracted from the certificate, delegated credential,
   // etc.
-  bssl::UniquePtr<EVP_PKEY> pubkey;
+  UniquePtr<EVP_PKEY> pubkey;
 
   // privkey is the private key of the credential. It may be omitted in favor of
   // |key_method|.
-  bssl::UniquePtr<EVP_PKEY> privkey;
+  UniquePtr<EVP_PKEY> privkey;
 
   // key_method, if non-null, is a set of callbacks to call for private key
   // operations.
@@ -1483,7 +1482,7 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
   //
   // In delegated credentials, this field is not configurable and is instead
   // computed from the dc_cert_verify_algorithm field.
-  bssl::Array<uint16_t> sigalgs;
+  Array<uint16_t> sigalgs;
 
   // chain contains the certificate chain, with the leaf at the beginning. The
   // first element of |chain| may be nullptr to indicate that the leaf
@@ -1491,36 +1490,36 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
   //   If |chain| != nullptr -> len(chain) >= 1
   //   If |chain[0]| == nullptr -> len(chain) >= 2.
   //   |chain[1..]| != nullptr
-  bssl::UniquePtr<STACK_OF(CRYPTO_BUFFER)> chain;
+  UniquePtr<STACK_OF(CRYPTO_BUFFER)> chain;
 
   // dc is the DelegatedCredential structure, if this is a delegated credential.
-  bssl::UniquePtr<CRYPTO_BUFFER> dc;
+  UniquePtr<CRYPTO_BUFFER> dc;
 
   // dc_algorithm is the signature scheme of the signature over the delegated
   // credential itself, made by the end-entity certificate's public key.
   uint16_t dc_algorithm = 0;
 
   // Signed certificate timestamp list to be sent to the client, if requested
-  bssl::UniquePtr<CRYPTO_BUFFER> signed_cert_timestamp_list;
+  UniquePtr<CRYPTO_BUFFER> signed_cert_timestamp_list;
 
   // OCSP response to be sent to the client, if requested.
-  bssl::UniquePtr<CRYPTO_BUFFER> ocsp_response;
+  UniquePtr<CRYPTO_BUFFER> ocsp_response;
 
   // SPAKE2+-specific information.
-  bssl::Array<uint8_t> pake_context;
-  bssl::Array<uint8_t> client_identity;
-  bssl::Array<uint8_t> server_identity;
-  bssl::Array<uint8_t> password_verifier_w0;
-  bssl::Array<uint8_t> password_verifier_w1;  // server-only
-  bssl::Array<uint8_t> registration_record;   // client-only
+  Array<uint8_t> pake_context;
+  Array<uint8_t> client_identity;
+  Array<uint8_t> server_identity;
+  Array<uint8_t> password_verifier_w0;
+  Array<uint8_t> password_verifier_w1;  // server-only
+  Array<uint8_t> registration_record;   // client-only
   mutable std::atomic<uint32_t> pake_limit;
 
   // External-PSK-specific information. epskx is the HKDF-Extract-ed value, from
   // Section 5.1 of RFC 9258.
-  bssl::Array<uint8_t> epskx;
-  bssl::Array<uint8_t> epsk_id;
+  Array<uint8_t> epskx;
+  Array<uint8_t> epsk_id;
   const EVP_MD *epsk_md = nullptr;
-  bssl::Array<uint8_t> epsk_context;
+  Array<uint8_t> epsk_context;
 
   // Checks whether there are still permitted PAKE attempts remaining, without
   // changing the counter.
@@ -1536,7 +1535,7 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
 
   // trust_anchor_id, if non-empty, is the trust anchor ID for the root of the
   // chain in |chain|.
-  bssl::Array<uint8_t> trust_anchor_id;
+  Array<uint8_t> trust_anchor_id;
 
   CRYPTO_EX_DATA ex_data;
 
@@ -1549,10 +1548,8 @@ struct ssl_credential_st : public bssl::RefCounted<ssl_credential_st> {
 
  private:
   friend RefCounted;
-  ~ssl_credential_st();
+  ~SSLCredential();
 };
-
-BSSL_NAMESPACE_BEGIN
 
 // ssl_get_full_credential_list computes |hs|'s full credential list, including
 // the legacy credential. On success, it writes it to |*out| and returns true.
@@ -1567,13 +1564,13 @@ BSSL_NAMESPACE_BEGIN
 //
 // The pointers in the result are only valid until |hs| is next mutated.
 bool ssl_get_full_credential_list(SSL_HANDSHAKE *hs,
-                                  Array<SSL_CREDENTIAL *> *out);
+                                  Array<SSLCredential *> *out);
 
 // ssl_credential_matches_requested_issuers returns true if |cred| is a
 // usable match for any requested issuers in |hs|, and false with an error
 // otherwise.
 bool ssl_credential_matches_requested_issuers(SSL_HANDSHAKE *hs,
-                                              const SSL_CREDENTIAL *cred);
+                                              const SSLCredential *cred);
 
 // ssl_check_tls13_credential_ignoring_issuer returns true if |cred| is usable
 // as the certificate in a TLS 1.3 handshake, ignoring the issuer check.
@@ -1583,7 +1580,7 @@ bool ssl_credential_matches_requested_issuers(SSL_HANDSHAKE *hs,
 // returned.
 bool ssl_check_tls13_credential_ignoring_issuer(
     SSL_HANDSHAKE *hs, Span<const uint8_t> allowed_cert_types,
-    const SSL_CREDENTIAL *cred, uint16_t *out_sigalg);
+    const SSLCredential *cred, uint16_t *out_sigalg);
 
 
 // Client certificate type & Server certificate type.
@@ -1944,7 +1941,7 @@ struct SSL_HANDSHAKE {
   Array<uint8_t> certificate_types;
 
   // credential is the credential we are using for the handshake.
-  UniquePtr<SSL_CREDENTIAL> credential;
+  UniquePtr<SSLCredential> credential;
 
   // peer_pubkey is the public key parsed from the peer's leaf certificate.
   UniquePtr<EVP_PKEY> peer_pubkey;
@@ -2497,7 +2494,7 @@ bool tls1_get_legacy_signature_algorithm(uint16_t *out, const EVP_PKEY *pkey);
 // with |cred| based on the peer's preferences and the algorithms supported. It
 // returns true on success and false on error.
 bool tls1_choose_signature_algorithm(SSL_HANDSHAKE *hs,
-                                     const SSL_CREDENTIAL *cred, uint16_t *out);
+                                     const SSLCredential *cred, uint16_t *out);
 
 // tls12_add_verify_sigalgs adds the signature algorithms acceptable for the
 // peer signature to |out|. It returns true on success and false on error.
@@ -2529,12 +2526,12 @@ struct CERT {
 
   // credentials is the list of credentials to select between. Elements of this
   // array immutable.
-  Vector<UniquePtr<SSL_CREDENTIAL>> credentials;
+  Vector<UniquePtr<SSLCredential>> credentials;
 
   // legacy_credential is the credential configured by the legacy
   // non-credential-based APIs. If IsComplete() returns true, it is appended to
   // the list of credentials.
-  UniquePtr<SSL_CREDENTIAL> legacy_credential;
+  UniquePtr<SSLCredential> legacy_credential;
 
   // x509_method contains pointers to functions that might deal with |X509|
   // compatibility, or might be a no-op, depending on the application.
@@ -3833,6 +3830,8 @@ BSSL_NAMESPACE_END
 //
 // The following types are exported to C code as public typedefs, so they must
 // be defined outside of the namespace.
+//
+// TODO(crbug.com/500444613): Move these to the bssl namespace.
 
 // ssl_method_st backs the public |SSL_METHOD| type. It is a compatibility
 // structure to support the legacy version-locked methods.

@@ -3296,7 +3296,7 @@ bool ssl_setup_pake_shares(SSL_HANDSHAKE *hs) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_UNSUPPORTED_CREDENTIAL_LIST);
     return false;
   }
-  SSL_CREDENTIAL *cred = creds[0].get();
+  SSLCredential *cred = creds[0].get();
   assert(cred->type == SSLCredentialType::kSPAKE2PlusV1Client);
 
   hs->pake_prover = MakeUnique<spake2plus::Prover>();
@@ -4979,8 +4979,7 @@ bool tls1_get_legacy_signature_algorithm(uint16_t *out, const EVP_PKEY *pkey) {
 }
 
 bool tls1_choose_signature_algorithm(SSL_HANDSHAKE *hs,
-                                     const SSL_CREDENTIAL *cred,
-                                     uint16_t *out) {
+                                     const SSLCredential *cred, uint16_t *out) {
   SSL *const ssl = hs->ssl;
   if (!cred->UsesPrivateKey()) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_UNKNOWN_CERTIFICATE_TYPE);

@@ -1590,7 +1590,7 @@ int SSL_has_pending(const SSL *ssl) {
   return SSL_pending(ssl) != 0 || !ssl->s3->read_buffer.empty();
 }
 
-static bool has_cert_and_key(const SSL_CREDENTIAL *cred) {
+static bool has_cert_and_key(const SSLCredential *cred) {
   // TODO(davidben): If |cred->key_method| is set, that should be fine too.
   if (cred->privkey == nullptr) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED);

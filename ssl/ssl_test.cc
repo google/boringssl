@@ -5675,7 +5675,8 @@ TEST(SSLTest, CredentialChains) {
                   CRYPTO_BUFFER_len(subject_buf.get())));
 #if !defined(BORINGSSL_SHARED_LIBRARY)
   ASSERT_FALSE(
-      cred->ChainContainsIssuer(Span(CRYPTO_BUFFER_data(subject_buf.get()),
+      FromOpaque(cred.get())
+          ->ChainContainsIssuer(Span(CRYPTO_BUFFER_data(subject_buf.get()),
                                      CRYPTO_BUFFER_len(subject_buf.get()))));
 #endif
 
@@ -5684,7 +5685,8 @@ TEST(SSLTest, CredentialChains) {
 
 #if !defined(BORINGSSL_SHARED_LIBRARY)
   ASSERT_TRUE(
-      cred->ChainContainsIssuer(Span(CRYPTO_BUFFER_data(subject_buf.get()),
+      FromOpaque(cred.get())
+          ->ChainContainsIssuer(Span(CRYPTO_BUFFER_data(subject_buf.get()),
                                      CRYPTO_BUFFER_len(subject_buf.get()))));
 #endif
 

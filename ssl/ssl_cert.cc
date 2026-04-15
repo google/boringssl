@@ -38,7 +38,7 @@
 BSSL_NAMESPACE_BEGIN
 
 CERT::CERT(const SSL_X509_METHOD *x509_method_arg)
-    : legacy_credential(MakeUnique<SSL_CREDENTIAL>(SSLCredentialType::kX509)),
+    : legacy_credential(MakeUnique<SSLCredential>(SSLCredentialType::kX509)),
       x509_method(x509_method_arg) {}
 
 CERT::~CERT() { x509_method->cert_free(this); }
