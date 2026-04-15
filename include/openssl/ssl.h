@@ -3988,6 +3988,7 @@ OPENSSL_EXPORT int SSL_get_peer_cert_type(const SSL *ssl);
 // has sent one in the handshake. It returns nullptr otherwise.
 OPENSSL_EXPORT EVP_PKEY *SSL_get0_peer_rpk(const SSL *ssl);
 
+
 // Password Authenticated Key Exchange (PAKE).
 //
 // Password Authenticated Key Exchange protocols allow client and server to
