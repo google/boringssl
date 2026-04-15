@@ -22,6 +22,9 @@ extern "C" {
 #endif
 
 
+// SLH-DSA.
+
+
 // SLHDSA_SHA2_128S_PUBLIC_KEY_BYTES is the number of bytes in an
 // SLH-DSA-SHA2-128s public key.
 #define SLHDSA_SHA2_128S_PUBLIC_KEY_BYTES 32

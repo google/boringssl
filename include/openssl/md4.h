@@ -23,6 +23,13 @@ extern "C" {
 
 
 // MD4.
+//
+// MD4 is not a secure hash function. There are very efficient attacks for
+// finding collisions, and its preimage resistance is also broken. It is
+// implemented purely for compatibility with legacy systems.
+//
+// Use a secure hash function, such as SHA-256, instead.
+
 
 // MD4_CBLOCK is the block size of MD4.
 #define MD4_CBLOCK 64

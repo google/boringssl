@@ -22,6 +22,9 @@ extern "C" {
 #endif
 
 
+// Blake2b.
+
+
 #define BLAKE2B256_DIGEST_LENGTH (256 / 8)
 #define BLAKE2B_CBLOCK 128
 

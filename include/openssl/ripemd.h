@@ -17,9 +17,14 @@
 
 #include <openssl/base.h>   // IWYU pragma: export
 
-#ifdef  __cplusplus
+#if defined(__cplusplus)
 extern "C" {
 #endif
+
+
+// RIPEMD-160.
+//
+// This module is deprecated and retained for legacy reasons only.
 
 
 # define RIPEMD160_CBLOCK        64

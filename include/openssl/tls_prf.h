@@ -22,7 +22,12 @@ extern "C" {
 #endif
 
 
-// CRYPTO_tls1_prf calculates |out_len| bytes of the TLS PDF, using |digest|,
+// TLS PRF.
+//
+// The TLS PRF is defined in Section 5 of RFC 5246.
+
+
+// CRYPTO_tls1_prf calculates |out_len| bytes of the TLS PRF, using |digest|,
 // and writes them to |out|. It is defined in Section 5 of RFC 5246, acting on
 // |secret_len| bytes of shared |secret|, |label_len| bytes of |label|,
 // |seed1_len| bytes of |seed1| and |seed2_len| bytes of |seed2|. It returns one
@@ -33,6 +38,7 @@ OPENSSL_EXPORT int CRYPTO_tls1_prf(const EVP_MD *digest, uint8_t *out,
                                    size_t label_len, const uint8_t *seed1,
                                    size_t seed1_len, const uint8_t *seed2,
                                    size_t seed2_len);
+
 
 #if defined(__cplusplus)
 }  // extern C

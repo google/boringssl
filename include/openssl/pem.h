@@ -28,9 +28,17 @@
 // |OPENSSL_malloc| from pem.h or err.h
 #include <openssl/crypto.h>
 
-#ifdef __cplusplus
+#if defined(__cplusplus)
 extern "C" {
 #endif
+
+
+// PEM.
+//
+// This library contains functions for reading and writing data encoded in PEM
+// format. This format originated in Privacy-Enhanced Mail (RFC 1421).
+//
+// TODO(crbug.com/42290574): Finish documenting this header.
 
 
 #define PEM_BUFSIZE 1024
@@ -60,7 +68,6 @@ extern "C" {
 #define PEM_STRING_ECPRIVATEKEY "EC PRIVATE KEY"
 #define PEM_STRING_CMS "CMS"
 
-// enc_type is one off
 #define PEM_TYPE_ENCRYPTED 10
 #define PEM_TYPE_MIC_ONLY 20
 #define PEM_TYPE_MIC_CLEAR 30
@@ -357,6 +364,7 @@ DECLARE_PEM_rw(X509, X509)
 
 // TODO(crbug.com/boringssl/426): When documenting these, copy the warning
 // about auxiliary properties from |PEM_X509_INFO_read_bio|.
+
 DECLARE_PEM_rw(X509_AUX, X509)
 
 DECLARE_PEM_rw(X509_REQ, X509_REQ)
@@ -437,7 +445,7 @@ OPENSSL_EXPORT int PEM_write_PKCS8PrivateKey(FILE *fp, const EVP_PKEY *x,
                                              pem_password_cb *cd, void *u);
 
 
-#ifdef __cplusplus
+#if defined(__cplusplus)
 }  // extern C
 #endif
 

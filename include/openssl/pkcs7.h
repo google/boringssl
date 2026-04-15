@@ -29,6 +29,7 @@ extern "C" {
 // This library contains functions for extracting information from PKCS#7
 // structures (RFC 2315).
 
+
 DECLARE_STACK_OF(CRYPTO_BUFFER)
 DECLARE_STACK_OF(X509)
 DECLARE_STACK_OF(X509_CRL)

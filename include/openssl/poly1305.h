@@ -17,9 +17,12 @@
 
 #include <openssl/base.h>   // IWYU pragma: export
 
-#ifdef  __cplusplus
+#if defined(__cplusplus)
 extern "C" {
 #endif
+
+
+// Poly1305.
 
 
 typedef uint8_t poly1305_state[512];

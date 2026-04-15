@@ -27,6 +27,12 @@ extern "C" {
 // The best exposition is https://eprint.iacr.org/2017/667.pdf although this
 // implementation uses a different KEM construction based on
 // https://eprint.iacr.org/2017/1005.pdf.
+//
+// This module is a remnant of early post-quantum KEM deployments. It should not
+// be used in any new applications. Use ML-KEM instead.
+//
+// TODO(crbug.com/503068543): Remove this.
+
 
 struct HRSS_private_key {
   uint8_t opaque[1808];

@@ -22,6 +22,9 @@ extern "C" {
 #endif
 
 
+// The SHA-2 family of hash functions.
+
+
 // SHA-224.
 
 // SHA224_CBLOCK is the block size of SHA-224.

@@ -30,11 +30,12 @@ extern "C" {
 // limited private metadata.
 //
 // References:
-// https://eprint.iacr.org/2020/072.pdf
-// https://github.com/ietf-wg-privacypass/base-drafts
-// https://github.com/WICG/trust-token-api/blob/main/README.md
+// * https://eprint.iacr.org/2020/072.pdf
+// * https://github.com/ietf-wg-privacypass/base-drafts
+// * https://github.com/WICG/trust-token-api/blob/main/README.md
 //
 // WARNING: This API is unstable and subject to change.
+
 
 // TRUST_TOKEN_experiment_v1 is an experimental Trust Tokens protocol using
 // PMBTokens and P-384.

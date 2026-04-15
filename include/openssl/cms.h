@@ -36,6 +36,7 @@ extern "C" {
 // the |BORINGSSL_NO_NO_CMS| build option can be used to suppress
 // |OPENSSL_NO_CMS|.
 
+
 DECLARE_STACK_OF(X509)
 
 // CMS_* are flags that can be passed to functions in this library. Their

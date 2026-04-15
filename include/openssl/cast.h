@@ -17,7 +17,7 @@
 
 #include <openssl/base.h>   // IWYU pragma: export
 
-#ifdef  __cplusplus
+#if defined(__cplusplus)
 extern "C" {
 #endif
 
@@ -30,6 +30,7 @@ extern "C" {
 // secrets via timing or cache side channels.
 //
 // Use a modern cipher, such as AES-GCM or ChaCha20-Poly1305, instead.
+
 
 #define CAST_ENCRYPT 1
 #define CAST_DECRYPT 0
@@ -82,7 +83,8 @@ OPENSSL_EXPORT void CAST_cfb64_encrypt(const uint8_t *in, uint8_t *out,
                                        size_t length, const CAST_KEY *schedule,
                                        uint8_t ivec[8], int *num, int enc);
 
-#ifdef __cplusplus
+
+#if defined(__cplusplus)
 }  // extern C
 #endif
 

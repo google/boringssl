@@ -24,6 +24,13 @@ extern "C" {
 #endif
 
 
+// PKCS#8 and PKCS#12.
+//
+// This library contains functions for reading and writing private key
+// information in PKCS#8 format (RFC 5958), and key and certificate information
+// in PKCS#12 format (RFC 7292).
+
+
 // PKCS8_encrypt serializes and encrypts a PKCS8_PRIV_KEY_INFO with PBES1 or
 // PBES2 as defined in PKCS #5. Only pbeWithSHAAnd128BitRC4,
 // pbeWithSHAAnd3-KeyTripleDES-CBC and pbeWithSHA1And40BitRC2, defined in PKCS
