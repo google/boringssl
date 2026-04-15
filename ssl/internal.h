@@ -57,6 +57,7 @@
 
 
 DECLARE_OPAQUE_STRUCT(ssl_credential_st, SSLCredential)
+DECLARE_OPAQUE_STRUCT(ssl_ech_keys_st, SSLECHKeys)
 
 BSSL_NAMESPACE_BEGIN
 
@@ -1318,6 +1319,17 @@ class ECHServerConfig {
   bool is_retry_config_ = false;
 };
 
+class SSLECHKeys : public ssl_ech_keys_st, public bssl::RefCounted<SSLECHKeys> {
+ public:
+  SSLECHKeys() : RefCounted(CheckSubClass()) {}
+
+  Vector<UniquePtr<ECHServerConfig>> configs;
+
+ private:
+  friend RefCounted;
+  ~SSLECHKeys() = default;
+};
+
 enum ssl_client_hello_type_t {
   ssl_client_hello_unencrypted,
   ssl_client_hello_inner,
@@ -1957,7 +1969,7 @@ struct SSL_HANDSHAKE {
   // ssl_ech_keys, for servers, is the set of ECH keys to use with this
   // handshake. This is copied from |SSL_CTX| to ensure consistent behavior as
   // |SSL_CTX| rotates keys.
-  UniquePtr<SSL_ECH_KEYS> ech_keys;
+  UniquePtr<SSLECHKeys> ech_keys;
 
   // selected_ech_config, for clients, is the ECHConfig the client uses to offer
   // ECH, or nullptr if ECH is not being offered. If non-NULL, |ech_hpke_ctx|
@@ -4074,7 +4086,7 @@ struct ssl_ctx_st : public bssl::RefCounted<ssl_ctx_st> {
   // ech_keys contains the server's list of ECHConfig values and associated
   // private keys. This list may be swapped out at any time, so all access must
   // be synchronized through |lock|.
-  bssl::UniquePtr<SSL_ECH_KEYS> ech_keys;
+  bssl::UniquePtr<bssl::SSLECHKeys> ech_keys;
 
   // keylog_callback, if not NULL, is the key logging callback. See
   // |SSL_CTX_set_keylog_callback|.
@@ -4424,16 +4436,6 @@ struct ssl_session_st : public bssl::RefCounted<ssl_session_st> {
  private:
   friend RefCounted;
   ~ssl_session_st();
-};
-
-struct ssl_ech_keys_st : public bssl::RefCounted<ssl_ech_keys_st> {
-  ssl_ech_keys_st() : RefCounted(CheckSubClass()) {}
-
-  bssl::Vector<bssl::UniquePtr<bssl::ECHServerConfig>> configs;
-
- private:
-  friend RefCounted;
-  ~ssl_ech_keys_st() = default;
 };
 
 #endif  // OPENSSL_HEADER_SSL_INTERNAL_H

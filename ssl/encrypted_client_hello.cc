@@ -1003,13 +1003,15 @@ int SSL_marshal_ech_config(uint8_t **out, size_t *out_len, uint8_t config_id,
   return 1;
 }
 
-SSL_ECH_KEYS *SSL_ECH_KEYS_new() { return New<SSL_ECH_KEYS>(); }
+SSL_ECH_KEYS *SSL_ECH_KEYS_new() { return New<SSLECHKeys>(); }
 
-void SSL_ECH_KEYS_up_ref(SSL_ECH_KEYS *keys) { keys->UpRefInternal(); }
+void SSL_ECH_KEYS_up_ref(SSL_ECH_KEYS *keys) {
+  FromOpaque(keys)->UpRefInternal();
+}
 
 void SSL_ECH_KEYS_free(SSL_ECH_KEYS *keys) {
   if (keys != nullptr) {
-    keys->DecRefInternal();
+    FromOpaque(keys)->DecRefInternal();
   }
 }
 
@@ -1025,7 +1027,7 @@ int SSL_ECH_KEYS_add(SSL_ECH_KEYS *configs, int is_retry_config,
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
     return 0;
   }
-  if (!configs->configs.Push(std::move(parsed_config))) {
+  if (!FromOpaque(configs)->configs.Push(std::move(parsed_config))) {
     return 0;
   }
   return 1;
@@ -1033,7 +1035,7 @@ int SSL_ECH_KEYS_add(SSL_ECH_KEYS *configs, int is_retry_config,
 
 int SSL_ECH_KEYS_has_duplicate_config_id(const SSL_ECH_KEYS *keys) {
   bool seen[256] = {false};
-  for (const auto &config : keys->configs) {
+  for (const auto &config : FromOpaque(keys)->configs) {
     if (seen[config->ech_config().config_id]) {
       return 1;
     }
@@ -1050,7 +1052,7 @@ int SSL_ECH_KEYS_marshal_retry_configs(const SSL_ECH_KEYS *keys, uint8_t **out,
       !CBB_add_u16_length_prefixed(cbb.get(), &child)) {
     return false;
   }
-  for (const auto &config : keys->configs) {
+  for (const auto &config : FromOpaque(keys)->configs) {
     if (config->is_retry_config() &&
         !CBB_add_bytes(&child, config->ech_config().raw.data(),
                        config->ech_config().raw.size())) {
@@ -1062,7 +1064,7 @@ int SSL_ECH_KEYS_marshal_retry_configs(const SSL_ECH_KEYS *keys, uint8_t **out,
 
 int SSL_CTX_set1_ech_keys(SSL_CTX *ctx, SSL_ECH_KEYS *keys) {
   bool has_retry_config = false;
-  for (const auto &config : keys->configs) {
+  for (const auto &config : FromOpaque(keys)->configs) {
     if (config->is_retry_config()) {
       has_retry_config = true;
       break;
@@ -1072,7 +1074,7 @@ int SSL_CTX_set1_ech_keys(SSL_CTX *ctx, SSL_ECH_KEYS *keys) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_ECH_SERVER_WOULD_HAVE_NO_RETRY_CONFIGS);
     return 0;
   }
-  UniquePtr<SSL_ECH_KEYS> owned_keys = UpRef(keys);
+  UniquePtr<SSLECHKeys> owned_keys = UpRef(FromOpaque(keys));
   MutexWriteLock lock(&ctx->lock);
   ctx->ech_keys.swap(owned_keys);
   return 1;
