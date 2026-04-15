@@ -53,9 +53,11 @@ use bssl_x509::{
 };
 use futures::future::join;
 
-const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
-const RSA_SERVER_CERT: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
-const RSA_SERVER_KEY: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
+pub(crate) const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
+pub(crate) const RSA_SERVER_CERT: &[u8] =
+    include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
+pub(crate) const RSA_SERVER_KEY: &[u8] =
+    include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
 
 mod datagram;
 mod handshake;

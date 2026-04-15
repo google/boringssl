@@ -185,7 +185,7 @@ where
 }
 
 /// # Authenticating with the peer
-impl<M> TlsConnectionInHandshake<'_, Client, M>
+impl<R, M> TlsConnectionInHandshake<'_, R, M>
 where
     M: HasTlsConnectionMethod,
 {

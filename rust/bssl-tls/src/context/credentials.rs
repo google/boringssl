@@ -33,7 +33,11 @@ use crate::{
         SignatureAlgorithm,
         TlsCredential,
         VerifyCertificate,
-        cert_cb, //
+        cert_cb,
+        early_callback::{
+            EarlyCallback,
+            early_select_cert_cb, //
+        }, //
     },
     errors::Error,
     ffi::slice_into_ffi_raw_parts,
@@ -130,6 +134,38 @@ where
             bssl_sys::SSL_CTX_set_custom_verify(conn, mode as _, None);
         }
         self.get_context_methods().verify_certificate_methods = None;
+        self
+    }
+
+    /// Set custom certificate selection callback.
+    ///
+    /// See [`EarlyCallback`] for its semantics.
+    pub fn with_early_callback<S>(&mut self, handler: S) -> &mut Self
+    where
+        S: EarlyCallback<M> + 'static,
+    {
+        let ctx = self.ptr();
+        let methods = self.get_context_methods();
+        unsafe {
+            // Safety: we only install our own vtable.
+            bssl_sys::SSL_CTX_set_select_certificate_cb(
+                ctx,
+                Some(early_select_cert_cb::<M, super::methods::RustContextMethods<M>>),
+            );
+        }
+        methods.early_callback_handler = Some(Box::new(handler) as _);
+        self
+    }
+
+    /// Remove custom certificate selection callback.
+    pub fn without_early_callback(&mut self) -> &mut Self {
+        let ctx = self.ptr();
+        let methods = self.get_context_methods();
+        unsafe {
+            // Safety: we only uninstall the vtable.
+            bssl_sys::SSL_CTX_set_select_certificate_cb(ctx, None);
+        }
+        methods.early_callback_handler = None;
         self
     }
 

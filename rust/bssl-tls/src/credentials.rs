@@ -71,6 +71,7 @@ use crate::{
     has_duplicates, //
 };
 
+pub mod early_callback;
 pub(crate) mod methods;
 
 /// TLS credentials builder

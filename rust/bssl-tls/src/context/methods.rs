@@ -21,6 +21,7 @@ use core::{
 use once_cell::sync::Lazy;
 
 use crate::{
+    EarlyCallbackMethods,
     Methods,
     VerifyCertificateMethods,
     context::{
@@ -29,11 +30,13 @@ use crate::{
         TlsMode, //
     },
     credentials::VerifyCertificate,
+    credentials::early_callback::EarlyCallback,
     methods::drop_box_rust_methods, //
 };
 
 pub(crate) struct RustContextMethods<M> {
     pub(crate) verify_certificate_methods: Option<Box<dyn VerifyCertificate>>,
+    pub(crate) early_callback_handler: Option<Box<dyn EarlyCallback<M>>>,
     _p: PhantomData<fn() -> M>,
 }
 
@@ -43,6 +46,7 @@ impl<M> RustContextMethods<M> {
     pub fn new() -> Self {
         Self {
             verify_certificate_methods: None,
+            early_callback_handler: None,
             _p: PhantomData,
         }
     }
@@ -67,6 +71,12 @@ impl<M: HasTlsContextMethod> Methods for RustContextMethods<M> {
 impl<M: HasTlsContextMethod> VerifyCertificateMethods for RustContextMethods<M> {
     fn verify_certificate_methods(&self) -> Option<&dyn VerifyCertificate> {
         self.verify_certificate_methods.as_deref()
+    }
+}
+
+impl<M: HasTlsContextMethod> EarlyCallbackMethods<M> for RustContextMethods<M> {
+    fn early_callback_handler(&self) -> Option<&dyn EarlyCallback<M>> {
+        self.early_callback_handler.as_deref()
     }
 }
 

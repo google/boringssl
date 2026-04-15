@@ -69,6 +69,10 @@ pub(crate) trait VerifyCertificateMethods: Methods {
     fn verify_certificate_methods(&self) -> Option<&dyn credentials::VerifyCertificate>;
 }
 
+pub(crate) trait EarlyCallbackMethods<M>: Methods {
+    fn early_callback_handler(&self) -> Option<&dyn credentials::early_callback::EarlyCallback<M>>;
+}
+
 #[inline]
 fn abort_on_panic<T>(work: impl FnOnce() -> T) -> T {
     let assert_unwind_safe = AssertUnwindSafe(work);
