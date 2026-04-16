@@ -628,8 +628,8 @@ class DTLSReplayBitmap {
 //
 // |max_valid_seqnum| must be most 2^48-1, in which case the output will also be
 // at most 2^48-1.
-OPENSSL_EXPORT uint64_t reconstruct_seqnum(uint16_t wire_seq, uint64_t seq_mask,
-                                           uint64_t max_valid_seqnum);
+uint64_t reconstruct_seqnum(uint16_t wire_seq, uint64_t seq_mask,
+                            uint64_t max_valid_seqnum);
 
 
 // Record layer.
@@ -1112,13 +1112,12 @@ enum ssl_key_usage_t {
 // ssl_cert_check_key_usage parses the DER-encoded, X.509 certificate in |in|
 // and returns true if doesn't specify a key usage or, if it does, if it
 // includes |bit|. Otherwise it pushes to the error queue and returns false.
-OPENSSL_EXPORT bool ssl_cert_check_key_usage(const CBS *in,
-                                             enum ssl_key_usage_t bit);
+bool ssl_cert_check_key_usage(const CBS *in, enum ssl_key_usage_t bit);
 
 // ssl_cert_extract_issuer parses the DER-encoded, X.509 certificate in |in|
 // and extracts the issuer. On success it returns true and the DER encoded
 // issuer is in |out_dn|, otherwise it returns false.
-OPENSSL_EXPORT bool ssl_cert_extract_issuer(const CBS *in, CBS *out_dn);
+bool ssl_cert_extract_issuer(const CBS *in, CBS *out_dn);
 
 // ssl_cert_matches_issuer parses the DER-encoded, X.509 certificate in |in|
 // and returns true if its issuer is an exact match for the DER encoded
@@ -1381,8 +1380,7 @@ bool ssl_ech_accept_confirmation(
 
 // ssl_is_valid_ech_public_name returns true if |public_name| is a valid ECH
 // public name and false otherwise. It is exported for testing.
-OPENSSL_EXPORT bool ssl_is_valid_ech_public_name(
-    Span<const uint8_t> public_name);
+bool ssl_is_valid_ech_public_name(Span<const uint8_t> public_name);
 
 // ssl_is_valid_ech_config_list returns true if |ech_config_list| is a valid
 // ECHConfigList structure and false otherwise.
