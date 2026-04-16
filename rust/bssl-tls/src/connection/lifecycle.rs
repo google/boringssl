@@ -33,6 +33,7 @@ use crate::{
         methods::HasTlsConnectionMethod, //
     },
     context::{
+        HasBasicIo,
         SupportedMode,
         TlsMode, //
     },
@@ -220,7 +221,10 @@ impl<R, M> DerefMut for EstablishedTlsConnection<'_, R, M> {
     }
 }
 
-impl<R> EstablishedTlsConnection<'_, R, TlsMode> {
+impl<R, M> EstablishedTlsConnection<'_, R, M>
+where
+    M: HasTlsConnectionMethod + HasBasicIo,
+{
     /// Perform synchronising shutdown.
     ///
     /// # Shutdown protocol

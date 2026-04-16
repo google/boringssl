@@ -33,6 +33,7 @@ use crate::{
     Methods,
     abort_on_panic,
     context::{
+        DtlsMode,
         QuicMode,
         TlsMode, //
     },
@@ -244,6 +245,15 @@ impl HasTlsConnectionMethod for TlsMode {
     fn registration() -> c_int {
         static TLS_CONTEXT_METHOD: Lazy<c_int> =
             Lazy::new(register_tls_connection_vtable::<TlsMode>);
+        *TLS_CONTEXT_METHOD
+    }
+}
+
+impl HasTlsConnectionMethod for DtlsMode {
+    #[inline(always)]
+    fn registration() -> c_int {
+        static TLS_CONTEXT_METHOD: Lazy<c_int> =
+            Lazy::new(register_tls_connection_vtable::<DtlsMode>);
         *TLS_CONTEXT_METHOD
     }
 }

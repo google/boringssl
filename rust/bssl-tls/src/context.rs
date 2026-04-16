@@ -42,14 +42,23 @@ mod methods;
 /// TLS or DTLS mode
 pub enum TlsMode {}
 
+/// DTLS mode
+pub enum DtlsMode {}
+
 /// QUIC mode
 pub enum QuicMode {}
+
+pub(crate) trait HasBasicIo {}
 
 /// A collection of supported mode of operations.
 pub trait SupportedMode: HasTlsContextMethod + HasTlsConnectionMethod {}
 
 impl SupportedMode for TlsMode {}
+impl SupportedMode for DtlsMode {}
 impl SupportedMode for QuicMode {}
+
+impl HasBasicIo for TlsMode {}
+impl HasBasicIo for DtlsMode {}
 
 /// General TLS configuration
 ///
@@ -105,7 +114,10 @@ impl TlsContextBuilder<TlsMode> {
             bssl_sys::TLS_method()
         })
     }
+}
 
+/// # Make a DTLS context builder operating in pure DTLS mode
+impl TlsContextBuilder<DtlsMode> {
     /// Creates a new DTLS context builder.
     pub fn new_dtls() -> Self {
         Self::new_inner(unsafe {

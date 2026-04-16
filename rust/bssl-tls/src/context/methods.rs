@@ -23,6 +23,7 @@ use once_cell::sync::Lazy;
 use crate::{
     Methods,
     context::{
+        DtlsMode,
         QuicMode,
         TlsMode, //
     },
@@ -81,6 +82,14 @@ impl HasTlsContextMethod for TlsMode {
     #[inline(always)]
     fn registration() -> c_int {
         static TLS_CONTEXT_METHOD: Lazy<c_int> = Lazy::new(register_tls_context_vtable::<TlsMode>);
+        *TLS_CONTEXT_METHOD
+    }
+}
+
+impl HasTlsContextMethod for DtlsMode {
+    #[inline(always)]
+    fn registration() -> c_int {
+        static TLS_CONTEXT_METHOD: Lazy<c_int> = Lazy::new(register_tls_context_vtable::<DtlsMode>);
         *TLS_CONTEXT_METHOD
     }
 }
