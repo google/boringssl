@@ -255,6 +255,12 @@ OPENSSL_EXPORT BIO *BIO_next(BIO *bio);
 
 // BIO_find_type walks a chain of BIOs and returns the first that matches
 // |type|, which is one of the |BIO_TYPE_*| values.
+//
+// If |type & 0xff| is non-zero, i.e. |type| is a complete type and contains an
+// "index" component, the function looks for an exact match. If |type & 0xff| is
+// zero, i.e. |type| just specifies |BIO_TYPE_DESCRIPTOR|, |BIO_TYPE_FILTER|,
+// and |BIO_TYPE_SOURCE_SINK| bits, the function looks for any BIO whose type
+// contains at least one of those bits.
 OPENSSL_EXPORT BIO *BIO_find_type(BIO *bio, int type);
 
 // BIO_copy_next_retry sets the retry flags and |retry_reason| of |bio| from
@@ -640,7 +646,8 @@ OPENSSL_EXPORT int BIO_shutdown_wr(BIO *bio);
 // Consumers can create custom |BIO|s by filling in a |BIO_METHOD| and using
 // low-level control functions to set state.
 
-// BIO_get_new_index returns a new "type" value for a custom |BIO|.
+// BIO_get_new_index returns a new "type" value for a custom |BIO|, or -1 on
+// error.
 OPENSSL_EXPORT int BIO_get_new_index(void);
 
 // BIO_meth_new returns a newly-allocated |BIO_METHOD| or NULL on allocation

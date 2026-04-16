@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -983,6 +984,93 @@ TEST(BIOTest, BIOFreeReturnValueChain) {
   // pointer. |BIO_free| should still return one because the input object was
   // freed.
   EXPECT_EQ(1, BIO_free(bio1.release()));
+}
+
+TEST(BIOTest, BIOChain) {
+  auto make_bio_method =
+      [](int mask) -> std::optional<std::pair<int, const BIO_METHOD *>> {
+    int index = BIO_get_new_index();
+    if (index < 0) {
+      return std::nullopt;
+    }
+    int type = index | mask;
+    BIO_METHOD *meth = BIO_meth_new(type, "test");
+    if (meth == nullptr) {
+      return std::nullopt;
+    }
+    return std::pair(type, meth);
+  };
+
+  // There are a limited of BIO_METHOD indices per process. Allocate these
+  // statically so the test can be repeated safely.
+  static auto method1 = make_bio_method(BIO_TYPE_FILTER);
+  ASSERT_TRUE(method1);
+  static auto method2 = make_bio_method(BIO_TYPE_FILTER);
+  ASSERT_TRUE(method2);
+  static auto method3 = make_bio_method(BIO_TYPE_FILTER | BIO_TYPE_SOURCE_SINK);
+  ASSERT_TRUE(method3);
+  static auto method4 = make_bio_method(BIO_TYPE_SOURCE_SINK);
+  ASSERT_TRUE(method4);
+
+  // Make a chain of BIOs, one from each method.
+  UniquePtr<BIO> bio(BIO_new(method1->second));
+  ASSERT_TRUE(bio);
+  for (const auto &method : {method2, method3, method4}) {
+    UniquePtr<BIO> next(BIO_new(method->second));
+    ASSERT_TRUE(next);
+    BIO_push(bio.get(), next.release());
+  }
+
+  // Check the |BIO_next| chain is what we expect.
+  auto expect_bio_chain = [](BIO *b, const std::vector<int> &types) {
+    for (int type : types) {
+      ASSERT_TRUE(b);
+      EXPECT_EQ(BIO_method_type(b), type);
+      b = BIO_next(b);
+    }
+    EXPECT_FALSE(b);
+  };
+  expect_bio_chain(bio.get(), {method1->first, method2->first, method3->first,
+                               method4->first});
+
+  // |BIO_find_type| should find all of them.
+  for (const auto &method : {method1, method2, method3, method4}) {
+    SCOPED_TRACE(method->first);
+    BIO *found = BIO_find_type(bio.get(), method->first);
+    ASSERT_TRUE(found);
+    EXPECT_EQ(BIO_method_type(found), method->first);
+  }
+
+  // |BIO_find_type| can also look by mask.
+  BIO *found = BIO_find_type(bio.get(), BIO_TYPE_FILTER);
+  ASSERT_TRUE(found);
+  EXPECT_EQ(BIO_method_type(found), method1->first);
+
+  found = BIO_find_type(bio.get(), BIO_TYPE_SOURCE_SINK);
+  ASSERT_TRUE(found);
+  EXPECT_EQ(BIO_method_type(found), method3->first);
+
+  found = BIO_find_type(bio.get(), BIO_TYPE_DESCRIPTOR | BIO_TYPE_SOURCE_SINK);
+  ASSERT_TRUE(found);
+  EXPECT_EQ(BIO_method_type(found), method3->first);
+
+  found = BIO_find_type(bio.get(), BIO_TYPE_FILTER | BIO_TYPE_SOURCE_SINK);
+  ASSERT_TRUE(found);
+  EXPECT_EQ(BIO_method_type(found), method1->first);
+
+  // Not found, by exact match and by mask.
+  EXPECT_FALSE(BIO_find_type(bio.get(), BIO_TYPE_MEM));
+  EXPECT_FALSE(BIO_find_type(bio.get(), BIO_TYPE_DESCRIPTOR));
+  EXPECT_FALSE(BIO_find_type(bio.get(), 0));
+
+  // Pop the front of the chain.
+  UniquePtr<BIO> rest(BIO_pop(bio.get()));
+
+  // bio is now a free-floating BIO.
+  expect_bio_chain(bio.get(), {method1->first});
+  // The remainder was returned.
+  expect_bio_chain(rest.get(),
+                   {method2->first, method3->first, method4->first});
 }
 
 }  // namespace

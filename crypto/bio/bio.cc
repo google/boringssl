@@ -387,19 +387,14 @@ BIO *BIO_next(BIO *bio) {
 }
 
 BIO *BIO_find_type(BIO *bio, int type) {
-  auto *impl = FromOpaque(bio);
-
-  int method_type, mask;
-
   if (!bio) {
     return nullptr;
   }
-  mask = type & 0xff;
 
+  int mask = type & 0xff;
   do {
-    if (impl->method != nullptr) {
-      method_type = impl->method->type;
-
+    if (FromOpaque(bio)->method != nullptr) {
+      int method_type = BIO_method_type(bio);
       if (!mask) {
         if (method_type & type) {
           return bio;
@@ -408,7 +403,7 @@ BIO *BIO_find_type(BIO *bio, int type) {
         return bio;
       }
     }
-    bio = impl->next_bio;
+    bio = BIO_next(bio);
   } while (bio != nullptr);
 
   return nullptr;
