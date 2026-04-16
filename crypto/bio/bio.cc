@@ -19,6 +19,8 @@
 #include <limits.h>
 #include <string.h>
 
+#include <utility>
+
 #include <openssl/asn1.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
@@ -62,13 +64,11 @@ int BIO_free(BIO *bio) {
   if (bio == nullptr) {
     return 1;
   }
-  auto *impl = FromOpaque(bio);
-  return impl->DecRefInternal();
+  return FromOpaque(bio)->DecRefInternal();
 }
 
 int BIO_up_ref(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-  impl->UpRefInternal();
+  FromOpaque(bio)->UpRefInternal();
   return 1;
 }
 
@@ -78,7 +78,6 @@ void BIO_free_all(BIO *bio) { BIO_free(bio); }
 
 int BIO_read(BIO *bio, void *buf, int len) {
   auto *impl = FromOpaque(bio);
-
   if (impl == nullptr || impl->method == nullptr ||
       impl->method->bread == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
@@ -91,7 +90,7 @@ int BIO_read(BIO *bio, void *buf, int len) {
   if (len <= 0) {
     return 0;
   }
-  int ret = impl->method->bread(bio, reinterpret_cast<char *>(buf), len);
+  int ret = impl->method->bread(impl, reinterpret_cast<char *>(buf), len);
   if (ret > 0) {
     impl->num_read += ret;
   }
@@ -100,8 +99,7 @@ int BIO_read(BIO *bio, void *buf, int len) {
 
 int BIO_gets(BIO *bio, char *buf, int len) {
   auto *impl = FromOpaque(bio);
-
-  if (bio == nullptr || impl->method == nullptr ||
+  if (impl == nullptr || impl->method == nullptr ||
       impl->method->bgets == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
@@ -113,7 +111,7 @@ int BIO_gets(BIO *bio, char *buf, int len) {
   if (len <= 0) {
     return 0;
   }
-  int ret = impl->method->bgets(bio, buf, len);
+  int ret = impl->method->bgets(impl, buf, len);
   if (ret > 0) {
     impl->num_read += ret;
   }
@@ -122,8 +120,7 @@ int BIO_gets(BIO *bio, char *buf, int len) {
 
 int BIO_write(BIO *bio, const void *in, int inl) {
   auto *impl = FromOpaque(bio);
-
-  if (bio == nullptr || impl->method == nullptr ||
+  if (impl == nullptr || impl->method == nullptr ||
       impl->method->bwrite == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
@@ -135,7 +132,7 @@ int BIO_write(BIO *bio, const void *in, int inl) {
   if (inl <= 0) {
     return 0;
   }
-  int ret = impl->method->bwrite(bio, reinterpret_cast<const char *>(in), inl);
+  int ret = impl->method->bwrite(impl, reinterpret_cast<const char *>(in), inl);
   if (ret > 0) {
     impl->num_write += ret;
   }
@@ -171,8 +168,7 @@ int BIO_flush(BIO *bio) {
 
 long BIO_ctrl(BIO *bio, int cmd, long larg, void *parg) {
   auto *impl = FromOpaque(bio);
-
-  if (bio == nullptr) {
+  if (impl == nullptr) {
     return 0;
   }
 
@@ -181,7 +177,7 @@ long BIO_ctrl(BIO *bio, int cmd, long larg, void *parg) {
     return -2;
   }
 
-  return impl->method->ctrl(bio, cmd, larg, parg);
+  return impl->method->ctrl(impl, cmd, larg, parg);
 }
 
 char *BIO_ptr_ctrl(BIO *b, int cmd, long larg) {
@@ -206,16 +202,10 @@ int BIO_reset(BIO *bio) {
 
 int BIO_eof(BIO *bio) { return (int)BIO_ctrl(bio, BIO_CTRL_EOF, 0, nullptr); }
 
-void BIO_set_flags(BIO *bio, int flags) {
-  auto *impl = FromOpaque(bio);
-
-  impl->flags |= flags;
-}
+void BIO_set_flags(BIO *bio, int flags) { FromOpaque(bio)->flags |= flags; }
 
 int BIO_test_flags(const BIO *bio, int flags) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->flags & flags;
+  return FromOpaque(bio)->flags & flags;
 }
 
 int BIO_should_read(const BIO *bio) {
@@ -235,68 +225,49 @@ int BIO_should_io_special(const BIO *bio) {
 }
 
 int BIO_get_retry_reason(const BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->retry_reason;
+  return FromOpaque(bio)->retry_reason;
 }
 
 void BIO_set_retry_reason(BIO *bio, int reason) {
-  auto *impl = FromOpaque(bio);
-
-  impl->retry_reason = reason;
+  FromOpaque(bio)->retry_reason = reason;
 }
 
-void BIO_clear_flags(BIO *bio, int flags) {
-  auto *impl = FromOpaque(bio);
-
-  impl->flags &= ~flags;
-}
+void BIO_clear_flags(BIO *bio, int flags) { FromOpaque(bio)->flags &= ~flags; }
 
 void BIO_set_retry_read(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  impl->flags |= BIO_FLAGS_READ | BIO_FLAGS_SHOULD_RETRY;
+  FromOpaque(bio)->flags |= BIO_FLAGS_READ | BIO_FLAGS_SHOULD_RETRY;
 }
 
 void BIO_set_retry_write(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  impl->flags |= BIO_FLAGS_WRITE | BIO_FLAGS_SHOULD_RETRY;
+  FromOpaque(bio)->flags |= BIO_FLAGS_WRITE | BIO_FLAGS_SHOULD_RETRY;
 }
 
 static const int kRetryFlags = BIO_FLAGS_RWS | BIO_FLAGS_SHOULD_RETRY;
 
 int BIO_get_retry_flags(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->flags & kRetryFlags;
+  return FromOpaque(bio)->flags & kRetryFlags;
 }
 
 void BIO_clear_retry_flags(BIO *bio) {
   auto *impl = FromOpaque(bio);
-
   impl->flags &= ~kRetryFlags;
   impl->retry_reason = 0;
 }
 
 int BIO_method_type(const BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->method->type;
+  return FromOpaque(bio)->method->type;
 }
 
 void BIO_copy_next_retry(BIO *bio) {
   auto *impl = FromOpaque(bio);
-
-  BIO_clear_retry_flags(bio);
-  BIO_set_flags(bio, BIO_get_retry_flags(impl->next_bio));
+  BIO_clear_retry_flags(impl);
+  BIO_set_flags(impl, BIO_get_retry_flags(impl->next_bio));
   impl->retry_reason = impl->next_bio->retry_reason;
 }
 
 long BIO_callback_ctrl(BIO *bio, int cmd, BIO_info_cb *fp) {
   auto *impl = FromOpaque(bio);
-
-  if (bio == nullptr) {
+  if (impl == nullptr) {
     return 0;
   }
 
@@ -305,11 +276,11 @@ long BIO_callback_ctrl(BIO *bio, int cmd, BIO_info_cb *fp) {
     return 0;
   }
 
-  return impl->method->callback_ctrl(bio, cmd, fp);
+  return impl->method->callback_ctrl(impl, cmd, fp);
 }
 
 size_t BIO_pending(const BIO *bio) {
-  const long r = BIO_ctrl((BIO *)bio, BIO_CTRL_PENDING, 0, nullptr);
+  const long r = BIO_ctrl(const_cast<BIO *>(bio), BIO_CTRL_PENDING, 0, nullptr);
   assert(r >= 0);
 
   if (r < 0) {
@@ -321,7 +292,8 @@ size_t BIO_pending(const BIO *bio) {
 size_t BIO_ctrl_pending(const BIO *bio) { return BIO_pending(bio); }
 
 size_t BIO_wpending(const BIO *bio) {
-  const long r = BIO_ctrl((BIO *)bio, BIO_CTRL_WPENDING, 0, nullptr);
+  const long r =
+      BIO_ctrl(const_cast<BIO *>(bio), BIO_CTRL_WPENDING, 0, nullptr);
   assert(r >= 0);
 
   if (r < 0) {
@@ -341,15 +313,11 @@ uint64_t BIO_number_written(const BIO *bio) {
 }
 
 BIO *BIO_push(BIO *bio, BIO *appended_bio) {
-  auto *impl = FromOpaque(bio);
-
-  Bio *last_bio;
-
   if (bio == nullptr) {
     return bio;
   }
 
-  last_bio = impl;
+  Bio *last_bio = FromOpaque(bio);
   while (last_bio->next_bio != nullptr) {
     last_bio = last_bio->next_bio;
   }
@@ -359,25 +327,17 @@ BIO *BIO_push(BIO *bio, BIO *appended_bio) {
 }
 
 BIO *BIO_pop(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  BIO *ret;
-
   if (bio == nullptr) {
     return nullptr;
   }
-  ret = impl->next_bio;
-  impl->next_bio = nullptr;
-  return ret;
+  return std::exchange(FromOpaque(bio)->next_bio, nullptr);
 }
 
 BIO *BIO_next(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
   if (!bio) {
     return nullptr;
   }
-  return impl->next_bio;
+  return FromOpaque(bio)->next_bio;
 }
 
 BIO *BIO_find_type(BIO *bio, int type) {
@@ -615,9 +575,7 @@ int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len, size_t max_len) {
 }
 
 void BIO_set_retry_special(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  impl->flags |= BIO_FLAGS_READ | BIO_FLAGS_IO_SPECIAL;
+  FromOpaque(bio)->flags |= BIO_FLAGS_READ | BIO_FLAGS_IO_SPECIAL;
 }
 
 int BIO_set_write_buffer_size(BIO *bio, int buffer_size) { return 0; }
@@ -685,41 +643,19 @@ int BIO_meth_set_callback_ctrl(BIO_METHOD *method,
   return 1;
 }
 
-void BIO_set_data(BIO *bio, void *ptr) {
-  auto *impl = FromOpaque(bio);
+void BIO_set_data(BIO *bio, void *ptr) { FromOpaque(bio)->ptr = ptr; }
 
-  impl->ptr = ptr;
-}
+void *BIO_get_data(BIO *bio) { return FromOpaque(bio)->ptr; }
 
-void *BIO_get_data(BIO *bio) {
-  auto *impl = FromOpaque(bio);
+void BIO_set_init(BIO *bio, int init) { FromOpaque(bio)->init = init; }
 
-  return impl->ptr;
-}
-
-void BIO_set_init(BIO *bio, int init) {
-  auto *impl = FromOpaque(bio);
-
-  impl->init = init;
-}
-
-int BIO_get_init(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->init;
-}
+int BIO_get_init(BIO *bio) { return FromOpaque(bio)->init; }
 
 void BIO_set_shutdown(BIO *bio, int shutdown) {
-  auto *impl = FromOpaque(bio);
-
-  impl->shutdown = shutdown;
+  FromOpaque(bio)->shutdown = shutdown;
 }
 
-int BIO_get_shutdown(BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->shutdown;
-}
+int BIO_get_shutdown(BIO *bio) { return FromOpaque(bio)->shutdown; }
 
 int BIO_meth_set_puts(BIO_METHOD *method, int (*puts)(BIO *, const char *)) {
   // Ignore the parameter. We implement |BIO_puts| using |BIO_write|.
@@ -734,13 +670,9 @@ int BIO_get_ex_new_index(long argl, void *argp,      //
 }
 
 int BIO_set_ex_data(BIO *bio, int idx, void *data) {
-  auto *impl = FromOpaque(bio);
-
-  return CRYPTO_set_ex_data(&impl->ex_data, idx, data);
+  return CRYPTO_set_ex_data(&FromOpaque(bio)->ex_data, idx, data);
 }
 
 void *BIO_get_ex_data(const BIO *bio, int idx) {
-  auto *impl = FromOpaque(bio);
-
-  return CRYPTO_get_ex_data(&impl->ex_data, idx);
+  return CRYPTO_get_ex_data(&FromOpaque(bio)->ex_data, idx);
 }
