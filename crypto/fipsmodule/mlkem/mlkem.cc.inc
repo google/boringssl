@@ -51,7 +51,7 @@ void ensure_decap_self_test();
 // See
 // https://csrc.nist.gov/pubs/fips/203/final
 
-static void prf(uint8_t *out, size_t out_len, const uint8_t in[33]) {
+inline void prf(uint8_t *out, size_t out_len, const uint8_t in[33]) {
   BORINGSSL_keccak(out, out_len, in, 33, boringssl_shake256);
 }
 
@@ -79,7 +79,7 @@ void kdf(uint8_t out[MLKEM_SHARED_SECRET_BYTES],
 #define DEGREE 256
 const size_t kBarrettMultiplier = 5039;
 const unsigned kBarrettShift = 24;
-static const uint16_t kPrime = 3329;
+const uint16_t kPrime = 3329;
 const int kLog2Prime = 12;
 const uint16_t kHalfPrime = (/*kPrime=*/3329 - 1) / 2;
 // kInverseDegree is 128^-1 mod 3329; 128 because kPrime does not have a 512th
@@ -88,10 +88,10 @@ const uint16_t kInverseDegree = 3303;
 
 // Rank-specific constants.
 #define RANK768 3
-static const int kDU768 = 10;
+const int kDU768 = 10;
 const int kDV768 = 4;
 #define RANK1024 4
-static const int kDU1024 = 11;
+const int kDU1024 = 11;
 const int kDV1024 = 5;
 
 constexpr size_t encoded_vector_size(int rank) {
@@ -193,7 +193,7 @@ const uint16_t kModRoots[128] = {
 };
 
 // reduce_once reduces 0 <= x < 2*kPrime, mod kPrime.
-uint16_t reduce_once(uint16_t x) {
+inline uint16_t reduce_once(uint16_t x) {
   declassify_assert(x < 2 * kPrime);
   const uint16_t subtracted = x - kPrime;
   uint16_t mask = 0u - (subtracted >> 15);
@@ -211,7 +211,7 @@ uint16_t reduce_once(uint16_t x) {
 
 // constant time reduce x mod kPrime using Barrett reduction. x must be less
 // than kPrime + 2×kPrime².
-static uint16_t reduce(uint32_t x) {
+inline uint16_t reduce(uint32_t x) {
   declassify_assert(x < kPrime + 2u * kPrime * kPrime);
   uint64_t product = (uint64_t)x * kBarrettMultiplier;
   uint32_t quotient = (uint32_t)(product >> kBarrettShift);
@@ -219,10 +219,10 @@ static uint16_t reduce(uint32_t x) {
   return reduce_once(remainder);
 }
 
-void scalar_zero(scalar *out) { OPENSSL_memset(out, 0, sizeof(*out)); }
+inline void scalar_zero(scalar *out) { OPENSSL_memset(out, 0, sizeof(*out)); }
 
 template <int RANK>
-void vector_zero(vector<RANK> *out) {
+inline void vector_zero(vector<RANK> *out) {
   OPENSSL_memset(out->v, 0, sizeof(scalar) * RANK);
 }
 
@@ -232,7 +232,7 @@ void vector_zero(vector<RANK> *out) {
 // relevant roots of unity being stored in |kNTTRoots|. This means the output
 // should be seen as 128 elements in GF(3329^2), with the coefficients of the
 // elements being consecutive entries in |s->c|.
-static void scalar_ntt(scalar *s) {
+inline void scalar_ntt(scalar *s) {
   int offset = DEGREE;
   // `int` is used here because using `size_t` throughout caused a ~5% slowdown
   // with Clang 14 on Aarch64.
@@ -253,7 +253,7 @@ static void scalar_ntt(scalar *s) {
 }
 
 template <int RANK>
-static void vector_ntt(vector<RANK> *a) {
+inline void vector_ntt(vector<RANK> *a) {
   for (int i = 0; i < RANK; i++) {
     scalar_ntt(&a->v[i]);
   }
@@ -294,13 +294,13 @@ void vector_inverse_ntt(vector<RANK> *a) {
   }
 }
 
-void scalar_add(scalar *lhs, const scalar *rhs) {
+inline void scalar_add(scalar *lhs, const scalar *rhs) {
   for (int i = 0; i < DEGREE; i++) {
     lhs->c[i] = reduce_once(lhs->c[i] + rhs->c[i]);
   }
 }
 
-void scalar_sub(scalar *lhs, const scalar *rhs) {
+inline void scalar_sub(scalar *lhs, const scalar *rhs) {
   for (int i = 0; i < DEGREE; i++) {
     lhs->c[i] = reduce_once(lhs->c[i] - rhs->c[i] + kPrime);
   }
@@ -314,7 +314,7 @@ void scalar_sub(scalar *lhs, const scalar *rhs) {
 // only allows us to multiply two reduced numbers together, so we need some
 // intermediate reduction steps, even if an uint64_t could hold 3 multiplied
 // numbers.
-void scalar_mult(scalar *out, const scalar *lhs, const scalar *rhs) {
+inline void scalar_mult(scalar *out, const scalar *lhs, const scalar *rhs) {
   for (int i = 0; i < DEGREE / 2; i++) {
     uint32_t real_real = (uint32_t)lhs->c[2 * i] * rhs->c[2 * i];
     uint32_t img_img = (uint32_t)lhs->c[2 * i + 1] * rhs->c[2 * i + 1];
@@ -327,14 +327,14 @@ void scalar_mult(scalar *out, const scalar *lhs, const scalar *rhs) {
 }
 
 template <int RANK>
-void vector_add(vector<RANK> *lhs, const vector<RANK> *rhs) {
+inline void vector_add(vector<RANK> *lhs, const vector<RANK> *rhs) {
   for (int i = 0; i < RANK; i++) {
     scalar_add(&lhs->v[i], &rhs->v[i]);
   }
 }
 
 template <int RANK>
-static void matrix_mult(vector<RANK> *out, const matrix<RANK> *m,
+inline void matrix_mult(vector<RANK> *out, const matrix<RANK> *m,
                         const vector<RANK> *a) {
   vector_zero(out);
   for (int i = 0; i < RANK; i++) {
@@ -347,7 +347,7 @@ static void matrix_mult(vector<RANK> *out, const matrix<RANK> *m,
 }
 
 template <int RANK>
-void matrix_mult_transpose(vector<RANK> *out, const matrix<RANK> *m,
+inline void matrix_mult_transpose(vector<RANK> *out, const matrix<RANK> *m,
                            const vector<RANK> *a) {
   vector_zero(out);
   for (int i = 0; i < RANK; i++) {
@@ -360,7 +360,7 @@ void matrix_mult_transpose(vector<RANK> *out, const matrix<RANK> *m,
 }
 
 template <int RANK>
-void scalar_inner_product(scalar *out, const vector<RANK> *lhs,
+inline void scalar_inner_product(scalar *out, const vector<RANK> *lhs,
                           const vector<RANK> *rhs) {
   scalar_zero(out);
   for (int i = 0; i < RANK; i++) {
@@ -373,7 +373,7 @@ void scalar_inner_product(scalar *out, const vector<RANK> *lhs,
 // Algorithm 6 from the spec. Rejection samples a Keccak stream to get
 // uniformly distributed elements. This is used for matrix expansion and only
 // operates on public inputs.
-static void scalar_from_keccak_vartime(scalar *out,
+inline void scalar_from_keccak_vartime(scalar *out,
                                        BORINGSSL_keccak_st *keccak_ctx) {
   assert(keccak_ctx->squeeze_offset == 0);
   assert(keccak_ctx->rate_bytes == 168);
@@ -577,7 +577,7 @@ void scalar_decode_1(scalar *out, const uint8_t in[32]) {
 // Decodes 32*|RANK|*|bits| bytes from |in| into |out|. It returns one on
 // success or zero if any parsed value is >= |kPrime|.
 template <int RANK>
-static int vector_decode(vector<RANK> *out, const uint8_t *in, int bits) {
+inline int vector_decode(vector<RANK> *out, const uint8_t *in, int bits) {
   for (int i = 0; i < RANK; i++) {
     if (!scalar_decode(&out->v[i], in + i * bits * DEGREE / 8, bits)) {
       return 0;
@@ -592,7 +592,7 @@ static int vector_decode(vector<RANK> *out, const uint8_t *in, int bits) {
 // Uses Barrett reduction to achieve constant time. Since we need both the
 // remainder (for rounding) and the quotient (as the result), we cannot use
 // |reduce| here, but need to do the Barrett reduction directly.
-static uint16_t compress(uint16_t x, int bits) {
+inline uint16_t compress(uint16_t x, int bits) {
   uint32_t shifted = (uint32_t)x << bits;
   uint64_t product = (uint64_t)shifted * kBarrettMultiplier;
   uint32_t quotient = (uint32_t)(product >> kBarrettShift);
@@ -611,7 +611,7 @@ static uint16_t compress(uint16_t x, int bits) {
 // Decompresses |x| by using an equi-distant representative. The formula is
 // round(kPrime/2^|bits|*x). Note that 2^|bits| being the divisor allows us to
 // implement this logic using only bit operations.
-uint16_t decompress(uint16_t x, int bits) {
+inline uint16_t decompress(uint16_t x, int bits) {
   uint32_t product = (uint32_t)x * kPrime;
   uint32_t power = 1 << bits;
   // This is |product| % power, since |power| is a power of 2.
@@ -625,13 +625,13 @@ uint16_t decompress(uint16_t x, int bits) {
   return lower + (remainder >> (bits - 1));
 }
 
-static void scalar_compress(scalar *s, int bits) {
+inline void scalar_compress(scalar *s, int bits) {
   for (int i = 0; i < DEGREE; i++) {
     s->c[i] = compress(s->c[i], bits);
   }
 }
 
-static void scalar_decompress(scalar *s, int bits) {
+inline void scalar_decompress(scalar *s, int bits) {
   for (int i = 0; i < DEGREE; i++) {
     s->c[i] = decompress(s->c[i], bits);
   }
@@ -667,7 +667,7 @@ struct private_key {
 };
 
 template <int RANK>
-static void decrypt_cpa(uint8_t out[32], const private_key<RANK> *priv,
+inline void decrypt_cpa(uint8_t out[32], const private_key<RANK> *priv,
                         const uint8_t ciphertext[MLKEM768_CIPHERTEXT_BYTES]) {
   constexpr int du = RANK == RANK768 ? kDU768 : kDU1024;
   constexpr int dv = RANK == RANK768 ? kDV768 : kDV1024;
@@ -688,7 +688,7 @@ static void decrypt_cpa(uint8_t out[32], const private_key<RANK> *priv,
 }
 
 template <int RANK>
-static bcm_status mlkem_marshal_public_key(CBB *out,
+inline bcm_status mlkem_marshal_public_key(CBB *out,
                                            const public_key<RANK> *pub) {
   uint8_t *vector_output;
   if (!CBB_add_space(out, &vector_output, encoded_vector_size(RANK))) {
@@ -702,7 +702,7 @@ static bcm_status mlkem_marshal_public_key(CBB *out,
 }
 
 template <int RANK>
-static bool mlkem_public_keys_equal(const public_key<RANK> *a,
+inline bool mlkem_public_keys_equal(const public_key<RANK> *a,
                                     const public_key<RANK> *b) {
   return OPENSSL_memcmp(a->public_key_hash, b->public_key_hash, 32) == 0;
 }
@@ -978,7 +978,7 @@ namespace fips {
 
 #include "fips_known_values.inc"
 
-static int keygen_self_test() {
+inline int keygen_self_test() {
   uint8_t pub_key[MLKEM768_PUBLIC_KEY_BYTES];
   private_key<RANK768> priv;
   static_assert(sizeof(kTestEntropy) >= MLKEM_SEED_BYTES);
@@ -997,7 +997,7 @@ static int keygen_self_test() {
   return 1;
 }
 
-static int encap_self_test() {
+inline int encap_self_test() {
   CBS cbs;
   CBS_init(&cbs, kExpectedPublicKeyBytes, sizeof(kExpectedPublicKeyBytes));
   public_key<RANK768> pub;
@@ -1018,7 +1018,7 @@ static int encap_self_test() {
   return 1;
 }
 
-static int decap_self_test() {
+inline int decap_self_test() {
   CBS cbs;
   CBS_init(&cbs, kExpectedPrivateKeyBytes, sizeof(kExpectedPrivateKeyBytes));
   private_key<RANK768> priv;
