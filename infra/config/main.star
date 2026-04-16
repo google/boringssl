@@ -144,7 +144,7 @@ notifier = luci.notifier(
     name = "all",
     on_occurrence = ["FAILURE", "INFRA_FAILURE"],
     on_new_status = ["SUCCESS"],
-    notify_emails = ["boringssl@google.com"],
+    notify_emails = ["boringssl-interrupts@rotations.google.com"],
 )
 
 DEFAULT_TIMEOUT = 30 * time.minute
