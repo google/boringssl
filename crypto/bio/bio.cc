@@ -334,16 +334,10 @@ int BIO_set_close(BIO *bio, int close_flag) {
   return (int)BIO_ctrl(bio, BIO_CTRL_SET_CLOSE, close_flag, nullptr);
 }
 
-OPENSSL_EXPORT uint64_t BIO_number_read(const BIO *bio) {
-  auto *impl = FromOpaque(bio);
+uint64_t BIO_number_read(const BIO *bio) { return FromOpaque(bio)->num_read; }
 
-  return impl->num_read;
-}
-
-OPENSSL_EXPORT uint64_t BIO_number_written(const BIO *bio) {
-  auto *impl = FromOpaque(bio);
-
-  return impl->num_write;
+uint64_t BIO_number_written(const BIO *bio) {
+  return FromOpaque(bio)->num_write;
 }
 
 BIO *BIO_push(BIO *bio, BIO *appended_bio) {
