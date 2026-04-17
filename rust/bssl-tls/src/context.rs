@@ -14,14 +14,26 @@
 
 //! TLS context builder and context type
 
-use alloc::{boxed::Box, sync::Arc};
-use core::{marker::PhantomData, mem::forget, ptr::NonNull};
+use alloc::{
+    boxed::Box,
+    sync::Arc, //
+};
+use core::{
+    marker::PhantomData,
+    mem::forget,
+    ptr::NonNull, //
+};
 
 use crate::{
     config::CompliancePolicy,
-    connection::{Client, Server, TlsConnection, methods::HasTlsConnectionMethod},
+    connection::{
+        Client,
+        Server,
+        TlsConnection,
+        methods::HasTlsConnectionMethod, //
+    },
     context::methods::HasTlsContextMethod,
-    errors::Error,
+    errors::Error, //
 };
 
 mod credentials;
@@ -223,7 +235,7 @@ where
     /// - `self` must outlive all uses of the returned handle;
     /// - this handle must be used with functions from the BoringSSL library this crate is linked
     ///   to; otherwise, it is **undefined behaviour**.
-    /// 
+    ///
     /// # Recommendation
     /// If the handle is used to interface BoringSSL library functions, please consider using a
     /// corresponding Rust safe binding or contact BoringSSL Authors for support.

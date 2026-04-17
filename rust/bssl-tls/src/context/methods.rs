@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{ffi::c_int, marker::PhantomData, ptr::null_mut};
+use core::{
+    ffi::c_int,
+    marker::PhantomData,
+    ptr::null_mut, //
+};
 
 use once_cell::sync::Lazy;
 
 use crate::{
     Methods,
-    context::{QuicMode, TlsMode},
-    methods::drop_box_rust_methods,
+    context::{
+        QuicMode,
+        TlsMode, //
+    },
+    methods::drop_box_rust_methods, //
 };
 
 pub(crate) struct RustContextMethods<M>(PhantomData<fn() -> M>);

@@ -17,16 +17,31 @@
 use alloc::boxed::Box;
 use core::{
     future::poll_fn,
-    ops::{Deref, DerefMut},
-    task::Poll,
+    ops::{
+        Deref,
+        DerefMut, //
+    },
+    task::Poll, //
 };
 
 use crate::{
     check_tls_error,
-    connection::{Client, Server, TlsConnectionRef, methods::HasTlsConnectionMethod},
-    context::{SupportedMode, TlsMode},
-    errors::{Error, TlsErrorReason, TlsRetryReason},
-    io::IoStatus,
+    connection::{
+        Client,
+        Server,
+        TlsConnectionRef,
+        methods::HasTlsConnectionMethod, //
+    },
+    context::{
+        SupportedMode,
+        TlsMode, //
+    },
+    errors::{
+        Error,
+        TlsErrorReason,
+        TlsRetryReason, //
+    },
+    io::IoStatus, //
 };
 
 /// # Connection shutdown

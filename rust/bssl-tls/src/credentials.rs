@@ -14,24 +14,45 @@
 
 //! TLS credentials
 
-use alloc::{boxed::Box, vec, vec::Vec};
+use alloc::{
+    boxed::Box,
+    vec,
+    vec::Vec, //
+};
 use core::{
-    ffi::{CStr, c_int},
+    ffi::{
+        CStr,
+        c_int, //
+    },
     fmt::Debug,
     marker::PhantomData,
     mem::forget,
-    ptr::{NonNull, null_mut},
+    ptr::{
+        NonNull,
+        null_mut, //
+    }, //
 };
 
-use bssl_x509::{errors::PemReason, keys::PrivateKey};
+use bssl_x509::{
+    errors::PemReason,
+    keys::PrivateKey, //
+};
 
 use crate::{
     check_lib_error,
     config::ConfigurationError,
     context::CertificateCache,
     crypto_buffer_wrapper,
-    errors::{Error, IoError},
-    ffi::{Alloc, Bio, sanitize_slice, slice_into_ffi_raw_parts},
+    errors::{
+        Error,
+        IoError, //
+    },
+    ffi::{
+        Alloc,
+        Bio,
+        sanitize_slice,
+        slice_into_ffi_raw_parts, //
+    }, //
 };
 
 pub(crate) mod methods;

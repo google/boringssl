@@ -17,13 +17,25 @@
 use alloc::boxed::Box;
 use core::{
     any::Any,
-    ffi::{CStr, c_int, c_uint},
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
+    ffi::{
+        CStr,
+        c_int,
+        c_uint, //
+    },
+    fmt::{
+        Debug,
+        Display,
+        Formatter,
+        Result as FmtResult, //
+    }, //
 };
 
 use bssl_macros::bssl_enum;
 use bssl_sys::LibCode;
-use bssl_x509::errors::{PemReason, PkiError};
+use bssl_x509::errors::{
+    PemReason,
+    PkiError, //
+};
 
 use crate::config::ConfigurationError;
 

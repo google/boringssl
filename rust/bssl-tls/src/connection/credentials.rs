@@ -13,18 +13,30 @@
 // limitations under the License.
 
 use alloc::ffi::CString;
-use core::{ffi::CStr, ptr::null};
+use core::{
+    ffi::CStr,
+    ptr::null, //
+};
 
 use bssl_x509::store::X509Store;
 
-use super::{Client, methods::HasTlsConnectionMethod};
+use super::{
+    Client,
+    methods::HasTlsConnectionMethod, //
+};
 use crate::{
     check_lib_error,
     config::ConfigurationError,
-    connection::lifecycle::{EstablishedTlsConnection, TlsConnectionInHandshake},
-    credentials::{CertificateVerificationMode, TlsCredential},
+    connection::lifecycle::{
+        EstablishedTlsConnection,
+        TlsConnectionInHandshake, //
+    }, //
+    credentials::{
+        CertificateVerificationMode,
+        TlsCredential, //
+    },
     errors::Error,
-    ffi::slice_into_ffi_raw_parts,
+    ffi::slice_into_ffi_raw_parts, //
 };
 
 /// # Custom certificate verification

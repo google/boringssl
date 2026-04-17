@@ -19,17 +19,23 @@ use core::{
     ffi::c_int,
     marker::PhantomData,
     mem::transmute,
-    ops::{Deref, DerefMut},
+    ops::{
+        Deref,
+        DerefMut, //
+    },
     ptr::NonNull,
-    task::Waker,
+    task::Waker, //
 };
 
 use crate::{
     config::ProtocolVersion,
     connection::methods::waker_data_ref_from_ssl,
     context::TlsMode,
-    errors::{Error, TlsRetryReason},
-    io::IoStatus,
+    errors::{
+        Error,
+        TlsRetryReason, //
+    },
+    io::IoStatus, //
 };
 
 mod credentials;

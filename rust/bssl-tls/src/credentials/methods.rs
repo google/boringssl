@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{ffi::c_int, ptr::null_mut};
+use core::{
+    ffi::c_int,
+    ptr::null_mut, //
+};
 
 use once_cell::sync::Lazy;
 
-use crate::{Methods, methods::drop_box_rust_methods};
+use crate::{
+    Methods,
+    methods::drop_box_rust_methods, //
+};
 
 pub(super) static TLS_CREDENTIAL_METHOD: Lazy<c_int> = Lazy::new(|| unsafe {
     // Safety: this a one-time registration uses only valid function pointers.

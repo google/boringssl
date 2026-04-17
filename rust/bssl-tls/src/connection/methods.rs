@@ -14,20 +14,31 @@
 
 use alloc::boxed::Box;
 use core::{
-    ffi::{c_int, c_long, c_void},
-    ptr::{NonNull, null_mut},
-    task::Waker,
+    ffi::{
+        c_int,
+        c_long,
+        c_void, //
+    },
+    ptr::{
+        NonNull,
+        null_mut, //
+    },
+    task::Waker, //
 };
 use std::marker::PhantomData;
 
 use once_cell::sync::Lazy;
 
 use crate::{
-    Methods, abort_on_panic,
-    context::{QuicMode, TlsMode},
+    Methods,
+    abort_on_panic,
+    context::{
+        QuicMode,
+        TlsMode, //
+    },
     errors::TlsRetryReason,
     io::RustBioHandle,
-    methods::drop_box_rust_methods,
+    methods::drop_box_rust_methods, //
 };
 
 /// The associated state to the [`super::TlsConnection`].

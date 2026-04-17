@@ -16,18 +16,33 @@
 
 use alloc::boxed::Box;
 use core::{
-    ffi::{CStr, c_char, c_int, c_long, c_void},
+    ffi::{
+        CStr,
+        c_char,
+        c_int,
+        c_long,
+        c_void, //
+    },
     fmt,
     ptr::NonNull,
-    task::{Context, Waker},
+    task::{
+        Context,
+        Waker, //
+    },
 };
 
 use once_cell::sync::Lazy;
 
 use crate::{
     abort_on_panic,
-    errors::{Error, TlsRetryReason},
-    ffi::{sanitise_mut_byteslice, sanitize_slice},
+    errors::{
+        Error,
+        TlsRetryReason, //
+    },
+    ffi::{
+        sanitise_mut_byteslice,
+        sanitize_slice, //
+    },
 };
 
 /// A wrapper around a `dyn AbstractSocket`, delegating BIO methods to the

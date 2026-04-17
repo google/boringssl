@@ -19,9 +19,15 @@ use bssl_x509::store::X509Store;
 use super::TlsContextBuilder;
 use crate::{
     check_lib_error,
-    context::{CertificateCache, SupportedMode},
-    credentials::{CertificateVerificationMode, TlsCredential},
-    errors::Error,
+    context::{
+        CertificateCache,
+        SupportedMode, //
+    },
+    credentials::{
+        CertificateVerificationMode,
+        TlsCredential, //
+    },
+    errors::Error, //
 };
 
 /// # Credentials

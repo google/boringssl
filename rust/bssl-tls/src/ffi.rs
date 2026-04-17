@@ -14,15 +14,25 @@
 
 use core::{
     marker::PhantomData,
-    ptr::{NonNull, null, null_mut},
-    slice::{from_raw_parts, from_raw_parts_mut},
+    ptr::{
+        NonNull,
+        null,
+        null_mut, //
+    },
+    slice::{
+        from_raw_parts,
+        from_raw_parts_mut, //
+    }, //
 };
 
 use bssl_crypto::FfiSlice;
 
 use crate::{
     context::CertificateCache,
-    errors::{Error, IoError},
+    errors::{
+        Error,
+        IoError, //
+    }, //
 };
 
 pub(crate) fn slice_into_ffi_raw_parts<T>(slice: &[T]) -> (*const T, usize) {

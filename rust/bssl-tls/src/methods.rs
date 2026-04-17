@@ -13,9 +13,16 @@
 // limitations under the License.
 
 use alloc::boxed::Box;
-use core::ffi::{c_int, c_long, c_void};
+use core::ffi::{
+    c_int,
+    c_long,
+    c_void, //
+};
 
-use crate::{Methods, abort_on_panic};
+use crate::{
+    Methods,
+    abort_on_panic, //
+};
 
 pub(crate) unsafe extern "C" fn drop_box_rust_methods<M: Methods>(
     _parent: *mut c_void,
