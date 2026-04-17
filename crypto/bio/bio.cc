@@ -53,7 +53,7 @@ BIO *BIO_new(const BIO_METHOD *method) {
 
 Bio::~Bio() {
   BIO *next = BIO_pop(this);
-  if (method != nullptr && method->destroy != nullptr) {
+  if (method->destroy != nullptr) {
     method->destroy(this);
   }
   CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);
@@ -78,8 +78,7 @@ void BIO_free_all(BIO *bio) { BIO_free(bio); }
 
 int BIO_read(BIO *bio, void *buf, int len) {
   auto *impl = FromOpaque(bio);
-  if (impl == nullptr || impl->method == nullptr ||
-      impl->method->bread == nullptr) {
+  if (impl == nullptr || impl->method->bread == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
   }
@@ -99,8 +98,7 @@ int BIO_read(BIO *bio, void *buf, int len) {
 
 int BIO_gets(BIO *bio, char *buf, int len) {
   auto *impl = FromOpaque(bio);
-  if (impl == nullptr || impl->method == nullptr ||
-      impl->method->bgets == nullptr) {
+  if (impl == nullptr || impl->method->bgets == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
   }
@@ -120,8 +118,7 @@ int BIO_gets(BIO *bio, char *buf, int len) {
 
 int BIO_write(BIO *bio, const void *in, int inl) {
   auto *impl = FromOpaque(bio);
-  if (impl == nullptr || impl->method == nullptr ||
-      impl->method->bwrite == nullptr) {
+  if (impl == nullptr || impl->method->bwrite == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
   }
@@ -172,7 +169,7 @@ long BIO_ctrl(BIO *bio, int cmd, long larg, void *parg) {
     return 0;
   }
 
-  if (impl->method == nullptr || impl->method->ctrl == nullptr) {
+  if (impl->method->ctrl == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
   }
@@ -271,7 +268,7 @@ long BIO_callback_ctrl(BIO *bio, int cmd, BIO_info_cb *fp) {
     return 0;
   }
 
-  if (impl->method == nullptr || impl->method->callback_ctrl == nullptr) {
+  if (impl->method->callback_ctrl == nullptr) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return 0;
   }
@@ -347,15 +344,13 @@ BIO *BIO_find_type(BIO *bio, int type) {
 
   int mask = type & 0xff;
   do {
-    if (FromOpaque(bio)->method != nullptr) {
-      int method_type = BIO_method_type(bio);
-      if (!mask) {
-        if (method_type & type) {
-          return bio;
-        }
-      } else if (method_type == type) {
+    int method_type = BIO_method_type(bio);
+    if (!mask) {
+      if (method_type & type) {
         return bio;
       }
+    } else if (method_type == type) {
+      return bio;
     }
     bio = BIO_next(bio);
   } while (bio != nullptr);
