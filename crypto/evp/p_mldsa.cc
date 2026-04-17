@@ -271,7 +271,7 @@ struct MLDSAImplementation {
         !CBB_add_asn1_element(&algorithm, CBS_ASN1_OBJECT, Traits::kOID.data(),
                               Traits::kOID.size()) ||
         !CBB_add_asn1(&spki, &key_bitstring, CBS_ASN1_BITSTRING) ||
-        !CBB_add_u8(&key_bitstring, 0 /* padding */) ||
+        !CBB_add_u8(&key_bitstring, 0 /* no unused bits */) ||
         !Traits::MarshalPublicKey(&key_bitstring, pub) ||
         !CBB_flush(out)) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_ENCODE_ERROR);
