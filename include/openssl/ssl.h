@@ -734,9 +734,12 @@ OPENSSL_EXPORT uint32_t SSL_get_mode(const SSL *ssl);
 // store certificates. This can allow multiple connections to share
 // certificates and thus save memory.
 //
-// The SSL_CTX does not take ownership of |pool| and the caller must ensure
-// that |pool| outlives |ctx| and all objects linked to it, including |SSL|,
-// |X509| and |SSL_SESSION| objects. Basically, don't ever free |pool|.
+// |ctx| does not take ownership of |pool|. The caller must ensure that |pool|
+// outlives |ctx|, as well as any |SSL| objects referencing |ctx|. (|SSL|
+// objects will increment an |SSL_CTX|'s reference count.) It is not necessary
+// for |pool| to outlive any |CRYPTO_BUFFER|s derived from it, so there is no
+// lifetime constraint on |X509| or |SSL_SESSION| objects created from the
+// connection.
 OPENSSL_EXPORT void SSL_CTX_set0_buffer_pool(SSL_CTX *ctx,
                                              CRYPTO_BUFFER_POOL *pool);
 
