@@ -147,6 +147,8 @@ func (d *delocation) processInput(input inputFile) (err error) {
 			statement, err = d.processDirective(statement, node.up)
 		case ruleLabelContainingDirective:
 			statement, err = d.processLabelContainingDirective(statement, node.up)
+		case rulePrefAlignDirective:
+			statement, err = d.processPrefAlignDirective(statement, node.up)
 		case ruleSymbolDefiningDirective:
 			statement, err = d.processSymbolDefiningDirective(statement, node.up)
 		case ruleLabel:
@@ -372,6 +374,36 @@ func (d *delocation) processLabelContainingDirective(statement, directive *node3
 	} else {
 		d.writeCommentedNode(statement)
 		d.output.WriteString("\t" + name + "\t" + strings.Join(args, ", ") + "\n")
+	}
+
+	return statement, nil
+}
+
+func (d *delocation) processPrefAlignDirective(statement, directive *node32) (*node32, error) {
+	assertNodeType(directive, ruleWS)
+	arg1 := directive.next
+	assertNodeType(arg1, ruleArg)
+
+	arg2 := skipWS(arg1.next)
+	if arg2 == nil {
+		d.writeNode(statement)
+		return statement, nil
+	}
+	assertNodeType(arg2, ruleSymbolArg)
+
+	arg3 := skipWS(arg2.next)
+	assertNodeType(arg3, ruleArg)
+
+	if arg3.next != nil {
+		panic("unexpected nodes")
+	}
+
+	assertNodeType(arg2.up, ruleSymbolExpr)
+	var b strings.Builder
+	if d.processSymbolExpr(arg2.up, &b) {
+		fmt.Fprintf(d.output, "\t.prefalign\t%s, %s, %s\n", d.contents(arg1), b.String(), d.contents(arg3))
+	} else {
+		d.writeNode(statement)
 	}
 
 	return statement, nil

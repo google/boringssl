@@ -93,6 +93,16 @@ bar:
 	.equ	.Lfoo2_local_target, foo
 	.equiv foo3, foo
 	.equiv	.Lfoo3_local_target, foo
+
+	.prefalign 2
+	.prefalign 4, .Lfunc_end, nop
+	.type prefalign_func, @function
+.Lprefalign_func_local_target:
+prefalign_func:
+	ret
+.Lfunc_end:
+
+	.size prefalign_func, .Lfunc_end-prefalign_func
 	# References to local labels are rewritten in subsequent files.
 .Llocal_label_BCM_1:
 
@@ -164,6 +174,17 @@ bar:
 
 # The first operand (the "place") of a .reloc should be rewritten.
 .reloc .Ltmp0_BCM_1, R_AARCH64_PATCHINST, ds
+
+	.prefalign 2
+	.prefalign	4, .Lfunc_end_BCM_1, nop
+	.type prefalign_func2, @function
+.Lprefalign_func2_local_target:
+prefalign_func2:
+	ret
+.Lfunc_end_BCM_1:
+
+# WAS .size prefalign_func2, .Lfunc_end-prefalign_func2
+	.size	prefalign_func2, .Lfunc_end_BCM_1-prefalign_func2
 .text
 .loc 1 2 0
 BORINGSSL_bcm_text_end:

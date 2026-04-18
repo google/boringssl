@@ -40,3 +40,11 @@ alias_to_local_label = .LLocal_label
 .Ltmp0:
 # The first operand (the "place") of a .reloc should be rewritten.
 	.reloc .Ltmp0, R_AARCH64_PATCHINST, ds
+
+	.prefalign 2
+	.prefalign 4, .Lfunc_end, nop
+	.type prefalign_func2, @function
+prefalign_func2:
+	ret
+.Lfunc_end:
+	.size prefalign_func2, .Lfunc_end-prefalign_func2
