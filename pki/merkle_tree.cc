@@ -88,7 +88,7 @@ std::optional<TreeHash> EvaluateMerkleSubtreeConsistencyProof(
   uint64_t tn = n - 1;
 
   // The bit patterns of these numbers indicates whether the path goes left or
-  // right (or in some cases on the rightmost edge of a (sub)treee, that a level
+  // right (or in some cases on the rightmost edge of a (sub)tree, that a level
   // of the tree is skipped).
   //
   // When consuming the proof, we work up the tree from the bottom level (level

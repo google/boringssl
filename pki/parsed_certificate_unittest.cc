@@ -596,7 +596,7 @@ TEST(ParsedCertificateTest, SubjectKeyIdentifierNotOctetString) {
 }
 
 // Tests an authorityKeyIdentifier that is not a SEQUENCE.
-TEST(ParsedCertificateTest, AuthourityKeyIdentifierNotSequence) {
+TEST(ParsedCertificateTest, AuthorityKeyIdentifierNotSequence) {
   std::shared_ptr<const ParsedCertificate> cert =
       ParseCertificateFromFile("authority_key_identifier_not_sequence.pem", {});
   ASSERT_FALSE(cert);

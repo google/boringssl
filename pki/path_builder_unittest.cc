@@ -2333,7 +2333,7 @@ TEST_F(PathBuilderCheckPathAfterVerificationTest, TestVerifyErrorMapping) {
 }
 
 TEST_F(PathBuilderCheckPathAfterVerificationTest,
-       TestVerifyErrorMulipleMapping) {
+       TestVerifyErrorMultipleMapping) {
   AddWarningPathBuilderDelegate delegate;
   CertPathBuilder::Result result = RunPathBuilder(nullptr, &delegate);
   ASSERT_TRUE(result.HasValidPath());

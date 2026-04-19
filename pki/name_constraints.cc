@@ -634,7 +634,7 @@ bool NameConstraints::IsPermittedRfc822Name(
   for (const auto &permitted_name : permitted_subtrees_.rfc822_names) {
     if (Rfc822NameMatches(name_components[0], name_components[1],
                           permitted_name, Rfc822NameMatchType::kPermitted,
-                          /*case_insenitive_local_part=*/false)) {
+                          /*case_insensitive_local_part=*/false)) {
       return true;
     }
   }

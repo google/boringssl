@@ -111,7 +111,7 @@ TEST(ParseCertificateTest, NotSequence) {
   RunCertificateTest("cert_not_sequence.pem");
 }
 
-// Tests that uncomsumed data is not allowed after the main SEQUENCE.
+// Tests that unconsumed data is not allowed after the main SEQUENCE.
 TEST(ParseCertificateTest, DataAfterSignature) {
   RunCertificateTest("cert_data_after_signature.pem");
 }

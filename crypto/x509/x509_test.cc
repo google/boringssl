@@ -2780,7 +2780,7 @@ TEST(X509Test, SignCertificate) {
         // Fill in the signature algorithm.
         ASSERT_TRUE(X509_set1_signature_algo(cert.get(), algor.get()));
 
-        // Extract the TBSCertificiate.
+        // Extract the TBSCertificate.
         uint8_t *tbs_cert = nullptr;
         int tbs_cert_len = i2d_re_X509_tbs(cert.get(), &tbs_cert);
         UniquePtr<uint8_t> free_tbs_cert(tbs_cert);
@@ -3237,9 +3237,9 @@ TEST(X509Test, TestFromBufferModified) {
   UniquePtr<X509> root(X509_parse_from_buffer(buf.get()));
   ASSERT_TRUE(root);
 
-  UniquePtr<ASN1_INTEGER> fourty_two(ASN1_INTEGER_new());
-  ASN1_INTEGER_set_int64(fourty_two.get(), 42);
-  X509_set_serialNumber(root.get(), fourty_two.get());
+  UniquePtr<ASN1_INTEGER> forty_two(ASN1_INTEGER_new());
+  ASN1_INTEGER_set_int64(forty_two.get(), 42);
+  X509_set_serialNumber(root.get(), forty_two.get());
 
   ASSERT_EQ(static_cast<long>(data_len), i2d_X509(root.get(), nullptr));
 
@@ -7596,7 +7596,7 @@ CN = Test)",
         0x01, 0x84, 0xb7, 0x09, 0x02, 0x04, 0x04, 0x03, 0x02, 0x02, 0x44}},
 
       {kTestOID, "ASN1:FORMAT:BITLIST,BITSTR:1,invalid,5", nullptr, {}},
-      // Negative bit inidices are not allowed.
+      // Negative bit indices are not allowed.
       {kTestOID, "ASN1:FORMAT:BITLIST,BITSTR:-1", nullptr, {}},
       // We cap bit indices at 256.
       {kTestOID, "ASN1:FORMAT:BITLIST,BITSTR:257", nullptr, {}},

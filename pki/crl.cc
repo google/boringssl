@@ -167,10 +167,10 @@ bool ParseCrlTbsCertList(der::Input tbs_tlv, ParsedCrlTbsCertList *out) {
 
   //         revokedCertificates     SEQUENCE OF SEQUENCE  { ... } OPTIONAL,
   der::Input unused_revoked_certificates;
-  CBS_ASN1_TAG maybe_revoked_certifigates_tag;
-  if (tbs_parser.PeekTagAndValue(&maybe_revoked_certifigates_tag,
+  CBS_ASN1_TAG maybe_revoked_certificates_tag;
+  if (tbs_parser.PeekTagAndValue(&maybe_revoked_certificates_tag,
                                  &unused_revoked_certificates) &&
-      maybe_revoked_certifigates_tag == CBS_ASN1_SEQUENCE) {
+      maybe_revoked_certificates_tag == CBS_ASN1_SEQUENCE) {
     der::Input revoked_certificates_tlv;
     if (!tbs_parser.ReadRawTLV(&revoked_certificates_tlv)) {
       return false;

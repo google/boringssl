@@ -241,7 +241,7 @@ TEST(MerkleTreeTest, SubtreeConsistencyProofRFC9162) {
   auto hash0_proof = SubtreeConsistencyProof(tree, hash0_subtree, final_tree);
   EXPECT_EQ(hash0_proof, ConcatProof({c, d, g, l}));
 
-  // "The consistency proof beween hash1 and hash is [l]."
+  // "The consistency proof between hash1 and hash is [l]."
   auto hash1_proof = SubtreeConsistencyProof(tree, hash1_subtree, final_tree);
   EXPECT_EQ(hash1_proof, ConcatProof({l}));
 
