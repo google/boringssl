@@ -44,6 +44,7 @@
 //! );
 //! ```
 
+use alloc::vec::Vec;
 use core::{
     ffi::{c_char, c_int, c_void},
     mem::transmute,
