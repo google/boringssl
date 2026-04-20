@@ -30,6 +30,7 @@
 
 #include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
+#include "../crypto/mem_internal.h"
 #include "internal.h"
 
 

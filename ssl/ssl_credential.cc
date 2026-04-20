@@ -20,6 +20,7 @@
 #include <openssl/span.h>
 
 #include "../crypto/internal.h"
+#include "../crypto/mem_internal.h"
 #include "../crypto/spake2plus/internal.h"
 #include "internal.h"
 

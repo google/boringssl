@@ -22,7 +22,9 @@
 
 #include <openssl/base.h>
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <errno.h>

@@ -32,6 +32,7 @@
 #include <openssl/x509.h>
 
 #include "../crypto/internal.h"
+#include "../crypto/mem_internal.h"
 #include "internal.h"
 
 
