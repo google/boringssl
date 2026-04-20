@@ -305,8 +305,10 @@ int bssl::EVP_sha256_final_with_secret_suffix(SHA256_CTX *ctx,
 
     input_idx += SHA256_CBLOCK - block_start;
 
-    // Fill in the length if this is the last block.
-    crypto_word_t is_last_block = constant_time_eq_w(i, last_block);
+    // Fill in the length if this is the last block. Use a value barrier to
+    // prevent Clang from compiling the conditional select as a jump.
+    crypto_word_t is_last_block =
+        value_barrier_w(constant_time_eq_w(i, last_block));
     for (size_t j = 0; j < 4; j++) {
       block[SHA256_CBLOCK - 4 + j] |= is_last_block & length_bytes[j];
     }
