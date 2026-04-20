@@ -1045,7 +1045,6 @@ $code.=<<___;
 
     bl  .Lpoly_hash_ad_internal
 
-.Lopen_ad_done:
     mov $adp, $inp
 
 // Each iteration of the loop hash 320 bytes, and prepare stream for 320 bytes
@@ -1081,7 +1080,6 @@ $code.=<<___;
     sub $adl, $adl, #10
 
     mov $itr2, #10
-    subs $itr1, $itr2, $adl
     subs $itr1, $itr2, $adl // itr1 can be negative if we have more than 320 bytes to hash
     csel $itr2, $itr2, $adl, le // if itr1 is zero or less, itr2 should be 10 to indicate all 10 rounds are full
 
