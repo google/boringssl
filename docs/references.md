@@ -8,7 +8,7 @@ This document collects links to useful references. It is currently incomplete, b
 
 * [AES (FIPS 197)](https://csrc.nist.gov/pubs/fips/197/final)
 * [GCM (SP 800-38D)](https://csrc.nist.gov/pubs/sp/800/38/d/final)
-* [ChaCha20-Poly1305 (RFC 7539)](https://www.rfc-editor.org/rfc/rfc7539.html)
+* [ChaCha20-Poly1305 (RFC 8439)](https://www.rfc-editor.org/rfc/rfc8439.html)
 * [AES-GCM-SIV (RFC 8452)](https://www.rfc-editor.org/rfc/rfc8452.html)
 * [RSA (PKCS #1, RFC 8017)](https://www.rfc-editor.org/rfc/rfc8017.html)
 * [X25519 (RFC 7748)](https://www.rfc-editor.org/rfc/rfc7748.html)
