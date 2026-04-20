@@ -141,6 +141,10 @@ static const struct KnownAEAD kAEADs[] = {
      "des_ede3_cbc_sha1_tls_implicit_iv_tests.txt",
      kLimitedImplementation | kVariableTag, /*required_ad_length=*/11},
 
+    {"AES_128_CBC_SHA256_TLS", EVP_aead_aes_128_cbc_sha256_tls,
+     "aes_128_cbc_sha256_tls_tests.txt", kLimitedImplementation | kVariableTag,
+     /*required_ad_length=*/11},
+
     {"AES_128_CTR_HMAC_SHA256", EVP_aead_aes_128_ctr_hmac_sha256,
      "aes_128_ctr_hmac_sha256.txt", kCanTruncateTags},
 
