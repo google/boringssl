@@ -143,6 +143,15 @@ typedef __uint128_t uint128_t;
 #define OPENSSL_ATTR_CONST
 #endif
 
+// OPENSSL_ATTR_ALWAYS_INLINE tells the compiler to always attempt inlining the
+// function. This has the beneficial side effects that it inherits attributes
+// for code generation (e.g. the target attribute) from its callee.
+#if defined(__GNUC__) || defined(__clang__)
+#define OPENSSL_ATTR_ALWAYS_INLINE __attribute__((always_inline))
+#else
+#define OPENSSL_ATTR_ALWAYS_INLINE
+#endif
+
 #if defined(BORINGSSL_MALLOC_FAILURE_TESTING)
 // OPENSSL_reset_malloc_counter_for_testing, when malloc testing is enabled,
 // resets the internal malloc counter, to simulate further malloc failures. This
