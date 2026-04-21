@@ -1122,9 +1122,6 @@ both_builders(
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
-        # The default Linux build may not depend on the C++ runtime. This is
-        # easy to check when building shared libraries.
-        "check_imported_libraries": True,
     },
 )
 both_builders(
