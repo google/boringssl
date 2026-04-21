@@ -22,10 +22,11 @@ extern "C" {
 #endif
 
 
-// X-Wing.
+// MLKEM768-X25519 (X-Wing).
 //
-// This implements the X-Wing key encapsulation mechanism from
-// https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-06.
+// This implements the hybrid key encapsulation mechanism "MLKEM768-X25519" from
+// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-concrete-hybrid-kems-02
+// which is also known as "X-Wing".
 
 
 // XWING_private_key contains an X-Wing private key. The contents of this object
