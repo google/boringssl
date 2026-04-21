@@ -165,18 +165,32 @@ void BasicTest() {
       Marshal(MARSHAL_PRIVATE, priv.get()));
   EXPECT_EQ(encoded_private_key.size(), size_t{PRIVATE_KEY_BYTES});
 
-  OPENSSL_memcpy(first_two_bytes, encoded_private_key.data(),
-                 sizeof(first_two_bytes));
-  OPENSSL_memset(encoded_private_key.data(), 0xff, sizeof(first_two_bytes));
+  // Parsing should fail if a coefficient is out of range.
+  {
+    std::vector<uint8_t> invalid = encoded_private_key;
+    invalid[0] = 0xff;
+    invalid[1] = 0xff;
+    CBS cbs;
+    CBS_init(&cbs, invalid.data(), invalid.size());
+    auto priv2 = std::make_unique<PRIVATE_KEY>();
+    ASSERT_FALSE(PARSE_PRIVATE(priv2.get(), &cbs));
+  }
+
+  // Parsing should fail if the public key hash is wrong.
+  {
+    std::vector<uint8_t> invalid = encoded_private_key;
+    // The final 64 bytes of the semi-expanded format are the 32-byte hash and
+    // the 32-byte FO (Fujisaki-Okamoto) failure secret. Flip a bit in the hash.
+    invalid[invalid.size() - 33] ^= 1;
+    CBS cbs;
+    CBS_init(&cbs, invalid.data(), invalid.size());
+    auto priv2 = std::make_unique<PRIVATE_KEY>();
+    ASSERT_FALSE(PARSE_PRIVATE(priv2.get(), &cbs));
+  }
+
   CBS cbs;
   CBS_init(&cbs, encoded_private_key.data(), encoded_private_key.size());
   auto priv2 = std::make_unique<PRIVATE_KEY>();
-  // Parsing should fail because the first coefficient is >= kPrime.
-  ASSERT_FALSE(PARSE_PRIVATE(priv2.get(), &cbs));
-
-  OPENSSL_memcpy(encoded_private_key.data(), first_two_bytes,
-                 sizeof(first_two_bytes));
-  CBS_init(&cbs, encoded_private_key.data(), encoded_private_key.size());
   ASSERT_TRUE(PARSE_PRIVATE(priv2.get(), &cbs));
   EXPECT_EQ(Bytes(Declassified(encoded_private_key)),
             Bytes(Declassified(Marshal(MARSHAL_PRIVATE, priv2.get()))));

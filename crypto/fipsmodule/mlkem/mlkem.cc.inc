@@ -986,10 +986,11 @@ void mlkem_decap(uint8_t out_shared_secret[MLKEM_SHARED_SECRET_BYTES],
   mlkem_decap_no_self_test(out_shared_secret, ciphertext, priv);
 }
 
-// mlkem_parse_public_key_no_hash parses |in| into |pub| but doesn't calculate
-// the value of |pub->public_key_hash|.
+// mlkem_parse_public_key_with_trailing_data parses |in| into |pub| but leaves
+// trailing data in |in| for the caller.
 template <int RANK>
-int mlkem_parse_public_key_no_hash(public_key<RANK> *pub, CBS *in) {
+int mlkem_parse_public_key_with_trailing_data(public_key<RANK> *pub, CBS *in) {
+  CBS orig_in = *in;
   CBS t_bytes;
   if (!CBS_get_bytes(in, &t_bytes, encoded_vector_size(RANK)) ||
       !vector_decode<kLog2Prime>(&pub->t, CBS_data(&t_bytes)) ||
@@ -997,28 +998,31 @@ int mlkem_parse_public_key_no_hash(public_key<RANK> *pub, CBS *in) {
     return 0;
   }
   matrix_expand(&pub->m, pub->rho);
+  size_t pub_key_len = CBS_len(&orig_in) - CBS_len(in);
+  assert(pub_key_len == encoded_public_key_size(RANK));
+  hash_h(pub->public_key_hash, CBS_data(&orig_in), pub_key_len);
   return 1;
 }
 
 template <int RANK>
 int mlkem_parse_public_key(public_key<RANK> *pub, CBS *in) {
-  CBS orig_in = *in;
-  if (!mlkem_parse_public_key_no_hash(pub, in) ||  //
+  if (!mlkem_parse_public_key_with_trailing_data(pub, in) ||  //
       CBS_len(in) != 0) {
     return 0;
   }
-  hash_h(pub->public_key_hash, CBS_data(&orig_in), CBS_len(&orig_in));
   return 1;
 }
 
 template <int RANK>
 int mlkem_parse_private_key(private_key<RANK> *priv, CBS *in) {
-  CBS s_bytes;
+  CBS s_bytes, public_key_hash;
   if (!CBS_get_bytes(in, &s_bytes, encoded_vector_size(RANK)) ||
       !vector_decode<kLog2Prime>(&priv->s, CBS_data(&s_bytes)) ||
-      !mlkem_parse_public_key_no_hash(&priv->pub, in) ||
-      !CBS_copy_bytes(in, priv->pub.public_key_hash,
-                      sizeof(priv->pub.public_key_hash)) ||
+      !mlkem_parse_public_key_with_trailing_data(&priv->pub, in) ||
+      // We compute the public key hash ourselves, but check it matched.
+      !CBS_get_bytes(in, &public_key_hash, sizeof(priv->pub.public_key_hash)) ||
+      !CBS_mem_equal(&public_key_hash, priv->pub.public_key_hash,
+                     sizeof(priv->pub.public_key_hash)) ||
       !CBS_copy_bytes(in, priv->fo_failure_secret,
                       sizeof(priv->fo_failure_secret)) ||
       CBS_len(in) != 0) {
