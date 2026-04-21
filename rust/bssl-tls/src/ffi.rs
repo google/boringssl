@@ -14,6 +14,7 @@
 
 use core::{
     marker::PhantomData,
+    mem::MaybeUninit,
     ptr::{
         NonNull,
         null,
@@ -165,5 +166,110 @@ impl<'a> Drop for Bio<'a> {
             // Safety: the BIO handle should still be valid
             bssl_sys::BIO_free(self.0.as_ptr());
         }
+    }
+}
+
+/// A buffer region that can be safely written to.
+pub struct ReceiveBuffer<'a> {
+    ptr: *mut u8,
+    capacity: usize,
+    cursor: usize,
+    _p: PhantomData<&'a mut [u8]>,
+}
+
+impl<'a> ReceiveBuffer<'a> {
+    /// Create a new receiver buffer, with uninitialised bytes.
+    pub fn new_uninit(buffer: &'a mut [MaybeUninit<u8>]) -> Self {
+        let (ptr, capacity) = mut_slice_into_ffi_raw_parts(buffer);
+        ReceiveBuffer {
+            ptr: ptr as _,
+            capacity,
+            cursor: 0,
+            _p: PhantomData,
+        }
+    }
+
+    /// Create a new receiver buffer.
+    pub fn new(buffer: &'a mut [u8]) -> Self {
+        let (ptr, capacity) = mut_slice_into_ffi_raw_parts(buffer);
+        ReceiveBuffer {
+            ptr,
+            capacity,
+            cursor: 0,
+            _p: PhantomData,
+        }
+    }
+
+    /// Return a pointer to the first byte of the unfilled bytes.
+    ///
+    /// **INTERNAL function only, keep it as pub(crate)**
+    ///
+    /// # Example for BoringSSL Authors
+    ///
+    /// ```no_run
+    /// let mut recv_buf: ReceiveBuffer<'_>;
+    /// let nr_recv = unsafe {
+    ///     // Safety: ...
+    ///     bssl_sys::SSL_read(ssl, recv_buf.head(), recv_buf.remaining())
+    /// };
+    /// assert!(nr_recv >= 0);
+    /// unsafe {
+    ///     // Safety: by BoringSSL contract, it is guaranteed that nr_recv bytes are filled.
+    ///     recv_buf.advance(nr_recv as usize);
+    /// }
+    /// ```
+    ///
+    /// # Safety
+    /// - all uses of the returned buffer must be outlived by `'a`.
+    /// - all reads into the byte under the returned pointer and those [`Self::remaining`]
+    ///   bytes following it must be proceeded by at least one write; otherwise, it is **undefined
+    ///   behaviour**.
+    #[allow(unused)]
+    pub(crate) unsafe fn head(&mut self) -> *mut u8 {
+        debug_assert!(self.cursor <= self.capacity && self.cursor <= isize::MAX as usize);
+        unsafe {
+            // Safety: the cursor is still in-bound and the buffer is still owned by `self`.
+            self.ptr.add(self.cursor)
+        }
+    }
+
+    /// Advance the cursor to mark `bytes` from the [`Self::head`] as filled.
+    ///
+    /// **INTERNAL function only, keep it as pub(crate)**
+    ///
+    /// # Safety
+    /// The bytes in between [`Self::head`] and `Self::head() + bytes` must have been filled
+    /// by the caller before calling this method.
+    #[allow(unused)]
+    pub(crate) unsafe fn advance(&mut self, bytes: usize) {
+        self.cursor += bytes;
+        debug_assert!(self.cursor <= self.capacity);
+    }
+
+    /// Extract a slice to the filled data.
+    pub fn filled(&self) -> &[u8] {
+        unsafe {
+            // Safety: `self` still exclusively owns the buffer region and the range of bytes
+            // is known to be initialised by us. See `advance`.
+            sanitize_slice(self.ptr, self.cursor).unwrap_or(&[])
+        }
+    }
+
+    /// Reports remaining capacity in the destination buffer.
+    pub fn remaining(&self) -> usize {
+        self.capacity - self.cursor
+    }
+
+    /// Reports written data in the destination buffer.
+    pub fn written(&self) -> usize {
+        self.cursor
+    }
+}
+
+impl core::ops::Deref for ReceiveBuffer<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.filled()
     }
 }

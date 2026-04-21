@@ -47,6 +47,8 @@ mod methods;
 #[doc(hidden)]
 mod macros;
 
+pub use ffi::ReceiveBuffer;
+
 fn has_duplicates<T: Ord + Eq>(list: &[T]) -> bool {
     let mut seen = alloc::collections::BTreeSet::new();
     list.iter().any(|elem| !seen.insert(elem))
