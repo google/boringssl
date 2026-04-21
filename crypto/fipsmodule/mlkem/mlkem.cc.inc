@@ -233,23 +233,31 @@ inline void vector_zero(vector<RANK> *out) {
 // should be seen as 128 elements in GF(3329^2), with the coefficients of the
 // elements being consecutive entries in |s->c|.
 inline void scalar_ntt(scalar *s) {
-  int offset = DEGREE;
-  // `int` is used here because using `size_t` throughout caused a ~5% slowdown
-  // with Clang 14 on Aarch64.
-  for (int step = 1; step < DEGREE / 2; step <<= 1) {
-    offset >>= 1;
-    int k = 0;
-    for (int i = 0; i < step; i++) {
-      const uint32_t step_root = kNTTRoots[i + step];
-      for (int j = k; j < k + offset; j++) {
-        uint16_t odd = reduce(step_root * s->c[j + offset]);
-        uint16_t even = s->c[j];
-        s->c[j] = reduce_once(odd + even);
-        s->c[j + offset] = reduce_once(even - odd + kPrime);
-      }
-      k += 2 * offset;
-    }
+  // Manually unrolled loop to maximize vectorization.
+#define ITER(step, offset)                                   \
+  {                                                          \
+    int k = 0;                                               \
+    for (int i = 0; i < step; i++) {                         \
+      const uint32_t step_root = kNTTRoots[i + step];        \
+      for (int j = k; j < k + offset; j++) {                 \
+        uint16_t odd = reduce(step_root * s->c[j + offset]); \
+        uint16_t even = s->c[j];                             \
+        s->c[j] = reduce_once(odd + even);                   \
+        s->c[j + offset] = reduce_once(even - odd + kPrime); \
+      }                                                      \
+      k += 2 * offset;                                       \
+    }                                                        \
   }
+  // for (int step = 1; step < DEGREE / 2; step <<= 1)
+  ITER(1, 128)
+  ITER(2, 64)
+  ITER(4, 32)
+  ITER(8, 16)
+  ITER(16, 8)
+  ITER(32, 4)
+  ITER(64, 2)
+  static_assert(DEGREE == 256);
+#undef ITER
 }
 
 template <int RANK>
@@ -265,23 +273,32 @@ inline void vector_ntt(vector<RANK> *a) {
 // to account for the fact that 3329 does not have a 512th root of unity, using
 // the precomputed 128 roots of unity stored in |kInverseNTTRoots|.
 void scalar_inverse_ntt(scalar *s) {
-  int step = DEGREE / 2;
-  // `int` is used here because using `size_t` throughout caused a ~5% slowdown
-  // with Clang 14 on Aarch64.
-  for (int offset = 2; offset < DEGREE; offset <<= 1) {
-    step >>= 1;
-    int k = 0;
-    for (int i = 0; i < step; i++) {
-      uint32_t step_root = kInverseNTTRoots[i + step];
-      for (int j = k; j < k + offset; j++) {
-        uint16_t odd = s->c[j + offset];
-        uint16_t even = s->c[j];
-        s->c[j] = reduce_once(odd + even);
-        s->c[j + offset] = reduce(step_root * (even - odd + kPrime));
-      }
-      k += 2 * offset;
-    }
+  // Manually unrolled loop to maximize vectorization.
+#define ITER(step, offset)                                            \
+  {                                                                   \
+    int k = 0;                                                        \
+    for (int i = 0; i < step; i++) {                                  \
+      uint32_t step_root = kInverseNTTRoots[i + step];                \
+      for (int j = k; j < k + offset; j++) {                          \
+        uint16_t odd = s->c[j + offset];                              \
+        uint16_t even = s->c[j];                                      \
+        s->c[j] = reduce_once(odd + even);                            \
+        s->c[j + offset] = reduce(step_root * (even - odd + kPrime)); \
+      }                                                               \
+      k += 2 * offset;                                                \
+    }                                                                 \
   }
+  // for (int offset = 2; offset < DEGREE; offset <<= 1)
+  ITER(64, 2)
+  ITER(32, 4)
+  ITER(16, 8)
+  ITER(8, 16)
+  ITER(4, 32)
+  ITER(2, 64)
+  ITER(1, 128)
+  static_assert(DEGREE == 256);
+#undef ITER
+
   for (int i = 0; i < DEGREE; i++) {
     s->c[i] = reduce(s->c[i] * kInverseDegree);
   }
