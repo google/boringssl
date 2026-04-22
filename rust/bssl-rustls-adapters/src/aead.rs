@@ -494,7 +494,11 @@ impl<A: AeadConstructible, AD: TlsAdditionalData> MessageEncrypter
         payload.extend_from_slice(&msg.typ.to_array());
         let tag = aead.seal_in_place(&nonce, &mut payload.as_mut()[0..plaintxt_len + 1], ad);
         payload.extend_from_slice(A::tag_to_buf(&tag));
-        Ok(OutboundOpaqueMessage::new(msg.typ, msg.version, payload))
+        Ok(OutboundOpaqueMessage::new(
+            ContentType::ApplicationData,
+            ProtocolVersion::TLSv1_2,
+            payload,
+        ))
     }
 
     fn encrypted_payload_len(&self, payload_len: usize) -> usize {
