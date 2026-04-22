@@ -151,21 +151,6 @@ impl<R, M> DerefMut for TlsConnectionInHandshake<'_, R, M> {
     }
 }
 
-impl<R, M> TlsConnectionInHandshake<'_, R, M>
-where
-    M: HasTlsConnectionMethod,
-{
-    #[allow(unused)] // This method will be used in the following patch to support some async tasks.
-    pub(super) fn get_connection_methods(
-        &mut self,
-    ) -> &mut super::methods::RustConnectionMethods<M> {
-        unsafe {
-            // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            super::get_connection_methods(self.ptr())
-        }
-    }
-}
-
 /// # Handshake
 impl<R, M> TlsConnectionInHandshake<'_, R, M>
 where
