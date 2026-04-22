@@ -221,13 +221,6 @@ impl TlsCredential {
         self.0.as_ptr()
     }
 
-    /// This method releases the ownership.
-    pub(crate) fn into_raw(self) -> *mut bssl_sys::SSL_CREDENTIAL {
-        let ptr = self.0.as_ptr();
-        forget(self);
-        ptr
-    }
-
     /// Create a new pre-shared key credential for TLS 1.3.
     ///
     /// See [RFC 9258](https://datatracker.ietf.org/doc/html/rfc9258) for details.

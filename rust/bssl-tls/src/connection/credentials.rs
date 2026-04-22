@@ -83,10 +83,10 @@ where
     ///
     /// Earlier calls to this method appends a credential that is preferred over those added
     /// in the later calls.
-    pub fn add_credential(&mut self, credential: TlsCredential) -> Result<&mut Self, Error> {
+    pub fn add_credential(&mut self, credential: &TlsCredential) -> Result<&mut Self, Error> {
         check_lib_error!(unsafe {
             // Safety: `credential` is still valid.
-            bssl_sys::SSL_add1_credential(self.ptr(), credential.into_raw())
+            bssl_sys::SSL_add1_credential(self.ptr(), credential.ptr())
         });
         Ok(self)
     }
