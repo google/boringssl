@@ -252,16 +252,14 @@ where
             bssl_sys::SSL_shutdown(self.ptr())
         };
         if self.is_write_closed() {
-            return Ok(ShutdownStatus::CloseNotifyReceived);
+            return Ok(ShutdownStatus::EndOfStream);
         }
         match rc {
             0 => Ok(ShutdownStatus::CloseNotifyPosted),
             1 => Ok(ShutdownStatus::CloseNotifyReceived),
             _ => match self.categorise_error_for_io(rc) {
                 Ok(IoStatus::Ok(_)) => unreachable!(),
-                Ok(IoStatus::Empty | IoStatus::EndOfStream) => {
-                    Err(Error::Io(crate::errors::IoError::EndOfStream))
-                }
+                Ok(IoStatus::Empty | IoStatus::EndOfStream) => Ok(ShutdownStatus::EndOfStream),
                 Ok(IoStatus::Retry(reason)) => Err(Error::TlsRetry(reason)),
                 Err(Error::TlsReason(TlsErrorReason::ApplicationDataOnShutdown)) => {
                     Ok(ShutdownStatus::RemainingApplicationData)
@@ -328,4 +326,6 @@ pub enum ShutdownStatus {
     CloseNotifyReceived,
     /// There are remaining application data. Consume them first before calling `shutdown` again.
     RemainingApplicationData,
+    /// The read half of the connection reaches the end of the stream.
+    EndOfStream,
 }
