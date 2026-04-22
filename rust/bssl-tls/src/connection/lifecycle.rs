@@ -14,7 +14,10 @@
 
 //! TLS Connection lifecycle controls
 
-use alloc::boxed::Box;
+use alloc::{
+    boxed::Box,
+    string::ToString, //
+};
 use core::{
     future::poll_fn,
     ops::{

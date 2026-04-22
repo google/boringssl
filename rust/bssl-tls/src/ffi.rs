@@ -206,7 +206,7 @@ impl<'a> ReceiveBuffer<'a> {
     ///
     /// # Example for BoringSSL Authors
     ///
-    /// ```no_run
+    /// ```ignore
     /// let mut recv_buf: ReceiveBuffer<'_>;
     /// let nr_recv = unsafe {
     ///     // Safety: ...

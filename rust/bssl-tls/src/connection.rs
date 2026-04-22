@@ -197,6 +197,8 @@ impl<R, M> TlsConnectionRef<R, M> {
     }
 }
 
+// TODO(@xfding): there seems to be some type inference regression, drop the turbofish when it is
+// resolved.
 impl<R, M> TlsConnectionRef<R, M>
 where
     M: methods::HasTlsConnectionMethod,
@@ -204,13 +206,13 @@ where
     fn get_connection_methods(&mut self) -> &mut methods::RustConnectionMethods<M> {
         unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            get_connection_methods(self.ptr())
+            get_connection_methods::<M>(self.ptr())
         }
     }
     fn get_connection_methods_ref(&self) -> &methods::RustConnectionMethods<M> {
         unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            get_connection_methods_ref(self.ptr())
+            get_connection_methods_ref::<M>(self.ptr())
         }
     }
 }

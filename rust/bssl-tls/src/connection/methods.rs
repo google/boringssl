@@ -19,13 +19,13 @@ use core::{
         c_long,
         c_void, //
     },
+    marker::PhantomData,
     ptr::{
         NonNull,
         null_mut, //
     },
     task::Waker, //
 };
-use std::marker::PhantomData;
 
 use once_cell::sync::Lazy;
 
