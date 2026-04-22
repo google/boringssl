@@ -103,7 +103,7 @@ class OPENSSL_EXPORT CertificateVerifyOptions {
   // will try to append an intermediate to a potential path. This bounds the
   // amount of time that a verification attempt can take, at the risk of
   // rejecting cases that would be solved if only more effort were used.
-  uint32_t max_iteration_count = 0;
+  uint32_t max_iteration_count = 20;
 
   // Sets an optional deadline for completing path building. It defaults
   // to std::chrono::time_point::max() if it not set. If |deadline| has a

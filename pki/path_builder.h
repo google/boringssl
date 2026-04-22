@@ -234,7 +234,7 @@ class OPENSSL_EXPORT CertPathBuilder {
 
   // Sets a limit to the number of times to repeat the process of considering a
   // new intermediate over all potential paths. Setting |limit| to 0 disables
-  // the iteration limit, which is the default.
+  // the iteration limit.
   void SetIterationLimit(uint32_t limit);
 
   // Sets a limit to the number of certificates to be added in a path from leaf
@@ -273,7 +273,7 @@ class OPENSSL_EXPORT CertPathBuilder {
   const std::set<der::Input> user_initial_policy_set_;
   const InitialPolicyMappingInhibit initial_policy_mapping_inhibit_;
   const InitialAnyPolicyInhibit initial_any_policy_inhibit_;
-  uint32_t max_iteration_count_ = 0;
+  uint32_t max_iteration_count_ = 20;
   uint32_t max_path_building_depth_ = 0;
   size_t valid_path_limit_ = 1;
   size_t valid_path_count_ = 0;
