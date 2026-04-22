@@ -119,11 +119,11 @@ impl<'a> X509Verifier<'a> {
     /// Returns `Ok(())` if verification succeeds.
     /// Returns `Err(X509VerifyResult)` if verification fails.
     pub fn verify(&mut self) -> Result<(), X509VerifyResult> {
-        self.verified = true;
         if unsafe {
             // Safety: `self.0` is valid. The context must have been initialized.
             bssl_sys::X509_verify_cert(self.ptr()) == 1
         } {
+            self.verified = true;
             Ok(())
         } else {
             Err(self.get_error())
@@ -138,12 +138,12 @@ impl<'a> X509Verifier<'a> {
         X509VerifyResult::try_from(error_code as i32).unwrap_or(X509VerifyResult::Unspecified)
     }
 
-    /// Returns the verified certificate chain.
+    /// Return a possibly valid certificate chain.
     ///
-    /// The first certificate will be the leaf certificate and the last certificate will be one of
-    /// the trust anchor.
+    /// The first certificate will be the leaf certificate and the last certificate should be one of
+    /// the trusted certificate authorities, if the method returns `Some(chain)`.
     ///
-    /// This method returns [`None`] if [`Self::verify`] has not been called.
+    /// This method also returns [`None`] if [`Self::verify`] has not been successfully completed.
     pub fn chain(&self) -> Option<Vec<X509Certificate>> {
         if !self.verified {
             return None;
