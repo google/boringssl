@@ -874,18 +874,24 @@ int SSL_request_handshake_hints(SSL *ssl, const uint8_t *client_hello,
 //     -- hint to the wrong field.
 //     decryptedPSKHint        [3] IMPLICIT OCTET STRING OPTIONAL,
 //     ignorePSKHint           [4] IMPLICIT NULL OPTIONAL,
-//     compressCertificateHint [5] IMPLICIT CompressCertificateHint OPTIONAL,
+//     -- Due to a historical typo, compressCertificateHint's tag is primitive
+//     -- instead of constructed.
+//     compressCertificateHint [5 PRIMITIVE] IMPLICIT CompressCertificateHint
+//                                 OPTIONAL,
 //     -- TLS 1.2 and 1.3 use different server random hints because one contains
 //     -- a timestamp while the other doesn't. If the hint was generated
 //     -- assuming TLS 1.3 but we actually negotiate TLS 1.2, mixing the two
 //     -- will break this.
 //     serverRandomTLS12       [6] IMPLICIT OCTET STRING OPTIONAL,
-//     ecdheHint               [7] IMPLICIT ECDHEHint OPTIONAL
+//     -- Due to a historical typo, ecdheHint tag has universal class instead of
+//     -- context-specific.
+//     ecdheHint               [UNIVERSAL 7] IMPLICIT ECDHEHint OPTIONAL
 //     -- At most one of decryptedTicketHint or ignoreTicketHint may be present.
 //     -- renewTicketHint requires decryptedTicketHint.
 //     decryptedTicketHint     [8] IMPLICIT OCTET STRING OPTIONAL,
 //     renewTicketHint         [9] IMPLICIT NULL OPTIONAL,
 //     ignoreTicketHint       [10] IMPLICIT NULL OPTIONAL,
+//     -- Unlike a usual ASN.1 structure, trailing data is ignored.
 // }
 //
 // KeyShareHint ::= SEQUENCE {
