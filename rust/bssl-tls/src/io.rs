@@ -342,7 +342,7 @@ fn get_bio_method() -> *const bssl_sys::BIO_METHOD {
 unsafe extern "C" fn rust_bio_read(
     bio: *mut bssl_sys::BIO,
     buffer: *mut c_char,
-    len: c_int,
+    buf_len: c_int,
 ) -> c_int {
     let rust_bio = unsafe {
         // Safety: `bio` is still valid and so is the `RustBio` which we have exclusive access to.
@@ -351,7 +351,7 @@ unsafe extern "C" fn rust_bio_read(
     if rust_bio.read_eos {
         return 0;
     }
-    let Ok(len) = usize::try_from(len) else {
+    let Ok(len) = usize::try_from(buf_len) else {
         return -1;
     };
     let waker = rust_bio.waker.clone();
@@ -378,7 +378,11 @@ unsafe extern "C" fn rust_bio_read(
     match rust_bio.transform_result(res, TlsRetryReason::WantRead) {
         IoStatus::Ok(bytes) => {
             if let Ok(bytes) = c_int::try_from(bytes) {
-                return bytes;
+                // Here the `bytes` read out from the transport as reported by the application does
+                // not necessary stay in-bound, it could be application error or active exploit.
+                // Therefore, we can fully trust that the application behaves well.
+                // In order to not break `libssl` we can cap the number of writes written.
+                return bytes.min(buf_len);
             }
             -1
         }
@@ -400,7 +404,7 @@ unsafe extern "C" fn rust_bio_read(
 unsafe extern "C" fn rust_bio_write(
     bio: *mut bssl_sys::BIO,
     buffer: *const c_char,
-    len: c_int,
+    buf_len: c_int,
 ) -> c_int {
     let rust_bio = unsafe {
         // Safety: `bio` is still valid and so is the `RustBio` which we have exclusive access to.
@@ -409,7 +413,7 @@ unsafe extern "C" fn rust_bio_write(
     if rust_bio.write_eos {
         return 0;
     }
-    let Ok(len) = usize::try_from(len) else {
+    let Ok(len) = usize::try_from(buf_len) else {
         return -1;
     };
     let waker = rust_bio.waker.clone();
@@ -434,7 +438,10 @@ unsafe extern "C" fn rust_bio_write(
     match rust_bio.transform_result(res, TlsRetryReason::WantWrite) {
         IoStatus::Ok(bytes) => {
             if let Ok(bytes) = c_int::try_from(bytes) {
-                return bytes;
+                // Here the `bytes` sent out to the transport as reported by the application does
+                // not necessary stay in-bound, it could be application error or active exploit.
+                // Therefore, we can fully trust that the application behaves well.
+                return bytes.min(buf_len);
             }
             -1
         }
