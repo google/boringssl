@@ -286,8 +286,7 @@ void bssl::CRYPTO_gcm128_init_aes_key(GCM128_KEY *gcm_key, const uint8_t *key,
     gcm_key->impl = gcm_x86_aesni;
   }
 #elif defined(OPENSSL_AARCH64)
-  // SHA3 and EOR3 belong to the same ISA extension.
-  if (gcm_sha3_capable() && is_hwaes) {
+  if (gcm_eor3_capable() && is_hwaes) {
     gcm_key->impl = gcm_arm64_aes_eor3;
   } else if (gcm_pmull_capable() && is_hwaes) {
     gcm_key->impl = gcm_arm64_aes;

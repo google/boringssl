@@ -171,8 +171,7 @@ TEST(GCMTest, ABI) {
                 Htable);
     }
   }
-  if (hwaes_capable() && gcm_pmull_capable() &&
-      CRYPTO_is_ARMv8_SHA3_capable()) {
+  if (hwaes_capable() && gcm_eor3_capable()) {
     static const uint8_t kKey[16] = {0};
     uint8_t iv[16] = {0};
 
