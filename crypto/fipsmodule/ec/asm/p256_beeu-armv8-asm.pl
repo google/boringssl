@@ -193,6 +193,8 @@ ___
 # - lsl must precede the lsr of the same register afterwards.
 # The chosen order of the instructions overall is to try and maximize
 # the pipeline usage.
+#
+# shift must be at most 63.
 sub SHIFT256 {
   my ($var0, $var1, $var2, $var3) = @_;
   return <<___;
@@ -285,6 +287,7 @@ beeu_mod_inverse_vartime:
 
     // shift := number of trailing 0s in $b0
     // (      = number of leading 0s in $t1; see the "rbit" instruction in TEST_B_ZERO)
+    orr     $t1, $t1, #1	// Clamp the shift to 63 bits (see SHIFT256)
     clz     $shift, $t1
 
     // If there is no shift, goto shift_A_Y
@@ -309,6 +312,7 @@ beeu_mod_inverse_vartime:
     // - The loop is only used to call SHIFT1(X)
     //   and $shift is decreased while executing the X loop.
     // - SHIFT256(B, $shift) is performed before right-shifting X; they are independent
+    // - "$shift" is clamped to 63 bits.
 
 .Lbeeu_shift_A_Y:
     // Same for A and Y.
@@ -316,6 +320,7 @@ beeu_mod_inverse_vartime:
     // Reverse the bit order of $a0
     // $shift := number of trailing 0s in $a0 (= number of leading 0s in $t1)
     rbit    $t1, $a0
+    orr     $t1, $t1, #1	// Clamp the shift to 63 bits (see SHIFT256)
     clz     $shift, $t1
 
     // If there is no shift, goto |B-A|, X+Y update
