@@ -2812,7 +2812,8 @@ static bool ext_certificate_authorities_parse_clienthello(SSL_HANDSHAKE *hs,
   }
 
   hs->ca_names = SSL_parse_CA_list(hs->ssl, out_alert, contents);
-  if (!hs->ca_names) {
+  if (!hs->ca_names || sk_CRYPTO_BUFFER_num(hs->ca_names.get()) == 0 ||
+      CBS_len(contents) != 0) {
     return false;
   }
 

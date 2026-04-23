@@ -1880,6 +1880,40 @@ func addExtensionTests() {
 				expectedLocalError: "remote error: error decoding message",
 			})
 
+			// The certificate authorities extension cannot be empty. The sender should
+			// have omitted if empty.
+			if ver.version >= VersionTLS13 {
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: clientTest,
+					name:     "RejectEmptyCertificateAuthorities-Client-" + suffix,
+					config: Config{
+						MaxVersion: ver.version,
+						ClientAuth: RequireAnyClientCert,
+						Bugs: ProtocolBugs{
+							SendEmptyCertificateAuthorities: true,
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: serverTest,
+					name:     "RejectEmptyCertificateAuthorities-Server-" + suffix,
+					config: Config{
+						MaxVersion: ver.version,
+						Bugs: ProtocolBugs{
+							SendEmptyCertificateAuthorities: true,
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+			}
+
 			// Extension permutation should interact correctly with other extensions,
 			// HelloVerifyRequest, HelloRetryRequest, and ECH. SSLTest.PermuteExtensions
 			// in ssl_test.cc tests that the extensions are actually permuted. This
@@ -2370,4 +2404,39 @@ func addOmitExtensionsTests() {
 			},
 		})
 	}
+}
+
+// Test that our extension parsers consistently reject trailing data.
+// TODO(crbug.com/505803427): Test other extensions.
+func addExtensionTrailingDataTests() {
+	testCases = append(testCases, testCase{
+		testType: clientTest,
+		name:     "ExtensionTrailingData-CertificateAuthorities-Client-TLS13",
+		config: Config{
+			MaxVersion: VersionTLS13,
+			ClientAuth: RequireAnyClientCert,
+			ClientCAs:  makeCertPoolFromRoots(&rsaChainCertificate, &ecdsaP384Certificate),
+			Bugs: ProtocolBugs{
+				ExtensionsWithTrailingData: []uint16{extensionCertificateAuthorities},
+			},
+		},
+		shouldFail:         true,
+		expectedError:      ":ERROR_PARSING_EXTENSION:",
+		expectedLocalError: "remote error: error decoding message",
+	})
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "ExtensionTrailingData-CertificateAuthorities-Server-TLS13",
+		config: Config{
+			MaxVersion:  VersionTLS13,
+			RootCAs:     makeCertPoolFromRoots(&rsaChainCertificate, &ecdsaP384Certificate),
+			SendRootCAs: true,
+			Bugs: ProtocolBugs{
+				ExtensionsWithTrailingData: []uint16{extensionCertificateAuthorities},
+			},
+		},
+		shouldFail:         true,
+		expectedError:      ":ERROR_PARSING_EXTENSION:",
+		expectedLocalError: "remote error: error decoding message",
+	})
 }

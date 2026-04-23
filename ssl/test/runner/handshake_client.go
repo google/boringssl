@@ -526,30 +526,31 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 	}
 
 	hello := &clientHelloMsg{
-		isDTLS:                    c.isDTLS,
-		compressionMethods:        []uint8{compressionNone},
-		random:                    make([]byte, 32),
-		ocspStapling:              !c.config.Bugs.NoOCSPStapling,
-		sctListSupported:          !c.config.Bugs.NoSignedCertificateTimestamps,
-		supportedCurves:           c.config.curvePreferences(),
-		supportedPoints:           []uint8{pointFormatUncompressed},
-		nextProtoNeg:              len(c.config.NextProtos) > 0,
-		secureRenegotiation:       []byte{},
-		alpnProtocols:             c.config.NextProtos,
-		quicTransportParams:       quicTransportParams,
-		quicTransportParamsLegacy: quicTransportParamsLegacy,
-		duplicateExtension:        c.config.Bugs.DuplicateExtension,
-		channelIDSupported:        c.config.ChannelID != nil,
-		extendedMasterSecret:      maxVersion >= VersionTLS10,
-		srtpProtectionProfiles:    c.config.SRTPProtectionProfiles,
-		srtpMasterKeyIdentifier:   c.config.Bugs.SRTPMasterKeyIdentifier,
-		customExtension:           c.config.Bugs.CustomExtension,
-		omitExtensions:            c.config.Bugs.OmitExtensions,
-		emptyExtensions:           c.config.Bugs.EmptyExtensions,
-		delegatedCredential:       c.config.DelegatedCredentialAlgorithms,
-		trustAnchors:              c.config.RequestTrustAnchors,
-		clientCertificateTypes:    c.config.Bugs.SendClientCertificateTypes,
-		serverCertificateTypes:    c.config.Bugs.SendServerCertificateTypes,
+		isDTLS:                     c.isDTLS,
+		compressionMethods:         []uint8{compressionNone},
+		random:                     make([]byte, 32),
+		ocspStapling:               !c.config.Bugs.NoOCSPStapling,
+		sctListSupported:           !c.config.Bugs.NoSignedCertificateTimestamps,
+		supportedCurves:            c.config.curvePreferences(),
+		supportedPoints:            []uint8{pointFormatUncompressed},
+		nextProtoNeg:               len(c.config.NextProtos) > 0,
+		secureRenegotiation:        []byte{},
+		alpnProtocols:              c.config.NextProtos,
+		quicTransportParams:        quicTransportParams,
+		quicTransportParamsLegacy:  quicTransportParamsLegacy,
+		duplicateExtension:         c.config.Bugs.DuplicateExtension,
+		channelIDSupported:         c.config.ChannelID != nil,
+		extendedMasterSecret:       maxVersion >= VersionTLS10,
+		srtpProtectionProfiles:     c.config.SRTPProtectionProfiles,
+		srtpMasterKeyIdentifier:    c.config.Bugs.SRTPMasterKeyIdentifier,
+		customExtension:            c.config.Bugs.CustomExtension,
+		omitExtensions:             c.config.Bugs.OmitExtensions,
+		emptyExtensions:            c.config.Bugs.EmptyExtensions,
+		delegatedCredential:        c.config.DelegatedCredentialAlgorithms,
+		trustAnchors:               c.config.RequestTrustAnchors,
+		clientCertificateTypes:     c.config.Bugs.SendClientCertificateTypes,
+		serverCertificateTypes:     c.config.Bugs.SendServerCertificateTypes,
+		extensionsWithTrailingData: c.config.Bugs.ExtensionsWithTrailingData,
 	}
 
 	// Translate the bugs that modify ClientHello extension order into a
@@ -671,6 +672,9 @@ func (hs *clientHandshakeState) createClientHello(innerHello *clientHelloMsg, ec
 
 	if c.config.SendRootCAs && c.config.RootCAs != nil {
 		hello.certificateAuthorities = c.config.RootCAs.Subjects()
+	}
+	if c.config.Bugs.SendEmptyCertificateAuthorities {
+		hello.certificateAuthorities = [][]byte{}
 	}
 
 	if maxVersion >= VersionTLS13 {

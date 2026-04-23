@@ -1140,10 +1140,11 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	if requestClientCert {
 		// Request a client certificate
 		certReq := &certificateRequestMsg{
-			hasSignatureAlgorithm: !config.Bugs.OmitCertificateRequestAlgorithms,
-			hasRequestContext:     true,
-			requestContext:        config.Bugs.SendRequestContext,
-			customExtension:       config.Bugs.SendCustomCertificateRequest,
+			hasSignatureAlgorithm:      !config.Bugs.OmitCertificateRequestAlgorithms,
+			hasRequestContext:          true,
+			requestContext:             config.Bugs.SendRequestContext,
+			customExtension:            config.Bugs.SendCustomCertificateRequest,
+			extensionsWithTrailingData: config.Bugs.ExtensionsWithTrailingData,
 		}
 		if !config.Bugs.NoSignatureAlgorithms {
 			certReq.signatureAlgorithms = config.verifySignatureAlgorithms()
@@ -1156,6 +1157,9 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		// an appropriate certificate to give to us.
 		if config.ClientCAs != nil {
 			certReq.certificateAuthorities = config.ClientCAs.Subjects()
+		}
+		if config.Bugs.SendEmptyCertificateAuthorities {
+			certReq.certificateAuthorities = [][]byte{}
 		}
 		hs.writeServerHash(certReq.marshal())
 		c.writeRecord(recordTypeHandshake, certReq.marshal())

@@ -2274,6 +2274,17 @@ type ProtocolBugs struct {
 	// send a server_certificate_type extension containing the given values.
 	// For a server, this may not contain more than 1 value.
 	SendServerCertificateTypes []CertificateType
+
+	// SendEmptyCertificateAuthorities, if true, causes a TLS 1.3 client or
+	// server to send an empty certificate_authorities extension, instead of
+	// omitting the extension.
+	SendEmptyCertificateAuthorities bool
+
+	// ExtensionsWithTrailingData specifies a list of extensions to include
+	// trailing data in.
+	// TODO(crbug.com/505803427): Currently only implemented for ClientHello and
+	// CertificateRequest.
+	ExtensionsWithTrailingData []uint16
 }
 
 func (c *Config) serverInit() {

@@ -789,7 +789,9 @@ static enum ssl_hs_wait_t do_read_certificate_request(SSL_HANDSHAKE *hs) {
 
   if (ca.present) {
     hs->ca_names = SSL_parse_CA_list(ssl, &alert, &ca.data);
-    if (!hs->ca_names) {
+    if (!hs->ca_names || sk_CRYPTO_BUFFER_num(hs->ca_names.get()) == 0 ||
+        CBS_len(&ca.data) != 0) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_PARSING_EXTENSION);
       ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
       return ssl_hs_error;
     }

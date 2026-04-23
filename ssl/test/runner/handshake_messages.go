@@ -7,6 +7,7 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"golang.org/x/crypto/cryptobyte"
 )
@@ -259,6 +260,7 @@ type clientHelloMsg struct {
 	outerExtensions                          []uint16
 	reorderOuterExtensionsWithoutCompressing bool
 	prefixExtensions                         []uint16
+	extensionsWithTrailingData               []uint16
 	// The following fields are only filled in by |unmarshal| and ignored when
 	// marshaling a new ClientHello.
 	echPayloadStart int
@@ -611,7 +613,8 @@ func (m *clientHelloMsg) marshalBody(hello *cryptobyte.Builder, typ clientHelloT
 			body: body.BytesOrPanic(),
 		})
 	}
-	if len(m.certificateAuthorities) > 0 {
+	// Check against nil to allow sending an (invalid) empty list.
+	if m.certificateAuthorities != nil {
 		body := cryptobyte.NewBuilder(nil)
 		body.AddUint16LengthPrefixed(func(certificateAuthorities *cryptobyte.Builder) {
 			for _, ca := range m.certificateAuthorities {
@@ -678,6 +681,13 @@ func (m *clientHelloMsg) marshalBody(hello *cryptobyte.Builder, typ clientHelloT
 			id:   extensionPreSharedKey,
 			body: pskExtension.BytesOrPanic(),
 		})
+	}
+
+	// Append trailing data to extensions if requested.
+	for i := range extensions {
+		if slices.Contains(m.extensionsWithTrailingData, extensions[i].id) {
+			extensions[i].body = append(slices.Clip(extensions[i].body), 0)
+		}
 	}
 
 	if m.omitExtensions {
@@ -2625,12 +2635,13 @@ type certificateRequestMsg struct {
 	// TLS 1.3.
 	hasRequestContext bool
 
-	certificateTypes        []byte
-	requestContext          []byte
-	signatureAlgorithms     []signatureAlgorithm
-	signatureAlgorithmsCert []signatureAlgorithm
-	certificateAuthorities  [][]byte
-	customExtension         uint16
+	certificateTypes           []byte
+	requestContext             []byte
+	signatureAlgorithms        []signatureAlgorithm
+	signatureAlgorithmsCert    []signatureAlgorithm
+	certificateAuthorities     [][]byte
+	customExtension            uint16
+	extensionsWithTrailingData []uint16
 }
 
 func (m *certificateRequestMsg) marshal() []byte {
@@ -2645,9 +2656,18 @@ func (m *certificateRequestMsg) marshal() []byte {
 		if m.hasRequestContext {
 			addUint8LengthPrefixedBytes(body, m.requestContext)
 			body.AddUint16LengthPrefixed(func(extensions *cryptobyte.Builder) {
-				if m.hasSignatureAlgorithm {
-					extensions.AddUint16(extensionSignatureAlgorithms)
+				writeExt := func(id uint16, cb func(*cryptobyte.Builder)) {
+					extensions.AddUint16(id)
 					extensions.AddUint16LengthPrefixed(func(extension *cryptobyte.Builder) {
+						cb(extension)
+						if slices.Contains(m.extensionsWithTrailingData, id) {
+							extension.AddUint8(0)
+						}
+					})
+				}
+
+				if m.hasSignatureAlgorithm {
+					writeExt(extensionSignatureAlgorithms, func(extension *cryptobyte.Builder) {
 						extension.AddUint16LengthPrefixed(func(signatureAlgorithms *cryptobyte.Builder) {
 							for _, sigAlg := range m.signatureAlgorithms {
 								signatureAlgorithms.AddUint16(uint16(sigAlg))
@@ -2656,8 +2676,7 @@ func (m *certificateRequestMsg) marshal() []byte {
 					})
 				}
 				if len(m.signatureAlgorithmsCert) > 0 {
-					extensions.AddUint16(extensionSignatureAlgorithmsCert)
-					extensions.AddUint16LengthPrefixed(func(extension *cryptobyte.Builder) {
+					writeExt(extensionSignatureAlgorithmsCert, func(extension *cryptobyte.Builder) {
 						extension.AddUint16LengthPrefixed(func(signatureAlgorithmsCert *cryptobyte.Builder) {
 							for _, sigAlg := range m.signatureAlgorithmsCert {
 								signatureAlgorithmsCert.AddUint16(uint16(sigAlg))
@@ -2665,9 +2684,9 @@ func (m *certificateRequestMsg) marshal() []byte {
 						})
 					})
 				}
-				if len(m.certificateAuthorities) > 0 {
-					extensions.AddUint16(extensionCertificateAuthorities)
-					extensions.AddUint16LengthPrefixed(func(extension *cryptobyte.Builder) {
+				// Check against nil to allow sending an (invalid) empty list.
+				if m.certificateAuthorities != nil {
+					writeExt(extensionCertificateAuthorities, func(extension *cryptobyte.Builder) {
 						extension.AddUint16LengthPrefixed(func(certificateAuthorities *cryptobyte.Builder) {
 							for _, ca := range m.certificateAuthorities {
 								addUint16LengthPrefixedBytes(certificateAuthorities, ca)
@@ -2676,8 +2695,7 @@ func (m *certificateRequestMsg) marshal() []byte {
 					})
 				}
 				if m.customExtension > 0 {
-					extensions.AddUint16(m.customExtension)
-					extensions.AddUint16(0) // Empty extension
+					writeExt(m.customExtension, func(extension *cryptobyte.Builder) {})
 				}
 			})
 		} else {

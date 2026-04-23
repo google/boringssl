@@ -2382,6 +2382,7 @@ func main() {
 	addRSAKeyUsageTests()
 	addExtraHandshakeTests()
 	addOmitExtensionsTests()
+	addExtensionTrailingDataTests()
 	addCertCompressionTests()
 	addJDK11WorkaroundTests()
 	addDelegatedCredentialTests()
