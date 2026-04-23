@@ -1716,6 +1716,11 @@ TEST(ASN1Test, StringPrintEx) {
        {0xff},
        0,
        ASN1_STRFLGS_ESC_MSB | ASN1_STRFLGS_UTF8_CONVERT},
+      // It is a caller error to place non-ASN1_STRING types in an ASN1_STRING.
+      // Still, we should gracefully detect this when we try to encode as DER.
+      {V_ASN1_NULL, {}, 0, ASN1_STRFLGS_DUMP_ALL | ASN1_STRFLGS_DUMP_DER},
+      {V_ASN1_BOOLEAN, {}, 0, ASN1_STRFLGS_DUMP_ALL | ASN1_STRFLGS_DUMP_DER},
+      {V_ASN1_OBJECT, {}, 0, ASN1_STRFLGS_DUMP_ALL | ASN1_STRFLGS_DUMP_DER},
   };
   for (const auto &t : kUnprintableTests) {
     SCOPED_TRACE(t.type);
