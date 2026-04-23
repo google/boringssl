@@ -1048,8 +1048,8 @@ int mlkem_marshal_private_key(CBB *out, const private_key<RANK> *priv) {
   return 1;
 }
 
-static_assert(sizeof(MLKEM768_public_key) >= sizeof(public_key<RANK768>));
-static_assert(alignof(MLKEM768_public_key) >= alignof(public_key<RANK768>));
+static_assert(sizeof(MLKEM768_public_key) == sizeof(public_key<RANK768>));
+static_assert(alignof(MLKEM768_public_key) == alignof(public_key<RANK768>));
 
 const public_key<RANK768> *public_key_768_from_external(
     const MLKEM768_public_key *external) {
@@ -1064,8 +1064,8 @@ const MLKEM768_public_key *public_key_768_to_external(
   return reinterpret_cast<const MLKEM768_public_key *>(public_key);
 }
 
-static_assert(sizeof(MLKEM1024_public_key) >= sizeof(public_key<RANK1024>));
-static_assert(alignof(MLKEM1024_public_key) >= alignof(public_key<RANK1024>));
+static_assert(sizeof(MLKEM1024_public_key) == sizeof(public_key<RANK1024>));
+static_assert(alignof(MLKEM1024_public_key) == alignof(public_key<RANK1024>));
 
 const public_key<RANK1024> *public_key_1024_from_external(
     const MLKEM1024_public_key *external) {
