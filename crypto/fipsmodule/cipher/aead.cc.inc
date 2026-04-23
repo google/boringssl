@@ -178,19 +178,28 @@ int EVP_AEAD_CTX_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
     }
   });
 
+  // |out_tag| contains both the encryption of |extra_in| and the tag.
+  Span<uint8_t> out_tag_span(out_tag, max_out_tag_len);
+  if (out_tag_span.size() < extra_in_len) {
+    OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
+    return 0;
+  }
+  Span<uint8_t> extra_out = out_tag_span.first(extra_in_len);
+  Span<uint8_t> tag_only_out = out_tag_span.subspan(extra_in_len);
+
   CRYPTO_IOVEC iovec[2];
   iovec[0].in = in;
   iovec[0].out = out;
   iovec[0].len = in_len;
   iovec[1].in = extra_in;
-  iovec[1].out = out_tag;
+  iovec[1].out = extra_out.data();
   iovec[1].len = extra_in_len;
   CRYPTO_IVEC aadvec[1];
   aadvec[0].in = ad;
   aadvec[0].len = ad_len;
-  if (!EVP_AEAD_CTX_sealv(
-          ctx, iovec, extra_in_len ? 2 : 1, out_tag + extra_in_len, out_tag_len,
-          max_out_tag_len - extra_in_len, nonce, nonce_len, aadvec, 1)) {
+  if (!EVP_AEAD_CTX_sealv(ctx, iovec, extra_in_len ? 2 : 1, tag_only_out.data(),
+                          out_tag_len, tag_only_out.size(), nonce, nonce_len,
+                          aadvec, 1)) {
     *out_tag_len = 0;
     return 0;
   }
