@@ -1255,6 +1255,34 @@ TEST(EVPExtraTest, Parameters) {
   EXPECT_EQ(EVP_PKEY_RSA, EVP_PKEY_id(rsa.get()));
 }
 
+// Test copying parameters into an empty key. This should result in allocating a
+// key for the receiving key, which did not already have one.
+TEST(EVPExtraTest, CopyParamsIntoEmptyKey) {
+  UniquePtr<EVP_PKEY> dsa = ParsePrivateKey(EVP_PKEY_DSA, kExampleDSAKeyDER);
+  UniquePtr<EVP_PKEY> ec = ParsePrivateKey(EVP_PKEY_EC, kExampleECKeyDER);
+
+  for (const EVP_PKEY* from_pkey : {dsa.get(), ec.get()}) {
+    SCOPED_TRACE(EVP_PKEY_id(from_pkey));
+    ASSERT_TRUE(from_pkey);
+    ASSERT_FALSE(EVP_PKEY_missing_parameters(from_pkey));
+
+    UniquePtr<EVP_PKEY> to_pkey(EVP_PKEY_new());
+    ASSERT_TRUE(to_pkey);
+    ASSERT_EQ(EVP_PKEY_NONE, EVP_PKEY_id(to_pkey.get()));
+    // EVP_PKEY_NONE has no parameters, so the params are not missing.
+    ASSERT_FALSE(EVP_PKEY_missing_parameters(to_pkey.get()));
+    ASSERT_FALSE(EVP_PKEY_has_private(to_pkey.get()));
+    ASSERT_FALSE(EVP_PKEY_has_public(to_pkey.get()));
+
+    EXPECT_TRUE(EVP_PKEY_copy_parameters(to_pkey.get(), from_pkey));
+    EXPECT_EQ(EVP_PKEY_id(to_pkey.get()), EVP_PKEY_id(from_pkey));
+    EXPECT_FALSE(EVP_PKEY_missing_parameters(to_pkey.get()));
+    // Only params are copied, not keys.
+    EXPECT_FALSE(EVP_PKEY_has_private(to_pkey.get()));
+    EXPECT_FALSE(EVP_PKEY_has_public(to_pkey.get()));
+  }
+}
+
 TEST(EVPExtraTest, CompareDifferentTypes) {
   UniquePtr<EVP_PKEY> rsa = ParsePrivateKey(EVP_PKEY_RSA, kExampleRSAKeyDER);
   UniquePtr<EVP_PKEY> dsa = ParsePrivateKey(EVP_PKEY_DSA, kExampleDSAKeyDER);

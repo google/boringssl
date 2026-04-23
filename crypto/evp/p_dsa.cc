@@ -177,6 +177,12 @@ static int dup_bn_into(UniquePtr<BIGNUM> *out, const BIGNUM *src) {
 }
 
 static int dsa_copy_parameters(EvpPkey *to, const EvpPkey *from) {
+  if (to->pkey == nullptr) {
+    to->pkey = DSA_new();
+    if (to->pkey == nullptr) {
+      return 0;
+    }
+  }
   DSAImpl *to_dsa = reinterpret_cast<DSAImpl *>(to->pkey);
   const DSAImpl *from_dsa = reinterpret_cast<const DSAImpl *>(from->pkey);
   if (!dup_bn_into(&to_dsa->p, from_dsa->p.get()) ||
