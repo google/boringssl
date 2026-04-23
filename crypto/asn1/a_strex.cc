@@ -135,7 +135,7 @@ static int do_buf(const unsigned char *buf, int buflen, int encoding,
       CBB_init_fixed(&utf8_cbb, utf8_buf, sizeof(utf8_buf));
       if (!CBB_add_utf8(&utf8_cbb, c)) {
         OPENSSL_PUT_ERROR(ASN1, ERR_R_INTERNAL_ERROR);
-        return 1;
+        return -1;
       }
       size_t utf8_len = CBB_len(&utf8_cbb);
       for (size_t i = 0; i < utf8_len; i++) {
