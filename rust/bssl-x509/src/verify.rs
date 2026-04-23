@@ -84,7 +84,12 @@ impl<'a> X509Verifier<'a> {
             // - `chain` is a valid stack pointer, kept alive by `ctx.chain`.
             // - The input objects will outlive `'a`, so the verifier is outlived by
             //   these objects.
-            bssl_sys::X509_STORE_CTX_init(ctx.ptr(), store.as_raw(), cert.ptr(), ctx.chain.ptr())
+            bssl_sys::X509_STORE_CTX_init(
+                ctx.ptr(),
+                store.as_mut_ptr(),
+                cert.ptr(),
+                ctx.chain.ptr(),
+            )
         });
         Ok(ctx)
     }

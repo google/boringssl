@@ -104,13 +104,13 @@ where
 /// # Certificate verification
 impl<M> TlsConnectionInHandshake<'_, Client, M> {
     /// Set certificate verification store.
-    pub fn set_certificate_store(&mut self, store: X509Store) -> &mut Self {
+    pub fn set_certificate_store(&mut self, store: &X509Store) -> &mut Self {
         unsafe {
             // Safety:
             // - the validity of the handle `self.0` is witnessed by `self`.
             // - when pending handshake, the assignment is always successful.
             // - `SSL_set1_verify_cert_store` bumps the ref-count on the store.
-            bssl_sys::SSL_set1_verify_cert_store(self.ptr(), store.as_raw());
+            bssl_sys::SSL_set1_verify_cert_store(self.ptr(), store.as_mut_ptr());
         }
         self
     }

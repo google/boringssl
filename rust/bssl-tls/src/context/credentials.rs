@@ -91,12 +91,15 @@ where
 /// # Certificate verification
 impl<M> TlsContextBuilder<M> {
     /// Set certificate verification store.
-    pub fn with_certificate_store(&mut self, store: X509Store) -> &mut Self {
+    pub fn with_certificate_store(&mut self, store: &X509Store) -> &mut Self {
         unsafe {
             // Safety:
             // - the validity of the handle `self.0` is witnessed by `self`.
             // - `SSL_CTX_set1_verify_cert_store` bumps the ref-count on `store`.
-            bssl_sys::SSL_CTX_set1_verify_cert_store(self.ptr(), store.as_raw());
+            assert_eq!(
+                bssl_sys::SSL_CTX_set1_verify_cert_store(self.ptr(), store.as_mut_ptr()),
+                1,
+            );
         }
         self
     }

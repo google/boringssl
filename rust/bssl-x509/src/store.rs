@@ -173,7 +173,7 @@ impl X509Store {
     ///
     /// `self` **must** outlive the uses of the returned handle.
     /// Verify the callsite contract to honour the lifetime contracts.
-    pub unsafe fn as_raw(&self) -> *mut bssl_sys::X509_STORE {
+    pub unsafe fn as_mut_ptr(&self) -> *mut bssl_sys::X509_STORE {
         self.0.as_ptr()
     }
 }
