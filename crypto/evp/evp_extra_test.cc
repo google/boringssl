@@ -1416,6 +1416,37 @@ TEST(EVPExtraTest, NoHalfEmptyKeys) {
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
 }
 
+// An empty key shouldn't crash on operations.
+TEST(EVPExtraTest, EmptyKey) {
+  UniquePtr<EVP_PKEY> empty(EVP_PKEY_new());
+  ASSERT_TRUE(empty);
+
+  EXPECT_FALSE(EVP_PKEY_is_opaque(empty.get()));
+  EXPECT_FALSE(EVP_PKEY_eq(empty.get(), empty.get()));
+  EXPECT_TRUE(EVP_PKEY_parameters_eq(empty.get(), empty.get()));
+  EXPECT_FALSE(EVP_PKEY_missing_parameters(empty.get()));
+  EXPECT_EQ(EVP_PKEY_size(empty.get()), 0);
+  EXPECT_EQ(EVP_PKEY_bits(empty.get()), 0);
+  EXPECT_EQ(EVP_PKEY_id(empty.get()), EVP_PKEY_NONE);
+
+  EXPECT_EQ(EVP_PKEY_get_raw_private_key(empty.get(), nullptr, nullptr), 0);
+  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
+                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_EQ(EVP_PKEY_get_private_seed(empty.get(), nullptr, nullptr), 0);
+  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
+                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_EQ(EVP_PKEY_get_raw_public_key(empty.get(), nullptr, nullptr), 0);
+  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
+                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+
+  EXPECT_EQ(EVP_PKEY_get1_tls_encodedpoint(empty.get(), nullptr), 0u);
+  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
+                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_EQ(EVP_PKEY_set1_tls_encodedpoint(empty.get(), nullptr, 0u), 0);
+  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
+                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+}
+
 // Due to an OpenSSL API flaw, it is possible to make a half-empty X25519 key.
 // Using a key in this state is a caller error, but we gracefully handle this
 // case.
