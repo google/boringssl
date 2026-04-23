@@ -416,7 +416,7 @@ static int asn1_marshal_string_with_type(CBB *out, const ASN1_STRING *in,
     case V_ASN1_BMPSTRING:
     case V_ASN1_UTF8STRING:
       return asn1_marshal_octet_string(out, in,
-                                       static_cast<CBS_ASN1_TAG>(in->type));
+                                       static_cast<CBS_ASN1_TAG>(type));
     case V_ASN1_SEQUENCE:
     case V_ASN1_SET:
     case V_ASN1_OTHER:
