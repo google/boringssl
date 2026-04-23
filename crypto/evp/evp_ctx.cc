@@ -144,7 +144,6 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_dup(EVP_PKEY_CTX *ctx) {
   ret->pkey = UpRef(impl->pkey);
   ret->peerkey = UpRef(impl->peerkey);
   if (impl->pmeth->copy(ret.get(), impl) <= 0) {
-    ret->pmeth = nullptr;  // Don't call |pmeth->cleanup|.
     OPENSSL_PUT_ERROR(EVP, ERR_LIB_EVP);
     return nullptr;
   }

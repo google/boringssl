@@ -189,9 +189,7 @@ static int pkey_dh_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
 }
 
 static void pkey_dh_cleanup(EvpPkeyCtx *ctx) {
-  DH_PKEY_CTX *dctx = reinterpret_cast<DH_PKEY_CTX *>(ctx->data);
-  Delete(dctx);
-  ctx->data = nullptr;
+  Delete(reinterpret_cast<DH_PKEY_CTX *>(ctx->data));
 }
 
 static int pkey_dh_keygen(EvpPkeyCtx *ctx, EvpPkey *pkey) {

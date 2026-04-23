@@ -63,9 +63,7 @@ static int pkey_hkdf_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
 }
 
 static void pkey_hkdf_cleanup(EvpPkeyCtx *ctx) {
-  HKDF_PKEY_CTX *hctx = reinterpret_cast<HKDF_PKEY_CTX *>(ctx->data);
-  Delete(hctx);
-  ctx->data = nullptr;
+  Delete(reinterpret_cast<HKDF_PKEY_CTX *>(ctx->data));
 }
 
 static int pkey_hkdf_derive(EvpPkeyCtx *ctx, uint8_t *out, size_t *out_len) {

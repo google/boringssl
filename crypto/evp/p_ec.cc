@@ -365,12 +365,7 @@ static int pkey_ec_copy(EvpPkeyCtx *dst, EvpPkeyCtx *src) {
 }
 
 static void pkey_ec_cleanup(EvpPkeyCtx *ctx) {
-  EC_PKEY_CTX *dctx = reinterpret_cast<EC_PKEY_CTX *>(ctx->data);
-  if (!dctx) {
-    return;
-  }
-
-  Delete(dctx);
+  Delete(reinterpret_cast<EC_PKEY_CTX *>(ctx->data));
 }
 
 static int pkey_ec_sign(EvpPkeyCtx *ctx, uint8_t *sig, size_t *siglen,
