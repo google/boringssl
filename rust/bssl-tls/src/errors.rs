@@ -706,8 +706,6 @@ bssl_enum! {
         Tlsv1AlertNoApplicationProtocol = bssl_sys::SSL_R_TLSV1_ALERT_NO_APPLICATION_PROTOCOL as i32,
         /// `SSL_R_TLSV1_ALERT_ECH_REQUIRED`
         Tlsv1AlertEchRequired = bssl_sys::SSL_R_TLSV1_ALERT_ECH_REQUIRED as i32,
-        /// `SSL_R_PAKE_AND_KEY_SHARE_NOT_ALLOWED`
-        PakeAndKeyShareNotAllowed = bssl_sys::SSL_R_PAKE_AND_KEY_SHARE_NOT_ALLOWED as i32,
     }
 }
 
