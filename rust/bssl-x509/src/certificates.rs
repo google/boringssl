@@ -277,32 +277,33 @@ impl<'a> SerialNumber<'a> {
     /// This is a big-endian integer. If the most-significant bit is set then
     /// it is negative. Positive values that would otherwise have the
     /// most-significant bit set are left padded with a zero byte to avoid this.
-    pub fn as_twos_complement_bytes(&self) -> &'a [u8] {
+    pub fn as_twos_complement_bytes(&self) -> Vec<u8> {
         let serial = self.ptr();
         let len = unsafe {
             // Safety:
             // - self witnesses the validity of the X509 handle and, therefore,
             //   this handle to the integer;
             // - ASN1_INTEGER is a subtype of ASN1_STRING.
-            bssl_sys::ASN1_STRING_length(serial)
+            bssl_sys::i2c_ASN1_INTEGER(serial, null_mut())
         };
         let Ok(len) = usize::try_from(len) else {
-            panic!("invalid ASN1_INTEGER")
+            panic!("invalid serial number")
         };
-        let ptr = unsafe {
+        if len == 0 {
+            panic!("invalid serial number")
+        }
+        let mut res = vec![0; len];
+        let len = unsafe {
             // Safety:
             // - self witnesses the validity of the X509 handle and, therefore,
-            //   this handle to the integer;
-            // - ASN1_INTEGER is a subtype of ASN1_STRING.
-            bssl_sys::ASN1_STRING_get0_data(serial)
+            //   this handle to the integer.
+            // - `outp` is non-null.
+            let mut outp = res.as_mut_ptr();
+            bssl_sys::i2c_ASN1_INTEGER(serial, &raw mut outp)
         };
-        unsafe {
-            // Safety:
-            // - `ptr` is non-null;
-            // - `len` is positive and less then isize::MAX;
-            // - the lifetime of `self` outlives that of `ptr`.
-            sanitize_slice(ptr, len).expect("invalid ASN1_INTEGER")
-        }
+        assert!(len > 0);
+        res.truncate(usize::try_from(len).unwrap());
+        res
     }
 }
 
