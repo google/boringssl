@@ -286,6 +286,46 @@ static void int_rsa_free(EvpPkey *pkey) {
   pkey->pkey = nullptr;
 }
 
+static int rsa_pss_params_missing(const EvpPkey *pkey) {
+  const RSA *rsa = reinterpret_cast<const RSA *>(pkey->pkey);
+  return rsa == nullptr || FromOpaque(rsa)->pss_params == rsa_pss_none;
+}
+
+static int rsa_pss_params_copy(EvpPkey *to, const EvpPkey *from) {
+  const RSA *from_key = reinterpret_cast<const RSA *>(from->pkey);
+  if (from_key == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
+    return 0;
+  }
+  rsa_pss_params_t pss_params = FromOpaque(from_key)->pss_params;
+  if (pss_params == rsa_pss_none) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
+    return 0;
+  }
+  if (to->pkey == nullptr) {
+    to->pkey = RSA_new();
+    if (to->pkey == nullptr) {
+      return 0;
+    }
+  }
+  FromOpaque(reinterpret_cast<RSA *>(to->pkey))->pss_params = pss_params;
+  return 1;
+}
+
+static bool rsa_pss_params_equal(const EvpPkey *a, const EvpPkey *b) {
+  const RSA *a_rsa = reinterpret_cast<const RSA *>(a->pkey);
+  const RSA *b_rsa = reinterpret_cast<const RSA *>(b->pkey);
+  if (a_rsa == nullptr || b_rsa == nullptr) {
+    return false;
+  }
+  rsa_pss_params_t a_pss_params = FromOpaque(a_rsa)->pss_params;
+  rsa_pss_params_t b_pss_params = FromOpaque(b_rsa)->pss_params;
+  if (a_pss_params == rsa_pss_none || b_pss_params == rsa_pss_none) {
+    return false;
+  }
+  return a_pss_params == b_pss_params;
+}
+
 const EVP_PKEY_ASN1_METHOD rsa_asn1_meth = {
     EVP_PKEY_RSA,
     // 1.2.840.113549.1.1.1
@@ -357,9 +397,9 @@ const EVP_PKEY_ASN1_METHOD rsa_pss_asn1_meth = {
     int_rsa_size,
     rsa_bits,
 
-    /*param_missing=*/nullptr,
-    /*param_copy=*/nullptr,
-    /*param_equal=*/nullptr,
+    rsa_pss_params_missing,
+    rsa_pss_params_copy,
+    rsa_pss_params_equal,
 
     int_rsa_free,
 };
