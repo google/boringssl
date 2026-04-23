@@ -2552,6 +2552,7 @@ bcm_status bssl::BCM_mldsa87_generate_key(
     uint8_t out_encoded_public_key[MLDSA87_PUBLIC_KEY_BYTES],
     uint8_t out_seed[MLDSA_SEED_BYTES], MLDSA87_private_key *out_private_key) {
   BCM_rand_bytes(out_seed, MLDSA_SEED_BYTES);
+  CONSTTIME_SECRET(out_seed, MLDSA_SEED_BYTES);
   return BCM_mldsa87_generate_key_external_entropy(out_encoded_public_key,
                                                    out_private_key, out_seed);
 }
@@ -2658,6 +2659,7 @@ bcm_status bssl::BCM_mldsa87_sign(
   BSSL_CHECK(context_len <= 255);
   uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES];
   BCM_rand_bytes(randomizer, sizeof(randomizer));
+  CONSTTIME_SECRET(randomizer, sizeof(randomizer));
 
   const uint8_t context_prefix[2] = {0, static_cast<uint8_t>(context_len)};
   return BCM_mldsa87_sign_internal(
@@ -2791,6 +2793,7 @@ bcm_status bssl::BCM_mldsa44_generate_key(
     uint8_t out_encoded_public_key[MLDSA44_PUBLIC_KEY_BYTES],
     uint8_t out_seed[MLDSA_SEED_BYTES], MLDSA44_private_key *out_private_key) {
   BCM_rand_bytes(out_seed, MLDSA_SEED_BYTES);
+  CONSTTIME_SECRET(out_seed, MLDSA_SEED_BYTES);
   return BCM_mldsa44_generate_key_external_entropy(out_encoded_public_key,
                                                    out_private_key, out_seed);
 }
@@ -2897,6 +2900,7 @@ bcm_status bssl::BCM_mldsa44_sign(
   BSSL_CHECK(context_len <= 255);
   uint8_t randomizer[BCM_MLDSA_SIGNATURE_RANDOMIZER_BYTES];
   BCM_rand_bytes(randomizer, sizeof(randomizer));
+  CONSTTIME_SECRET(randomizer, sizeof(randomizer));
 
   const uint8_t context_prefix[2] = {0, static_cast<uint8_t>(context_len)};
   return BCM_mldsa44_sign_internal(
