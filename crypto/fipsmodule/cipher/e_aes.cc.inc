@@ -268,6 +268,10 @@ static int aes_gcm_ctrl(EVP_CIPHER_CTX *c, int type, int arg, void *ptr) {
         return 0;
       }
 
+      // Clear any existing IV or partial IV that may have previously been set.
+      gctx->iv_set = 0;
+      gctx->iv_gen = 0;
+
       // Allocate memory for IV if needed
       if (arg > EVP_MAX_IV_LENGTH && arg > gctx->ivlen) {
         if (gctx->iv != c->iv) {

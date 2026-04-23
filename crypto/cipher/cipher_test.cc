@@ -1162,7 +1162,7 @@ TEST(CipherTest, GCMIncrementingIV) {
     ASSERT_NO_FATAL_FAILURE(expect_iv(ctx.get(), iv, /*enc=*/true));
   }
 
-    {
+  {
     // Same as above, but with a larger IV.
     const uint8_t kFixedIV[8] = {1, 2, 3, 4, 5, 6, 7, 8};
     ScopedEVP_CIPHER_CTX ctx;
@@ -1189,7 +1189,46 @@ TEST(CipherTest, GCMIncrementingIV) {
     EXPECT_EQ(CRYPTO_load_u64_be(counter2), CRYPTO_load_u64_be(counter) + 1);
     memcpy(iv + sizeof(kFixedIV), counter2, sizeof(counter2));
     ASSERT_NO_FATAL_FAILURE(expect_iv(ctx.get(), iv, /*enc=*/true));
-    }
+  }
+}
+
+TEST(CipherTest, SetIVLengthResets) {
+  const EVP_CIPHER *kCipher = EVP_aes_128_gcm();
+  static const uint8_t kKey[16] = {};
+  static const uint8_t kIV[12] = {};
+
+  {
+    // Set an IV...
+    ScopedEVP_CIPHER_CTX ctx;
+    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), kCipher, /*impl=*/nullptr,
+                                   /*key=*/nullptr, kIV));
+    // But then change the length, invalidating the IV.
+    ASSERT_TRUE(
+        EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_AEAD_SET_IVLEN, 64, nullptr));
+    // Configuring the key should not be enough...
+    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), /*cipher=*/nullptr,
+                                   /*impl=*/nullptr, kKey,
+                                   /*iv=*/nullptr));
+    // ...to perform any operation.
+    uint8_t in[1] = {0};
+    uint8_t out[1];
+    int out_len;
+    EXPECT_FALSE(EVP_EncryptUpdate(ctx.get(), out, &out_len, in, sizeof(in)));
+  }
+
+  {
+    // Changing IV length should also reset the unusual IV generation feature.
+    ScopedEVP_CIPHER_CTX ctx;
+    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), kCipher, /*impl=*/nullptr, kKey,
+                                   /*iv=*/nullptr));
+    ASSERT_TRUE(EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_AEAD_SET_IV_FIXED, 4,
+                                    const_cast<uint8_t *>(kIV)));
+    ASSERT_TRUE(
+        EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_AEAD_SET_IVLEN, 64, nullptr));
+    uint8_t counter[8];
+    EXPECT_FALSE(EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_IV_GEN,
+                                     sizeof(counter), counter));
+  }
 }
 
 }  // namespace
