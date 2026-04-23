@@ -5843,6 +5843,11 @@ TEST(X509Test, BytesToHex) {
 }
 
 TEST(X509Test, NamePrint) {
+  // Registering one of the test OIDs as a nameless OID should not impact
+  // printing. Note this impacts global state.
+  ASSERT_NE(OBJ_create("1.2.840.113554.4.1.72585.3", nullptr, nullptr),
+            NID_undef);
+
   // kTestName is a DER-encoded X.509 that covers many cases.
   //
   // SEQUENCE {
