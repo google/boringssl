@@ -334,6 +334,7 @@ TEST(DigestTest, TransformBlocks) {
   SHA256_CTX ctx2;
   SHA256_Init(&ctx2);
   SHA256_TransformBlocks(ctx2.h, blocks, sizeof(blocks) / SHA256_CBLOCK);
+  SHA256_TransformBlocks(ctx2.h, nullptr, 0);
 
   EXPECT_TRUE(0 == OPENSSL_memcmp(ctx1.h, ctx2.h, sizeof(ctx1.h)));
 }

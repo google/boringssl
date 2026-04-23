@@ -299,7 +299,9 @@ static void sha256_block_data_order(uint32_t state[8], const uint8_t *data,
 bcm_infallible bssl::BCM_sha256_transform_blocks(uint32_t state[8],
                                                  const uint8_t *data,
                                                  size_t num_blocks) {
-  sha256_block_data_order(state, data, num_blocks);
+  if (num_blocks > 0) {
+    sha256_block_data_order(state, data, num_blocks);
+  }
   return bcm_infallible::approved;
 }
 
