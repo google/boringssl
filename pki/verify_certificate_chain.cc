@@ -1140,7 +1140,8 @@ static bool VerifyMTC(const ParsedCertificate &cert,
   CBS mtc_proof(cert.signature_value().bytes());
   uint64_t start, end;
   CBS inclusion_proof, signatures;
-  if (!CBS_get_u64(&mtc_proof, &start) || !CBS_get_u64(&mtc_proof, &end) ||
+  if (cert.signature_value().unused_bits() != 0 ||
+      !CBS_get_u64(&mtc_proof, &start) || !CBS_get_u64(&mtc_proof, &end) ||
       !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof) ||
       !CBS_get_u16_length_prefixed(&mtc_proof, &signatures) ||
       CBS_len(&mtc_proof) != 0) {

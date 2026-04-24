@@ -13,10 +13,11 @@ The following test certs are created according to these instructions.
 ## Instructions
 
 - Run
-  `go run github.com/davidben/merkle-tree-certs/demo@92282dba2bf361c486dda5fe7606ef77abd2a1a0 -config=mtc-config.json`
+  `go run github.com/ietf-plants-wg/merkle-tree-certs/demo@b0c83104918f10e8c813783f77434143eab4ef97 -config=mtc-config.json`
 - copy/move the following output files:
   - `out/cert_9_0.pem` to `mtc-leaf.pem`
   - `out/cert_9_1.pem` to `mtc-leaf-bitflip.pem`
+  - `out/cert_9_2.pem` to `mtc-leaf-unused-bit.pem`
   - `out/cert_10_0.pem` to `mtc-leaf-b.pem`
   - `out/cert_19_0.pem` to `mtc-leaf-c.pem`
 - edit `VerifyMTCTest::SetUp` to set the trusted subtrees to the ones output by

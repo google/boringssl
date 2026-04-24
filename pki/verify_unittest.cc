@@ -186,6 +186,7 @@ class VerifyMTCTest : public ::testing::Test {
   void SetUp() override {
     ASSERT_TRUE(ReadTestCertPem("mtc-leaf.pem", &generic_cert_));
     ASSERT_TRUE(ReadTestCertPem("mtc-leaf-bitflip.pem", &bitflip_cert_));
+    ASSERT_TRUE(ReadTestCertPem("mtc-leaf-unused-bit.pem", &unused_bit_cert_));
     ASSERT_TRUE(ReadTestCertPem("mtc-leaf-b.pem", &leaf_b_));
     ASSERT_TRUE(ReadTestCertPem("mtc-leaf-c.pem", &leaf_c_));
 
@@ -249,6 +250,7 @@ class VerifyMTCTest : public ::testing::Test {
  protected:
   std::string generic_cert_;
   std::string bitflip_cert_;
+  std::string unused_bit_cert_;
   std::string leaf_b_;
   std::string leaf_c_;
 
@@ -321,6 +323,21 @@ TEST_F(VerifyMTCTest, WrongProof) {
   CertificateVerifyOptions opts;
   VerifyError error;
   ASSERT_TRUE(PrepareOptsForVerify(bitflip_cert_, trust_store.get(), &opts));
+  EXPECT_FALSE(CertificateVerify(opts, &error)) << error.DiagnosticString();
+  EXPECT_EQ(error.Code(),
+            VerifyError::StatusCode::CERTIFICATE_INVALID_SIGNATURE);
+}
+
+TEST_F(VerifyMTCTest, UnusedBit) {
+  std::unique_ptr<VerifyTrustStore> trust_store = EmptyTrustStore();
+  std::vector<TrustedSubtree> trusted_subtrees = {generic_cert_subtree_};
+  auto mtc_anchor = std::make_shared<MTCAnchor>(MakeSpan(kAnchorLogId),
+                                                MakeSpan(trusted_subtrees));
+  ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
+
+  CertificateVerifyOptions opts;
+  VerifyError error;
+  ASSERT_TRUE(PrepareOptsForVerify(unused_bit_cert_, trust_store.get(), &opts));
   EXPECT_FALSE(CertificateVerify(opts, &error)) << error.DiagnosticString();
   EXPECT_EQ(error.Code(),
             VerifyError::StatusCode::CERTIFICATE_INVALID_SIGNATURE);

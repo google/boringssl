@@ -2901,6 +2901,7 @@ set(
   pki/testdata/verify_unittest/mtc-leaf-b.pem
   pki/testdata/verify_unittest/mtc-leaf-bitflip.pem
   pki/testdata/verify_unittest/mtc-leaf-c.pem
+  pki/testdata/verify_unittest/mtc-leaf-unused-bit.pem
   pki/testdata/verify_unittest/mtc-leaf.pem
   pki/testdata/verify_unittest/self-issued.pem
 )
