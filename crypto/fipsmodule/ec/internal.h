@@ -58,20 +58,20 @@ typedef struct {
 
 // ec_bignum_to_scalar converts |in| to an |EC_SCALAR| and writes it to
 // |*out|. It returns one on success and zero if |in| is out of range.
-OPENSSL_EXPORT int ec_bignum_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
-                                       const BIGNUM *in);
+int ec_bignum_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
+                        const BIGNUM *in);
 
 // ec_scalar_to_bytes serializes |in| as a big-endian bytestring to |out| and
 // sets |*out_len| to the number of bytes written. The number of bytes written
 // is |BN_num_bytes(&group->order)|, which is at most |EC_MAX_BYTES|.
-OPENSSL_EXPORT void ec_scalar_to_bytes(const EC_GROUP *group, uint8_t *out,
-                                       size_t *out_len, const EC_SCALAR *in);
+void ec_scalar_to_bytes(const EC_GROUP *group, uint8_t *out, size_t *out_len,
+                        const EC_SCALAR *in);
 
 // ec_scalar_from_bytes deserializes |in| and stores the resulting scalar over
 // group |group| to |out|. It returns one on success and zero if |in| is
 // invalid.
-OPENSSL_EXPORT int ec_scalar_from_bytes(const EC_GROUP *group, EC_SCALAR *out,
-                                        const uint8_t *in, size_t len);
+int ec_scalar_from_bytes(const EC_GROUP *group, EC_SCALAR *out,
+                         const uint8_t *in, size_t len);
 
 // ec_scalar_reduce sets |out| to |words|, reduced modulo the group order.
 // |words| must be less than order^2. |num| must be at most twice the width of
@@ -236,8 +236,8 @@ void ec_affine_to_jacobian(const EC_GROUP *group, EC_JACOBIAN *out,
 //
 // If only extracting the x-coordinate, use |ec_get_x_coordinate_*| which is
 // slightly faster.
-OPENSSL_EXPORT int ec_jacobian_to_affine(const EC_GROUP *group, EC_AFFINE *out,
-                                         const EC_JACOBIAN *p);
+int ec_jacobian_to_affine(const EC_GROUP *group, EC_AFFINE *out,
+                          const EC_JACOBIAN *p);
 
 // ec_jacobian_to_affine_batch converts |num| points in |in| from Jacobian
 // coordinates to affine coordinates and writes the results to |out|. It returns
@@ -344,11 +344,9 @@ int ec_point_mul_scalar_precomp(const EC_GROUP *group, EC_JACOBIAN *r,
 // ec_point_mul_scalar_public sets |r| to
 // generator * |g_scalar| + |p| * |p_scalar|. It assumes that the inputs are
 // public so there is no concern about leaking their values through timing.
-OPENSSL_EXPORT int ec_point_mul_scalar_public(const EC_GROUP *group,
-                                              EC_JACOBIAN *r,
-                                              const EC_SCALAR *g_scalar,
-                                              const EC_JACOBIAN *p,
-                                              const EC_SCALAR *p_scalar);
+int ec_point_mul_scalar_public(const EC_GROUP *group, EC_JACOBIAN *r,
+                               const EC_SCALAR *g_scalar, const EC_JACOBIAN *p,
+                               const EC_SCALAR *p_scalar);
 
 // ec_point_mul_scalar_public_batch sets |r| to the sum of generator *
 // |g_scalar| and |points[i]| * |scalars[i]| where |points| and |scalars| have

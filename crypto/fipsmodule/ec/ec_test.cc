@@ -908,11 +908,13 @@ TEST_P(ECCurveTest, DoubleSpecialCase) {
                            nullptr));
   EXPECT_EQ(0, EC_POINT_cmp(group(), p.get(), two_g.get(), nullptr));
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
   EC_SCALAR one;
   ASSERT_TRUE(ec_bignum_to_scalar(group(), &one, BN_value_one()));
   ASSERT_TRUE(
       ec_point_mul_scalar_public(group(), &p->raw, &one, &g->raw, &one));
   EXPECT_EQ(0, EC_POINT_cmp(group(), p.get(), two_g.get(), nullptr));
+#endif
 }
 
 // This a regression test for a P-224 bug, but we may as well run it for all
@@ -936,6 +938,7 @@ TEST_P(ECCurveTest, P224Bug) {
                            nullptr));
   EXPECT_EQ(0, EC_POINT_cmp(group(), ret.get(), g, nullptr));
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
   // Repeat the computation with |ec_point_mul_scalar_public|, which ties the
   // additions together.
   EC_SCALAR sc31, sc32;
@@ -944,6 +947,7 @@ TEST_P(ECCurveTest, P224Bug) {
   ASSERT_TRUE(
       ec_point_mul_scalar_public(group(), &ret->raw, &sc32, &p->raw, &sc31));
   EXPECT_EQ(0, EC_POINT_cmp(group(), ret.get(), g, nullptr));
+#endif
 }
 
 TEST_P(ECCurveTest, GPlusMinusG) {
@@ -1131,12 +1135,14 @@ TEST(ECTest, DISABLED_ScalarBaseMultVectorsTwoPoint) {
               EC_POINT_mul(group, p.get(), a.get(), g, b.get(), ctx.get()));
           check_point(p.get());
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
           EC_SCALAR a_scalar, b_scalar;
           ASSERT_TRUE(ec_bignum_to_scalar(group, &a_scalar, a.get()));
           ASSERT_TRUE(ec_bignum_to_scalar(group, &b_scalar, b.get()));
           ASSERT_TRUE(ec_point_mul_scalar_public(group, &p->raw, &a_scalar,
                                                  &g->raw, &b_scalar));
           check_point(p.get());
+#endif
         }
       });
 }
@@ -1497,6 +1503,7 @@ TEST(ECTest, HashToCurve) {
       EC_group_p384(), &raw, nullptr, 0, kMessage, sizeof(kMessage)));
 }
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(ECTest, HashToScalar) {
   struct HashToScalarTest {
     int (*hash_to_scalar)(const EC_GROUP *group, EC_SCALAR *out,
@@ -1555,6 +1562,7 @@ TEST(ECTest, HashToScalar) {
       EC_group_p224(), &scalar, kDST, sizeof(kDST), kMessage,
       sizeof(kMessage)));
 }
+#endif  // BORINGSSL_SHARED_LIBRARY
 
 }  // namespace
 BSSL_NAMESPACE_END

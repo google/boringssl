@@ -248,6 +248,9 @@ TEST(TrustTokenTest, KeyGenExp2PMB) {
             Bytes(pub_key, pub_key_len));
 }
 
+// These tests depend on access to library internals.
+#if !defined(BORINGSSL_SHARED_LIBRARY)
+
 // Test that H in |TRUST_TOKEN_experiment_v1| was computed correctly.
 TEST(TrustTokenTest, HExp1) {
   const EC_GROUP *group = EC_group_p384();
@@ -598,6 +601,8 @@ TEST(TrustTokenTest, PSTV1VOPRFTestVector3) {
                   CBB_len(expected_response.get())),
             Bytes(CBB_data(response.get()), CBB_len(response.get())));
 }
+
+#endif  // BORINGSSL_SHARED_LIBRARY
 
 static std::vector<const TRUST_TOKEN_METHOD *> AllMethods() {
   return {
