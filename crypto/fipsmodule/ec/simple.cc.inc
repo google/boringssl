@@ -28,8 +28,8 @@
 using namespace bssl;
 
 // Most method functions in this file are designed to work with non-trivial
-// representations of field elements if necessary (see ecp_mont.c): while
-// standard modular addition and subtraction are used, the field_mul and
+// representations of field elements if necessary (see ec_montgomery.cc.inc):
+// while standard modular addition and subtraction are used, the field_mul and
 // field_sqr methods will be used for multiplication, and field_encode and
 // field_decode (if defined) will be used for converting between
 // representations.
@@ -37,6 +37,9 @@ using namespace bssl;
 // Functions here specifically assume that if a non-trivial representation is
 // used, it is a Montgomery representation (i.e. 'encoding' means multiplying
 // by some factor R).
+//
+// TODO(crbug.com/505908440): ec_montgomery.cc.inc is now the only field element
+// representation. Fold these files together.
 
 int bssl::ec_GFp_simple_group_set_curve(EC_GROUP *group, const BIGNUM *p,
                                         const BIGNUM *a, const BIGNUM *b,

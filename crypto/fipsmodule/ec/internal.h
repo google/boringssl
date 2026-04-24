@@ -491,13 +491,8 @@ struct ec_method_st {
   // |bssl::EC_POINT_dbl| implementations can work both with
   // |bssl::EC_GFp_mont_method| and the tuned operations.
   //
-  // TODO(davidben): This constrains |bssl::EC_FELEM|'s internal representation,
-  // adds many indirect calls in the middle of the generic code, and a bunch of
-  // conversions. If p224-64.c were easily convertible to Montgomery form, we
-  // could say |bssl::EC_FELEM| is always in Montgomery form. If we routed the
-  // rest of simple.c to |bssl::EC_METHOD|, we could give |bssl::EC_POINT| an
-  // |bssl::EC_METHOD|-specific representation and say |bssl::EC_FELEM| is
-  // purely a |bssl::EC_GFp_mont_method| type.
+  // TODO(crbug.com/505908440): These are always implemented with the same
+  // functions, now that EC_FELEM is always in Montgomery form. Remove this.
   void (*felem_mul)(const EC_GROUP *, bssl::EC_FELEM *r,
                     const bssl::EC_FELEM *a, const bssl::EC_FELEM *b);
   void (*felem_sqr)(const EC_GROUP *, bssl::EC_FELEM *r,
@@ -698,7 +693,6 @@ int ec_GFp_mont_felem_from_bytes(const EC_GROUP *group, EC_FELEM *out,
 void ec_GFp_nistp_recode_scalar_bits(crypto_word_t *sign, crypto_word_t *digit,
                                      crypto_word_t in);
 
-const EC_METHOD *EC_GFp_nistp224_method();
 const EC_METHOD *EC_GFp_nistp256_method();
 
 // EC_GFp_nistz256_method is a GFp method using montgomery multiplication, with

@@ -74,19 +74,11 @@ DEFINE_METHOD_FUNCTION(EC_GROUP, EC_group_p224) {
   ec_group_init_static_mont(&out->order, std::size(kP224Order), kP224Order,
                             kP224OrderRR, kP224OrderN0);
 
-#if defined(BORINGSSL_HAS_UINT128) && !defined(OPENSSL_SMALL)
-  out->meth = EC_GFp_nistp224_method();
-  OPENSSL_memcpy(out->generator.raw.X.words, kP224GX, sizeof(kP224GX));
-  OPENSSL_memcpy(out->generator.raw.Y.words, kP224GY, sizeof(kP224GY));
-  out->generator.raw.Z.words[0] = 1;
-  OPENSSL_memcpy(out->b.words, kP224B, sizeof(kP224B));
-#else
   out->meth = EC_GFp_mont_method();
   OPENSSL_memcpy(out->generator.raw.X.words, kP224MontGX, sizeof(kP224MontGX));
   OPENSSL_memcpy(out->generator.raw.Y.words, kP224MontGY, sizeof(kP224MontGY));
   OPENSSL_memcpy(out->generator.raw.Z.words, kP224FieldR, sizeof(kP224FieldR));
   OPENSSL_memcpy(out->b.words, kP224MontB, sizeof(kP224MontB));
-#endif
   out->generator.group = out;
 
   ec_group_set_a_minus3(out);

@@ -69,7 +69,6 @@ set(
   crypto/fipsmodule/ec/ec_montgomery.cc.inc
   crypto/fipsmodule/ec/felem.cc.inc
   crypto/fipsmodule/ec/oct.cc.inc
-  crypto/fipsmodule/ec/p224-64.cc.inc
   crypto/fipsmodule/ec/p256-nistz.cc.inc
   crypto/fipsmodule/ec/p256.cc.inc
   crypto/fipsmodule/ec/scalar.cc.inc
