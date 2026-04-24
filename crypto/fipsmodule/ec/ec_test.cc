@@ -914,6 +914,12 @@ TEST_P(ECCurveTest, DoubleSpecialCase) {
   ASSERT_TRUE(
       ec_point_mul_scalar_public(group(), &p->raw, &one, &g->raw, &one));
   EXPECT_EQ(0, EC_POINT_cmp(group(), p.get(), two_g.get(), nullptr));
+
+  // Also test that 0 * P + 0 * G = infinity.
+  EC_SCALAR zero = {};
+  ASSERT_TRUE(
+      ec_point_mul_scalar_public(group(), &p->raw, &zero, &g->raw, &zero));
+  EXPECT_TRUE(EC_POINT_is_at_infinity(group(), p.get()));
 #endif
 }
 
