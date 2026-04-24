@@ -69,8 +69,8 @@ void bssl::slhdsa_fors_treehash(const slh_dsa_config *config,
                                 uint32_t i /*target node index*/,
                                 uint32_t z /*target node height*/,
                                 const uint8_t *pk_seed, uint8_t addr[32]) {
-  const uint32_t nodes_in_tree = 1u << (config->fors_height - z);
   BSSL_CHECK(z <= config->fors_height);
+  const uint32_t nodes_in_tree = 1u << (config->fors_height - z);
   BSSL_CHECK(i < (uint32_t)(config->fors_trees * nodes_in_tree));
 
   if (z == 0) {
