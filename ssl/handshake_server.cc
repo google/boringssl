@@ -507,6 +507,7 @@ static bool extract_sni(SSL_HANDSHAKE *hs, uint8_t *out_alert,
       !CBS_get_u16_length_prefixed(&server_name_list, &host_name) ||  //
       CBS_len(&server_name_list) != 0 ||                              //
       CBS_len(&sni) != 0) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_PARSING_EXTENSION);
     *out_alert = SSL_AD_DECODE_ERROR;
     return false;
   }
@@ -515,6 +516,7 @@ static bool extract_sni(SSL_HANDSHAKE *hs, uint8_t *out_alert,
       CBS_len(&host_name) == 0 ||                       //
       CBS_len(&host_name) > TLSEXT_MAXLEN_host_name ||  //
       CBS_contains_zero_byte(&host_name)) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_PARSING_EXTENSION);
     *out_alert = SSL_AD_UNRECOGNIZED_NAME;
     return false;
   }

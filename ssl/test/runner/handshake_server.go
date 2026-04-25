@@ -565,6 +565,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	// Prepare an EncryptedExtensions message, but do not send it yet.
 	encryptedExtensions := new(encryptedExtensionsMsg)
 	encryptedExtensions.empty = config.Bugs.EmptyEncryptedExtensions
+	encryptedExtensions.extensions.extensionsWithTrailingData = config.Bugs.ExtensionsWithTrailingData
 	if err := hs.processClientExtensions(&encryptedExtensions.extensions); err != nil {
 		return err
 	}
@@ -1522,7 +1523,8 @@ func (hs *serverHandshakeState) processClientHello() (isResume bool, err error) 
 		versOverride:      config.Bugs.SendServerHelloVersion,
 		compressionMethod: config.Bugs.SendCompressionMethod,
 		extensions: serverExtensions{
-			supportedVersion: config.Bugs.SendServerSupportedVersionExtension,
+			supportedVersion:           config.Bugs.SendServerSupportedVersionExtension,
+			extensionsWithTrailingData: config.Bugs.ExtensionsWithTrailingData,
 		},
 		omitExtensions:  config.Bugs.OmitExtensions,
 		emptyExtensions: config.Bugs.EmptyExtensions,

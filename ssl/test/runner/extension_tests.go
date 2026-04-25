@@ -2409,34 +2409,76 @@ func addOmitExtensionsTests() {
 // Test that our extension parsers consistently reject trailing data.
 // TODO(crbug.com/505803427): Test other extensions.
 func addExtensionTrailingDataTests() {
-	testCases = append(testCases, testCase{
-		testType: clientTest,
-		name:     "ExtensionTrailingData-CertificateAuthorities-Client-TLS13",
-		config: Config{
-			MaxVersion: VersionTLS13,
-			ClientAuth: RequireAnyClientCert,
-			ClientCAs:  makeCertPoolFromRoots(&rsaChainCertificate, &ecdsaP384Certificate),
-			Bugs: ProtocolBugs{
-				ExtensionsWithTrailingData: []uint16{extensionCertificateAuthorities},
-			},
-		},
-		shouldFail:         true,
-		expectedError:      ":ERROR_PARSING_EXTENSION:",
-		expectedLocalError: "remote error: error decoding message",
-	})
-	testCases = append(testCases, testCase{
-		testType: serverTest,
-		name:     "ExtensionTrailingData-CertificateAuthorities-Server-TLS13",
-		config: Config{
-			MaxVersion:  VersionTLS13,
-			RootCAs:     makeCertPoolFromRoots(&rsaChainCertificate, &ecdsaP384Certificate),
-			SendRootCAs: true,
-			Bugs: ProtocolBugs{
-				ExtensionsWithTrailingData: []uint16{extensionCertificateAuthorities},
-			},
-		},
-		shouldFail:         true,
-		expectedError:      ":ERROR_PARSING_EXTENSION:",
-		expectedLocalError: "remote error: error decoding message",
-	})
+	for _, protocol := range []protocol{tls, dtls, quic} {
+		for _, ver := range allVersions(protocol) {
+			suffix := fmt.Sprintf("%s-%s", protocol.String(), ver.name)
+
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: clientTest,
+				name:     "ExtensionTrailingData-ServerName-Client-" + suffix,
+				config: Config{
+					MaxVersion: ver.version,
+					Bugs: ProtocolBugs{
+						SendServerNameAck:          true,
+						ExtensionsWithTrailingData: []uint16{extensionServerName},
+					},
+				},
+				flags:              []string{"-host-name", "example.com"},
+				shouldFail:         true,
+				expectedError:      ":ERROR_PARSING_EXTENSION:",
+				expectedLocalError: "remote error: error decoding message",
+			})
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: serverTest,
+				name:     "ExtensionTrailingData-ServerName-Server-" + suffix,
+				config: Config{
+					MaxVersion: ver.version,
+					ServerName: "example.com",
+					Bugs: ProtocolBugs{
+						ExtensionsWithTrailingData: []uint16{extensionServerName},
+					},
+				},
+				shouldFail:         true,
+				expectedError:      ":ERROR_PARSING_EXTENSION:",
+				expectedLocalError: "remote error: error decoding message",
+			})
+
+			if ver.version >= VersionTLS13 {
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: clientTest,
+					name:     "ExtensionTrailingData-CertificateAuthorities-Client-" + suffix,
+					config: Config{
+						MaxVersion: ver.version,
+						ClientAuth: RequireAnyClientCert,
+						ClientCAs:  makeCertPoolFromRoots(&rsaChainCertificate, &ecdsaP384Certificate),
+						Bugs: ProtocolBugs{
+							ExtensionsWithTrailingData: []uint16{extensionCertificateAuthorities},
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: serverTest,
+					name:     "ExtensionTrailingData-CertificateAuthorities-Server-" + suffix,
+					config: Config{
+						MaxVersion:  ver.version,
+						RootCAs:     makeCertPoolFromRoots(&rsaChainCertificate, &ecdsaP384Certificate),
+						SendRootCAs: true,
+						Bugs: ProtocolBugs{
+							ExtensionsWithTrailingData: []uint16{extensionCertificateAuthorities},
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+			}
+		}
+	}
 }
