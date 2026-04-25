@@ -267,6 +267,11 @@ static int aes_gcm_ctrl(EVP_CIPHER_CTX *c, int type, int arg, void *ptr) {
       if (arg <= 0) {
         return 0;
       }
+      if (arg == gctx->ivlen) {
+        // Some applications set the IV and then do a no-op length change,
+        // expecting the IV to remain set.
+        return 1;
+      }
 
       // Clear any existing IV or partial IV that may have previously been set.
       gctx->iv_set = 0;

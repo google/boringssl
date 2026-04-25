@@ -1229,6 +1229,24 @@ TEST(CipherTest, SetIVLengthResets) {
     EXPECT_FALSE(EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_IV_GEN,
                                      sizeof(counter), counter));
   }
+
+  {
+    // Set an IV...
+    ScopedEVP_CIPHER_CTX ctx;
+    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), kCipher, /*impl=*/nullptr,
+                                   /*key=*/nullptr, kIV));
+    // ...and then perform a no-op IV length change.
+    ASSERT_TRUE(
+        EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_AEAD_SET_IVLEN, 12, nullptr));
+    // This time the IV is left alone. Some applications expect this to work.
+    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), /*cipher=*/nullptr,
+                                   /*impl=*/nullptr, kKey,
+                                   /*iv=*/nullptr));
+    uint8_t in[1] = {0};
+    uint8_t out[1];
+    int out_len;
+    EXPECT_TRUE(EVP_EncryptUpdate(ctx.get(), out, &out_len, in, sizeof(in)));
+  }
 }
 
 }  // namespace
