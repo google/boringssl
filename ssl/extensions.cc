@@ -2865,7 +2865,8 @@ static bool ext_trust_anchors_parse_clienthello(SSL_HANDSHAKE *hs,
 
   CBS child;
   if (!CBS_get_u16_length_prefixed(contents, &child) ||
-      !ssl_is_valid_trust_anchor_list(child)) {
+      !ssl_is_valid_trust_anchor_list(child) ||  //
+      CBS_len(contents) != 0) {
     *out_alert = SSL_AD_DECODE_ERROR;
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
     return false;
@@ -2937,8 +2938,9 @@ static bool ext_trust_anchors_parse_serverhello(SSL_HANDSHAKE *hs,
   CBS child;
   if (!CBS_get_u16_length_prefixed(contents, &child) ||
       // The list of available trust anchors may not be empty.
-      CBS_len(&child) == 0 ||  //
-      !ssl_is_valid_trust_anchor_list(child)) {
+      CBS_len(&child) == 0 ||                    //
+      !ssl_is_valid_trust_anchor_list(child) ||  //
+      CBS_len(contents) != 0) {
     *out_alert = SSL_AD_DECODE_ERROR;
     OPENSSL_PUT_ERROR(SSL, SSL_R_DECODE_ERROR);
     return false;

@@ -2501,6 +2501,54 @@ func addExtensionTrailingDataTests() {
 					expectedError:      ":ERROR_PARSING_EXTENSION:",
 					expectedLocalError: "remote error: error decoding message",
 				})
+
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: clientTest,
+					name:     "ExtensionTrailingData-TrustAnchors-EncryptedExtensions-Client-" + suffix,
+					config: Config{
+						MaxVersion:            ver.version,
+						AvailableTrustAnchors: [][]byte{{1}},
+						Bugs: ProtocolBugs{
+							ExtensionsWithTrailingData: []uint16{extensionTrustAnchors},
+						},
+					},
+					flags:              []string{"-requested-trust-anchors", trustAnchorListFlagValue([]byte{2})},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: clientTest,
+					name:     "ExtensionTrailingData-TrustAnchors-Certificate-Client-" + suffix,
+					config: Config{
+						MaxVersion: ver.version,
+						Bugs: ProtocolBugs{
+							AlwaysMatchTrustAnchorID:   true,
+							ExtensionsWithTrailingData: []uint16{extensionTrustAnchors},
+						},
+					},
+					flags:              []string{"-requested-trust-anchors", trustAnchorListFlagValue([]byte{2})},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: serverTest,
+					name:     "ExtensionTrailingData-TrustAnchors-ClientHello-Server-" + suffix,
+					config: Config{
+						MaxVersion:          ver.version,
+						RequestTrustAnchors: [][]byte{{1}},
+						Bugs: ProtocolBugs{
+							ExtensionsWithTrailingData: []uint16{extensionTrustAnchors},
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
 			}
 		}
 	}
