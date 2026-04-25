@@ -2236,7 +2236,8 @@ type certificateMsg struct {
 	// `certTypeRawPublicKey`, then the Raw Public Key data, if any, is stored in
 	// `certificates[0].data` and `certificates` will contain exactly 1 entry.
 	// (Or else `certificates` will be empty.)
-	certificateType CertificateType
+	certificateType            CertificateType
+	extensionsWithTrailingData []uint16
 }
 
 func (m *certificateMsg) marshal() (x []byte) {
@@ -2262,13 +2263,21 @@ func (m *certificateMsg) marshal() (x []byte) {
 				addUint24LengthPrefixedBytes(certificateList, cert.data)
 				if m.hasRequestContext {
 					certificateList.AddUint16LengthPrefixed(func(extensions *cryptobyte.Builder) {
+						addExt := func(id uint16, cb func(*cryptobyte.Builder)) {
+							extensions.AddUint16(id)
+							extensions.AddUint16LengthPrefixed(func(extension *cryptobyte.Builder) {
+								cb(extension)
+								if slices.Contains(m.extensionsWithTrailingData, id) {
+									extension.AddUint8(0)
+								}
+							})
+						}
 						if (i == 0 && m.matchedTrustAnchor) || (i == 1 && m.sendTrustAnchorWrongCertificate) {
-							extensions.AddUint16(extensionTrustAnchors)
-							if m.sendNonEmptyTrustAnchorMatch {
-								addUint16LengthPrefixedBytes(extensions, []byte{0x03, 0xba, 0xdb, 0x0b})
-							} else {
-								extensions.AddUint16(0) // Empty extension
-							}
+							addExt(extensionTrustAnchors, func(extension *cryptobyte.Builder) {
+								if m.sendNonEmptyTrustAnchorMatch {
+									extension.AddBytes([]byte{0x03, 0xba, 0xdb, 0x0b})
+								}
+							})
 						}
 						count := 1
 						if cert.duplicateExtensions {
@@ -2277,16 +2286,16 @@ func (m *certificateMsg) marshal() (x []byte) {
 
 						for i := 0; i < count; i++ {
 							if cert.ocspResponse != nil {
-								extensions.AddUint16(extensionStatusRequest)
-								extensions.AddUint16LengthPrefixed(func(body *cryptobyte.Builder) {
+								addExt(extensionStatusRequest, func(body *cryptobyte.Builder) {
 									body.AddUint8(statusTypeOCSP)
 									addUint24LengthPrefixedBytes(body, cert.ocspResponse)
 								})
 							}
 
 							if cert.sctList != nil {
-								extensions.AddUint16(extensionSignedCertificateTimestamp)
-								addUint16LengthPrefixedBytes(extensions, cert.sctList)
+								addExt(extensionSignedCertificateTimestamp, func(body *cryptobyte.Builder) {
+									body.AddBytes(cert.sctList)
+								})
 							}
 						}
 						if cert.extraExtension != nil {

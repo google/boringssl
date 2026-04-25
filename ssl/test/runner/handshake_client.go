@@ -1322,7 +1322,8 @@ func (hs *clientHandshakeState) doTLS13Handshake(msg any) error {
 			}
 
 			certMsg = &certificateMsg{
-				hasRequestContext: true,
+				hasRequestContext:          true,
+				extensionsWithTrailingData: c.config.Bugs.ExtensionsWithTrailingData,
 			}
 
 			if !certMsg.unmarshal(decompressed) {

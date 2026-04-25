@@ -2445,6 +2445,29 @@ func addExtensionTrailingDataTests() {
 				expectedLocalError: "remote error: error decoding message",
 			})
 
+			ocspError := ":ERROR_PARSING_EXTENSION:"
+			if ver.version >= VersionTLS13 {
+				ocspError = ":DECODE_ERROR:"
+			}
+			testCases = append(testCases, testCase{
+				protocol: protocol,
+				testType: clientTest,
+				name:     "ExtensionTrailingData-StatusRequest-Client-" + suffix,
+				config: Config{
+					MaxVersion: ver.version,
+					Credential: rsaCertificate.WithOCSP(testOCSPResponse),
+					Bugs: ProtocolBugs{
+						ExtensionsWithTrailingData: []uint16{extensionStatusRequest},
+					},
+				},
+				flags:              []string{"-enable-ocsp-stapling"},
+				shouldFail:         true,
+				expectedError:      ocspError,
+				expectedLocalError: "remote error: error decoding message",
+			})
+			// Skip the server test. BoringSSL does not currently parse most of the
+			// ClientHello status_request extension.
+
 			if ver.version >= VersionTLS13 {
 				testCases = append(testCases, testCase{
 					protocol: protocol,

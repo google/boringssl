@@ -1172,7 +1172,8 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 			useCert = config.Bugs.UseCertificateCredential
 		}
 		certMsg := &certificateMsg{
-			hasRequestContext: true,
+			hasRequestContext:          true,
+			extensionsWithTrailingData: config.Bugs.ExtensionsWithTrailingData,
 		}
 		certMsg.sendTrustAnchorWrongCertificate = config.Bugs.SendTrustAnchorWrongCertificate
 		certMsg.sendNonEmptyTrustAnchorMatch = config.Bugs.SendNonEmptyTrustAnchorMatch
