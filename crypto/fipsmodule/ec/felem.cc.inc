@@ -18,9 +18,9 @@
 
 #include <assert.h>
 
-#include "internal.h"
-#include "../bn/internal.h"
 #include "../../internal.h"
+#include "../bn/internal.h"
+#include "internal.h"
 
 
 using namespace bssl;
@@ -54,12 +54,28 @@ int bssl::ec_felem_to_bignum(const EC_GROUP *group, BIGNUM *out,
 
 void bssl::ec_felem_to_bytes(const EC_GROUP *group, uint8_t *out,
                              size_t *out_len, const EC_FELEM *in) {
-  group->meth->felem_to_bytes(group, out, out_len, in);
+  EC_FELEM tmp;
+  ec_felem_from_montgomery(group, &tmp, in);
+  size_t len = BN_num_bytes(&group->field.N);
+  bn_words_to_big_endian(out, len, tmp.words, group->field.N.width);
+  *out_len = len;
 }
 
 int bssl::ec_felem_from_bytes(const EC_GROUP *group, EC_FELEM *out,
                               const uint8_t *in, size_t len) {
-  return group->meth->felem_from_bytes(group, out, in, len);
+  if (len != BN_num_bytes(&group->field.N)) {
+    OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
+    return 0;
+  }
+
+  bn_big_endian_to_words(out->words, group->field.N.width, in, len);
+  if (!bn_less_than_words(out->words, group->field.N.d, group->field.N.width)) {
+    OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
+    return 0;
+  }
+
+  ec_felem_to_montgomery(group, out, out);
+  return 1;
 }
 
 void bssl::ec_felem_neg(const EC_GROUP *group, EC_FELEM *out,
@@ -107,4 +123,45 @@ int bssl::ec_felem_equal(const EC_GROUP *group, const EC_FELEM *a,
                          const EC_FELEM *b) {
   return CRYPTO_memcmp(a->words, b->words,
                        group->field.N.width * sizeof(BN_ULONG)) == 0;
+}
+
+void bssl::ec_felem_mul(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *a,
+                        const EC_FELEM *b) {
+  bn_mod_mul_montgomery_small(out->words, a->words, b->words,
+                              group->field.N.width, &group->field);
+}
+
+void bssl::ec_felem_sqr(const EC_GROUP *group, EC_FELEM *out,
+                        const EC_FELEM *a) {
+  bn_mod_mul_montgomery_small(out->words, a->words, a->words,
+                              group->field.N.width, &group->field);
+}
+
+void bssl::ec_felem_to_montgomery(const EC_GROUP *group, EC_FELEM *out,
+                                  const EC_FELEM *a) {
+  bn_to_montgomery_small(out->words, a->words, group->field.N.width,
+                         &group->field);
+}
+
+void bssl::ec_felem_from_montgomery(const EC_GROUP *group, EC_FELEM *out,
+                                    const EC_FELEM *a) {
+  bn_from_montgomery_small(out->words, group->field.N.width, a->words,
+                           group->field.N.width, &group->field);
+}
+
+void bssl::ec_felem_reduce(const EC_GROUP *group, EC_FELEM *out,
+                           const BN_ULONG *words, size_t num) {
+  // Convert "from" Montgomery form so the value is reduced mod p.
+  bn_from_montgomery_small(out->words, group->field.N.width, words, num,
+                           &group->field);
+  // Convert "to" Montgomery form to remove the R^-1 factor added.
+  ec_felem_to_montgomery(group, out, out);
+  // Convert to Montgomery form to match this implementation's representation.
+  ec_felem_to_montgomery(group, out, out);
+}
+
+void bssl::ec_felem_exp(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *a,
+                        const BN_ULONG *exp, size_t num_exp) {
+  bn_mod_exp_mont_small(out->words, a->words, group->field.N.width, exp,
+                        num_exp, &group->field);
 }

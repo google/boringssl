@@ -551,17 +551,12 @@ int bssl::ec_jacobian_to_affine_batch(const EC_GROUP *group, EC_AFFINE *out,
 int bssl::ec_point_set_affine_coordinates(const EC_GROUP *group, EC_AFFINE *out,
                                           const EC_FELEM *x,
                                           const EC_FELEM *y) {
-  void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
-                          const EC_FELEM *b) = group->meth->felem_mul;
-  void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
-      group->meth->felem_sqr;
-
   // Check if the point is on the curve.
   EC_FELEM lhs, rhs;
-  felem_sqr(group, &lhs, y);                   // lhs = y^2
-  felem_sqr(group, &rhs, x);                   // rhs = x^2
+  ec_felem_sqr(group, &lhs, y);                // lhs = y^2
+  ec_felem_sqr(group, &rhs, x);                // rhs = x^2
   ec_felem_add(group, &rhs, &rhs, &group->a);  // rhs = x^2 + a
-  felem_mul(group, &rhs, &rhs, x);             // rhs = x^3 + ax
+  ec_felem_mul(group, &rhs, &rhs, x);          // rhs = x^3 + ax
   ec_felem_add(group, &rhs, &rhs, &group->b);  // rhs = x^3 + ax + b
   if (!ec_felem_equal(group, &lhs, &rhs)) {
     OPENSSL_PUT_ERROR(EC, EC_R_POINT_IS_NOT_ON_CURVE);

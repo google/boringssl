@@ -727,14 +727,6 @@ DEFINE_METHOD_FUNCTION(EC_METHOD, EC_GFp_nistz256_method) {
   out->mul = ecp_nistz256_point_mul;
   out->mul_base = ecp_nistz256_point_mul_base;
   out->mul_public = ecp_nistz256_points_mul_public;
-  out->felem_mul = ec_GFp_mont_felem_mul;
-  out->felem_sqr = ec_GFp_mont_felem_sqr;
-  out->felem_to_bytes = ec_GFp_mont_felem_to_bytes;
-  out->felem_from_bytes = ec_GFp_mont_felem_from_bytes;
-  out->felem_reduce = ec_GFp_mont_felem_reduce;
-  // TODO(davidben): This should use the specialized field arithmetic
-  // implementation, rather than the generic one.
-  out->felem_exp = ec_GFp_mont_felem_exp;
   out->scalar_inv0_montgomery = ecp_nistz256_inv0_mod_ord;
   out->scalar_to_montgomery_inv_vartime =
       ecp_nistz256_scalar_to_montgomery_inv_vartime;

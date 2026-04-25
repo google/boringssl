@@ -37,13 +37,13 @@ namespace {
 // becomes a performance bottleneck, some possible optimizations by
 // specializing it to the curve:
 //
-// - Rather than using a generic |felem_exp|, specialize the exponentiation to
-//   c2 with a faster addition chain.
+// - Rather than using a generic |ec_felem_exp|, specialize the exponentiation
+//   to c2 with a faster addition chain.
 //
-// - |felem_mul| and |felem_sqr| are indirect calls to generic Montgomery
-//   code. Given the few curves, we could specialize
-//   |map_to_curve_simple_swu|. But doing this reasonably without duplicating
-//   code in C is difficult. (C++ templates would be useful here.)
+// - |ec_felem_mul| and |ec_felem_sqr| are generic Montgomery code. Given the
+//   few curves, we could specialize |map_to_curve_simple_swu|. But doing this
+//   reasonably without duplicating code in C is difficult. (C++ templates
+//   would be useful here.)
 //
 // - P-521's Z and c2 have small power-of-two absolute values. We could save
 //   two multiplications in SSWU. (Other curves have reasonable values of Z
@@ -180,9 +180,9 @@ int hash_to_field2(const EC_GROUP *group, const EVP_MD *md, EC_FELEM *out1,
   BN_ULONG words[2 * EC_MAX_WORDS];
   size_t num_words = 2 * group->field.N.width;
   big_endian_to_words(words, num_words, buf, L);
-  group->meth->felem_reduce(group, out1, words, num_words);
+  ec_felem_reduce(group, out1, words, num_words);
   big_endian_to_words(words, num_words, buf + L, L);
-  group->meth->felem_reduce(group, out2, words, num_words);
+  ec_felem_reduce(group, out2, words, num_words);
   return 1;
 }
 
@@ -200,7 +200,7 @@ int hash_to_field1(const EC_GROUP *group, const EVP_MD *md, EC_FELEM *out,
   BN_ULONG words[2 * EC_MAX_WORDS];
   size_t num_words = 2 * group->field.N.width;
   big_endian_to_words(words, num_words, buf, L);
-  group->meth->felem_reduce(group, out, words, num_words);
+  ec_felem_reduce(group, out, words, num_words);
   return 1;
 }
 
@@ -252,20 +252,15 @@ BN_ULONG sqrt_ratio_3mod4(const EC_GROUP *group, const EC_FELEM *Z,
                           const EC_FELEM *v) {
   assert(is_3mod4(group));
 
-  void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
-                          const EC_FELEM *b) = group->meth->felem_mul;
-  void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
-      group->meth->felem_sqr;
-
   EC_FELEM tv1, tv2, tv3, y1, y2;
-  felem_sqr(group, &tv1, v);                             // 1. tv1 = v^2
-  felem_mul(group, &tv2, u, v);                          // 2. tv2 = u * v
-  felem_mul(group, &tv1, &tv1, &tv2);                    // 3. tv1 = tv1 * tv2
-  group->meth->felem_exp(group, &y1, &tv1, c1, num_c1);  // 4. y1 = tv1^c1
-  felem_mul(group, &y1, &y1, &tv2);                      // 5. y1 = y1 * tv2
-  felem_mul(group, &y2, &y1, c2);                        // 6. y2 = y1 * c2
-  felem_sqr(group, &tv3, &y1);                           // 7. tv3 = y1^2
-  felem_mul(group, &tv3, &tv3, v);                       // 8. tv3 = tv3 * v
+  ec_felem_sqr(group, &tv1, v);                // 1. tv1 = v^2
+  ec_felem_mul(group, &tv2, u, v);             // 2. tv2 = u * v
+  ec_felem_mul(group, &tv1, &tv1, &tv2);       // 3. tv1 = tv1 * tv2
+  ec_felem_exp(group, &y1, &tv1, c1, num_c1);  // 4. y1 = tv1^c1
+  ec_felem_mul(group, &y1, &y1, &tv2);         // 5. y1 = y1 * tv2
+  ec_felem_mul(group, &y2, &y1, c2);           // 6. y2 = y1 * c2
+  ec_felem_sqr(group, &tv3, &y1);              // 7. tv3 = y1^2
+  ec_felem_mul(group, &tv3, &tv3, v);          // 8. tv3 = tv3 * v
 
   // 9. isQR = tv3 == u
   // 10. y = CMOV(y2, y1, isQR)
@@ -289,41 +284,36 @@ void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
   assert(is_3mod4(group));
   assert(group->a_is_minus3);
 
-  void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
-                          const EC_FELEM *b) = group->meth->felem_mul;
-  void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
-      group->meth->felem_sqr;
-
   EC_FELEM tv1, tv2, tv3, tv4, tv5, tv6, x, y, y1;
-  felem_sqr(group, &tv1, u);                             // 1. tv1 = u^2
-  felem_mul(group, &tv1, Z, &tv1);                       // 2. tv1 = Z * tv1
-  felem_sqr(group, &tv2, &tv1);                          // 3. tv2 = tv1^2
+  ec_felem_sqr(group, &tv1, u);                          // 1. tv1 = u^2
+  ec_felem_mul(group, &tv1, Z, &tv1);                    // 2. tv1 = Z * tv1
+  ec_felem_sqr(group, &tv2, &tv1);                       // 3. tv2 = tv1^2
   ec_felem_add(group, &tv2, &tv2, &tv1);                 // 4. tv2 = tv2 + tv1
   ec_felem_add(group, &tv3, &tv2, ec_felem_one(group));  // 5. tv3 = tv2 + 1
-  felem_mul(group, &tv3, &group->b, &tv3);               // 6. tv3 = B * tv3
+  ec_felem_mul(group, &tv3, &group->b, &tv3);            // 6. tv3 = B * tv3
 
   // 7. tv4 = CMOV(Z, -tv2, tv2 != 0)
   const BN_ULONG tv2_non_zero = ec_felem_non_zero_mask(group, &tv2);
   ec_felem_neg(group, &tv4, &tv2);
   ec_felem_select(group, &tv4, tv2_non_zero, &tv4, Z);
 
-  mul_A(group, &tv4, &tv4);                 // 8. tv4 = A * tv4
-  felem_sqr(group, &tv2, &tv3);             // 9. tv2 = tv3^2
-  felem_sqr(group, &tv6, &tv4);             // 10. tv6 = tv4^2
-  mul_A(group, &tv5, &tv6);                 // 11. tv5 = A * tv6
-  ec_felem_add(group, &tv2, &tv2, &tv5);    // 12. tv2 = tv2 + tv5
-  felem_mul(group, &tv2, &tv2, &tv3);       // 13. tv2 = tv2 * tv3
-  felem_mul(group, &tv6, &tv6, &tv4);       // 14. tv6 = tv6 * tv4
-  felem_mul(group, &tv5, &group->b, &tv6);  // 15. tv5 = B * tv6
-  ec_felem_add(group, &tv2, &tv2, &tv5);    // 16. tv2 = tv2 + tv5
-  felem_mul(group, &x, &tv1, &tv3);         // 17. x = tv1 * tv3
+  mul_A(group, &tv4, &tv4);                    // 8. tv4 = A * tv4
+  ec_felem_sqr(group, &tv2, &tv3);             // 9. tv2 = tv3^2
+  ec_felem_sqr(group, &tv6, &tv4);             // 10. tv6 = tv4^2
+  mul_A(group, &tv5, &tv6);                    // 11. tv5 = A * tv6
+  ec_felem_add(group, &tv2, &tv2, &tv5);       // 12. tv2 = tv2 + tv5
+  ec_felem_mul(group, &tv2, &tv2, &tv3);       // 13. tv2 = tv2 * tv3
+  ec_felem_mul(group, &tv6, &tv6, &tv4);       // 14. tv6 = tv6 * tv4
+  ec_felem_mul(group, &tv5, &group->b, &tv6);  // 15. tv5 = B * tv6
+  ec_felem_add(group, &tv2, &tv2, &tv5);       // 16. tv2 = tv2 + tv5
+  ec_felem_mul(group, &x, &tv1, &tv3);         // 17. x = tv1 * tv3
 
   // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
   const BN_ULONG is_gx1_square =
       sqrt_ratio_3mod4(group, Z, c1, num_c1, c2, &y1, &tv2, &tv6);
 
-  felem_mul(group, &y, &tv1, u);  // 19. y = tv1 * u
-  felem_mul(group, &y, &y, &y1);  // 20. y = y * y1
+  ec_felem_mul(group, &y, &tv1, u);                      // 19. y = tv1 * u
+  ec_felem_mul(group, &y, &y, &y1);                      // 20. y = y * y1
 
   // 21. x = CMOV(x, tv3, is_gx1_square)
   ec_felem_select(group, &x, is_gx1_square, &tv3, &x);
@@ -347,8 +337,8 @@ void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
   // efficient if the caller will do further computation on the output. (If the
   // caller will immediately convert to affine coordinates, it is slightly less
   // efficient, but only by a few field multiplications.)
-  felem_mul(group, &out->X, &x, &tv4);
-  felem_mul(group, &out->Y, &y, &tv6);
+  ec_felem_mul(group, &out->X, &x, &tv4);
+  ec_felem_mul(group, &out->Y, &y, &tv6);
   out->Z = tv4;
 }
 

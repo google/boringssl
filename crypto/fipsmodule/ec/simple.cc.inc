@@ -126,19 +126,14 @@ int bssl::ec_GFp_simple_is_on_curve(const EC_GROUP *group,
   // This function may be used when double-checking the secret result of a point
   // multiplication, so we proceed in constant-time.
 
-  void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
-                          const EC_FELEM *b) = group->meth->felem_mul;
-  void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
-      group->meth->felem_sqr;
-
   // rh := X^2
   EC_FELEM rh;
-  felem_sqr(group, &rh, &point->X);
+  ec_felem_sqr(group, &rh, &point->X);
 
   EC_FELEM tmp, Z4, Z6;
-  felem_sqr(group, &tmp, &point->Z);
-  felem_sqr(group, &Z4, &tmp);
-  felem_mul(group, &Z6, &Z4, &tmp);
+  ec_felem_sqr(group, &tmp, &point->Z);
+  ec_felem_sqr(group, &Z4, &tmp);
+  ec_felem_mul(group, &Z6, &Z4, &tmp);
 
   // rh := rh + a*Z^4
   if (group->a_is_minus3) {
@@ -146,19 +141,19 @@ int bssl::ec_GFp_simple_is_on_curve(const EC_GROUP *group,
     ec_felem_add(group, &tmp, &tmp, &Z4);
     ec_felem_sub(group, &rh, &rh, &tmp);
   } else {
-    felem_mul(group, &tmp, &Z4, &group->a);
+    ec_felem_mul(group, &tmp, &Z4, &group->a);
     ec_felem_add(group, &rh, &rh, &tmp);
   }
 
   // rh := (rh + a*Z^4)*X
-  felem_mul(group, &rh, &rh, &point->X);
+  ec_felem_mul(group, &rh, &rh, &point->X);
 
   // rh := rh + b*Z^6
-  felem_mul(group, &tmp, &group->b, &Z6);
+  ec_felem_mul(group, &tmp, &group->b, &Z6);
   ec_felem_add(group, &rh, &rh, &tmp);
 
   // 'lh' := Y^2
-  felem_sqr(group, &tmp, &point->Y);
+  ec_felem_sqr(group, &tmp, &point->Y);
 
   ec_felem_sub(group, &tmp, &tmp, &rh);
   BN_ULONG not_equal = ec_felem_non_zero_mask(group, &tmp);
@@ -187,23 +182,18 @@ int bssl::ec_GFp_simple_points_equal(const EC_GROUP *group,
   // or equivalently, whether
   //     (X_a*Z_b^2, Y_a*Z_b^3) = (X_b*Z_a^2, Y_b*Z_a^3).
 
-  void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
-                          const EC_FELEM *b) = group->meth->felem_mul;
-  void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
-      group->meth->felem_sqr;
-
   EC_FELEM tmp1, tmp2, Za23, Zb23;
-  felem_sqr(group, &Zb23, &b->Z);         // Zb23 = Z_b^2
-  felem_mul(group, &tmp1, &a->X, &Zb23);  // tmp1 = X_a * Z_b^2
-  felem_sqr(group, &Za23, &a->Z);         // Za23 = Z_a^2
-  felem_mul(group, &tmp2, &b->X, &Za23);  // tmp2 = X_b * Z_a^2
+  ec_felem_sqr(group, &Zb23, &b->Z);         // Zb23 = Z_b^2
+  ec_felem_mul(group, &tmp1, &a->X, &Zb23);  // tmp1 = X_a * Z_b^2
+  ec_felem_sqr(group, &Za23, &a->Z);         // Za23 = Z_a^2
+  ec_felem_mul(group, &tmp2, &b->X, &Za23);  // tmp2 = X_b * Z_a^2
   ec_felem_sub(group, &tmp1, &tmp1, &tmp2);
   const BN_ULONG x_not_equal = ec_felem_non_zero_mask(group, &tmp1);
 
-  felem_mul(group, &Zb23, &Zb23, &b->Z);  // Zb23 = Z_b^3
-  felem_mul(group, &tmp1, &a->Y, &Zb23);  // tmp1 = Y_a * Z_b^3
-  felem_mul(group, &Za23, &Za23, &a->Z);  // Za23 = Z_a^3
-  felem_mul(group, &tmp2, &b->Y, &Za23);  // tmp2 = Y_b * Z_a^3
+  ec_felem_mul(group, &Zb23, &Zb23, &b->Z);  // Zb23 = Z_b^3
+  ec_felem_mul(group, &tmp1, &a->Y, &Zb23);  // tmp1 = Y_a * Z_b^3
+  ec_felem_mul(group, &Za23, &Za23, &a->Z);  // Za23 = Z_a^3
+  ec_felem_mul(group, &tmp2, &b->Y, &Za23);  // tmp2 = Y_b * Z_a^3
   ec_felem_sub(group, &tmp1, &tmp1, &tmp2);
   const BN_ULONG y_not_equal = ec_felem_non_zero_mask(group, &tmp1);
   const BN_ULONG x_and_y_equal = ~(x_not_equal | y_not_equal);
@@ -224,19 +214,14 @@ int bssl::ec_affine_jacobian_equal(const EC_GROUP *group, const EC_AFFINE *a,
   // or equivalently, whether
   //     (X_a*Z_b^2, Y_a*Z_b^3) = (X_b, Y_b).
 
-  void (*const felem_mul)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a,
-                          const EC_FELEM *b) = group->meth->felem_mul;
-  void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
-      group->meth->felem_sqr;
-
   EC_FELEM tmp, Zb2;
-  felem_sqr(group, &Zb2, &b->Z);        // Zb2 = Z_b^2
-  felem_mul(group, &tmp, &a->X, &Zb2);  // tmp = X_a * Z_b^2
+  ec_felem_sqr(group, &Zb2, &b->Z);        // Zb2 = Z_b^2
+  ec_felem_mul(group, &tmp, &a->X, &Zb2);  // tmp = X_a * Z_b^2
   ec_felem_sub(group, &tmp, &tmp, &b->X);
   const BN_ULONG x_not_equal = ec_felem_non_zero_mask(group, &tmp);
 
-  felem_mul(group, &tmp, &a->Y, &Zb2);  // tmp = Y_a * Z_b^2
-  felem_mul(group, &tmp, &tmp, &b->Z);  // tmp = Y_a * Z_b^3
+  ec_felem_mul(group, &tmp, &a->Y, &Zb2);  // tmp = Y_a * Z_b^2
+  ec_felem_mul(group, &tmp, &tmp, &b->Z);  // tmp = Y_a * Z_b^3
   ec_felem_sub(group, &tmp, &tmp, &b->Y);
   const BN_ULONG y_not_equal = ec_felem_non_zero_mask(group, &tmp);
   const BN_ULONG x_and_y_equal = ~(x_not_equal | y_not_equal);
@@ -259,28 +244,4 @@ int bssl::ec_GFp_simple_cmp_x_coordinate(const EC_GROUP *group,
   EC_SCALAR x;
   return ec_get_x_coordinate_as_scalar(group, &x, p) &&
          ec_scalar_equal_vartime(group, &x, r);
-}
-
-void bssl::ec_GFp_simple_felem_to_bytes(const EC_GROUP *group, uint8_t *out,
-                                        size_t *out_len, const EC_FELEM *in) {
-  size_t len = BN_num_bytes(&group->field.N);
-  bn_words_to_big_endian(out, len, in->words, group->field.N.width);
-  *out_len = len;
-}
-
-int bssl::ec_GFp_simple_felem_from_bytes(const EC_GROUP *group, EC_FELEM *out,
-                                         const uint8_t *in, size_t len) {
-  if (len != BN_num_bytes(&group->field.N)) {
-    OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
-    return 0;
-  }
-
-  bn_big_endian_to_words(out->words, group->field.N.width, in, len);
-
-  if (!bn_less_than_words(out->words, group->field.N.d, group->field.N.width)) {
-    OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
-    return 0;
-  }
-
-  return 1;
 }
