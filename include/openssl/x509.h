@@ -398,7 +398,7 @@ OPENSSL_EXPORT int X509_verify(const X509 *x509, EVP_PKEY *pkey);
 // X509_get1_email returns a newly-allocated list of NUL-terminated strings
 // containing all email addresses in |x509|'s subject and all rfc822name names
 // in |x509|'s subject alternative names. Email addresses which contain embedded
-// NUL bytes are skipped.
+// NUL bytes are skipped. The results are returned in an arbitrary order.
 //
 // On error, or if there are no such email addresses, it returns NULL. When
 // done, the caller must release the result with |X509_email_free|.
@@ -408,7 +408,7 @@ OPENSSL_EXPORT STACK_OF(OPENSSL_STRING) *X509_get1_email(const X509 *x509);
 // containing all OCSP URIs in |x509|. That is, it collects all URI
 // AccessDescriptions with an accessMethod of id-ad-ocsp in |x509|'s authority
 // information access extension. URIs which contain embedded NUL bytes are
-// skipped.
+// skipped. The results are returned in an arbitrary order.
 //
 // On error, or if there are no such URIs, it returns NULL. When done, the
 // caller must release the result with |X509_email_free|.
@@ -1173,7 +1173,8 @@ OPENSSL_EXPORT int X509_REQ_verify(const X509_REQ *req, EVP_PKEY *pkey);
 // containing all email addresses in |req|'s subject and all rfc822name names
 // in |req|'s subject alternative names. The subject alternative names extension
 // is extracted from the result of |X509_REQ_get_extensions|. Email addresses
-// which contain embedded NUL bytes are skipped.
+// which contain embedded NUL bytes are skipped. The results are returned in an
+// arbitrary order.
 //
 // On error, or if there are no such email addresses, it returns NULL. When
 // done, the caller must release the result with |X509_email_free|.

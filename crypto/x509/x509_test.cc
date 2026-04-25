@@ -9917,5 +9917,165 @@ TEST(X509Test, CheckPrivateKey) {
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_KEY_TYPE_MISMATCH));
 }
 
+TEST(X509Test, GetEmail) {
+  // A certificate with no emails.
+  UniquePtr<EVP_PKEY> p256(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(p256);
+  UniquePtr<X509> cert = MakeTestCert("Issuer", "Subject", p256.get(), false);
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(X509_sign(cert.get(), p256.get(), EVP_sha256()));
+  EXPECT_EQ(nullptr, X509_get1_email(cert.get()));
+
+  // A CSR with no emails.
+  UniquePtr<X509_REQ> req(X509_REQ_new());
+  ASSERT_TRUE(req);
+  ASSERT_TRUE(X509_REQ_set_pubkey(req.get(), p256.get()));
+  ASSERT_TRUE(X509_REQ_sign(req.get(), p256.get(), EVP_sha256()));
+  EXPECT_EQ(nullptr, X509_REQ_get1_email(req.get()));
+
+  // Prepare many emails.
+  constexpr size_t kCount = 100;
+  UniquePtr<X509_NAME> subject(X509_NAME_new());
+  ASSERT_TRUE(subject);
+  UniquePtr<GENERAL_NAMES> sans(GENERAL_NAMES_new());
+  ASSERT_TRUE(sans);
+  std::vector<std::string> expected;
+  for (size_t i = 0; i < kCount; i++) {
+    bool duplicate = i % 3 == 0;
+    bool add_to_both = i % 5 == 0;
+    bool add_to_subject = add_to_both || i % 2 == 0;
+    bool add_to_sans = add_to_both || i % 2 == 1;
+
+    char email[256];
+    snprintf(email, sizeof(email), "test%zu@example.com", i);
+    std::string_view email_sv = email;
+    Span<const uint8_t> email_bytes = StringAsBytes(email);
+    if (i == 0) {
+      // Test with an embedded NUL. This string should be discarded.
+      email[4] = '\0';
+    } else {
+      expected.push_back(email);
+    }
+
+    for (int dup = 0; dup < (duplicate ? 1 : 2); dup++) {
+      if (add_to_subject) {
+        ASSERT_TRUE(X509_NAME_add_entry_by_NID(
+            subject.get(), NID_pkcs9_emailAddress, MBSTRING_UTF8,
+            email_bytes.data(), email_bytes.size(), /*loc=*/-1, /*set=*/-1));
+      }
+      if (add_to_sans) {
+        UniquePtr<GENERAL_NAME> san = MakeGeneralName(GEN_EMAIL, email_sv);
+        ASSERT_TRUE(san);
+        ASSERT_TRUE(PushToStack(sans.get(), std::move(san)));
+      }
+    }
+  }
+
+  // A certificate with many emails.
+  {
+    cert = MakeTestCert("Issuer", "Subject", p256.get(), false);
+    ASSERT_TRUE(cert);
+    ASSERT_TRUE(X509_set_subject_name(cert.get(), subject.get()));
+    ASSERT_TRUE(X509_add1_ext_i2d(cert.get(), NID_subject_alt_name, sans.get(),
+                                  /*crit=*/0, /*flags=*/0));
+    ASSERT_TRUE(X509_sign(cert.get(), p256.get(), EVP_sha256()));
+
+    UniquePtr<STACK_OF(OPENSSL_STRING)> emails(X509_get1_email(cert.get()));
+    ASSERT_TRUE(emails);
+    std::vector<std::string> actual;
+    for (const char *email : emails.get()) {
+      actual.push_back(email);
+    }
+
+    // The output order is undefined.
+    std::sort(expected.begin(), expected.end());
+    std::sort(actual.begin(), actual.end());
+    EXPECT_EQ(actual, expected);
+  }
+
+  // A CSR with many emails.
+  {
+    req.reset(X509_REQ_new());
+    ASSERT_TRUE(req);
+    ASSERT_TRUE(X509_REQ_set_subject_name(req.get(), subject.get()));
+    ASSERT_TRUE(X509_REQ_set_pubkey(req.get(), p256.get()));
+    STACK_OF(X509_EXTENSION) *exts_raw = nullptr;
+    ASSERT_TRUE(X509V3_add1_i2d(&exts_raw, NID_subject_alt_name, sans.get(),
+                                /*crit=*/0, X509V3_ADD_APPEND));
+    UniquePtr<STACK_OF(X509_EXTENSION)> exts(exts_raw);
+    ASSERT_TRUE(X509_REQ_add_extensions(req.get(), exts.get()));
+    ASSERT_TRUE(X509_REQ_sign(req.get(), p256.get(), EVP_sha256()));
+
+    UniquePtr<STACK_OF(OPENSSL_STRING)> emails(X509_REQ_get1_email(req.get()));
+    ASSERT_TRUE(emails);
+    std::vector<std::string> actual;
+    for (const char *email : emails.get()) {
+      actual.push_back(email);
+    }
+
+    // The output order is undefined.
+    std::sort(expected.begin(), expected.end());
+    std::sort(actual.begin(), actual.end());
+    EXPECT_EQ(actual, expected);
+  }
+}
+
+TEST(X509Test, GetOCSP) {
+  // A certificate with no OCSP URIs.
+  UniquePtr<EVP_PKEY> p256(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(p256);
+  UniquePtr<X509> cert = MakeTestCert("Issuer", "Subject", p256.get(), false);
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(X509_sign(cert.get(), p256.get(), EVP_sha256()));
+  EXPECT_EQ(nullptr, X509_get1_ocsp(cert.get()));
+
+  // Make a certificate with many OCSP URIs.
+  constexpr size_t kCount = 100;
+  UniquePtr<AUTHORITY_INFO_ACCESS> aia(AUTHORITY_INFO_ACCESS_new());
+  ASSERT_TRUE(aia);
+  std::vector<std::string> expected;
+  for (size_t i = 0; i < kCount; i++) {
+    bool duplicate = i % 3 == 0;
+    bool is_ocsp = i % 5 != 0;
+    char uri[256];
+    snprintf(uri, sizeof(uri), "http://test%zu.example.com/", i);
+    std::string_view uri_sv = uri;
+    if (i == 0) {
+      // Test with an embedded NUL. This string should be discarded.
+      uri[11] = '\0';
+    } else if (is_ocsp) {
+      expected.push_back(uri);
+    }
+
+    for (int dup = 0; dup < (duplicate ? 1 : 2); dup++) {
+      UniquePtr<ACCESS_DESCRIPTION> ad(ACCESS_DESCRIPTION_new());
+      ASSERT_TRUE(ad);
+      ad->method = OBJ_nid2obj(is_ocsp ? NID_ad_OCSP : NID_ad_ca_issuers);
+      GENERAL_NAME_free(ad->location);
+      ad->location = MakeGeneralName(GEN_URI, uri_sv).release();
+      ASSERT_TRUE(ad->location);
+      ASSERT_TRUE(PushToStack(aia.get(), std::move(ad)));
+    }
+  }
+
+  cert = MakeTestCert("Issuer", "Subject", p256.get(), false);
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(X509_add1_ext_i2d(cert.get(), NID_info_access, aia.get(),
+                                /*crit=*/0, /*flags=*/0));
+  ASSERT_TRUE(X509_sign(cert.get(), p256.get(), EVP_sha256()));
+
+  UniquePtr<STACK_OF(OPENSSL_STRING)> ocsps(X509_get1_ocsp(cert.get()));
+  ASSERT_TRUE(ocsps);
+  std::vector<std::string> actual;
+  for (const char *ocsp : ocsps.get()) {
+    actual.push_back(ocsp);
+  }
+
+  // The output order is undefined.
+  std::sort(expected.begin(), expected.end());
+  std::sort(actual.begin(), actual.end());
+  EXPECT_EQ(actual, expected);
+}
+
 }  // namespace
 BSSL_NAMESPACE_END
