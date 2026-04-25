@@ -85,9 +85,7 @@ static inline void fiat_addcarryx_u64(uint64_t* out1, fiat_uint1* out2, fiat_uin
   *out2 = addcarry64(arg1, arg2, arg3, &t);
   *out1 = t;
 #elif defined(_M_X64)
-  long long unsigned int t;
   *out2 = _addcarry_u64(arg1, arg2, arg3, out1);
-  *out1 = t;
 #else
   arg2 += arg1;
   arg1 = arg2 < arg1;
