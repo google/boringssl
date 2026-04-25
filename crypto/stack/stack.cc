@@ -365,6 +365,26 @@ void OPENSSL_sk_sort(OPENSSL_STACK *sk,
   sk->sorted = 1;
 }
 
+void OPENSSL_sk_sort_and_dedup(
+    OPENSSL_STACK *sk, OPENSSL_sk_call_cmp_func call_cmp_func,
+    OPENSSL_sk_call_free_func call_free_func, OPENSSL_sk_free_func free_func) {
+  OPENSSL_sk_sort(sk, call_cmp_func);
+  if (sk == nullptr || sk->comp == nullptr || sk->num <= 1) {
+    return;
+  }
+
+  size_t new_num = 1;
+  for (size_t i = 1; i < sk->num; i++) {
+    if (call_cmp_func(sk->comp, sk->data[i], sk->data[new_num - 1]) != 0) {
+      sk->data[new_num] = sk->data[i];
+      new_num++;
+    } else if (free_func != nullptr) {
+      call_free_func(free_func, sk->data[i]);
+    }
+  }
+  sk->num = new_num;
+}
+
 int OPENSSL_sk_is_sorted(const OPENSSL_STACK *sk) {
   if (!sk) {
     return 1;

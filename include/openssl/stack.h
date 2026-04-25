@@ -204,6 +204,12 @@ STACK_OF(SAMPLE) *sk_SAMPLE_dup(const STACK_OF(SAMPLE) *sk);
 // elements that are equivalent under the comparison function.
 void sk_SAMPLE_sort(STACK_OF(SAMPLE) *sk);
 
+// sk_SAMPLE_sort_and_dedup sorts the elements of |sk| based on the comparison
+// function and removes duplicates. If |free_func| is not NULL, it is called on
+// every removed element.
+void sk_SAMPLE_sort_and_dedup(STACK_OF(SAMPLE) *sk,
+                              sk_SAMPLE_free_func free_func);
+
 // sk_SAMPLE_is_sorted returns one if |sk| is known to be sorted and zero
 // otherwise.
 int sk_SAMPLE_is_sorted(const STACK_OF(SAMPLE) *sk);
@@ -297,6 +303,9 @@ OPENSSL_EXPORT void *OPENSSL_sk_pop(OPENSSL_STACK *sk);
 OPENSSL_EXPORT OPENSSL_STACK *OPENSSL_sk_dup(const OPENSSL_STACK *sk);
 OPENSSL_EXPORT void OPENSSL_sk_sort(OPENSSL_STACK *sk,
                                     OPENSSL_sk_call_cmp_func call_cmp_func);
+OPENSSL_EXPORT void OPENSSL_sk_sort_and_dedup(
+    OPENSSL_STACK *sk, OPENSSL_sk_call_cmp_func call_cmp_func,
+    OPENSSL_sk_call_free_func call_free_func, OPENSSL_sk_free_func free_func);
 OPENSSL_EXPORT int OPENSSL_sk_is_sorted(const OPENSSL_STACK *sk);
 OPENSSL_EXPORT OPENSSL_sk_cmp_func
 OPENSSL_sk_set_cmp_func(OPENSSL_STACK *sk, OPENSSL_sk_cmp_func comp);
@@ -502,6 +511,13 @@ BSSL_NAMESPACE_END
                                                                                \
   OPENSSL_INLINE void sk_##name##_sort(STACK_OF(name) *sk) {                   \
     OPENSSL_sk_sort((OPENSSL_STACK *)sk, sk_##name##_call_cmp_func);           \
+  }                                                                            \
+                                                                               \
+  OPENSSL_INLINE void sk_##name##_sort_and_dedup(                              \
+      STACK_OF(name) *sk, sk_##name##_free_func free_func) {                   \
+    OPENSSL_sk_sort_and_dedup((OPENSSL_STACK *)sk, sk_##name##_call_cmp_func,  \
+                              sk_##name##_call_free_func,                      \
+                              (OPENSSL_sk_free_func)free_func);                \
   }                                                                            \
                                                                                \
   OPENSSL_INLINE int sk_##name##_is_sorted(const STACK_OF(name) *sk) {         \

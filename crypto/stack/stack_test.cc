@@ -486,6 +486,43 @@ TEST(StackTest, DeleteIf) {
   EXPECT_TRUE(sk_TEST_INT_is_sorted(sk.get()));
 }
 
+TEST(StackTest, SortAndDedup) {
+  UniquePtr<STACK_OF(TEST_INT)> sk(sk_TEST_INT_new(compare));
+  ASSERT_TRUE(sk);
+  sk_TEST_INT_sort_and_dedup(sk.get(), TEST_INT_free);
+  ExpectStackEquals(sk.get(), std::vector<int>{});
+
+  for (int v : {1, 2, 3, 4, 5, 2, 2, 2, 2, 3}) {
+    auto obj = TEST_INT_new(v);
+    ASSERT_TRUE(obj);
+    ASSERT_TRUE(PushToStack(sk.get(), std::move(obj)));
+  }
+
+  sk_TEST_INT_sort_and_dedup(sk.get(), TEST_INT_free);
+  ExpectStackEquals(sk.get(), {1, 2, 3, 4, 5});
+
+  sk_TEST_INT_sort_and_dedup(sk.get(), TEST_INT_free);
+  ExpectStackEquals(sk.get(), {1, 2, 3, 4, 5});
+
+  // Repeat with non-owning pointers.
+  sk.reset(sk_TEST_INT_new(compare));
+  ASSERT_TRUE(sk);
+  for (int v : {1, 2, 3, 4, 5, 2, 2, 2, 2, 3}) {
+    auto obj = TEST_INT_new(v);
+    ASSERT_TRUE(obj);
+    ASSERT_TRUE(PushToStack(sk.get(), std::move(obj)));
+  }
+
+  // |not_owned| does not own its contents, so we cannot use bssl::UniquePtr.
+  STACK_OF(TEST_INT) *not_owned = sk_TEST_INT_dup(sk.get());
+  ASSERT_TRUE(not_owned);
+  sk_TEST_INT_sort_and_dedup(not_owned, nullptr);
+  ExpectStackEquals(not_owned, {1, 2, 3, 4, 5});
+  sk_TEST_INT_sort_and_dedup(not_owned, nullptr);
+  ExpectStackEquals(not_owned, {1, 2, 3, 4, 5});
+  sk_TEST_INT_free(not_owned);
+}
+
 TEST(StackTest, IsSorted) {
   UniquePtr<STACK_OF(TEST_INT)> sk(sk_TEST_INT_new_null());
   ASSERT_TRUE(sk);
