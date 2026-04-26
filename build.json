@@ -404,6 +404,7 @@
             "crypto/x509/x_x509a.cc",
             "crypto/xwing/xwing.cc"
         ],
+        "prefix_symbols": true,
         "hdrs": [
             "include/openssl/aead.h",
             "include/openssl/aes.h",
@@ -733,6 +734,7 @@
             "ssl/tls_method.cc",
             "ssl/tls_record.cc"
         ],
+        "prefix_symbols": true,
         "hdrs": [
             "include/openssl/dtls1.h",
             "include/openssl/srtp.h",

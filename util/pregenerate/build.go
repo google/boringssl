@@ -385,7 +385,9 @@ func MakePrefixingIncludes(in map[string]InputTarget, targetsOut map[string]buil
 		NewSimpleTask("prefix_symbols", "include/openssl/prefix_symbols.h", func() ([]byte, error) {
 			var headers []string
 			for _, t := range in {
-				headers = append(headers, t.Hdrs...)
+				if t.PrefixSymbols {
+					headers = append(headers, t.Hdrs...)
+				}
 			}
 			syms, err := CollectCSymbols(headers)
 			return BuildCRenamingInclude(syms), err

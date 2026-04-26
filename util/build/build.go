@@ -35,4 +35,7 @@ type Target struct {
 	// Data is a list of test data files that should be available when the test is
 	// run.
 	Data []string `json:"data,omitempty"`
+	// PrefixSymbols, if true, indicates this is a target that may define C public
+	// symbols, so its headers must be processed.
+	PrefixSymbols bool `json:"prefix_symbols,omitempty"`
 }
