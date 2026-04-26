@@ -87,6 +87,10 @@ func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 			"/Zs",
 			"-Xclang", "-ast-dump=json",
 			"/I", "include",
+			// Suppress the C++ helper APIs, to avoid including STL headers. There are
+			// no C symbols in there, and this reduces the volume of JSON from around
+			// 288 MB to 44 MB.
+			"/DBORINGSSL_NO_CXX=1",
 			"-",
 		}
 	} else {
@@ -97,6 +101,8 @@ func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 			"-fsyntax-only",
 			"-Xclang", "-ast-dump=json",
 			"-Iinclude",
+			// See above.
+			"-DBORINGSSL_NO_CXX=1",
 			"-",
 		}
 	}
