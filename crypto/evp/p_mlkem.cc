@@ -370,31 +370,6 @@ struct MLKEMImplementation {
     return 1;
   }
 
-  static int EncapCtx(EvpPkeyCtx *ctx, uint8_t *out_ciphertext,
-                      size_t *out_ciphertext_len, uint8_t *out_secret,
-                      size_t *out_secret_len) {
-    const EVP_PKEY *pkey = ctx->pkey.get();
-    const auto *public_key = GetKeyData(FromOpaque(pkey))->GetPublicKey();
-    if (out_ciphertext == nullptr) {
-      if (out_ciphertext_len != nullptr) {
-        *out_ciphertext_len = Traits::kCiphertextBytes;
-      }
-      if (out_secret_len != nullptr) {
-        *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
-      }
-      return 1;
-    }
-    if (*out_ciphertext_len < Traits::kCiphertextBytes ||
-        *out_secret_len < MLKEM_SHARED_SECRET_BYTES) {
-      OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
-      return 0;
-    }
-    Traits::Encap(out_ciphertext, out_secret, public_key);
-    *out_ciphertext_len = Traits::kCiphertextBytes;
-    *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
-    return 1;
-  }
-
   static int KemDecap(uint8_t *out_secret, size_t secret_len,
                       const uint8_t *ciphertext, size_t ciphertext_len,
                       const EVP_PKEY *key) {
@@ -410,30 +385,13 @@ struct MLKEMImplementation {
     return Traits::Decap(out_secret, ciphertext, ciphertext_len, &priv->priv);
   }
 
-  static int DecapCtx(EvpPkeyCtx *ctx, uint8_t *out_secret,
-                      size_t *out_secret_len, const uint8_t *ciphertext,
-                      size_t ciphertext_len) {
-    if (out_secret == nullptr) {
-      *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
-      return 1;
-    }
-    if (*out_secret_len < MLKEM_SHARED_SECRET_BYTES) {
-      OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
-      return 0;
-    }
-    const EVP_PKEY *pkey = ctx->pkey.get();
-    const auto *private_key = GetKeyData(FromOpaque(pkey))->AsPrivateKeyData();
-    if (private_key == nullptr) {
-      OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
-      return 0;
-    }
-    if (Traits::Decap(out_secret, ciphertext, ciphertext_len,
-                      &private_key->priv)) {
-      *out_secret_len = MLKEM_SHARED_SECRET_BYTES;
-      return 1;
-    }
-    return 0;
-  }
+  static constexpr EVP_KEM evp_kem = {
+      /*pkey_id=*/Traits::kType,
+      /*ciphertext_len=*/Traits::kCiphertextBytes,
+      /*secret_len=*/MLKEM_SHARED_SECRET_BYTES,
+      &KemEncap,
+      &KemDecap,
+  };
 
   static constexpr EVP_PKEY_CTX_METHOD pkey_method = {
       Traits::kType,
@@ -450,8 +408,8 @@ struct MLKEMImplementation {
       /*decrypt=*/nullptr,
       /*derive=*/nullptr,
       /*paramgen=*/nullptr,
-      &EncapCtx,
-      &DecapCtx,
+      &KemAdapter<evp_kem>::EncapMethod,
+      &KemAdapter<evp_kem>::DecapMethod,
       /*ctrl=*/nullptr,
   };
 
@@ -503,14 +461,6 @@ struct MLKEMImplementation {
     ret.oid_len = oid.size();
     return ret;
   }
-
-  static constexpr EVP_KEM evp_kem = {
-      /*pkey_id=*/Traits::kType,
-      /*ciphertext_len=*/Traits::kCiphertextBytes,
-      /*secret_len=*/MLKEM_SHARED_SECRET_BYTES,
-      &KemEncap,
-      &KemDecap,
-  };
 
   static constexpr EVP_PKEY_ASN1_METHOD asn1_method = BuildASN1Method();
   static constexpr EVP_PKEY_ALG pkey_alg = {&asn1_method, &pkey_method};

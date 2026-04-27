@@ -315,6 +315,59 @@ struct evp_kem_st {
 
 BSSL_NAMESPACE_BEGIN
 
+// KemAdapter is templated on an instance of EVP_KEM, and generates static
+// methods matching the behavior and function signatures for `encap` and `decap`
+// in EVP_PKEY_CTX_METHOD.
+template <const evp_kem_st &KEM>
+struct KemAdapter {
+  KemAdapter() = delete;
+
+  static int EncapMethod(EvpPkeyCtx *ctx, uint8_t *out_ciphertext,
+                         size_t *out_ciphertext_len, uint8_t *out_secret,
+                         size_t *out_secret_len) {
+    if (out_ciphertext == nullptr) {
+      if (out_ciphertext_len != nullptr) {
+        *out_ciphertext_len = KEM.ciphertext_len;
+      }
+      if (out_secret_len != nullptr) {
+        *out_secret_len = KEM.secret_len;
+      }
+      return 1;
+    }
+    if (*out_ciphertext_len < KEM.ciphertext_len ||
+        *out_secret_len < KEM.secret_len) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
+      return 0;
+    }
+    if (KEM.encap(out_ciphertext, KEM.ciphertext_len, out_secret,
+                  KEM.secret_len, ctx->pkey.get())) {
+      *out_ciphertext_len = KEM.ciphertext_len;
+      *out_secret_len = KEM.secret_len;
+      return 1;
+    }
+    return 0;
+  }
+
+  static int DecapMethod(EvpPkeyCtx *ctx, uint8_t *out_secret,
+                         size_t *out_secret_len, const uint8_t *ciphertext,
+                         size_t ciphertext_len) {
+    if (out_secret == nullptr) {
+      *out_secret_len = KEM.secret_len;
+      return 1;
+    }
+    if (*out_secret_len < KEM.secret_len) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
+      return 0;
+    }
+    if (KEM.decap(out_secret, KEM.secret_len, ciphertext, ciphertext_len,
+                  ctx->pkey.get())) {
+      *out_secret_len = KEM.secret_len;
+      return 1;
+    }
+    return 0;
+  }
+};
+
 // evp_pkey_ec_no_curve returns an internal curveless EC |EVP_PKEY_ALG|. This
 // cannot be used to parse anything and is only useful for key generation.
 const EVP_PKEY_ALG *evp_pkey_ec_no_curve();
