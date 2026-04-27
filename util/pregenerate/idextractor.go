@@ -82,27 +82,25 @@ func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 	if isCL {
 		// If using clang-cl.exe, args need to be in CL form.
 		args = []string{
-			"/TP",
-			"/std:c++17",
-			"/Zs",
-			"-Xclang", "-ast-dump=json",
-			"/I", "include",
 			// Suppress the C++ helper APIs, to avoid including STL headers. There are
 			// no C symbols in there, and this reduces the volume of JSON from around
 			// 288 MB to 44 MB.
-			"/DBORINGSSL_NO_CXX=1",
+			"/TC",
+			"/std:c99",
+			"/Zs",
+			"-Xclang", "-ast-dump=json",
+			"/I", "include",
 			"-",
 		}
 	} else {
 		// Standard Clang args.
 		args = []string{
-			"-x", "c++",
-			"-std=c++17",
+			// See above.
+			"-x", "c",
+			"-std=c99",
 			"-fsyntax-only",
 			"-Xclang", "-ast-dump=json",
 			"-Iinclude",
-			// See above.
-			"-DBORINGSSL_NO_CXX=1",
 			"-",
 		}
 	}
@@ -150,12 +148,13 @@ func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 		}
 		var isInline bool
 		switch id.Linkage {
-		case "", "static", "static inline":
+		case "", "static":
 			// Definitely not linked.
 			return nil
-		case `extern "C" inline`, `extern "C++" inline`:
-			// Sorry, can't redefine_extname inline functions:
+		case `extern "C" inline`, `extern "C++" inline`, "static inline":
+			// Sorry, can't redefine_extname inline functions in GCC:
 			// error: #pragma redefine_extname is applicable to external C declarations only; not applied to function
+			// Also, including `static inline` as it becomes `inline` when compiling as C++.
 			isInline = true
 		case `extern "C"`:
 			// Link those.
@@ -189,7 +188,7 @@ func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 		}
 	}
 
-	err = idextractor.New(report, idextractor.Options{Language: "C++"}).Parse(stdout)
+	err = idextractor.New(report, idextractor.Options{Language: "C"}).Parse(stdout)
 	if err != nil {
 		c.Process.Kill()
 		return cSymbolData{}, err
