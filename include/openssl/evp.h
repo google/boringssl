@@ -396,6 +396,10 @@ OPENSSL_EXPORT int EVP_marshal_private_key(CBB *cbb, const EVP_PKEY *key);
 //   APIs, but instead the |EVP_PKEY_from_private_seed| and
 //   |EVP_PKEY_get_private_seed| APIs.
 //
+// - ML-KEM, using the formats in FIPS 203. The private key representation
+//   supported by BoringSSL is the 64-byte "seed" resulting from the
+//   concatenation of d||z, as each is defined in FIPS 203.
+//
 // These formats are suitable if serializing a key in a context where the
 // algorithm is already known and there is no need to encode it.
 

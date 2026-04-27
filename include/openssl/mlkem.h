@@ -25,7 +25,7 @@ extern "C" {
 // ML-KEM-768.
 //
 // This implements the Module-Lattice-Based Key-Encapsulation Mechanism from
-// https://csrc.nist.gov/pubs/fips/204/final
+// https://csrc.nist.gov/pubs/fips/203/final
 
 
 // MLKEM768_public_key contains an ML-KEM-768 public key. The contents of this
