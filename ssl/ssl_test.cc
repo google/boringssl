@@ -684,8 +684,8 @@ TEST(SSLTest, CurveRules) {
 }
 
 TEST(SSLTest, DefaultCurves) {
-  const uint16_t kDefaults[] = {SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
-                                SSL_GROUP_SECP384R1};
+  const uint16_t kDefaults[] = {SSL_GROUP_X25519_MLKEM768, SSL_GROUP_X25519,
+                                SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1};
 
   // Test the group ID APIs.
   {
@@ -1666,6 +1666,13 @@ static bool GetClientHello(SSL *ssl, std::vector<uint8_t> *out) {
 static size_t GetClientHelloLen(uint16_t max_version, uint16_t session_version,
                                 size_t ticket_len) {
   bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
+
+  // Reduce the number of supported groups, as we need ClientHellos smaller
+  // than 254 bytes for SSLTest.Padding.
+  uint16_t groups[] = {SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
+                       SSL_GROUP_SECP384R1};
+  SSL_CTX_set1_group_ids(ctx.get(), groups, sizeof(groups) / sizeof(*groups));
+
   bssl::UniquePtr<SSL_SESSION> session =
       CreateSessionWithTicket(session_version, ticket_len);
   if (!ctx || !session) {
@@ -2340,7 +2347,8 @@ TEST(SSLTest, SetGroupIdsWithEqualPreference) {
 // Test that the SSL group flags are defaulted to zero when zero groups are set
 // (i.e. using the default groups).
 TEST(SSLTest, SetGroupIdsWithFlags_DefaultGroups) {
-  const uint16_t kDefaultGroups[] = {SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
+  const uint16_t kDefaultGroups[] = {SSL_GROUP_X25519_MLKEM768,
+                                     SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
                                      SSL_GROUP_SECP384R1};
   const uint32_t kBogusFlags[] = {SSL_GROUP_FLAG_EQUAL_PREFERENCE_WITH_NEXT,
                                   SSL_GROUP_FLAG_EQUAL_PREFERENCE_WITH_NEXT, 0};
@@ -7209,8 +7217,8 @@ TEST(SSLTest, ApplyHandoffRemovesUnsupportedCurves) {
 
   // The default list of groups is used before applying the handoff.
   EXPECT_THAT(FromOpaque(server.get())->config->supported_group_list,
-              ElementsAreArray({SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
-                                SSL_GROUP_SECP384R1}));
+              ElementsAreArray({SSL_GROUP_X25519_MLKEM768, SSL_GROUP_X25519,
+                                SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1}));
   ASSERT_TRUE(SSL_apply_handoff(server.get(), handoff));
   EXPECT_EQ(1u, FromOpaque(server.get())->config->supported_group_list.size());
   EXPECT_EQ(SSL_GROUP_SECP256R1,
