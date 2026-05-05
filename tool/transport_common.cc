@@ -121,7 +121,8 @@ static std::string GetLastSocketErrorString() {
       reinterpret_cast<char *>(&buffer), 0, nullptr);
   if (len == 0) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "unknown error (0x%x)", error);
+    snprintf(buf, sizeof(buf), "unknown error (0x%x)",
+             static_cast<unsigned>(error));
     return buf;
   }
   std::string ret(buffer, len);
