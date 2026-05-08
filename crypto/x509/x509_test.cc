@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -2036,9 +2037,9 @@ static bssl::UniquePtr<X509_NAME> MakeTestName(std::string_view common_name) {
   return name;
 }
 
-static bssl::UniquePtr<X509> MakeTestCert(std::string_view issuer,
-                                          std::string_view subject,
-                                          EVP_PKEY *key, bool is_ca) {
+static bssl::UniquePtr<X509> MakeTestCert(
+    std::string_view issuer, std::string_view subject, EVP_PKEY *key,
+    bool is_ca, std::optional<int64_t> pathlen = std::nullopt) {
   UniquePtr<X509_NAME> issuer_name = MakeTestName(issuer);
   UniquePtr<X509_NAME> subject_name = MakeTestName(subject);
   UniquePtr<X509> cert(X509_new());
@@ -2060,6 +2061,13 @@ static bssl::UniquePtr<X509> MakeTestCert(std::string_view issuer,
     return nullptr;
   }
   bc->ca = is_ca ? ASN1_BOOLEAN_TRUE : ASN1_BOOLEAN_FALSE;
+  if (pathlen.has_value()) {
+    bc->pathlen = ASN1_INTEGER_new();
+    if (bc->pathlen == nullptr ||
+        !ASN1_INTEGER_set_int64(bc->pathlen, *pathlen)) {
+      return nullptr;
+    }
+  }
   if (!X509_add1_ext_i2d(cert.get(), NID_basic_constraints, bc.get(),
                          /*crit=*/1, /*flags=*/0)) {
     return nullptr;
@@ -10438,6 +10446,134 @@ TEST(X509Test, GetOCSP) {
   std::sort(expected.begin(), expected.end());
   std::sort(actual.begin(), actual.end());
   EXPECT_EQ(actual, expected);
+}
+
+struct CertChainItem {
+  bool self_issued;
+  std::optional<int64_t> pathlen;
+};
+
+static std::optional<int> VerifyChain(
+    std::initializer_list<CertChainItem> items) {
+  std::vector<bssl::UniquePtr<X509>> intermediates;
+
+  std::vector<UniquePtr<EVP_PKEY>> keys;
+  for (size_t k = 0; k < items.size(); ++k) {
+    UniquePtr<EVP_PKEY> key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+    if (key == nullptr) {
+      return std::nullopt;
+    }
+    keys.push_back(std::move(key));
+  }
+
+  bssl::UniquePtr<X509> leaf = nullptr;
+
+  size_t name_idx = 0;
+  size_t key_idx = 0;
+  for (const auto &item : items) {
+    std::string subject_name = std::to_string(name_idx);
+    if (!item.self_issued) {
+      ++name_idx;
+    }
+    std::string issuer_name = std::to_string(name_idx);
+
+    size_t subject_key_idx = key_idx;
+    if (key_idx < items.size() - 1) {
+      ++key_idx;
+    }
+    size_t issuer_key_idx = key_idx;
+
+    EVP_PKEY *subject_key = keys[subject_key_idx].get();
+    EVP_PKEY *issuer_key = keys[issuer_key_idx].get();
+
+    bssl::UniquePtr<X509> cert(MakeTestCert(
+        issuer_name, subject_name, subject_key, /*is_ca=*/true, item.pathlen));
+    uint8_t skid = static_cast<uint8_t>(subject_key_idx);
+    uint8_t akid = static_cast<uint8_t>(issuer_key_idx);
+    if (cert == nullptr || !AddSubjectKeyIdentifier(cert.get(), {&skid, 1}) ||
+        !AddAuthorityKeyIdentifier(cert.get(), {&akid, 1}) ||
+        !X509_sign(cert.get(), issuer_key, EVP_sha256())) {
+      return std::nullopt;
+    }
+    if (leaf == nullptr) {
+      // The first cert in the list is the leaf.
+      leaf = std::move(cert);
+    } else {
+      // All else gets into the chain for now.
+      intermediates.emplace_back(std::move(cert));
+    }
+  }
+
+  // The last cert shall be considered the root.
+  bssl::UniquePtr<X509> root = std::move(intermediates.back());
+  intermediates.pop_back();
+
+  std::vector<X509 *> intermediate_ptrs = {};
+  for (const auto &intermediate : intermediates) {
+    intermediate_ptrs.push_back(intermediate.get());
+  }
+  return Verify(leaf.get(), {root.get()}, intermediate_ptrs, {}, /*flags=*/0);
+}
+
+TEST(X509Test, PathLenNormalUnconstrained) {
+  EXPECT_EQ(X509_V_OK,
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/std::nullopt},
+                         {/*self_issued=*/false, /*pathlen=*/std::nullopt},
+                         {/*self_issued=*/false, /*pathlen=*/std::nullopt},
+                         {/*self_issued=*/false, /*pathlen=*/std::nullopt},
+                         {/*self_issued=*/true, /*pathlen=*/std::nullopt}}));
+}
+
+TEST(X509Test, PathLenNormal) {
+  EXPECT_EQ(X509_V_OK, VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                                    {/*self_issued=*/false, /*pathlen=*/0},
+                                    {/*self_issued=*/false, /*pathlen=*/1},
+                                    {/*self_issued=*/false, /*pathlen=*/2},
+                                    {/*self_issued=*/true, /*pathlen=*/3}}));
+  EXPECT_EQ(X509_V_ERR_PATH_LENGTH_EXCEEDED,
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/2},
+                         {/*self_issued=*/true, /*pathlen=*/3}}));
+  EXPECT_EQ(X509_V_ERR_PATH_LENGTH_EXCEEDED,
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/1},
+                         {/*self_issued=*/false, /*pathlen=*/1},
+                         {/*self_issued=*/true, /*pathlen=*/3}}));
+  EXPECT_EQ(X509_V_OK,  // Path length on trust anchor is ignored.
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/1},
+                         {/*self_issued=*/false, /*pathlen=*/2},
+                         {/*self_issued=*/true, /*pathlen=*/2}}));
+}
+
+TEST(X509Test, PathLenSelfIssuedNotCountedButStillVerified) {
+  EXPECT_EQ(X509_V_OK, VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                                    {/*self_issued=*/false, /*pathlen=*/0},
+                                    {/*self_issued=*/true, /*pathlen=*/1},
+                                    {/*self_issued=*/false, /*pathlen=*/1},
+                                    {/*self_issued=*/true, /*pathlen=*/2}}));
+  EXPECT_EQ(X509_V_ERR_PATH_LENGTH_EXCEEDED,
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/true, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/1},
+                         {/*self_issued=*/true, /*pathlen=*/2}}));
+  EXPECT_EQ(X509_V_ERR_PATH_LENGTH_EXCEEDED,
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/true, /*pathlen=*/1},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/true, /*pathlen=*/2}}));
+  EXPECT_EQ(X509_V_OK,  // Path length on trust anchor is ignored.
+            VerifyChain({{/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/false, /*pathlen=*/0},
+                         {/*self_issued=*/true, /*pathlen=*/1},
+                         {/*self_issued=*/false, /*pathlen=*/1},
+                         {/*self_issued=*/true, /*pathlen=*/1}}));
 }
 
 }  // namespace
