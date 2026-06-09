@@ -198,7 +198,7 @@ impl TlsSession {
     }
 
     /// Get the signed certificate timestamp list, if any.
-    pub fn get0_signed_cert_timestamp_list(&self) -> Option<&[u8]> {
+    pub fn get_signed_cert_timestamp_list(&self) -> Option<&[u8]> {
         call_slice_getter!(
             bssl_sys::SSL_SESSION_get0_signed_cert_timestamp_list,
             self.ptr()
