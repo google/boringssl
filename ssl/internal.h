@@ -1985,12 +1985,15 @@ struct SSL_HANDSHAKE {
   // key_block is the record-layer key block for TLS 1.2 and earlier.
   Array<uint8_t> key_block;
 
-  // hints contains the handshake hints for this connection. If
-  // `hints_requested` is true, this field is non-null and contains the pending
-  // hints to filled as the predicted handshake progresses. Otherwise, this
-  // field, if non-null, contains hints configured by the caller and will
-  // influence the handshake on match.
-  UniquePtr<SSL_HANDSHAKE_HINTS> hints;
+  // pending_hints, if non-null, contains the pending hints to filled as the
+  // predicted handshake progresses. If non-null, only the first round-trip of
+  // the handshake will complete, after which the `pending_hints` structure can
+  // be serialized.
+  UniquePtr<SSL_HANDSHAKE_HINTS> pending_hints;
+
+  // provided_hints, if non-null, contains hints configured by the caller
+  // and will influence the (real or predicted) handshake on match.
+  UniquePtr<SSL_HANDSHAKE_HINTS> provided_hints;
 
   // ech_is_inner, on the server, indicates whether the ClientHello contained an
   // inner ECH extension.
@@ -2069,11 +2072,6 @@ struct SSL_HANDSHAKE {
   // `SSL_get_error` returns `SSL_ERROR_HANDBACK`.  It is set by
   // `SSL_apply_handoff`.
   bool handback : 1;
-
-  // hints_requested indicates the caller has requested handshake hints. Only
-  // the first round-trip of the handshake will complete, after which the
-  // `hints` structure can be serialized.
-  bool hints_requested : 1;
 
   // cert_compression_negotiated is true iff `cert_compression_alg_id` is valid.
   bool cert_compression_negotiated : 1;

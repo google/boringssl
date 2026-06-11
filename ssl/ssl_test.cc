@@ -11815,5 +11815,151 @@ TEST(SSLTest, SignatureAlgorithmUsed) {
   EXPECT_EQ(SSL_get_signature_algorithm_used(server.get()), 0u);
 }
 
+struct HintTestState {
+  std::vector<uint8_t> client_hello;
+  std::vector<uint8_t> capabilities;
+  std::optional<std::vector<uint8_t>> hints;
+};
+
+// This callback either saves the ClientHello to the HintTestState, or resumes
+// the handshake with hints read from the HintTestState. If `hints` is
+// populated, the contents will be passed to `SSL_set_handshake_hints` and the
+// handshake will be continued. Otherwise, `client_hello` and `capabilities`
+// will be filled in and the handshake will be paused.
+static enum ssl_select_cert_result_t SaveClientHelloCallback(
+    const SSL_CLIENT_HELLO *client_hello) {
+  SSL *ssl = client_hello->ssl;
+  HintTestState *state =
+      reinterpret_cast<HintTestState *>(SSL_get_app_data(ssl));
+  if (state == nullptr) {
+    return ssl_select_cert_success;
+  }
+  if (state->hints.has_value()) {
+    SSL_set_handshake_hints(ssl, state->hints->data(), state->hints->size());
+    return ssl_select_cert_success;
+  }
+
+  state->client_hello.assign(
+      client_hello->client_hello,
+      client_hello->client_hello + client_hello->client_hello_len);
+
+  bssl::ScopedCBB cbb;
+  if (!CBB_init(cbb.get(), 64) || !SSL_serialize_capabilities(ssl, cbb.get())) {
+    return ssl_select_cert_error;
+  }
+  Span<const uint8_t> capabilities = CBBAsSpan(cbb.get());
+  state->capabilities.assign(capabilities.begin(), capabilities.end());
+  return ssl_select_cert_retry;
+}
+
+// Helper to optionally apply `hints_in`, run the server side of a handshake to
+// the first round-trip, and obtain hints. Returns std::nullopt on failure.
+std::optional<std::vector<uint8_t>> GetHandshakeHints(
+    SSL *ssl, const HintTestState &test_state, Span<const uint8_t> hints_in) {
+  SSL_set_accept_state(ssl);
+  if (!SSL_request_handshake_hints(
+          ssl, test_state.client_hello.data(), test_state.client_hello.size(),
+          test_state.capabilities.data(), test_state.capabilities.size()) ||
+      (!hints_in.empty() &&
+       !SSL_set_handshake_hints(ssl, hints_in.data(), hints_in.size()))) {
+    return std::nullopt;
+  }
+  int ret = SSL_do_handshake(ssl);
+  if (ret != -1 || SSL_get_error(ssl, ret) != SSL_ERROR_HANDSHAKE_HINTS_READY) {
+    return std::nullopt;
+  }
+  bssl::ScopedCBB hints;
+  if (!CBB_init(hints.get(), 256) ||
+      !SSL_serialize_handshake_hints(ssl, hints.get())) {
+    return std::nullopt;
+  }
+  return std::vector<uint8_t>(CBB_data(hints.get()),
+                              CBB_data(hints.get()) + CBB_len(hints.get()));
+}
+
+TEST(SSLTest, HandshakeHints) {
+  bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(client_ctx);
+
+  bssl::UniquePtr<SSL_CTX> server_rsa_ctx(
+      CreateContextWithTestCertificate(TLS_method()));
+  ASSERT_TRUE(server_rsa_ctx);
+
+  bssl::UniquePtr<SSL_CTX> server_ecdsa_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(server_ecdsa_ctx);
+  bssl::UniquePtr<X509> ecdsa_cert = GetECDSATestCertificate();
+  bssl::UniquePtr<EVP_PKEY> ecdsa_key = GetECDSATestKey();
+  ASSERT_TRUE(ecdsa_cert);
+  ASSERT_TRUE(ecdsa_key);
+  ASSERT_TRUE(
+      SSL_CTX_use_certificate(server_ecdsa_ctx.get(), ecdsa_cert.get()));
+  ASSERT_TRUE(SSL_CTX_use_PrivateKey(server_ecdsa_ctx.get(), ecdsa_key.get()));
+
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
+  SSL_CTX_set_custom_verify(server_rsa_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
+  SSL_CTX_set_custom_verify(server_ecdsa_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
+
+  // Capture ClientHello and capabilities, pausing the handshake to resume later
+  // with hints.
+  HintTestState test_state;
+  SSL_CTX_set_select_certificate_cb(server_rsa_ctx.get(),
+                                    SaveClientHelloCallback);
+  bssl::UniquePtr<SSL> client, server;
+  ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                    server_rsa_ctx.get()));
+  SSL_set_app_data(server.get(), &test_state);
+  ASSERT_FALSE(CompleteHandshakes(client.get(), server.get()));
+  ASSERT_FALSE(test_state.client_hello.empty());
+  ASSERT_FALSE(test_state.capabilities.empty());
+
+  // Generate RSA hints from scratch.
+  bssl::UniquePtr<SSL> rsa1(SSL_new(server_rsa_ctx.get()));
+  ASSERT_TRUE(rsa1);
+  std::optional<std::vector<uint8_t>> rsa_hints1 =
+      GetHandshakeHints(rsa1.get(), test_state,
+                        /*hints_in=*/Span<const uint8_t>());
+  ASSERT_TRUE(rsa_hints1.has_value());
+
+  // Generate RSA hints after applying rsa_hints1.
+  bssl::UniquePtr<SSL> rsa2(SSL_new(server_rsa_ctx.get()));
+  ASSERT_TRUE(rsa2);
+  std::optional<std::vector<uint8_t>> rsa_hints2 =
+      GetHandshakeHints(rsa2.get(), test_state,
+                        /*hints_in=*/*rsa_hints1);
+  ASSERT_TRUE(rsa_hints2.has_value());
+
+  EXPECT_EQ(*rsa_hints1, *rsa_hints2);
+
+  // Generate ECDSA hints after providing rsa_hints1.
+  bssl::UniquePtr<SSL> ecdsa1(SSL_new(server_ecdsa_ctx.get()));
+  ASSERT_TRUE(ecdsa1);
+  std::optional<std::vector<uint8_t>> ecdsa_hints1 =
+      GetHandshakeHints(ecdsa1.get(), test_state,
+                        /*hints_in=*/*rsa_hints1);
+  ASSERT_TRUE(ecdsa_hints1.has_value());
+
+  // The ECDSA hints are different because the ECDSA handshake could not apply
+  // the RSA hints.
+  EXPECT_NE(*ecdsa_hints1, *rsa_hints1);
+
+  // Generate ECDSA hints after applying ecdsa_hints1.
+  bssl::UniquePtr<SSL> ecdsa2(SSL_new(server_ecdsa_ctx.get()));
+  ASSERT_TRUE(ecdsa2);
+  std::optional<std::vector<uint8_t>> ecdsa_hints2 =
+      GetHandshakeHints(ecdsa2.get(), test_state,
+                        /*hints_in=*/*ecdsa_hints1);
+  ASSERT_TRUE(ecdsa_hints2.has_value());
+
+  EXPECT_EQ(*ecdsa_hints1, *ecdsa_hints2);
+
+  // Complete the original handshake while providing ecdsa_hints1. (The hints
+  // will not apply, but the handshake should still succeed.)
+  test_state.hints = *std::move(ecdsa_hints1);
+  ASSERT_TRUE(CompleteHandshakes(client.get(), server.get()));
+}
+
 }  // namespace
 BSSL_NAMESPACE_END

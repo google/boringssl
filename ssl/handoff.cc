@@ -828,9 +828,10 @@ int SSL_request_handshake_hints(SSL *ssl, const uint8_t *client_hello,
 
   CBS cbs, seq;
   CBS_init(&cbs, capabilities, capabilities_len);
-  UniquePtr<SSL_HANDSHAKE_HINTS> hints = MakeUnique<SSL_HANDSHAKE_HINTS>();
-  if (hints == nullptr ||                              //
-      !CBS_get_asn1(&cbs, &seq, CBS_ASN1_SEQUENCE) ||  //
+  UniquePtr<SSL_HANDSHAKE_HINTS> pending_hints =
+      MakeUnique<SSL_HANDSHAKE_HINTS>();
+  if (pending_hints == nullptr ||
+      !CBS_get_asn1(&cbs, &seq, CBS_ASN1_SEQUENCE) ||
       !apply_remote_features(ssl, &seq)) {
     return 0;
   }
@@ -856,8 +857,7 @@ int SSL_request_handshake_hints(SSL *ssl, const uint8_t *client_hello,
     return 0;
   }
 
-  s3->hs->hints_requested = true;
-  s3->hs->hints = std::move(hints);
+  s3->hs->pending_hints = std::move(pending_hints);
   return 1;
 }
 
@@ -937,12 +937,12 @@ static const CBS_ASN1_TAG kIgnoreTicketTag = CBS_ASN1_CONTEXT_SPECIFIC | 10;
 
 int SSL_serialize_handshake_hints(const SSL *ssl, CBB *out) {
   const SSL_HANDSHAKE *hs = ssl->s3->hs.get();
-  if (!ssl->server || !hs->hints_requested) {
+  const SSL_HANDSHAKE_HINTS *const hints = hs->pending_hints.get();
+  if (!ssl->server || hints == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
-  const SSL_HANDSHAKE_HINTS *hints = hs->hints.get();
   CBB seq, child;
   if (!CBB_add_asn1(out, &seq, CBS_ASN1_SEQUENCE)) {
     return 0;
@@ -1195,6 +1195,6 @@ int SSL_set_handshake_hints(SSL *ssl, const uint8_t *hints, size_t hints_len) {
     return 0;
   }
 
-  ssl->s3->hs->hints = std::move(hints_obj);
+  ssl->s3->hs->provided_hints = std::move(hints_obj);
   return 1;
 }

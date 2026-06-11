@@ -579,13 +579,14 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
     return false;
   }
 
-  SSL_HANDSHAKE_HINTS *const hints = hs->hints.get();
-  if (hints && !hs->hints_requested &&
-      hints->cert_compression_alg_id == hs->cert_compression_alg_id &&
-      hints->cert_compression_input == Span(msg) &&
-      !hints->cert_compression_output.empty()) {
-    if (!CBB_add_bytes(&compressed, hints->cert_compression_output.data(),
-                       hints->cert_compression_output.size())) {
+  if (hs->provided_hints != nullptr &&
+      hs->provided_hints->cert_compression_alg_id ==
+          hs->cert_compression_alg_id &&
+      hs->provided_hints->cert_compression_input == Span(msg) &&
+      !hs->provided_hints->cert_compression_output.empty()) {
+    if (!CBB_add_bytes(&compressed,
+                       hs->provided_hints->cert_compression_output.data(),
+                       hs->provided_hints->cert_compression_output.size())) {
       return false;
     }
   } else {
@@ -593,12 +594,13 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
       OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
       return false;
     }
-    if (hints && hs->hints_requested) {
-      hints->cert_compression_alg_id = hs->cert_compression_alg_id;
-      if (!hints->cert_compression_input.CopyFrom(msg) ||
-          !hints->cert_compression_output.CopyFrom(CBBAsSpan(&compressed))) {
-        return false;
-      }
+  }
+  if (hs->pending_hints != nullptr) {
+    hs->pending_hints->cert_compression_alg_id = hs->cert_compression_alg_id;
+    if (!hs->pending_hints->cert_compression_input.CopyFrom(msg) ||
+        !hs->pending_hints->cert_compression_output.CopyFrom(
+            CBBAsSpan(&compressed))) {
+      return false;
     }
   }
 

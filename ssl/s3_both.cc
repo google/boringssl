@@ -155,7 +155,7 @@ bool tls_flush_pending_hs_data(SSL *ssl) {
   auto data = Span(reinterpret_cast<const uint8_t *>(pending_hs_data->data),
                    pending_hs_data->length);
   if (SSL_is_quic(ssl)) {
-    if ((ssl->s3->hs == nullptr || !ssl->s3->hs->hints_requested) &&
+    if ((ssl->s3->hs == nullptr || ssl->s3->hs->pending_hints == nullptr) &&
         !ssl->quic_method->add_handshake_data(ssl, ssl->s3->quic_write_level,
                                               data.data(), data.size())) {
       OPENSSL_PUT_ERROR(SSL, SSL_R_QUIC_INTERNAL_ERROR);

@@ -55,7 +55,6 @@ SSL_HANDSHAKE::SSL_HANDSHAKE(SSL *ssl_arg)
       extended_master_secret(false),
       pending_private_key_op(false),
       handback(false),
-      hints_requested(false),
       cert_compression_negotiated(false),
       apply_jdk11_workaround(false),
       can_release_private_key(false),

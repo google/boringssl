@@ -89,12 +89,13 @@ static bool resolve_ecdhe_secret(SSL_HANDSHAKE *hs,
   }
 
   Array<uint8_t> secret;
-  SSL_HANDSHAKE_HINTS *const hints = hs->hints.get();
-  if (hints && !hs->hints_requested && hints->key_share_group_id == group_id &&
-      !hints->key_share_secret.empty()) {
+  if (hs->provided_hints != nullptr &&
+      hs->provided_hints->key_share_group_id == group_id &&
+      !hs->provided_hints->key_share_secret.empty()) {
     // Copy the key_share secret from hints.
-    if (!hs->key_share_ciphertext.CopyFrom(hints->key_share_ciphertext) ||
-        !secret.CopyFrom(hints->key_share_secret)) {
+    if (!hs->key_share_ciphertext.CopyFrom(
+            hs->provided_hints->key_share_ciphertext) ||
+        !secret.CopyFrom(hs->provided_hints->key_share_secret)) {
       ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
       return false;
     }
@@ -108,13 +109,14 @@ static bool resolve_ecdhe_secret(SSL_HANDSHAKE *hs,
       ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
       return false;
     }
-    if (hints && hs->hints_requested) {
-      hints->key_share_group_id = group_id;
-      if (!hints->key_share_ciphertext.CopyFrom(hs->key_share_ciphertext) ||
-          !hints->key_share_secret.CopyFrom(secret)) {
-        ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
-        return false;
-      }
+  }
+  if (hs->pending_hints != nullptr) {
+    hs->pending_hints->key_share_group_id = group_id;
+    if (!hs->pending_hints->key_share_ciphertext.CopyFrom(
+            hs->key_share_ciphertext) ||
+        !hs->pending_hints->key_share_secret.CopyFrom(secret)) {
+      ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
+      return false;
     }
   }
 
@@ -824,7 +826,7 @@ static enum ssl_hs_wait_t do_select_session(SSL_HANDSHAKE *hs) {
 
 static enum ssl_hs_wait_t do_send_hello_retry_request(SSL_HANDSHAKE *hs) {
   SSL *const ssl = hs->ssl;
-  if (hs->hints_requested) {
+  if (hs->pending_hints != nullptr) {
     return ssl_hs_hints_ready;
   }
 
@@ -1000,17 +1002,17 @@ static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
 
   Span<uint8_t> random(ssl->s3->server_random);
 
-  SSL_HANDSHAKE_HINTS *const hints = hs->hints.get();
-  if (hints && !hs->hints_requested &&
-      hints->server_random_tls13.size() == random.size()) {
-    OPENSSL_memcpy(random.data(), hints->server_random_tls13.data(),
+  if (hs->provided_hints != nullptr &&
+      hs->provided_hints->server_random_tls13.size() == random.size()) {
+    OPENSSL_memcpy(random.data(),
+                   hs->provided_hints->server_random_tls13.data(),
                    random.size());
   } else {
     RAND_bytes(random.data(), random.size());
-    if (hints && hs->hints_requested &&
-        !hints->server_random_tls13.CopyFrom(random)) {
-      return ssl_hs_error;
-    }
+  }
+  if (hs->pending_hints != nullptr &&
+      !hs->pending_hints->server_random_tls13.CopyFrom(random)) {
+    return ssl_hs_error;
   }
 
   Array<uint8_t> server_hello;
@@ -1146,7 +1148,7 @@ static enum ssl_hs_wait_t do_send_server_certificate_verify(SSL_HANDSHAKE *hs) {
 
 static enum ssl_hs_wait_t do_send_server_finished(SSL_HANDSHAKE *hs) {
   SSL *const ssl = hs->ssl;
-  if (hs->hints_requested) {
+  if (hs->pending_hints != nullptr) {
     return ssl_hs_hints_ready;
   }
 

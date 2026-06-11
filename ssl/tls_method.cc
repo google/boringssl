@@ -51,7 +51,7 @@ static bool tls_set_read_state(SSL *ssl, ssl_encryption_level_t level,
   }
 
   if (SSL_is_quic(ssl)) {
-    if ((ssl->s3->hs == nullptr || !ssl->s3->hs->hints_requested) &&
+    if ((ssl->s3->hs == nullptr || ssl->s3->hs->pending_hints == nullptr) &&
         !ssl->quic_method->set_read_secret(ssl, level, aead_ctx->cipher(),
                                            traffic_secret.data(),
                                            traffic_secret.size())) {
@@ -80,7 +80,7 @@ static bool tls_set_write_state(SSL *ssl, ssl_encryption_level_t level,
   }
 
   if (SSL_is_quic(ssl)) {
-    if ((ssl->s3->hs == nullptr || !ssl->s3->hs->hints_requested) &&
+    if ((ssl->s3->hs == nullptr || ssl->s3->hs->pending_hints == nullptr) &&
         !ssl->quic_method->set_write_secret(ssl, level, aead_ctx->cipher(),
                                             traffic_secret.data(),
                                             traffic_secret.size())) {
