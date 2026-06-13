@@ -29,17 +29,19 @@
 DECLARE_OPAQUE_STRUCT(x509_st, X509Impl)
 DECLARE_OPAQUE_STRUCT(x509_store_st, X509Store)
 DECLARE_OPAQUE_STRUCT(X509_name_st, X509Name)
-
-struct X509_pubkey_st {
-  X509_ALGOR algor;
-  ASN1_BIT_STRING public_key;
-  EVP_PKEY *pkey;
-} /* X509_PUBKEY */;
+DECLARE_OPAQUE_STRUCT(X509_pubkey_st, X509Pubkey)
 
 BSSL_NAMESPACE_BEGIN
 
-void x509_pubkey_init(X509_PUBKEY *key);
-void x509_pubkey_cleanup(X509_PUBKEY *key);
+class X509Pubkey : public X509_pubkey_st {
+ public:
+  X509Pubkey();
+  ~X509Pubkey();
+
+  X509_ALGOR algor;
+  ASN1_BIT_STRING public_key;
+  UniquePtr<EVP_PKEY> pkey;
+};
 
 int x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
                           Span<const EVP_PKEY_ALG *const> algs);
@@ -139,7 +141,7 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
   ASN1_TIME notBefore;
   ASN1_TIME notAfter;
   X509Name subject;
-  X509_PUBKEY key;
+  X509Pubkey key;
   ASN1_BIT_STRING *issuerUID = nullptr;            // [ 1 ] optional in v2
   ASN1_BIT_STRING *subjectUID = nullptr;           // [ 2 ] optional in v2
   STACK_OF(X509_EXTENSION) *extensions = nullptr;  // [ 3 ] optional in v3

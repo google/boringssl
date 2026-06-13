@@ -82,7 +82,7 @@ int X509_REQ_print_ex(BIO *bio, const X509_REQ *x, unsigned long nmflags,
   if (!(cflag & X509_FLAG_NO_PUBKEY)) {
     if (BIO_write(bio, "        Subject Public Key Info:\n", 33) <= 0 ||
         BIO_printf(bio, "%12sPublic Key Algorithm: ", "") <= 0 ||
-        i2a_ASN1_OBJECT(bio, ri->pubkey->algor.algorithm) <= 0 ||
+        i2a_ASN1_OBJECT(bio, FromOpaque(ri->pubkey)->algor.algorithm) <= 0 ||
         BIO_puts(bio, "\n") <= 0) {
       goto err;
     }

@@ -16,6 +16,8 @@
 
 #include <limits.h>
 
+#include <utility>
+
 #include <openssl/asn1.h>
 #include <openssl/asn1t.h>
 #include <openssl/bytestring.h>
@@ -35,37 +37,22 @@
 
 using namespace bssl;
 
-void bssl::x509_pubkey_init(X509_PUBKEY *key) {
-  OPENSSL_memset(key, 0, sizeof(X509_PUBKEY));
-  x509_algor_init(&key->algor);
-  asn1_string_init(&key->public_key, V_ASN1_BIT_STRING);
+bssl::X509Pubkey::X509Pubkey() {
+  x509_algor_init(&algor);
+  asn1_string_init(&public_key, V_ASN1_BIT_STRING);
 }
 
-X509_PUBKEY *X509_PUBKEY_new() {
-  UniquePtr<X509_PUBKEY> ret = MakeUnique<X509_PUBKEY>();
-  if (ret == nullptr) {
-    return nullptr;
-  }
-  x509_pubkey_init(ret.get());
-  return ret.release();
+bssl::X509Pubkey::~X509Pubkey() {
+  x509_algor_cleanup(&algor);
+  asn1_string_cleanup(&public_key);
 }
 
-void bssl::x509_pubkey_cleanup(X509_PUBKEY *key) {
-  x509_algor_cleanup(&key->algor);
-  asn1_string_cleanup(&key->public_key);
-  EVP_PKEY_free(key->pkey);
-}
+X509_PUBKEY *X509_PUBKEY_new() { return New<X509Pubkey>(); }
 
-void X509_PUBKEY_free(X509_PUBKEY *key) {
-  if (key != nullptr) {
-    x509_pubkey_cleanup(key);
-    OPENSSL_free(key);
-  }
-}
+void X509_PUBKEY_free(X509_PUBKEY *key) { Delete(FromOpaque(key)); }
 
-static void x509_pubkey_changed(X509_PUBKEY *pub,
+static void x509_pubkey_changed(X509Pubkey *pub,
                                 Span<const EVP_PKEY_ALG *const> algs) {
-  EVP_PKEY_free(pub->pkey);
   pub->pkey = nullptr;
 
   // Re-encode the `X509_PUBKEY` to DER and parse it with EVP's APIs. If the
@@ -83,32 +70,34 @@ static void x509_pubkey_changed(X509_PUBKEY *pub,
     return;
   }
 
-  pub->pkey = pkey.release();
+  pub->pkey = std::move(pkey);
 }
 
 int bssl::x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
                                 Span<const EVP_PKEY_ALG *const> algs) {
+  auto *out_impl = FromOpaque(out);
   CBS seq;
   if (!CBS_get_asn1(cbs, &seq, CBS_ASN1_SEQUENCE) ||
-      !x509_parse_algorithm(&seq, &out->algor) ||
-      !asn1_parse_bit_string(&seq, &out->public_key, /*tag=*/0) ||
+      !x509_parse_algorithm(&seq, &out_impl->algor) ||
+      !asn1_parse_bit_string(&seq, &out_impl->public_key, /*tag=*/0) ||
       CBS_len(&seq) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
     return 0;
   }
-  x509_pubkey_changed(out, algs);
+  x509_pubkey_changed(out_impl, algs);
   return 1;
 }
 
 static int x509_parse_public_key_default(CBS *cbs, X509_PUBKEY *out) {
-  return x509_parse_public_key(cbs, out, GetDefaultEVPAlgorithms());
+  return x509_parse_public_key(cbs, FromOpaque(out), GetDefaultEVPAlgorithms());
 }
 
 int bssl::x509_marshal_public_key(CBB *cbb, const X509_PUBKEY *in) {
+  auto *in_impl = FromOpaque(in);
   CBB seq;
   return CBB_add_asn1(cbb, &seq, CBS_ASN1_SEQUENCE) &&
-         x509_marshal_algorithm(&seq, &in->algor) &&
-         asn1_marshal_bit_string(&seq, &in->public_key, /*tag=*/0) &&
+         x509_marshal_algorithm(&seq, &in_impl->algor) &&
+         asn1_marshal_bit_string(&seq, &in_impl->public_key, /*tag=*/0) &&
          CBB_flush(cbb);
 }
 
@@ -124,7 +113,7 @@ X509_PUBKEY *d2i_X509_PUBKEY(X509_PUBKEY **out, const uint8_t **inp, long len) {
 
 int i2d_X509_PUBKEY(const X509_PUBKEY *key, uint8_t **outp) {
   return I2DFromCBB(/*initial_capacity=*/32, outp, [&](CBB *cbb) -> bool {
-    return x509_marshal_public_key(cbb, key);
+    return x509_marshal_public_key(cbb, FromOpaque(key));
   });
 }
 
@@ -156,7 +145,8 @@ int bssl::x509_pubkey_set1(X509_PUBKEY *key, EVP_PKEY *pkey) {
 
 int X509_PUBKEY_set(X509_PUBKEY **x, EVP_PKEY *pkey) {
   UniquePtr<X509_PUBKEY> new_key(X509_PUBKEY_new());
-  if (new_key == nullptr || !x509_pubkey_set1(new_key.get(), pkey)) {
+  if (new_key == nullptr ||
+      !x509_pubkey_set1(FromOpaque(new_key.get()), pkey)) {
     return 0;
   }
   X509_PUBKEY_free(*x);
@@ -169,12 +159,12 @@ EVP_PKEY *X509_PUBKEY_get0(const X509_PUBKEY *key) {
     return nullptr;
   }
 
-  if (key->pkey == nullptr) {
+  if (FromOpaque(key)->pkey == nullptr) {
     OPENSSL_PUT_ERROR(X509, X509_R_PUBLIC_KEY_DECODE_ERROR);
     return nullptr;
   }
 
-  return key->pkey;
+  return FromOpaque(key)->pkey.get();
 }
 
 EVP_PKEY *X509_PUBKEY_get(const X509_PUBKEY *key) {
@@ -187,31 +177,33 @@ EVP_PKEY *X509_PUBKEY_get(const X509_PUBKEY *key) {
 
 int X509_PUBKEY_set0_param(X509_PUBKEY *pub, ASN1_OBJECT *obj, int param_type,
                            void *param_value, uint8_t *key, int key_len) {
-  if (!X509_ALGOR_set0(&pub->algor, obj, param_type, param_value)) {
+  auto *pub_impl = FromOpaque(pub);
+  if (!X509_ALGOR_set0(&pub_impl->algor, obj, param_type, param_value)) {
     return 0;
   }
 
-  ASN1_STRING_set0(&pub->public_key, key, key_len);
-  x509_pubkey_changed(pub, GetDefaultEVPAlgorithms());
+  ASN1_STRING_set0(&pub_impl->public_key, key, key_len);
+  x509_pubkey_changed(pub_impl, GetDefaultEVPAlgorithms());
   return 1;
 }
 
 int X509_PUBKEY_get0_param(ASN1_OBJECT **out_obj, const uint8_t **out_key,
                            int *out_key_len, X509_ALGOR **out_alg,
                            X509_PUBKEY *pub) {
+  auto *pub_impl = FromOpaque(pub);
   if (out_obj != nullptr) {
-    *out_obj = pub->algor.algorithm;
+    *out_obj = pub_impl->algor.algorithm;
   }
   if (out_key != nullptr) {
-    *out_key = pub->public_key.data;
-    *out_key_len = pub->public_key.length;
+    *out_key = pub_impl->public_key.data;
+    *out_key_len = pub_impl->public_key.length;
   }
   if (out_alg != nullptr) {
-    *out_alg = &pub->algor;
+    *out_alg = &pub_impl->algor;
   }
   return 1;
 }
 
 const ASN1_BIT_STRING *X509_PUBKEY_get0_public_key(const X509_PUBKEY *pub) {
-  return &pub->public_key;
+  return &FromOpaque(pub)->public_key;
 }

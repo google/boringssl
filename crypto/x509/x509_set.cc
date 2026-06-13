@@ -166,5 +166,5 @@ const X509_ALGOR *X509_get0_tbs_sigalg(const X509 *x) {
 X509_PUBKEY *X509_get_X509_PUBKEY(const X509 *x509) {
   // This function is not const-correct for OpenSSL compatibility.
   const auto *impl = FromOpaque(x509);
-  return const_cast<X509_PUBKEY *>(&impl->key);
+  return const_cast<X509Pubkey *>(&impl->key);
 }

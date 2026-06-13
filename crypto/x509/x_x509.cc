@@ -49,7 +49,6 @@ X509Impl::X509Impl() : RefCounted(CheckSubClass()) {
   x509_algor_init(&tbs_sig_alg);
   asn1_string_init(&notBefore, -1);
   asn1_string_init(&notAfter, -1);
-  x509_pubkey_init(&key);
   x509_algor_init(&sig_alg);
   asn1_string_init(&signature, V_ASN1_BIT_STRING);
   CRYPTO_new_ex_data(&ex_data);
@@ -64,7 +63,6 @@ X509Impl::~X509Impl() {
   x509_algor_cleanup(&tbs_sig_alg);
   asn1_string_cleanup(&notBefore);
   asn1_string_cleanup(&notAfter);
-  x509_pubkey_cleanup(&key);
   ASN1_BIT_STRING_free(issuerUID);
   ASN1_BIT_STRING_free(subjectUID);
   sk_X509_EXTENSION_pop_free(extensions, X509_EXTENSION_free);
