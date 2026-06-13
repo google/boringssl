@@ -82,7 +82,7 @@ int X509_NAME_entry_count(const X509_NAME *name) {
     return 0;
   }
   const auto *impl = FromOpaque(name);
-  return (int)sk_X509_NAME_ENTRY_num(impl->entries);
+  return (int)sk_X509_NAME_ENTRY_num(impl->entries.get());
 }
 
 int X509_NAME_get_index_by_NID(const X509_NAME *name, int nid, int lastpos) {
@@ -105,7 +105,7 @@ int X509_NAME_get_index_by_OBJ(const X509_NAME *name, const ASN1_OBJECT *obj,
   if (lastpos < 0) {
     lastpos = -1;
   }
-  const STACK_OF(X509_NAME_ENTRY) *sk = impl->entries;
+  const STACK_OF(X509_NAME_ENTRY) *sk = impl->entries.get();
   int n = (int)sk_X509_NAME_ENTRY_num(sk);
   for (lastpos++; lastpos < n; lastpos++) {
     const X509_NAME_ENTRY *ne = sk_X509_NAME_ENTRY_value(sk, lastpos);
@@ -121,10 +121,10 @@ X509_NAME_ENTRY *X509_NAME_get_entry(const X509_NAME *name, int loc) {
     return nullptr;
   }
   const auto *impl = FromOpaque(name);
-  if (loc < 0 || sk_X509_NAME_ENTRY_num(impl->entries) <= (size_t)loc) {
+  if (loc < 0 || sk_X509_NAME_ENTRY_num(impl->entries.get()) <= (size_t)loc) {
     return nullptr;
   } else {
-    return (sk_X509_NAME_ENTRY_value(impl->entries, loc));
+    return (sk_X509_NAME_ENTRY_value(impl->entries.get(), loc));
   }
 }
 
@@ -133,11 +133,11 @@ X509_NAME_ENTRY *X509_NAME_delete_entry(X509_NAME *name, int loc) {
     return nullptr;
   }
   const auto *impl = FromOpaque(name);
-  if (loc < 0 || sk_X509_NAME_ENTRY_num(impl->entries) <= (size_t)loc) {
+  if (loc < 0 || sk_X509_NAME_ENTRY_num(impl->entries.get()) <= (size_t)loc) {
     return nullptr;
   }
 
-  STACK_OF(X509_NAME_ENTRY) *sk = impl->entries;
+  STACK_OF(X509_NAME_ENTRY) *sk = impl->entries.get();
   X509_NAME_ENTRY *ret = sk_X509_NAME_ENTRY_delete(sk, loc);
   size_t n = sk_X509_NAME_ENTRY_num(sk);
   x509_name_invalidate_cache(name);
@@ -211,13 +211,13 @@ int X509_NAME_add_entry(X509_NAME *name, const X509_NAME_ENTRY *entry, int loc,
   }
   auto *impl = FromOpaque(name);
   if (impl->entries == nullptr) {
-    impl->entries = sk_X509_NAME_ENTRY_new_null();
+    impl->entries.reset(sk_X509_NAME_ENTRY_new_null());
     if (impl->entries == nullptr) {
       return 0;
     }
   }
 
-  STACK_OF(X509_NAME_ENTRY) *sk = impl->entries;
+  STACK_OF(X509_NAME_ENTRY) *sk = impl->entries.get();
   int n = (int)sk_X509_NAME_ENTRY_num(sk);
   if (loc > n) {
     loc = n;

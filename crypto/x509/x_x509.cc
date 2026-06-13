@@ -47,10 +47,8 @@ static constexpr CBS_ASN1_TAG kExtensionsTag =
 X509Impl::X509Impl() : RefCounted(CheckSubClass()) {
   asn1_string_init(&serialNumber, V_ASN1_INTEGER);
   x509_algor_init(&tbs_sig_alg);
-  x509_name_init(&issuer);
   asn1_string_init(&notBefore, -1);
   asn1_string_init(&notAfter, -1);
-  x509_name_init(&subject);
   x509_pubkey_init(&key);
   x509_algor_init(&sig_alg);
   asn1_string_init(&signature, V_ASN1_BIT_STRING);
@@ -64,10 +62,8 @@ X509Impl::~X509Impl() {
 
   asn1_string_cleanup(&serialNumber);
   x509_algor_cleanup(&tbs_sig_alg);
-  x509_name_cleanup(&issuer);
   asn1_string_cleanup(&notBefore);
   asn1_string_cleanup(&notAfter);
-  x509_name_cleanup(&subject);
   x509_pubkey_cleanup(&key);
   ASN1_BIT_STRING_free(issuerUID);
   ASN1_BIT_STRING_free(subjectUID);

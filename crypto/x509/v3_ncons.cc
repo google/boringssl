@@ -296,11 +296,11 @@ bool nc_get_valid_uri_host(CBS *out, const ASN1_IA5STRING *uri_name) {
 // makes this comparison easy. It is matched if the constraint is a prefix of
 // the name.
 int nc_dn(const X509_NAME *nm, const X509_NAME *base) {
-  const X509_NAME_CACHE *nm_cache = x509_name_get_cache(nm);
+  const X509NameCache *nm_cache = x509_name_get_cache(nm);
   if (nm_cache == nullptr) {
     return X509_V_ERR_OUT_OF_MEM;
   }
-  const X509_NAME_CACHE *base_cache = x509_name_get_cache(base);
+  const X509NameCache *base_cache = x509_name_get_cache(base);
   if (base_cache == nullptr) {
     return X509_V_ERR_OUT_OF_MEM;
   }

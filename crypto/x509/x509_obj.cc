@@ -68,8 +68,8 @@ char *X509_NAME_oneline(const X509_NAME *a, char *buf, int len) {
 
   len--;  // space for '\0'
   l = 0;
-  for (i = 0; i < sk_X509_NAME_ENTRY_num(name->entries); i++) {
-    ne = sk_X509_NAME_ENTRY_value(name->entries, i);
+  for (i = 0; i < sk_X509_NAME_ENTRY_num(name->entries.get()); i++) {
+    ne = sk_X509_NAME_ENTRY_value(name->entries.get(), i);
     n = OBJ_obj2nid(ne->object);
     if ((n == NID_undef) || ((s = OBJ_nid2sn(n)) == nullptr)) {
       i2t_ASN1_OBJECT(tmp_buf, sizeof(tmp_buf), ne->object);

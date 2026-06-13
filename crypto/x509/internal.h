@@ -66,7 +66,7 @@ BSSL_NAMESPACE_BEGIN
 // (RFC 5280) and C type is `X509_NAME_ENTRY*`.
 DECLARE_ASN1_ITEM(X509_NAME_ENTRY)
 
-struct X509_NAME_CACHE {
+struct X509NameCache {
   static constexpr bool kAllowUniquePtr = true;
   // canon contains the DER-encoded canonicalized X.509 Name, not including the
   // outermost TLV.
@@ -77,8 +77,14 @@ struct X509_NAME_CACHE {
 
 class X509Name : public X509_name_st {
  public:
-  STACK_OF(X509_NAME_ENTRY) *entries = nullptr;
-  mutable bssl::Atomic<bssl::X509_NAME_CACHE *> cache;
+  ~X509Name();
+
+  // TODO(crbug.com/42290036): Switch to `Vector<UniquePtr<X509_NAME_ENTRY>>`,
+  // which would save an allocation. Potentially `Vector<X509_NAME_ENTRY>` if we
+  // are willing to break pointer stability of entries after
+  // `X509_NAME_add_entry` or `X509_NAME_delete_entry`.
+  UniquePtr<STACK_OF(X509_NAME_ENTRY)> entries;
+  mutable Atomic<X509NameCache *> cache = nullptr;
 } /* X509_NAME */;
 
 BSSL_NAMESPACE_END
@@ -611,9 +617,6 @@ int X509_PURPOSE_get_trust(const X509_PURPOSE *xp);
 // TODO(https://crbug.com/boringssl/695): Remove this.
 int DIST_POINT_set_dpname(DIST_POINT_NAME *dpn, X509_NAME *iname);
 
-void x509_name_init(X509_NAME *name);
-void x509_name_cleanup(X509_NAME *name);
-
 // x509_parse_name parses a DER-encoded, X.509 Name from `cbs` and writes the
 // result to `*out`. It returns one on success and zero on error.
 int x509_parse_name(CBS *cbs, X509_NAME *out);
@@ -622,7 +625,7 @@ int x509_parse_name(CBS *cbs, X509_NAME *out);
 // result to `out`. It returns one on success and zero on error.
 int x509_marshal_name(CBB *out, const X509_NAME *in);
 
-const X509_NAME_CACHE *x509_name_get_cache(const X509_NAME *name);
+const X509NameCache *x509_name_get_cache(const X509_NAME *name);
 void x509_name_invalidate_cache(X509_NAME *name);
 
 int x509_name_copy(X509_NAME *dst, const X509_NAME *src);

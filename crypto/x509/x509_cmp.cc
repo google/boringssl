@@ -117,11 +117,11 @@ int X509_cmp(const X509 *a, const X509 *b) {
 }
 
 int X509_NAME_cmp(const X509_NAME *a, const X509_NAME *b) {
-  const X509_NAME_CACHE *a_cache = x509_name_get_cache(a);
+  const X509NameCache *a_cache = x509_name_get_cache(a);
   if (a_cache == nullptr) {
     return -2;
   }
-  const X509_NAME_CACHE *b_cache = x509_name_get_cache(b);
+  const X509NameCache *b_cache = x509_name_get_cache(b);
   if (b_cache == nullptr) {
     return -2;
   }
@@ -145,7 +145,7 @@ int X509_NAME_cmp(const X509_NAME *a, const X509_NAME *b) {
 }
 
 uint32_t X509_NAME_hash(const X509_NAME *x) {
-  const X509_NAME_CACHE *cache = x509_name_get_cache(x);
+  const X509NameCache *cache = x509_name_get_cache(x);
   if (cache == nullptr) {
     return 0;
   }
@@ -158,7 +158,7 @@ uint32_t X509_NAME_hash(const X509_NAME *x) {
 // this is reasonably efficient.
 
 uint32_t X509_NAME_hash_old(const X509_NAME *x) {
-  const X509_NAME_CACHE *cache = x509_name_get_cache(x);
+  const X509NameCache *cache = x509_name_get_cache(x);
   if (cache == nullptr) {
     return 0;
   }
