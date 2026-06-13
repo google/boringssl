@@ -205,6 +205,14 @@ static int rsa_pub_encode_pss(CBB *out, const EvpPkey *key) {
   return 1;
 }
 
+static void evp_pkey_set0_pss(EvpPkey *out, const EVP_PKEY_ALG *alg,
+                              UniquePtr<RSA> rsa) {
+  BSSL_CHECK(alg->pkey_method->pkey_id == EVP_PKEY_RSA_PSS);
+  const auto *alg_pss = static_cast<const EVP_PKEY_ALG_RSA_PSS *>(alg);
+  FromOpaque(rsa.get())->pss_params = alg_pss->pss_params;
+  evp_pkey_set0(out, alg->method, rsa.release());
+}
+
 static bssl::evp_decode_result_t rsa_pub_decode_pss(const EVP_PKEY_ALG *alg,
                                                     EvpPkey *out, CBS *params,
                                                     CBS *key) {
@@ -214,15 +222,13 @@ static bssl::evp_decode_result_t rsa_pub_decode_pss(const EVP_PKEY_ALG *alg,
     return ret;
   }
 
-  UniquePtr<RSAImpl> rsa(
-      FromOpaque(RSA_public_key_from_bytes(CBS_data(key), CBS_len(key))));
+  UniquePtr<RSA> rsa(RSA_public_key_from_bytes(CBS_data(key), CBS_len(key)));
   if (rsa == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
   }
 
-  rsa->pss_params = alg_pss->pss_params;
-  evp_pkey_set0(out, &rsa_pss_asn1_meth, rsa.release());
+  evp_pkey_set0_pss(out, alg, std::move(rsa));
   return evp_decode_ok;
 }
 
@@ -254,15 +260,13 @@ static bssl::evp_decode_result_t rsa_priv_decode_pss(const EVP_PKEY_ALG *alg,
     return ret;
   }
 
-  UniquePtr<RSAImpl> rsa(
-      FromOpaque(RSA_private_key_from_bytes(CBS_data(key), CBS_len(key))));
+  UniquePtr<RSA> rsa(RSA_private_key_from_bytes(CBS_data(key), CBS_len(key)));
   if (rsa == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return evp_decode_error;
   }
 
-  rsa->pss_params = alg_pss->pss_params;
-  evp_pkey_set0(out, &rsa_pss_asn1_meth, rsa.release());
+  evp_pkey_set0_pss(out, alg, std::move(rsa));
   return evp_decode_ok;
 }
 
@@ -972,6 +976,70 @@ EVP_PKEY *EVP_RSA_gen(unsigned bits) {
     return nullptr;
   }
   return pkey;
+}
+
+EVP_PKEY *EVP_PKEY_from_rsa_public_key(const EVP_PKEY_ALG *alg,
+                                       const uint8_t *in, size_t len) {
+  if (alg->pkey_method->pkey_id != EVP_PKEY_RSA &&
+      alg->pkey_method->pkey_id != EVP_PKEY_RSA_PSS) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+    return nullptr;
+  }
+  UniquePtr<RSA> rsa(RSA_public_key_from_bytes(in, len));
+  if (rsa == nullptr) {
+    return nullptr;
+  }
+  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  if (ret == nullptr) {
+    return nullptr;
+  }
+  // Use the PSS-specific setter if needed, to fill in `rsa->pss_params`.
+  if (alg->pkey_method->pkey_id == EVP_PKEY_RSA) {
+    evp_pkey_set0(FromOpaque(ret.get()), alg->method, rsa.release());
+  } else {
+    evp_pkey_set0_pss(FromOpaque(ret.get()), alg, std::move(rsa));
+  }
+  return ret.release();
+}
+
+EVP_PKEY *EVP_PKEY_from_rsa_private_key(const EVP_PKEY_ALG *alg,
+                                        const uint8_t *in, size_t len) {
+  if (alg->pkey_method->pkey_id != EVP_PKEY_RSA &&
+      alg->pkey_method->pkey_id != EVP_PKEY_RSA_PSS) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+    return nullptr;
+  }
+  UniquePtr<RSA> rsa(RSA_private_key_from_bytes(in, len));
+  if (rsa == nullptr) {
+    return nullptr;
+  }
+  UniquePtr<EVP_PKEY> ret(EVP_PKEY_new());
+  if (ret == nullptr) {
+    return nullptr;
+  }
+  // Use the PSS-specific setter if needed, to fill in `rsa->pss_params`.
+  if (alg->pkey_method->pkey_id == EVP_PKEY_RSA) {
+    evp_pkey_set0(FromOpaque(ret.get()), alg->method, rsa.release());
+  } else {
+    evp_pkey_set0_pss(FromOpaque(ret.get()), alg, std::move(rsa));
+  }
+  return ret.release();
+}
+
+int EVP_PKEY_marshal_rsa_public_key(CBB *cbb, const EVP_PKEY *key) {
+  const RSA *rsa = EVP_PKEY_get0_RSA(key);
+  if (rsa == nullptr) {
+    return 0;
+  }
+  return RSA_marshal_public_key(cbb, rsa);
+}
+
+int EVP_PKEY_marshal_rsa_private_key(CBB *cbb, const EVP_PKEY *key) {
+  const RSA *rsa = EVP_PKEY_get0_RSA(key);
+  if (rsa == nullptr) {
+    return 0;
+  }
+  return RSA_marshal_private_key(cbb, rsa);
 }
 
 int EVP_PKEY_set1_RSA(EVP_PKEY *pkey, RSA *key) {

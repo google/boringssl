@@ -526,6 +526,10 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
                            alg_info, &EVP_PKEY_from_ec_compressed_point) ||
       !ImportWithAlgCommon(t, &key_set, KeyRole::kPrivate, "ECPrivateScalar",
                            alg_info, &EVP_PKEY_from_ec_private_scalar) ||
+      !ImportWithAlgCommon(t, &key_set, KeyRole::kPublic, "RSAPublicKey",
+                           alg_info, &EVP_PKEY_from_rsa_public_key) ||
+      !ImportWithAlgCommon(t, &key_set, KeyRole::kPrivate, "RSAPrivateKey",
+                           alg_info, &EVP_PKEY_from_rsa_private_key) ||
       !ImportRSAPublicParams(t, &key_set, alg_info) ||
       !ImportRSAPrivateParams(t, &key_set, alg_info)) {
     return false;
@@ -616,7 +620,11 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
         !CheckMarshalCBB(t, "ECCompressedPoint", KeyRoleSelect::kAny, key,
                          EVP_PKEY_marshal_ec_compressed_point) ||
         !CheckMarshalCBB(t, "ECPrivateScalar", KeyRoleSelect::kPrivate, key,
-                         EVP_PKEY_marshal_ec_private_scalar)) {
+                         EVP_PKEY_marshal_ec_private_scalar) ||
+        !CheckMarshalCBB(t, "RSAPublicKey", KeyRoleSelect::kAny, key,
+                         EVP_PKEY_marshal_rsa_public_key) ||
+        !CheckMarshalCBB(t, "RSAPrivateKey", KeyRoleSelect::kPrivate, key,
+                         EVP_PKEY_marshal_rsa_private_key)) {
       return false;
     }
   }

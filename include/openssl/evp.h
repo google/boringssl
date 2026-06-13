@@ -1025,6 +1025,50 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_set1_signature_context_string(
 // `EVP_PKEY_CTX_set_rsa_keygen_pubexp` and `EVP_PKEY_keygen`.
 OPENSSL_EXPORT EVP_PKEY *EVP_RSA_gen(unsigned bits);
 
+// EVP_PKEY_from_rsa_public_key decodes `len` bytes from `in` as a DER-encoded
+// RSAPublicKey structure (RFC 8017) of algorithm `alg`. It returns a
+// newly-allocated `EVP_PKEY` on success or NULL on error. `alg` must be an
+// RSA-based algorithm, i.e. `EVP_pkey_rsa` or one of `EVP_pkey_rsa_pss_*`. If
+// unsure, use `EVP_pkey_rsa`.
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_from_rsa_public_key(const EVP_PKEY_ALG *alg,
+                                                      const uint8_t *in,
+                                                      size_t len);
+
+// EVP_PKEY_from_rsa_private_key decodes `len` bytes from `in` as a DER-encoded
+// RSAPrivateKey structure (RFC 8017) of algorithm `alg`. It returns a
+// newly-allocated `EVP_PKEY` on success or NULL on error. `alg` must be an
+// RSA-based algorithm, i.e. `EVP_pkey_rsa` or one of `EVP_pkey_rsa_pss_*`. If
+// unsure, use `EVP_pkey_rsa`.
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_from_rsa_private_key(const EVP_PKEY_ALG *alg,
+                                                       const uint8_t *in,
+                                                       size_t len);
+
+// EVP_PKEY_marshal_rsa_public_key marshals `key` as a DER-encoded RSAPublicKey
+// structure (RFC 8017) and writes the result to `cbb`. It returns one on
+// success and zero on error. If `key` is not of type `EVP_PKEY_RSA` or
+// `EVP_PKEY_RSA_PSS`, it returns zero.
+//
+// WARNING: If `key` is of type `EVP_PKEY_RSA_PSS`, this representation does not
+// encode the key's RSA-PSS restrictions. If decoding with
+// `EVP_PKEY_from_rsa_public_key`, callers are expected to pass an appropriate
+// `EVP_PKEY_ALG` out of band. If decoding into a low-level `RSA` object, the
+// result will be an unrestricted key.
+OPENSSL_EXPORT int EVP_PKEY_marshal_rsa_public_key(CBB *cbb,
+                                                   const EVP_PKEY *key);
+
+// EVP_PKEY_marshal_rsa_private_key marshals `key` as a DER-encoded
+// RSAPrivateKey structure (RFC 8017) and writes the result to `cbb`. It returns
+// one on success and zero on error. If `key` is not of type `EVP_PKEY_RSA` or
+// `EVP_PKEY_RSA_PSS`, it returns zero.
+//
+// WARNING: If `key` is of type `EVP_PKEY_RSA_PSS`, this representation does not
+// encode the key's RSA-PSS restrictions. If decoding with
+// `EVP_PKEY_from_rsa_private_key`, callers are expected to pass an appropriate
+// `EVP_PKEY_ALG` out of band. If decoding into a low-level `RSA` object, the
+// result will be an unrestricted key.
+OPENSSL_EXPORT int EVP_PKEY_marshal_rsa_private_key(CBB *cbb,
+                                                    const EVP_PKEY *key);
+
 // EVP_PKEY_CTX_set_rsa_padding sets the padding type to use. It should be one
 // of the `RSA_*_PADDING` values. Returns one on success or zero on error. By
 // default, the padding is `RSA_PKCS1_PADDING`.
