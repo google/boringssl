@@ -37,16 +37,6 @@
 
 using namespace bssl;
 
-bssl::X509Pubkey::X509Pubkey() {
-  x509_algor_init(&algor);
-  asn1_string_init(&public_key, V_ASN1_BIT_STRING);
-}
-
-bssl::X509Pubkey::~X509Pubkey() {
-  x509_algor_cleanup(&algor);
-  asn1_string_cleanup(&public_key);
-}
-
 X509_PUBKEY *X509_PUBKEY_new() { return New<X509Pubkey>(); }
 
 void X509_PUBKEY_free(X509_PUBKEY *key) { Delete(FromOpaque(key)); }
@@ -78,8 +68,8 @@ int bssl::x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
   auto *out_impl = FromOpaque(out);
   CBS seq;
   if (!CBS_get_asn1(cbs, &seq, CBS_ASN1_SEQUENCE) ||
-      !x509_parse_algorithm(&seq, &out_impl->algor) ||
-      !asn1_parse_bit_string(&seq, &out_impl->public_key, /*tag=*/0) ||
+      !x509_parse_algorithm(&seq, out_impl->algor.get()) ||
+      !asn1_parse_bit_string(&seq, out_impl->public_key.get(), /*tag=*/0) ||
       CBS_len(&seq) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
     return 0;
@@ -96,8 +86,8 @@ int bssl::x509_marshal_public_key(CBB *cbb, const X509_PUBKEY *in) {
   auto *in_impl = FromOpaque(in);
   CBB seq;
   return CBB_add_asn1(cbb, &seq, CBS_ASN1_SEQUENCE) &&
-         x509_marshal_algorithm(&seq, &in_impl->algor) &&
-         asn1_marshal_bit_string(&seq, &in_impl->public_key, /*tag=*/0) &&
+         x509_marshal_algorithm(&seq, in_impl->algor.get()) &&
+         asn1_marshal_bit_string(&seq, in_impl->public_key.get(), /*tag=*/0) &&
          CBB_flush(cbb);
 }
 
@@ -178,11 +168,11 @@ EVP_PKEY *X509_PUBKEY_get(const X509_PUBKEY *key) {
 int X509_PUBKEY_set0_param(X509_PUBKEY *pub, ASN1_OBJECT *obj, int param_type,
                            void *param_value, uint8_t *key, int key_len) {
   auto *pub_impl = FromOpaque(pub);
-  if (!X509_ALGOR_set0(&pub_impl->algor, obj, param_type, param_value)) {
+  if (!X509_ALGOR_set0(pub_impl->algor.get(), obj, param_type, param_value)) {
     return 0;
   }
 
-  ASN1_STRING_set0(&pub_impl->public_key, key, key_len);
+  ASN1_STRING_set0(pub_impl->public_key.get(), key, key_len);
   x509_pubkey_changed(pub_impl, GetDefaultEVPAlgorithms());
   return 1;
 }
@@ -192,18 +182,18 @@ int X509_PUBKEY_get0_param(ASN1_OBJECT **out_obj, const uint8_t **out_key,
                            X509_PUBKEY *pub) {
   auto *pub_impl = FromOpaque(pub);
   if (out_obj != nullptr) {
-    *out_obj = pub_impl->algor.algorithm;
+    *out_obj = pub_impl->algor->algorithm;
   }
   if (out_key != nullptr) {
-    *out_key = pub_impl->public_key.data;
-    *out_key_len = pub_impl->public_key.length;
+    *out_key = pub_impl->public_key->data;
+    *out_key_len = pub_impl->public_key->length;
   }
   if (out_alg != nullptr) {
-    *out_alg = &pub_impl->algor;
+    *out_alg = pub_impl->algor.get();
   }
   return 1;
 }
 
 const ASN1_BIT_STRING *X509_PUBKEY_get0_public_key(const X509_PUBKEY *pub) {
-  return &FromOpaque(pub)->public_key;
+  return FromOpaque(pub)->public_key.get();
 }

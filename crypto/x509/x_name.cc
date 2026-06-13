@@ -44,10 +44,7 @@ static int asn1_marshal_string_canon(CBB *cbb, const ASN1_STRING *in);
 
 bssl::X509NameEntry::X509NameEntry() {
   object.reset(const_cast<ASN1_OBJECT *>(OBJ_get_undef()));
-  asn1_string_init(&value, -1);
 }
-
-bssl::X509NameEntry::~X509NameEntry() { asn1_string_cleanup(&value); }
 
 X509_NAME_ENTRY *X509_NAME_ENTRY_new() { return New<X509NameEntry>(); }
 
@@ -62,7 +59,7 @@ static int x509_parse_name_entry(CBS *cbs, X509_NAME_ENTRY *out) {
   }
   out_impl->object.reset(asn1_parse_object(&seq, /*tag=*/0));
   if (out_impl->object == nullptr ||                        //
-      !asn1_parse_any_as_string(&seq, &out_impl->value) ||  //
+      !asn1_parse_any_as_string(&seq, out_impl->value.get()) ||  //
       CBS_len(&seq) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
     return 0;
@@ -78,8 +75,9 @@ static int x509_marshal_name_entry(CBB *cbb, const X509_NAME_ENTRY *entry,
       !asn1_marshal_object(&seq, entry_impl->object.get(), /*tag=*/0)) {
     return 0;
   }
-  int ok = canonicalize ? asn1_marshal_string_canon(&seq, &entry_impl->value)
-                        : asn1_marshal_any_string(&seq, &entry_impl->value);
+  int ok = canonicalize
+               ? asn1_marshal_string_canon(&seq, entry_impl->value.get())
+               : asn1_marshal_any_string(&seq, entry_impl->value.get());
   if (!ok) {
     return 0;
   }

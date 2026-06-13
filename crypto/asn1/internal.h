@@ -107,6 +107,26 @@ void asn1_string_init(ASN1_STRING *str, int type);
 // freeing `str` itself.
 void asn1_string_cleanup(ASN1_STRING *str);
 
+// A ScopedASN1String is a stack-allocatable `ASN1_STRING` with managed
+// lifetime.
+// TODO(crbug.com/443769299): Once `ASN1_STRING` is no longer public, this can
+// instead use `DECLARE_OPAQUE_STRUCT`.
+class ScopedASN1String {
+ public:
+  explicit ScopedASN1String(int type) { asn1_string_init(&str_, type); }
+  ScopedASN1String(const ScopedASN1String &) = delete;
+  ScopedASN1String &operator=(const ScopedASN1String &) = delete;
+  ~ScopedASN1String() { asn1_string_cleanup(&str_); }
+
+  ASN1_STRING *get() { return &str_; }
+  const ASN1_STRING *get() const { return &str_; }
+  ASN1_STRING *operator->() { return &str_; }
+  const ASN1_STRING *operator->() const { return &str_; }
+
+ private:
+  ASN1_STRING str_;
+};
+
 // asn1_parse_string_unchecked parses a DER-encoded string of type `str_type`,
 // tagged with `tag`. It does not check the contents.
 int asn1_parse_string_unchecked(CBS *cbs, ASN1_STRING *out, int str_type,

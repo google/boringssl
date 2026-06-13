@@ -344,7 +344,7 @@ int X509_NAME_ENTRY_set_data(X509_NAME_ENTRY *ne, int type,
     return 0;
   }
   if ((type > 0) && (type & MBSTRING_FLAG)) {
-    ASN1_STRING *dst = &ne_impl->value;
+    ASN1_STRING *dst = ne_impl->value.get();
     return ASN1_STRING_set_by_NID(&dst, bytes, len, type,
                                   OBJ_obj2nid(ne_impl->object.get())) !=
            nullptr;
@@ -352,11 +352,11 @@ int X509_NAME_ENTRY_set_data(X509_NAME_ENTRY *ne, int type,
   if (len < 0) {
     len = strlen((const char *)bytes);
   }
-  if (!ASN1_STRING_set(&ne_impl->value, bytes, len)) {
+  if (!ASN1_STRING_set(ne_impl->value.get(), bytes, len)) {
     return 0;
   }
   if (type != V_ASN1_UNDEF) {
-    ne_impl->value.type = type;
+    ne_impl->value->type = type;
   }
   return 1;
 }
@@ -373,5 +373,5 @@ ASN1_STRING *X509_NAME_ENTRY_get_data(const X509_NAME_ENTRY *ne) {
     return nullptr;
   }
   // This function is not const-correct for OpenSSL compatibility.
-  return const_cast<ASN1_STRING*>(&FromOpaque(ne)->value);
+  return const_cast<ASN1_STRING*>(FromOpaque(ne)->value.get());
 }

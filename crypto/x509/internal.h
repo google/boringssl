@@ -34,13 +34,28 @@ DECLARE_OPAQUE_STRUCT(X509_pubkey_st, X509Pubkey)
 
 BSSL_NAMESPACE_BEGIN
 
+void x509_algor_init(X509_ALGOR *alg);
+void x509_algor_cleanup(X509_ALGOR *alg);
+
+// A ScopedX509Algor is a stack-allocatable `X509_ALGOR` with managed lifetime.
+// This cannot use `DECLARE_OPAQUE_STRUCT` because `X509_ALGOR` is a public
+// struct.
+using ScopedX509Algor =
+    internal::StackAllocated<X509_ALGOR, void, x509_algor_init,
+                             x509_algor_cleanup>;
+
+// x509_parse_algorithm parses a DER-encoded, AlgorithmIdentifier from `cbs` and
+// writes the result to `*out`. It returns one on success and zero on error.
+int x509_parse_algorithm(CBS *cbs, X509_ALGOR *out);
+
+// x509_marshal_algorithm marshals `in` as a DER-encoded, AlgorithmIdentifier
+// and writes the result to `out`. It returns one on success and zero on error.
+int x509_marshal_algorithm(CBB *out, const X509_ALGOR *in);
+
 class X509Pubkey : public X509_pubkey_st {
  public:
-  X509Pubkey();
-  ~X509Pubkey();
-
-  X509_ALGOR algor;
-  ASN1_BIT_STRING public_key;
+  ScopedX509Algor algor;
+  ScopedASN1String public_key{V_ASN1_BIT_STRING};
   UniquePtr<EVP_PKEY> pkey;
 };
 
@@ -59,10 +74,9 @@ class X509NameEntry : public X509_name_entry_st {
  public:
   static constexpr bool kAllowUniquePtr = true;
   X509NameEntry();
-  ~X509NameEntry();
 
   UniquePtr<ASN1_OBJECT> object;
-  ASN1_STRING value;
+  ScopedASN1String value{-1};
   int set = 0;
 };
 
@@ -137,19 +151,19 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
 
   // TBSCertificate fields:
   uint8_t version = X509_VERSION_1;  // One of the `X509_VERSION_*` constants.
-  ASN1_INTEGER serialNumber;
-  X509_ALGOR tbs_sig_alg;
+  ScopedASN1String serialNumber{V_ASN1_INTEGER};
+  ScopedX509Algor tbs_sig_alg;
   X509Name issuer;
-  ASN1_TIME notBefore;
-  ASN1_TIME notAfter;
+  ScopedASN1String notBefore{-1};
+  ScopedASN1String notAfter{-1};
   X509Name subject;
   X509Pubkey key;
   UniquePtr<ASN1_BIT_STRING> issuerUID;            // [ 1 ] optional in v2
   UniquePtr<ASN1_BIT_STRING> subjectUID;           // [ 2 ] optional in v2
   STACK_OF(X509_EXTENSION) *extensions = nullptr;  // [ 3 ] optional in v3
   // Certificate fields:
-  X509_ALGOR sig_alg;
-  ASN1_BIT_STRING signature;
+  ScopedX509Algor sig_alg;
+  ScopedASN1String signature{V_ASN1_BIT_STRING};
   // Other state:
   // buf, if not nullptr, contains a copy of the serialized Certificate.
   // TODO(davidben): Now every parsed `X509` has an underlying `CRYPTO_BUFFER`,
@@ -633,17 +647,6 @@ const X509NameCache *x509_name_get_cache(const X509_NAME *name);
 void x509_name_invalidate_cache(X509_NAME *name);
 
 int x509_name_copy(X509_NAME *dst, const X509_NAME *src);
-
-void x509_algor_init(X509_ALGOR *alg);
-void x509_algor_cleanup(X509_ALGOR *alg);
-
-// x509_parse_algorithm parses a DER-encoded, AlgorithmIdentifier from `cbs` and
-// writes the result to `*out`. It returns one on success and zero on error.
-int x509_parse_algorithm(CBS *cbs, X509_ALGOR *out);
-
-// x509_marshal_algorithm marshals `in` as a DER-encoded, AlgorithmIdentifier
-// and writes the result to `out`. It returns one on success and zero on error.
-int x509_marshal_algorithm(CBB *out, const X509_ALGOR *in);
 
 
 // Standard extensions.

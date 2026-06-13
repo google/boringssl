@@ -110,7 +110,7 @@ int X509_print_ex(BIO *bp, const X509 *x, unsigned long nmflags,
   }
 
   if (!(cflag & X509_FLAG_NO_SIGNAME)) {
-    if (X509_signature_print(bp, &impl->tbs_sig_alg, nullptr) <= 0) {
+    if (X509_signature_print(bp, impl->tbs_sig_alg.get(), nullptr) <= 0) {
       return 0;
     }
   }
@@ -166,7 +166,7 @@ int X509_print_ex(BIO *bp, const X509 *x, unsigned long nmflags,
     if (BIO_printf(bp, "%12sPublic Key Algorithm: ", "") <= 0) {
       return 0;
     }
-    if (i2a_ASN1_OBJECT(bp, impl->key.algor.algorithm) <= 0) {
+    if (i2a_ASN1_OBJECT(bp, impl->key.algor->algorithm) <= 0) {
       return 0;
     }
     if (BIO_puts(bp, "\n") <= 0) {
@@ -207,7 +207,8 @@ int X509_print_ex(BIO *bp, const X509 *x, unsigned long nmflags,
   }
 
   if (!(cflag & X509_FLAG_NO_SIGDUMP)) {
-    if (X509_signature_print(bp, &impl->sig_alg, &impl->signature) <= 0) {
+    if (X509_signature_print(bp, impl->sig_alg.get(), impl->signature.get()) <=
+        0) {
       return 0;
     }
   }

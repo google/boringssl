@@ -72,14 +72,12 @@ X509_NAME *X509_get_subject_name(const X509 *a) {
   return const_cast<X509Name *>(&impl->subject);
 }
 
-ASN1_INTEGER *X509_get_serialNumber(X509 *a) {
-  auto *impl = FromOpaque(a);
-  return &impl->serialNumber;
+ASN1_INTEGER *X509_get_serialNumber(X509 *x509) {
+  return FromOpaque(x509)->serialNumber.get();
 }
 
 const ASN1_INTEGER *X509_get0_serialNumber(const X509 *x509) {
-  const auto *impl = FromOpaque(x509);
-  return &impl->serialNumber;
+  return FromOpaque(x509)->serialNumber.get();
 }
 
 uint32_t X509_subject_name_hash(const X509 *x) {
@@ -216,7 +214,7 @@ ASN1_BIT_STRING *X509_get0_pubkey_bitstr(const X509 *x) {
   }
   // This function is not const-correct for OpenSSL compatibility.
   auto *impl = FromOpaque(x);
-  return const_cast<ASN1_BIT_STRING *>(&impl->key.public_key);
+  return const_cast<ASN1_BIT_STRING *>(impl->key.public_key.get());
 }
 
 int X509_check_private_key(const X509 *x, const EVP_PKEY *k) {

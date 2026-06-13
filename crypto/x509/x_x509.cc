@@ -45,12 +45,6 @@ static constexpr CBS_ASN1_TAG kExtensionsTag =
     CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 3;
 
 X509Impl::X509Impl() : RefCounted(CheckSubClass()) {
-  asn1_string_init(&serialNumber, V_ASN1_INTEGER);
-  x509_algor_init(&tbs_sig_alg);
-  asn1_string_init(&notBefore, -1);
-  asn1_string_init(&notAfter, -1);
-  x509_algor_init(&sig_alg);
-  asn1_string_init(&signature, V_ASN1_BIT_STRING);
   CRYPTO_new_ex_data(&ex_data);
 }
 
@@ -59,13 +53,7 @@ X509 *X509_new() { return New<X509Impl>(); }
 X509Impl::~X509Impl() {
   CRYPTO_free_ex_data(&g_ex_data_class, &ex_data);
 
-  asn1_string_cleanup(&serialNumber);
-  x509_algor_cleanup(&tbs_sig_alg);
-  asn1_string_cleanup(&notBefore);
-  asn1_string_cleanup(&notAfter);
   sk_X509_EXTENSION_pop_free(extensions, X509_EXTENSION_free);
-  x509_algor_cleanup(&sig_alg);
-  asn1_string_cleanup(&signature);
   X509_CERT_AUX_free(aux);
 }
 
@@ -97,13 +85,13 @@ X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
       // module often omit overflow checks.
       CBS_len(&cert) > INT_MAX / 2 ||
       !CBS_get_asn1(&cert, &tbs, CBS_ASN1_SEQUENCE) ||
-      !x509_parse_algorithm(&cert, &ret->sig_alg) ||
+      !x509_parse_algorithm(&cert, ret->sig_alg.get()) ||
       // For just the signature field, we accept non-minimal BER lengths, though
       // not indefinite-length encoding. See b/18228011.
       //
       // TODO(crbug.com/boringssl/354): Switch the affected callers to convert
       // the certificate before parsing and then remove this workaround.
-      !asn1_parse_bit_string_with_bad_length(&cert, &ret->signature) ||
+      !asn1_parse_bit_string_with_bad_length(&cert, ret->signature.get()) ||
       CBS_len(&cert) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
     return nullptr;
@@ -132,13 +120,13 @@ X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
     ret->version = X509_VERSION_1;
   }
   CBS validity;
-  if (!asn1_parse_integer(&tbs, &ret->serialNumber, /*tag=*/0) ||
-      !x509_parse_algorithm(&tbs, &ret->tbs_sig_alg) ||
+  if (!asn1_parse_integer(&tbs, ret->serialNumber.get(), /*tag=*/0) ||
+      !x509_parse_algorithm(&tbs, ret->tbs_sig_alg.get()) ||
       !x509_parse_name(&tbs, &ret->issuer) ||
       !CBS_get_asn1(&tbs, &validity, CBS_ASN1_SEQUENCE) ||
-      !asn1_parse_time(&validity, &ret->notBefore,
+      !asn1_parse_time(&validity, ret->notBefore.get(),
                        /*allow_utc_timezone_offset=*/1) ||
-      !asn1_parse_time(&validity, &ret->notAfter,
+      !asn1_parse_time(&validity, ret->notAfter.get(),
                        /*allow_utc_timezone_offset=*/1) ||
       CBS_len(&validity) != 0 ||  //
       !x509_parse_name(&tbs, &ret->subject) ||
@@ -238,12 +226,12 @@ int bssl::x509_marshal_tbs_cert(CBB *cbb, const X509 *x509) {
       return 0;
     }
   }
-  if (!asn1_marshal_integer(&tbs, &impl->serialNumber, /*tag=*/0) ||
-      !x509_marshal_algorithm(&tbs, &impl->tbs_sig_alg) ||
+  if (!asn1_marshal_integer(&tbs, impl->serialNumber.get(), /*tag=*/0) ||
+      !x509_marshal_algorithm(&tbs, impl->tbs_sig_alg.get()) ||
       !x509_marshal_name(&tbs, &impl->issuer) ||
       !CBB_add_asn1(&tbs, &validity, CBS_ASN1_SEQUENCE) ||
-      !asn1_marshal_time(&validity, &impl->notBefore) ||
-      !asn1_marshal_time(&validity, &impl->notAfter) ||
+      !asn1_marshal_time(&validity, impl->notBefore.get()) ||
+      !asn1_marshal_time(&validity, impl->notAfter.get()) ||
       !x509_marshal_name(&tbs, &impl->subject) ||
       !x509_marshal_public_key(&tbs, &impl->key) ||
       (impl->issuerUID != nullptr &&
@@ -271,8 +259,8 @@ static int x509_marshal(CBB *cbb, const X509 *x509) {
   auto *impl = FromOpaque(x509);
   return CBB_add_asn1(cbb, &cert, CBS_ASN1_SEQUENCE) &&
          x509_marshal_tbs_cert(&cert, x509) &&
-         x509_marshal_algorithm(&cert, &impl->sig_alg) &&
-         asn1_marshal_bit_string(&cert, &impl->signature, /*tag=*/0) &&
+         x509_marshal_algorithm(&cert, impl->sig_alg.get()) &&
+         asn1_marshal_bit_string(&cert, impl->signature.get(), /*tag=*/0) &&
          CBB_flush(cbb);
 }
 
@@ -456,26 +444,26 @@ int i2d_X509_tbs(const X509 *x509, uint8_t **outp) {
 
 int X509_set1_signature_algo(X509 *x509, const X509_ALGOR *algo) {
   auto *impl = FromOpaque(x509);
-  return X509_ALGOR_copy(&impl->sig_alg, algo) &&
-         X509_ALGOR_copy(&impl->tbs_sig_alg, algo);
+  return X509_ALGOR_copy(impl->sig_alg.get(), algo) &&
+         X509_ALGOR_copy(impl->tbs_sig_alg.get(), algo);
 }
 
 int X509_set1_signature_value(X509 *x509, const uint8_t *sig, size_t sig_len) {
-  return ASN1_STRING_set(&FromOpaque(x509)->signature, sig, sig_len);
+  return ASN1_STRING_set(FromOpaque(x509)->signature.get(), sig, sig_len);
 }
 
 void X509_get0_signature(const ASN1_BIT_STRING **psig, const X509_ALGOR **palg,
                          const X509 *x) {
   const auto *impl = FromOpaque(x);
   if (psig) {
-    *psig = &impl->signature;
+    *psig = impl->signature.get();
   }
   if (palg) {
-    *palg = &impl->sig_alg;
+    *palg = impl->sig_alg.get();
   }
 }
 
 int X509_get_signature_nid(const X509 *x) {
   const auto *impl = FromOpaque(x);
-  return OBJ_obj2nid(impl->sig_alg.algorithm);
+  return OBJ_obj2nid(impl->sig_alg->algorithm);
 }
