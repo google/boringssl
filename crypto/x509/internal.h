@@ -142,8 +142,8 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
   ASN1_TIME notAfter;
   X509Name subject;
   X509Pubkey key;
-  ASN1_BIT_STRING *issuerUID = nullptr;            // [ 1 ] optional in v2
-  ASN1_BIT_STRING *subjectUID = nullptr;           // [ 2 ] optional in v2
+  UniquePtr<ASN1_BIT_STRING> issuerUID;            // [ 1 ] optional in v2
+  UniquePtr<ASN1_BIT_STRING> subjectUID;           // [ 2 ] optional in v2
   STACK_OF(X509_EXTENSION) *extensions = nullptr;  // [ 3 ] optional in v3
   // Certificate fields:
   X509_ALGOR sig_alg;
@@ -152,18 +152,18 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
   // buf, if not nullptr, contains a copy of the serialized Certificate.
   // TODO(davidben): Now every parsed `X509` has an underlying `CRYPTO_BUFFER`,
   // but `X509`s created peacemeal do not. Can we make this more uniform?
-  CRYPTO_BUFFER *buf = nullptr;
+  UniquePtr<CRYPTO_BUFFER> buf;
   CRYPTO_EX_DATA ex_data;
   // These contain copies of various extension values
   long ex_pathlen = -1;
   uint32_t ex_flags = 0;
   uint32_t ex_kusage = 0;
   uint32_t ex_xkusage = 0;
-  ASN1_OCTET_STRING *skid = nullptr;
-  AUTHORITY_KEYID *akid = nullptr;
-  STACK_OF(DIST_POINT) *crldp = nullptr;
-  STACK_OF(GENERAL_NAME) *altname = nullptr;
-  NAME_CONSTRAINTS *nc = nullptr;
+  UniquePtr<ASN1_OCTET_STRING> skid;
+  UniquePtr<AUTHORITY_KEYID> akid;
+  UniquePtr<STACK_OF(DIST_POINT)> crldp;
+  UniquePtr<STACK_OF(GENERAL_NAME)> altname;
+  UniquePtr<NAME_CONSTRAINTS> nc;
   unsigned char cert_hash[SHA256_DIGEST_LENGTH] = {};
   bssl::X509_CERT_AUX *aux = nullptr;
   Mutex lock;

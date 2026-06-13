@@ -734,7 +734,7 @@ int NAME_CONSTRAINTS_check(const X509 *x, const NAME_CONSTRAINTS *nc) {
   // check.
   const auto *x_impl = FromOpaque(x);
   size_t name_count =
-      X509_NAME_entry_count(nm) + sk_GENERAL_NAME_num(x_impl->altname);
+      X509_NAME_entry_count(nm) + sk_GENERAL_NAME_num(x_impl->altname.get());
   size_t constraint_count = sk_GENERAL_SUBTREE_num(nc->permittedSubtrees) +
                             sk_GENERAL_SUBTREE_num(nc->excludedSubtrees);
   size_t check_count = constraint_count * name_count;
@@ -787,7 +787,7 @@ int NAME_CONSTRAINTS_check(const X509 *x, const NAME_CONSTRAINTS *nc) {
     }
   }
 
-  for (const GENERAL_NAME *gen : x_impl->altname) {
+  for (const GENERAL_NAME *gen : x_impl->altname.get()) {
     int r = nc_match(gen, nc, /*case_insensitive_exclude_localpart=*/false);
     if (r != X509_V_OK) {
       return r;

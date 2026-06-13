@@ -569,7 +569,7 @@ static int check_name_constraints(X509_STORE_CTX *ctx) {
     // but if it includes constraints it is to be assumed it expects them
     // to be obeyed.
     for (j = (int)sk_X509_num(ctx->chain) - 1; j > i; j--) {
-      NAME_CONSTRAINTS *nc = FromOpaque(sk_X509_value(ctx->chain, j))->nc;
+      NAME_CONSTRAINTS *nc = FromOpaque(sk_X509_value(ctx->chain, j))->nc.get();
       if (nc) {
         has_name_constraints = 1;
         rv = NAME_CONSTRAINTS_check(x, nc);
@@ -1048,8 +1048,8 @@ static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score) {
       return 0;
     }
   }
-  for (size_t i = 0; i < sk_DIST_POINT_num(impl->crldp); i++) {
-    DIST_POINT *dp = sk_DIST_POINT_value(impl->crldp, i);
+  for (size_t i = 0; i < sk_DIST_POINT_num(impl->crldp.get()); i++) {
+    DIST_POINT *dp = sk_DIST_POINT_value(impl->crldp.get(), i);
     // Skip distribution points with a reasons field or a CRL issuer:
     //
     // We do not support CRLs partitioned by reason code. RFC 5280 requires CAs

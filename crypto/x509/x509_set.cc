@@ -138,10 +138,10 @@ void X509_get0_uids(const X509 *x509, const ASN1_BIT_STRING **out_issuer_uid,
                     const ASN1_BIT_STRING **out_subject_uid) {
   const auto *impl = FromOpaque(x509);
   if (out_issuer_uid != nullptr) {
-    *out_issuer_uid = impl->issuerUID;
+    *out_issuer_uid = impl->issuerUID.get();
   }
   if (out_subject_uid != nullptr) {
-    *out_subject_uid = impl->subjectUID;
+    *out_subject_uid = impl->subjectUID.get();
   }
 }
 

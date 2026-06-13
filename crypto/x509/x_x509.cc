@@ -63,17 +63,9 @@ X509Impl::~X509Impl() {
   x509_algor_cleanup(&tbs_sig_alg);
   asn1_string_cleanup(&notBefore);
   asn1_string_cleanup(&notAfter);
-  ASN1_BIT_STRING_free(issuerUID);
-  ASN1_BIT_STRING_free(subjectUID);
   sk_X509_EXTENSION_pop_free(extensions, X509_EXTENSION_free);
   x509_algor_cleanup(&sig_alg);
   asn1_string_cleanup(&signature);
-  CRYPTO_BUFFER_free(buf);
-  ASN1_OCTET_STRING_free(skid);
-  AUTHORITY_KEYID_free(akid);
-  CRL_DIST_POINTS_free(crldp);
-  GENERAL_NAMES_free(altname);
-  NAME_CONSTRAINTS_free(nc);
   X509_CERT_AUX_free(aux);
 }
 
@@ -94,7 +86,7 @@ X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
   }
 
   // Save the buffer to cache the original encoding.
-  ret->buf = UpRef(buf).release();
+  ret->buf = UpRef(buf);
 
   // Parse the Certificate.
   CBS cbs, cert, tbs;
@@ -157,17 +149,17 @@ X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
   // Per RFC 5280, section 4.1.2.8, these fields require v2 or v3:
   if (ret->version >= X509_VERSION_2 &&
       CBS_peek_asn1_tag(&tbs, kIssuerUIDTag)) {
-    ret->issuerUID = ASN1_BIT_STRING_new();
+    ret->issuerUID.reset(ASN1_BIT_STRING_new());
     if (ret->issuerUID == nullptr ||
-        !asn1_parse_bit_string(&tbs, ret->issuerUID, kIssuerUIDTag)) {
+        !asn1_parse_bit_string(&tbs, ret->issuerUID.get(), kIssuerUIDTag)) {
       return nullptr;
     }
   }
   if (ret->version >= X509_VERSION_2 &&
       CBS_peek_asn1_tag(&tbs, kSubjectUIDTag)) {
-    ret->subjectUID = ASN1_BIT_STRING_new();
+    ret->subjectUID.reset(ASN1_BIT_STRING_new());
     if (ret->subjectUID == nullptr ||
-        !asn1_parse_bit_string(&tbs, ret->subjectUID, kSubjectUIDTag)) {
+        !asn1_parse_bit_string(&tbs, ret->subjectUID.get(), kSubjectUIDTag)) {
       return nullptr;
     }
   }
@@ -225,7 +217,7 @@ int bssl::x509_marshal_tbs_cert(CBB *cbb, const X509 *x509) {
     // exactly what we parsed. The `CRYPTO_BUFFER` contains the full
     // Certificate, so we need to find the TBSCertificate portion.
     CBS cbs, cert, tbs;
-    CRYPTO_BUFFER_init_CBS(impl->buf, &cbs);
+    CRYPTO_BUFFER_init_CBS(impl->buf.get(), &cbs);
     if (!CBS_get_asn1(&cbs, &cert, CBS_ASN1_SEQUENCE) ||
         !CBS_get_asn1_element(&cert, &tbs, CBS_ASN1_SEQUENCE)) {
       // This should be impossible.
@@ -255,9 +247,10 @@ int bssl::x509_marshal_tbs_cert(CBB *cbb, const X509 *x509) {
       !x509_marshal_name(&tbs, &impl->subject) ||
       !x509_marshal_public_key(&tbs, &impl->key) ||
       (impl->issuerUID != nullptr &&
-       !asn1_marshal_bit_string(&tbs, impl->issuerUID, kIssuerUIDTag)) ||
+       !asn1_marshal_bit_string(&tbs, impl->issuerUID.get(), kIssuerUIDTag)) ||
       (impl->subjectUID != nullptr &&
-       !asn1_marshal_bit_string(&tbs, impl->subjectUID, kSubjectUIDTag))) {
+       !asn1_marshal_bit_string(&tbs, impl->subjectUID.get(),
+                                kSubjectUIDTag))) {
     return 0;
   }
   if (impl->extensions != nullptr) {
@@ -451,7 +444,6 @@ int i2d_X509_AUX(const X509 *a, unsigned char **pp) {
 
 int i2d_re_X509_tbs(X509 *x509, uint8_t **outp) {
   auto *impl = FromOpaque(x509);
-  CRYPTO_BUFFER_free(impl->buf);
   impl->buf = nullptr;
   return i2d_X509_tbs(x509, outp);
 }

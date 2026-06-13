@@ -187,7 +187,7 @@ int X509_print_ex(BIO *bp, const X509 *x, unsigned long nmflags,
       if (BIO_printf(bp, "%8sIssuer Unique ID: ", "") <= 0) {
         return 0;
       }
-      if (!X509_signature_dump(bp, impl->issuerUID, 12)) {
+      if (!X509_signature_dump(bp, impl->issuerUID.get(), 12)) {
         return 0;
       }
     }
@@ -195,7 +195,7 @@ int X509_print_ex(BIO *bp, const X509 *x, unsigned long nmflags,
       if (BIO_printf(bp, "%8sSubject Unique ID: ", "") <= 0) {
         return 0;
       }
-      if (!X509_signature_dump(bp, impl->subjectUID, 12)) {
+      if (!X509_signature_dump(bp, impl->subjectUID.get(), 12)) {
         return 0;
       }
     }

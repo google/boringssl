@@ -78,7 +78,6 @@ int X509_sign_ctx(X509 *x, EVP_MD_CTX *ctx) {
   }
 
   // Discard the cached encoding. (We just modified it.)
-  CRYPTO_BUFFER_free(impl->buf);
   impl->buf = nullptr;
 
   ScopedCBB cbb;
