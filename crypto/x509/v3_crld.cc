@@ -121,9 +121,8 @@ static int set_dist_point_name(DIST_POINT_NAME **pdp, const X509V3_CTX *ctx,
       return -1;
     }
     // There can only be one RDN in nameRelativeToCRLIssuer.
-    if (sk_X509_NAME_ENTRY_value(rnm.get(),
-                                 sk_X509_NAME_ENTRY_num(rnm.get()) - 1)
-            ->set) {
+    if (X509_NAME_ENTRY_set(sk_X509_NAME_ENTRY_value(
+            rnm.get(), sk_X509_NAME_ENTRY_num(rnm.get()) - 1)) != 0) {
       OPENSSL_PUT_ERROR(X509V3, X509V3_R_INVALID_MULTIPLE_RDNS);
       return -1;
     }

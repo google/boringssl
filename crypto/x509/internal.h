@@ -29,6 +29,7 @@
 DECLARE_OPAQUE_STRUCT(x509_st, X509Impl)
 DECLARE_OPAQUE_STRUCT(x509_store_st, X509Store)
 DECLARE_OPAQUE_STRUCT(X509_name_st, X509Name)
+DECLARE_OPAQUE_STRUCT(X509_name_entry_st, X509NameEntry)
 DECLARE_OPAQUE_STRUCT(X509_pubkey_st, X509Pubkey)
 
 BSSL_NAMESPACE_BEGIN
@@ -54,15 +55,16 @@ int x509_pubkey_set1(X509_PUBKEY *key, EVP_PKEY *pkey);
 // depend on the tables.
 DECLARE_ASN1_ITEM(X509_PUBKEY)
 
-BSSL_NAMESPACE_END
+class X509NameEntry : public X509_name_entry_st {
+ public:
+  static constexpr bool kAllowUniquePtr = true;
+  X509NameEntry();
+  ~X509NameEntry();
 
-struct X509_name_entry_st {
-  ASN1_OBJECT *object;
+  UniquePtr<ASN1_OBJECT> object;
   ASN1_STRING value;
-  int set;
-} /* X509_NAME_ENTRY */;
-
-BSSL_NAMESPACE_BEGIN
+  int set = 0;
+};
 
 // X509_NAME_ENTRY is an `ASN1_ITEM` whose ASN.1 type is AttributeTypeAndValue
 // (RFC 5280) and C type is `X509_NAME_ENTRY*`.
@@ -81,8 +83,8 @@ class X509Name : public X509_name_st {
  public:
   ~X509Name();
 
-  // TODO(crbug.com/42290036): Switch to `Vector<UniquePtr<X509_NAME_ENTRY>>`,
-  // which would save an allocation. Potentially `Vector<X509_NAME_ENTRY>` if we
+  // TODO(crbug.com/42290036): Switch to `Vector<UniquePtr<X509NameEntry>>`,
+  // which would save an allocation. Potentially `Vector<X509NameEntry>` if we
   // are willing to break pointer stability of entries after
   // `X509_NAME_add_entry` or `X509_NAME_delete_entry`.
   UniquePtr<STACK_OF(X509_NAME_ENTRY)> entries;

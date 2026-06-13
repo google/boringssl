@@ -42,35 +42,27 @@ using namespace bssl;
 
 static int asn1_marshal_string_canon(CBB *cbb, const ASN1_STRING *in);
 
-X509_NAME_ENTRY *X509_NAME_ENTRY_new() {
-  UniquePtr<X509_NAME_ENTRY> ret = MakeUnique<X509_NAME_ENTRY>();
-  if (ret == nullptr) {
-    return nullptr;
-  }
-  ret->object = const_cast<ASN1_OBJECT *>(OBJ_get_undef());
-  asn1_string_init(&ret->value, -1);
-  ret->set = 0;
-  return ret.release();
+bssl::X509NameEntry::X509NameEntry() {
+  object.reset(const_cast<ASN1_OBJECT *>(OBJ_get_undef()));
+  asn1_string_init(&value, -1);
 }
 
-void X509_NAME_ENTRY_free(X509_NAME_ENTRY *entry) {
-  if (entry != nullptr) {
-    ASN1_OBJECT_free(entry->object);
-    asn1_string_cleanup(&entry->value);
-    Delete(entry);
-  }
-}
+bssl::X509NameEntry::~X509NameEntry() { asn1_string_cleanup(&value); }
+
+X509_NAME_ENTRY *X509_NAME_ENTRY_new() { return New<X509NameEntry>(); }
+
+void X509_NAME_ENTRY_free(X509_NAME_ENTRY *entry) { Delete(FromOpaque(entry)); }
 
 static int x509_parse_name_entry(CBS *cbs, X509_NAME_ENTRY *out) {
+  auto *out_impl = FromOpaque(out);
   CBS seq;
   if (!CBS_get_asn1(cbs, &seq, CBS_ASN1_SEQUENCE)) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
     return 0;
   }
-  ASN1_OBJECT_free(out->object);
-  out->object = asn1_parse_object(&seq, /*tag=*/0);
-  if (out->object == nullptr ||                        //
-      !asn1_parse_any_as_string(&seq, &out->value) ||  //
+  out_impl->object.reset(asn1_parse_object(&seq, /*tag=*/0));
+  if (out_impl->object == nullptr ||                        //
+      !asn1_parse_any_as_string(&seq, &out_impl->value) ||  //
       CBS_len(&seq) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
     return 0;
@@ -80,13 +72,14 @@ static int x509_parse_name_entry(CBS *cbs, X509_NAME_ENTRY *out) {
 
 static int x509_marshal_name_entry(CBB *cbb, const X509_NAME_ENTRY *entry,
                                    int canonicalize) {
+  auto *entry_impl = FromOpaque(entry);
   CBB seq;
   if (!CBB_add_asn1(cbb, &seq, CBS_ASN1_SEQUENCE) ||
-      !asn1_marshal_object(&seq, entry->object, /*tag=*/0)) {
+      !asn1_marshal_object(&seq, entry_impl->object.get(), /*tag=*/0)) {
     return 0;
   }
-  int ok = canonicalize ? asn1_marshal_string_canon(&seq, &entry->value)
-                        : asn1_marshal_any_string(&seq, &entry->value);
+  int ok = canonicalize ? asn1_marshal_string_canon(&seq, &entry_impl->value)
+                        : asn1_marshal_any_string(&seq, &entry_impl->value);
   if (!ok) {
     return 0;
   }
@@ -152,7 +145,7 @@ int bssl::x509_parse_name(CBS *cbs, X509_NAME *out) {
       return 0;
     }
     while (CBS_len(&rdn) != 0) {
-      UniquePtr<X509_NAME_ENTRY> entry(X509_NAME_ENTRY_new());
+      auto entry = MakeUnique<X509NameEntry>();
       if (entry == nullptr || !x509_parse_name_entry(&rdn, entry.get())) {
         return 0;
       }
@@ -175,20 +168,20 @@ static int x509_marshal_name_entries(CBB *out, const X509_NAME *name,
   }
 
   // Bootstrap the first RDN.
-  int set = sk_X509_NAME_ENTRY_value(impl->entries.get(), 0)->set;
+  int set = FromOpaque(sk_X509_NAME_ENTRY_value(impl->entries.get(), 0))->set;
   CBB rdn;
   if (!CBB_add_asn1(out, &rdn, CBS_ASN1_SET)) {
     return 0;
   }
 
   for (const X509_NAME_ENTRY *entry : impl->entries.get()) {
-    if (entry->set != set) {
+    if (FromOpaque(entry)->set != set) {
       // Flush the previous RDN and start a new one.
       if (!CBB_flush_asn1_set_of(&rdn) ||
           !CBB_add_asn1(out, &rdn, CBS_ASN1_SET)) {
         return 0;
       }
-      set = entry->set;
+      set = FromOpaque(entry)->set;
     }
     if (!x509_marshal_name_entry(&rdn, entry, canonicalize)) {
       return 0;
@@ -396,7 +389,9 @@ int X509_NAME_set(X509_NAME **xn, const X509_NAME *name) {
   return 1;
 }
 
-int X509_NAME_ENTRY_set(const X509_NAME_ENTRY *ne) { return ne->set; }
+int X509_NAME_ENTRY_set(const X509_NAME_ENTRY *ne) {
+  return FromOpaque(ne)->set;
+}
 
 int X509_NAME_get0_der(const X509_NAME *nm, const unsigned char **out_der,
                        size_t *out_der_len) {
