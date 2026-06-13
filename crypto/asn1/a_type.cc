@@ -328,9 +328,7 @@ int bssl::asn1_parse_any_as_string(CBS *cbs, ASN1_STRING *out) {
     case CBS_ASN1_UTF8STRING:
       return asn1_parse_utf8_string(&elem, out, tag);
     case CBS_ASN1_UTCTIME:
-      // TODO(crbug.com/42290221): Reject timezone offsets here. We have no
-      // known cases where UTCTime inside ANY needs accept invalid timezones.
-      return asn1_parse_utc_time(&elem, out, tag, /*allow_timezone_offset=*/1);
+      return asn1_parse_utc_time(&elem, out, tag, /*allow_timezone_offset=*/0);
     case CBS_ASN1_GENERALIZEDTIME:
       return asn1_parse_generalized_time(&elem, out, tag);
     case CBS_ASN1_OCTETSTRING:

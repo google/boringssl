@@ -574,10 +574,7 @@ static int asn1_parse_item_primitive(ASN1_VALUE **pval, CBS *cbs,
     case V_ASN1_UTF8STRING:
       return asn1_parse_utf8_string(cbs, str, tag);
     case V_ASN1_UTCTIME:
-      // TODO(crbug.com/42290221): Reject timezone offsets. We need to parse
-      // invalid timestamps in `X509` objects, but that parser no longer uses
-      // this code.
-      return asn1_parse_utc_time(cbs, str, tag, /*allow_timezone_offset=*/1);
+      return asn1_parse_utc_time(cbs, str, tag, /*allow_timezone_offset=*/0);
     case V_ASN1_GENERALIZEDTIME:
       return asn1_parse_generalized_time(cbs, str, tag);
     case V_ASN1_OCTET_STRING:

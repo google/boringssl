@@ -11859,6 +11859,43 @@ TEST_P(X509VerifyTest, PathLenConstraint) {
                           {/*self_issued=*/true, /*pathlen=*/1}}));
 }
 
+// Non-DER UTCTimes with timezone offsets are rejected in CRLs.
+TEST(X509Test, CRLWithTimezoneOffset) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+
+  auto make_crl_with_time =
+      [&](std::string_view last_update) -> UniquePtr<X509_CRL> {
+    UniquePtr<X509_CRL> crl = MakeTestCRL("CA", -1, 1);
+    UniquePtr<ASN1_UTCTIME> t(ASN1_UTCTIME_new());
+    if (crl == nullptr || t == nullptr ||
+        !ASN1_STRING_set(t.get(), last_update.data(), last_update.size()) ||
+        !X509_CRL_set1_lastUpdate(crl.get(), t.get()) ||
+        !X509_CRL_sign(crl.get(), key.get(), EVP_sha256())) {
+      return nullptr;
+    }
+    return crl;
+  };
+
+  static constexpr std::string_view kValid = "160926000000Z";
+  UniquePtr<X509_CRL> crl = make_crl_with_time(kValid);
+  ASSERT_TRUE(crl);
+  UniquePtr<X509_CRL> parsed = ReencodeCRL(crl.get());
+  ASSERT_TRUE(parsed);
+  EXPECT_EQ(ASN1_STRING_type(X509_CRL_get0_lastUpdate(parsed.get())),
+            V_ASN1_UTCTIME);
+  EXPECT_EQ(ASN1StringAsView(X509_CRL_get0_lastUpdate(parsed.get())), kValid);
+
+  // UTCTime values with timezone offsets are invalid.
+  for (std::string_view tz_time : {"160926010000+0100", "160926010000-0400"}) {
+    SCOPED_TRACE(tz_time);
+    crl = make_crl_with_time(tz_time);
+    ASSERT_TRUE(crl);
+    EXPECT_FALSE(ReencodeCRL(crl.get()));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
+  }
+}
+
 #if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(X509Test, MarshalTBSCertCached) {
   UniquePtr<X509> cert = CertFromPEM(kLeafPEM);
