@@ -16,7 +16,9 @@
 
 #include <openssl/digest.h>
 #include <openssl/err.h>
+#include <openssl/hkdf.h>
 #include <openssl/nid.h>
+#include <openssl/span.h>
 
 #include <assert.h>
 
@@ -154,16 +156,23 @@ int num_bytes_to_derive(size_t *out, const BIGNUM *modulus, unsigned k) {
 }
 
 // big_endian_to_words decodes `in` as a big-endian integer and writes the
-// result to `out`. `num_words` must be large enough to contain the output.
-void big_endian_to_words(BN_ULONG *out, size_t num_words, const uint8_t *in,
-                         size_t len) {
-  assert(len <= num_words * sizeof(BN_ULONG));
+// result to `out`. `out` must be large enough to contain the output.
+void big_endian_to_words(Span<BN_ULONG> out, Span<const uint8_t> in) {
+  BSSL_CHECK(in.size() <= out.size() * sizeof(BN_ULONG));
   // Ensure any excess bytes are zeroed.
-  OPENSSL_memset(out, 0, num_words * sizeof(BN_ULONG));
-  uint8_t *out_u8 = (uint8_t *)out;
-  for (size_t i = 0; i < len; i++) {
-    out_u8[len - 1 - i] = in[i];
+  OPENSSL_memset(out.data(), 0, out.size() * sizeof(BN_ULONG));
+  uint8_t *out_u8 = reinterpret_cast<uint8_t *>(out.data());
+  for (size_t i = 0; i < in.size(); i++) {
+    out_u8[in.size() - 1 - i] = in[i];
   }
+}
+
+void big_endian_reduce_to_felem(const EC_GROUP *group, EC_FELEM *out,
+                                Span<const uint8_t> in) {
+  BN_ULONG words_buf[2 * EC_MAX_WORDS];
+  auto words = Span(words_buf).first(2 * group->field.N.width);
+  big_endian_to_words(words, in);
+  ec_felem_reduce(group, out, words.data(), words.size());
 }
 
 // hash_to_field implements the operation described in section 5.2
@@ -177,12 +186,8 @@ int hash_to_field2(const EC_GROUP *group, const EVP_MD *md, EC_FELEM *out1,
       !expand_message_xmd(md, buf, 2 * L, msg, msg_len, dst, dst_len)) {
     return 0;
   }
-  BN_ULONG words[2 * EC_MAX_WORDS];
-  size_t num_words = 2 * group->field.N.width;
-  big_endian_to_words(words, num_words, buf, L);
-  ec_felem_reduce(group, out1, words, num_words);
-  big_endian_to_words(words, num_words, buf + L, L);
-  ec_felem_reduce(group, out2, words, num_words);
+  big_endian_reduce_to_felem(group, out1, Span(buf).first(L));
+  big_endian_reduce_to_felem(group, out2, Span(buf).subspan(L, L));
   return 1;
 }
 
@@ -197,10 +202,7 @@ int hash_to_field1(const EC_GROUP *group, const EVP_MD *md, EC_FELEM *out,
       !expand_message_xmd(md, buf, L, msg, msg_len, dst, dst_len)) {
     return 0;
   }
-  BN_ULONG words[2 * EC_MAX_WORDS];
-  size_t num_words = 2 * group->field.N.width;
-  big_endian_to_words(words, num_words, buf, L);
-  ec_felem_reduce(group, out, words, num_words);
+  big_endian_reduce_to_felem(group, out, Span(buf).first(L));
   return 1;
 }
 
@@ -219,7 +221,7 @@ int hash_to_scalar(const EC_GROUP *group, const EVP_MD *md, EC_SCALAR *out,
 
   BN_ULONG words[2 * EC_MAX_WORDS];
   size_t num_words = 2 * order->width;
-  big_endian_to_words(words, num_words, buf, L);
+  big_endian_to_words(Span(words).first(num_words), Span(buf).first(L));
   ec_scalar_reduce(group, out, words, num_words);
   return 1;
 }
@@ -342,15 +344,8 @@ void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
   out->Z = tv4;
 }
 
-int hash_to_curve(const EC_GROUP *group, const EVP_MD *md, const EC_FELEM *Z,
-                  const EC_FELEM *c2, unsigned k, EC_JACOBIAN *out,
-                  const uint8_t *dst, size_t dst_len, const uint8_t *msg,
-                  size_t msg_len) {
-  EC_FELEM u0, u1;
-  if (!hash_to_field2(group, md, &u0, &u1, dst, dst_len, k, msg, msg_len)) {
-    return 0;
-  }
-
+int sswu_and_add(const EC_GROUP *group, const EC_FELEM *Z, const EC_FELEM *c2,
+                 EC_JACOBIAN *out, const EC_FELEM *u0, const EC_FELEM *u1) {
   // Compute `c1` = (p - 3) / 4.
   BN_ULONG c1[EC_MAX_WORDS];
   size_t num_c1 = group->field.N.width;
@@ -360,12 +355,21 @@ int hash_to_curve(const EC_GROUP *group, const EVP_MD *md, const EC_FELEM *Z,
   bn_rshift_words(c1, c1, /*shift=*/2, /*num=*/num_c1);
 
   EC_JACOBIAN Q0, Q1;
-  map_to_curve_simple_swu(group, Z, c1, num_c1, c2, &Q0, &u0);
-  map_to_curve_simple_swu(group, Z, c1, num_c1, c2, &Q1, &u1);
+  map_to_curve_simple_swu(group, Z, c1, num_c1, c2, &Q0, u0);
+  map_to_curve_simple_swu(group, Z, c1, num_c1, c2, &Q1, u1);
 
   group->meth->add(group, out, &Q0, &Q1);  // R = Q0 + Q1
   // All our curves have cofactor one, so `clear_cofactor` is a no-op.
   return 1;
+}
+
+int hash_to_curve(const EC_GROUP *group, const EVP_MD *md, const EC_FELEM *Z,
+                  const EC_FELEM *c2, unsigned k, EC_JACOBIAN *out,
+                  const uint8_t *dst, size_t dst_len, const uint8_t *msg,
+                  size_t msg_len) {
+  EC_FELEM u0, u1;
+  return hash_to_field2(group, md, &u0, &u1, dst, dst_len, k, msg, msg_len) &&
+         sswu_and_add(group, Z, c2, out, &u0, &u1);
 }
 
 int encode_to_curve(const EC_GROUP *group, const EVP_MD *md, const EC_FELEM *Z,
@@ -552,6 +556,55 @@ int EC_encode_to_curve_p384_xmd_sha384_sswu(const EC_GROUP *group,
   }
   return ec_encode_to_curve_p384_xmd_sha384_sswu(group, &out->raw, dst, dst_len,
                                                  msg, msg_len);
+}
+
+int EC_wpa3_sae_hash_to_curve_p256(const EC_GROUP *group, EC_POINT *out,
+                                   const uint8_t *salt, size_t salt_len,
+                                   const uint8_t *ikm, size_t ikm_len) {
+  if (EC_GROUP_cmp(group, out->group, nullptr) != 0) {
+    OPENSSL_PUT_ERROR(EC, EC_R_INCOMPATIBLE_OBJECTS);
+    return 0;
+  }
+  if (EC_GROUP_get_curve_name(group) != NID_X9_62_prime256v1) {
+    OPENSSL_PUT_ERROR(EC, EC_R_GROUP_MISMATCH);
+    return 0;
+  }
+
+  // WPA3 uses a different process for computing `u0` and `u1` (called `u1` and
+  // `u2` in 802.11) than RFC 9380.
+  uint8_t pwd_seed[EVP_MAX_MD_SIZE];
+  size_t pwd_seed_len;
+  if (!HKDF_extract(pwd_seed, &pwd_seed_len, EVP_sha256(), ikm, ikm_len, salt,
+                    salt_len)) {
+    return 0;
+  }
+
+  uint8_t pwd_value[48];  // `len` for P-256 is 32 + 32 / 2
+  auto label = StringAsBytes("SAE Hash to Element u1 P1");
+  if (!HKDF_expand(pwd_value, sizeof(pwd_value), EVP_sha256(), pwd_seed,
+                   pwd_seed_len, label.data(), label.size())) {
+    return 0;
+  }
+  EC_FELEM u1;
+  big_endian_reduce_to_felem(group, &u1, pwd_value);
+
+  label = StringAsBytes("SAE Hash to Element u2 P2");
+  if (!HKDF_expand(pwd_value, sizeof(pwd_value), EVP_sha256(), pwd_seed,
+                   pwd_seed_len, label.data(), label.size())) {
+    return 0;
+  }
+  EC_FELEM u2;
+  big_endian_reduce_to_felem(group, &u2, pwd_value);
+
+  // Z = -10, c2 = sqrt(10)
+  EC_FELEM Z, c2;
+  if (!felem_from_u8(group, &Z, 10) ||
+      !ec_felem_from_bytes(group, &c2, kP256Sqrt10, sizeof(kP256Sqrt10))) {
+    return 0;
+  }
+  ec_felem_neg(group, &Z, &Z);
+
+  return sswu_and_add(group, &Z, &c2, &out->raw, &u1, &u2);
 }
 
 int bssl::ec_hash_to_scalar_p384_xmd_sha384(const EC_GROUP *group,

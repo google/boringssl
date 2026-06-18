@@ -336,6 +336,16 @@ OPENSSL_EXPORT int EC_encode_to_curve_p384_xmd_sha384_sswu(
     const EC_GROUP *group, EC_POINT *out, const uint8_t *dst, size_t dst_len,
     const uint8_t *msg, size_t msg_len);
 
+// EC_wpa3_sae_hash_to_curve_p256 hashes `salt` and `ikm` to a point on `group`
+// and writes the result to `out`, implementing the WPA3 SAE hash-to-curve
+// variant for P-256 defined in IEEE Std 802.11-2020, Section 12.4.4.2.3. It
+// returns one on success and zero on error. `salt` is the HKDF-Extract salt,
+// which is the SSID. `ikm` is the HKDF-Extract input, or password and
+// identifier concatenation.
+OPENSSL_EXPORT int EC_wpa3_sae_hash_to_curve_p256(
+    const EC_GROUP *group, EC_POINT *out, const uint8_t *salt, size_t salt_len,
+    const uint8_t *ikm, size_t ikm_len);
+
 
 // Deprecated functions.
 

@@ -1509,6 +1509,46 @@ TEST(ECTest, HashToCurve) {
       EC_group_p384(), &raw, nullptr, 0, kMessage, sizeof(kMessage)));
 }
 
+// Test the WPA3 SAE hash-to-curve construction. Test vector from Appendix J.10
+// of IEEE Std 802.11-2024.
+TEST(ECTest, WPA3SAEHashToCurve) {
+  static const uint8_t kSalt[] = {0x62, 0x79, 0x74, 0x65, 0x6d, 0x65};
+  static const uint8_t kIKM[] = {0x6d, 0x65, 0x6b, 0x6d, 0x69, 0x74, 0x61,
+                                 0x73, 0x64, 0x69, 0x67, 0x6f, 0x61, 0x74,
+                                 0x70, 0x73, 0x6b, 0x34, 0x69, 0x6e, 0x74,
+                                 0x65, 0x72, 0x6e, 0x65, 0x74};
+  static const uint8_t kExpected[] = {
+      0x04, 0xb6, 0xe3, 0x8c, 0x98, 0x75, 0x0c, 0x68, 0x4b, 0x5d, 0x17,
+      0xc3, 0xd8, 0xc9, 0xa4, 0x10, 0x0b, 0x39, 0x93, 0x12, 0x79, 0x18,
+      0x7c, 0xa6, 0xcc, 0xed, 0x5f, 0x37, 0xef, 0x46, 0xdd, 0xfa, 0x97,
+      0x56, 0x87, 0xe9, 0x72, 0xe5, 0x0f, 0x73, 0xe3, 0x89, 0x88, 0x61,
+      0xe7, 0xed, 0xad, 0x21, 0xbe, 0xa7, 0xd5, 0xf6, 0x22, 0xdf, 0x88,
+      0x24, 0x3b, 0xb8, 0x04, 0x92, 0x0a, 0xe8, 0xe6, 0x47, 0xfa};
+
+  const EC_GROUP *group = EC_group_p256();
+  UniquePtr<EC_POINT> point(EC_POINT_new(group));
+  ASSERT_TRUE(point);
+  ASSERT_TRUE(EC_wpa3_sae_hash_to_curve_p256(
+      group, point.get(), kSalt, sizeof(kSalt), kIKM, sizeof(kIKM)));
+
+  std::vector<uint8_t> buf;
+  ASSERT_TRUE(
+      EncodeECPoint(&buf, group, point.get(), POINT_CONVERSION_UNCOMPRESSED));
+  EXPECT_EQ(Bytes(kExpected), Bytes(buf));
+
+  // The function should check for the wrong group.
+  UniquePtr<EC_POINT> point_p384(EC_POINT_new(EC_group_p384()));
+  ASSERT_TRUE(point_p384);
+  EXPECT_FALSE(EC_wpa3_sae_hash_to_curve_p256(EC_group_p384(), point_p384.get(),
+                                              kSalt, sizeof(kSalt), kIKM,
+                                              sizeof(kIKM)));
+  EXPECT_FALSE(EC_wpa3_sae_hash_to_curve_p256(EC_group_p256(), point_p384.get(),
+                                              kSalt, sizeof(kSalt), kIKM,
+                                              sizeof(kIKM)));
+  EXPECT_FALSE(EC_wpa3_sae_hash_to_curve_p256(
+      EC_group_p384(), point.get(), kSalt, sizeof(kSalt), kIKM, sizeof(kIKM)));
+}
+
 #if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(ECTest, HashToScalar) {
   struct HashToScalarTest {
