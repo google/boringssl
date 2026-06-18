@@ -167,14 +167,12 @@ fn psk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
     let test_future = async {
         let client_handshake = async {
-            let mut in_handshake = client_conn.in_handshake().unwrap();
-            in_handshake.async_handshake().await?;
+            assert!(client_conn.async_handshake().await?.is_none());
             Ok::<(), crate::errors::Error>(())
         };
 
         let server_handshake = async {
-            let mut in_handshake = server_conn.in_handshake().unwrap();
-            in_handshake.async_handshake().await?;
+            assert!(server_conn.async_handshake().await?.is_none());
             Ok::<(), crate::errors::Error>(())
         };
 
@@ -222,13 +220,11 @@ fn psk_tls13_handshake_sync() -> Result<(), Box<dyn std::error::Error + Send + S
     server_conn.set_split_io(server_reader, server_writer)?;
 
     let server_thread = std::thread::spawn(move || {
-        let mut in_handshake = server_conn.in_handshake().unwrap();
-        in_handshake.do_handshake().unwrap();
+        server_conn.do_handshake().unwrap();
         server_conn
     });
 
-    let mut in_handshake = client_conn.in_handshake().unwrap();
-    in_handshake.do_handshake().unwrap();
+    client_conn.do_handshake().unwrap();
 
     let _server_conn = server_thread.join().unwrap();
 
@@ -473,19 +469,9 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
         client_conn.set_io(sock_client)?;
 
         let test_future = async {
-            let client_handshake = async {
-                if let Some(mut in_handshake) = client_conn.in_handshake() {
-                    in_handshake.async_handshake().await?;
-                }
-                Ok::<(), crate::errors::Error>(())
-            };
+            let client_handshake = client_conn.async_handshake();
 
-            let server_handshake = async {
-                if let Some(mut in_handshake) = server_conn.in_handshake() {
-                    in_handshake.async_handshake().await?;
-                }
-                Ok::<(), crate::errors::Error>(())
-            };
+            let server_handshake = server_conn.async_handshake();
 
             let handshake_result =
                 futures::future::try_join(client_handshake, server_handshake).await;

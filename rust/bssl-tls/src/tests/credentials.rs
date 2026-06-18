@@ -140,10 +140,8 @@ fn test_private_key_methods() -> Result<(), Box<dyn std::error::Error + Send + S
     server_conn.set_io(server_socket)?;
 
     let mut server_task = async move || -> Result<(), crate::errors::Error> {
-        let mut in_handshake = server_conn.in_handshake().unwrap();
-
         loop {
-            match in_handshake.async_handshake().await {
+            match server_conn.async_handshake().await {
                 Ok(None) => break,
                 Ok(Some(TlsRetryReason::PendingPrivateKeyOperation)) => {
                     struct Yield(bool);
@@ -175,7 +173,7 @@ fn test_private_key_methods() -> Result<(), Box<dyn std::error::Error + Send + S
     };
 
     let client_task = async move || -> Result<(), crate::errors::Error> {
-        let res = client_conn.in_handshake().unwrap().do_handshake();
+        let res = client_conn.do_handshake();
         assert!(
             matches!(res, Ok(Some(TlsRetryReason::WantRead))),
             "Expected WantRead, got {:?}",

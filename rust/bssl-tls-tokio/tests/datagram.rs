@@ -88,11 +88,7 @@ async fn async_ping_pong(
     use std::time::Duration;
 
     let task = tokio::spawn(async move {
-        server_conn
-            .in_handshake()
-            .unwrap()
-            .async_handshake()
-            .await?;
+        server_conn.async_handshake().await?;
 
         let mut message = [0; 21];
         let mut read_bytes = 0;
@@ -117,11 +113,7 @@ async fn async_ping_pong(
         Ok::<_, Error>(())
     });
 
-    client_conn
-        .in_handshake()
-        .unwrap()
-        .async_handshake()
-        .await?;
+    client_conn.async_handshake().await?;
     client_conn
         .as_pin_mut()
         .async_write(b"BoringSSL is awesome!")

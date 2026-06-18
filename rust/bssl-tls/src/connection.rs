@@ -147,8 +147,8 @@ where
 
 /// TLS Connection
 ///
-/// `Role` is expected to be either [`Server`] or [`Client`] and
-/// `Mode` is expected to be either [`TlsMode`] or [`QuicMode`].
+/// `Role` is expected to be either [`crate::context::Server`] or [`crate::context::Client`] and
+/// `Mode` is expected to be either [`crate::context::TlsMode`] or [`crate::context::QuicMode`].
 /// These generics will govern the capabilities that respective TLS connection role can access,
 // NOTE: any method that involves I/O must require exclusive access, enforced by requiring `&mut`.
 #[repr(transparent)]

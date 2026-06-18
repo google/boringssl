@@ -109,7 +109,7 @@ fn sync_ping_pong<
     mut client_conn: TlsConnection<Client, M>,
 ) -> Result<(), Error> {
     let thread = std::thread::spawn(move || {
-        server_conn.in_handshake().unwrap().accept()?;
+        server_conn.accept()?;
         assert!(!server_conn.is_in_handshake());
         // TODO: switch to `From` impls when Rust compiler is bumped to 1.95.0.
         let mut message = [MaybeUninit::uninit(); 21];
@@ -126,7 +126,7 @@ fn sync_ping_pong<
         Ok::<_, Error>(())
     });
 
-    client_conn.in_handshake().unwrap().connect()?;
+    client_conn.connect()?;
     assert!(!client_conn.is_in_handshake());
     client_conn.sync_write(b"BoringSSL is awesome!")?;
     let mut message = [MaybeUninit::uninit(); 19];
@@ -425,14 +425,7 @@ fn test_async() -> Result<(), Error> {
 }
 
 pub async fn drive_handshake<R>(conn: &mut TlsConnection<R>) {
-    assert!(
-        conn.in_handshake()
-            .unwrap()
-            .async_handshake()
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(conn.async_handshake().await.unwrap().is_none());
 }
 
 #[test]

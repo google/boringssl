@@ -80,7 +80,7 @@ impl HasBasicIo for DtlsMode {}
 /// General TLS configuration
 ///
 /// The `Mode` generic can be either [`TlsMode`] or [`QuicMode`].
-/// This generic governs the kind of [`TlsConnection`] that can be constructed.
+/// This generic governs the kind of [`crate::connection::TlsConnection`] that can be constructed.
 pub struct TlsContextBuilder<Mode = TlsMode> {
     ptr: NonNull<bssl_sys::SSL_CTX>,
     _p: PhantomData<fn() -> Mode>,

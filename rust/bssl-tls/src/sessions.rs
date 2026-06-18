@@ -390,8 +390,8 @@ mod tests {
 
         executor
             .run(try_join(
-                conn_client.in_handshake().unwrap().async_handshake(),
-                conn_server.in_handshake().unwrap().async_handshake(),
+                conn_client.async_handshake(),
+                conn_server.async_handshake(),
             ))
             .unwrap();
 
@@ -441,8 +441,8 @@ mod tests {
 
         executor
             .run(try_join(
-                conn_client.in_handshake().unwrap().async_handshake(),
-                conn_server.in_handshake().unwrap().async_handshake(),
+                conn_client.async_handshake(),
+                conn_server.async_handshake(),
             ))
             .unwrap();
 

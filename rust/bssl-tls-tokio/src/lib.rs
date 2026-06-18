@@ -77,7 +77,7 @@
 //! #         let (stream, _) = listener.accept().await.unwrap();
 //! #         let mut conn = server_ctx.new_server_connection(None).unwrap().build();
 //! #         conn.set_io(TokioIo(stream)).unwrap();
-//! #         conn.in_handshake().unwrap().async_handshake().await.unwrap();
+//! #         conn.async_handshake().await.unwrap();
 //! #         
 //! #         let mut tls_stream = TokioTlsConnection::new(conn);
 //! #         let mut buf = [0u8; 1024];

@@ -170,24 +170,13 @@ impl<R> TlsConnection<R, TlsMode> {
 }
 
 /// A handle to the connection that is valid only during handshake.
+// NOTE(@xfding): this type is strictly for configuration of the connection during the handshake,
+// and no methods should be allowed to drive the TLS state machine.
 #[repr(transparent)]
 pub struct TlsConnectionInHandshake<'a, R, M>(pub(crate) &'a mut TlsConnection<R, M>);
 
-impl<R, M> Deref for TlsConnectionInHandshake<'_, R, M> {
-    type Target = TlsConnection<R, M>;
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
-
-impl<R, M> DerefMut for TlsConnectionInHandshake<'_, R, M> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.0
-    }
-}
-
 /// # Handshake
-impl<R, M> TlsConnectionInHandshake<'_, R, M>
+impl<R, M> TlsConnection<R, M>
 where
     M: HasTlsConnectionMethod,
 {
@@ -205,7 +194,7 @@ where
     }
 }
 
-impl<M> TlsConnectionInHandshake<'_, Server, M>
+impl<M> TlsConnection<Server, M>
 where
     M: HasTlsConnectionMethod,
 {
@@ -219,7 +208,7 @@ where
     }
 }
 
-impl<M> TlsConnectionInHandshake<'_, Client, M>
+impl<M> TlsConnection<Client, M>
 where
     M: HasTlsConnectionMethod,
 {
@@ -317,14 +306,14 @@ where
     }
 }
 
-impl<R, M> TlsConnectionInHandshake<'_, R, M>
+impl<R, M> TlsConnection<R, M>
 where
     M: SupportedMode,
 {
     /// Perform asynchronous handshake, until completion or until pending on non-I/O operations.
     ///
     /// The caller needs to ensure that any pending operations during the handshake are resolved,
-    /// before polling [`async_handshake`] again.
+    /// before polling [`Self::async_handshake`] again.
     pub fn async_handshake(
         &mut self,
     ) -> impl Send + Future<Output = Result<Option<TlsRetryReason>, Error>> + '_ {

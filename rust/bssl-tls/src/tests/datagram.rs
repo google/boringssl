@@ -87,12 +87,8 @@ fn test_async_dtls() -> Result<(), Error> {
     client_conn.set_io(client_socket)?;
 
     let test_future = async {
-        let server_handshake =
-            async { server_conn.in_handshake().unwrap().async_handshake().await };
-        let client_handshake =
-            async { client_conn.in_handshake().unwrap().async_handshake().await };
-
-        futures::future::try_join(server_handshake, client_handshake).await?;
+        futures::future::try_join(server_conn.async_handshake(), client_conn.async_handshake())
+            .await?;
 
         let server_data = async {
             let mut buf = [0u8; TEST_DATA.len()];
