@@ -23,12 +23,6 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install CACHE PATH "" FORCE)
 endif()
 
-if(WIN32)
-  # On Windows, prefer cl over gcc if both are available. By default most of
-  # the CMake generators prefer gcc, even on Windows.
-  set(CMAKE_GENERATOR_CC cl)
-endif()
-
 include(cmake/go.cmake)
 include(gen/sources.cmake)
 
