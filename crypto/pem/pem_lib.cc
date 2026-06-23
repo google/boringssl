@@ -645,7 +645,8 @@ int bssl::PEM_read_bio_inner(BIO *bp, UniquePtr<char> *name,
     return 0;
   }
   int k;
-  status = EVP_DecodeFinal(&ctx, (unsigned char *)&(dataB->data[bl]), &k);
+  status = EVP_DecodeFinal(&ctx,
+                           (unsigned char *)&(dataB->data[decoded_length]), &k);
   if (status < 0) {
     OPENSSL_PUT_ERROR(PEM, PEM_R_BAD_BASE64_DECODE);
     return 0;
