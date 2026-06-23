@@ -50,6 +50,7 @@
 #include "../../../../crypto/bytestring/internal.h"
 #include "../../../../crypto/fipsmodule/bcm_interface.h"
 #include "../../../../crypto/fipsmodule/ec/internal.h"
+#include "../../../../crypto/fipsmodule/keccak/internal.h"
 #include "../../../../crypto/fipsmodule/rand/internal.h"
 #include "../../../../crypto/fipsmodule/tls/internal.h"
 #include "modulewrapper.h"
@@ -57,6 +58,9 @@
 
 BSSL_NAMESPACE_BEGIN
 namespace acvp {
+
+// A general sanity limit for values that are expected to be small.
+constexpr size_t kMaxSize = 128 * 1024 * 1024;
 
 #if defined(OPENSSL_TRUSTY)
 #include <trusty_log.h>
@@ -114,6 +118,26 @@ static bool GetConfig(const Span<const uint8_t> args[],
         "revision": "1.0",
         "messageLength": [{
           "min": 0, "max": 65528, "increment": 8
+        }]
+      },
+      {
+        "algorithm": "SHAKE-128",
+        "revision": "1.0",
+        "inBit": false,
+        "inEmpty": true,
+        "outBit": false,
+        "outputLen": [{
+          "min": 16, "max": 65536, "increment": 8
+        }]
+      },
+      {
+        "algorithm": "SHAKE-256",
+        "revision": "1.0",
+        "inBit": false,
+        "inEmpty": true,
+        "outBit": false,
+        "outputLen": [{
+          "min": 16, "max": 65536, "increment": 8
         }]
       },
       {
@@ -917,6 +941,75 @@ static bool HashMCT(const Span<const uint8_t> args[],
   }
 
   return write_reply({Span(buf).subspan(2 * DigestLength, DigestLength)});
+}
+
+template <enum boringssl_keccak_config_t Config>
+static bool SHAKE(const Span<const uint8_t> args[], ReplyCallback write_reply) {
+  const Span<const uint8_t> msg = args[0];
+  if (args[1].size() != sizeof(uint32_t)) {
+    LOG_ERROR("Wrong length for SHAKE output length.\n");
+    return false;
+  }
+  const uint32_t out_len = CRYPTO_load_u32_le(args[1].data());
+  if (out_len > kMaxSize) {
+    LOG_ERROR("SHAKE output length too large.\n");
+    return false;
+  }
+
+  std::vector<uint8_t> out(out_len);
+  BORINGSSL_keccak(out.data(), out.size(), msg.data(), msg.size(), Config);
+  return write_reply({Span<const uint8_t>(out)});
+}
+
+// Monte Carlo Test for SHAKE. See
+// https://pages.nist.gov/ACVP/draft-celi-acvp-sha3.html#name-shake-monte-carlo-test
+template <enum boringssl_keccak_config_t Config>
+static bool SHAKEMCT(const Span<const uint8_t> args[],
+                     ReplyCallback write_reply) {
+  if (args[1].size() != sizeof(uint32_t) ||
+      args[2].size() != sizeof(uint32_t) ||
+      args[3].size() != sizeof(uint32_t)) {
+    LOG_ERROR("Bad parameter length for SHAKE MCT.\n");
+    return false;
+  }
+  const uint32_t min_out_len = CRYPTO_load_u32_le(args[1].data());
+  const uint32_t max_out_len = CRYPTO_load_u32_le(args[2].data());
+  uint32_t out_len = CRYPTO_load_u32_le(args[3].data());
+
+  if (max_out_len < min_out_len || out_len > kMaxSize ||
+      max_out_len > kMaxSize) {
+    LOG_ERROR("Bad SHAKE MCT lengths: %u %u %u.\n", min_out_len, max_out_len,
+              out_len);
+    return false;
+  }
+  const uint32_t range = max_out_len - min_out_len + 1;
+
+  std::vector<uint8_t> md(args[0].begin(), args[0].end());
+  for (size_t i = 0; i < 1000; i++) {
+    // The message is the leftmost 128 bits of the previous output, zero-padded
+    // if the previous output was shorter.
+    uint8_t msg[16] = {0};
+    if (!md.empty()) {
+      memcpy(msg, md.data(), std::min(md.size(), sizeof(msg)));
+    }
+
+    md.resize(out_len);
+    BORINGSSL_keccak(md.data(), md.size(), msg, sizeof(msg), Config);
+
+    // The output length for the next iteration is derived from the rightmost
+    // 16 bits of the output.
+    uint16_t rightmost = 0;
+    if (out_len >= 2) {
+      rightmost = CRYPTO_load_u16_be(&md[out_len - 2]);
+    } else if (out_len == 1) {
+      rightmost = md[0];
+    }
+    out_len = min_out_len + (rightmost % range);
+  }
+
+  uint8_t out_len_bytes[sizeof(out_len)];
+  CRYPTO_store_u32_le(out_len_bytes, out_len);
+  return write_reply({Span<const uint8_t>(md), MakeConstSpan(out_len_bytes)});
 }
 
 static uint32_t GetIterations(const Span<const uint8_t> iterations_bytes) {
@@ -2397,6 +2490,12 @@ static constexpr struct {
     {"SHA2-384/MCT", 1, HashMCT<SHA384, SHA384_DIGEST_LENGTH>},
     {"SHA2-512/MCT", 1, HashMCT<SHA512, SHA512_DIGEST_LENGTH>},
     {"SHA2-512/256/MCT", 1, HashMCT<SHA512_256, SHA512_256_DIGEST_LENGTH>},
+    {"SHAKE-128", 2, SHAKE<boringssl_shake128>},
+    {"SHAKE-128/VOT", 2, SHAKE<boringssl_shake128>},
+    {"SHAKE-128/MCT", 4, SHAKEMCT<boringssl_shake128>},
+    {"SHAKE-256", 2, SHAKE<boringssl_shake256>},
+    {"SHAKE-256/VOT", 2, SHAKE<boringssl_shake256>},
+    {"SHAKE-256/MCT", 4, SHAKEMCT<boringssl_shake256>},
     {"AES/encrypt", 3, AES<AES_set_encrypt_key, AES_encrypt>},
     {"AES/decrypt", 3, AES<AES_set_decrypt_key, AES_decrypt>},
     {"AES-CBC/encrypt", 4, AES_CBC<AES_set_encrypt_key, AES_ENCRYPT>},
