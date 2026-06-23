@@ -812,7 +812,9 @@ static bool GetConfig(const Span<const uint8_t> args[],
         ],
         "functions": [
           "encapsulation",
-          "decapsulation"
+          "decapsulation",
+          "encapsulationKeyCheck",
+          "decapsulationKeyCheck"
         ]
       },
       {
@@ -1867,9 +1869,9 @@ static bool RSASigGen(const Span<const uint8_t> args[],
     }
     memcpy(&salt_len, args[2].data(), sizeof(salt_len));
     if (salt_len != digest_len) {
-      LOG_ERROR(
-          "PSS salt length %u does not match digest length %u.\n",
-          static_cast<unsigned>(salt_len), static_cast<unsigned>(digest_len));
+      LOG_ERROR("PSS salt length %u does not match digest length %u.\n",
+                static_cast<unsigned>(salt_len),
+                static_cast<unsigned>(digest_len));
       return false;
     }
     if (!RSA_sign_pss_mgf1(key, &sig_len, sig.data(), sig.size(), digest_buf,
@@ -2277,6 +2279,30 @@ static bool MLKEMDecap(const Span<const uint8_t> args[],
   return write_reply({shared_secret});
 }
 
+template <typename PublicKey, bcm_status (*ParsePublic)(PublicKey *, CBS *)>
+static bool MLKEMEncapKeyCheck(const Span<const uint8_t> args[],
+                               ReplyCallback write_reply) {
+  const Span<const uint8_t> pub_key_bytes = args[0];
+
+  auto pub = std::make_unique<PublicKey>();
+  CBS cbs = pub_key_bytes;
+  uint8_t valid = bcm_success(ParsePublic(pub.get(), &cbs));
+
+  return write_reply({Span<const uint8_t>(&valid, sizeof(valid))});
+}
+
+template <typename PrivateKey, bcm_status (*ParsePrivate)(PrivateKey *, CBS *)>
+static bool MLKEMDecapKeyCheck(const Span<const uint8_t> args[],
+                               ReplyCallback write_reply) {
+  const Span<const uint8_t> priv_key_bytes = args[0];
+
+  auto priv = std::make_unique<PrivateKey>();
+  CBS cbs = priv_key_bytes;
+  uint8_t valid = bcm_success(ParsePrivate(priv.get(), &cbs));
+
+  return write_reply({Span<const uint8_t>(&valid, sizeof(valid))});
+}
+
 template <size_t N, size_t PublicKeyBytes, size_t PrivateKeyBytes,
           bcm_infallible (*GenerateFromSeed)(uint8_t *, uint8_t *,
                                              const uint8_t *)>
@@ -2503,6 +2529,15 @@ static constexpr struct {
     {"ML-KEM-1024/decap", 2,
      MLKEMDecap<MLKEM1024_private_key, BCM_mlkem1024_parse_private_key,
                 BCM_mlkem1024_decap>},
+    {"ML-KEM-768/encapKeyCheck", 1,
+     MLKEMEncapKeyCheck<MLKEM768_public_key, BCM_mlkem768_parse_public_key>},
+    {"ML-KEM-1024/encapKeyCheck", 1,
+     MLKEMEncapKeyCheck<MLKEM1024_public_key, BCM_mlkem1024_parse_public_key>},
+    {"ML-KEM-768/decapKeyCheck", 1,
+     MLKEMDecapKeyCheck<MLKEM768_private_key, BCM_mlkem768_parse_private_key>},
+    {"ML-KEM-1024/decapKeyCheck", 1,
+     MLKEMDecapKeyCheck<MLKEM1024_private_key,
+                        BCM_mlkem1024_parse_private_key>},
     {"SLH-DSA-SHA2-128s/keyGen", 1,
      SLHDSAKeyGen<BCM_SLHDSA_SHA2_128S_N, BCM_SLHDSA_SHA2_128S_PUBLIC_KEY_BYTES,
                   BCM_SLHDSA_SHA2_128S_PRIVATE_KEY_BYTES,
