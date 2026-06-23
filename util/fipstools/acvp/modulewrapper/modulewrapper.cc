@@ -1038,7 +1038,9 @@ static bool GetConfig(const Span<const uint8_t> args[],
         ],
         "functions": [
           "encapsulation",
-          "decapsulation"
+          "decapsulation",
+          "encapsulationKeyCheck",
+          "decapsulationKeyCheck"
         ]
       },
       {
@@ -2521,6 +2523,30 @@ static bool MLKEMDecap(const Span<const uint8_t> args[],
   return write_reply({shared_secret});
 }
 
+template <typename PublicKey, bcm_status (*ParsePublic)(PublicKey *, CBS *)>
+static bool MLKEMEncapKeyCheck(const Span<const uint8_t> args[],
+                               ReplyCallback write_reply) {
+  const Span<const uint8_t> pub_key_bytes = args[0];
+
+  auto pub = std::make_unique<PublicKey>();
+  CBS cbs = pub_key_bytes;
+  uint8_t valid = bcm_success(ParsePublic(pub.get(), &cbs));
+
+  return write_reply({Span<const uint8_t>(&valid, sizeof(valid))});
+}
+
+template <typename PrivateKey, bcm_status (*ParsePrivate)(PrivateKey *, CBS *)>
+static bool MLKEMDecapKeyCheck(const Span<const uint8_t> args[],
+                               ReplyCallback write_reply) {
+  const Span<const uint8_t> priv_key_bytes = args[0];
+
+  auto priv = std::make_unique<PrivateKey>();
+  CBS cbs = priv_key_bytes;
+  uint8_t valid = bcm_success(ParsePrivate(priv.get(), &cbs));
+
+  return write_reply({Span<const uint8_t>(&valid, sizeof(valid))});
+}
+
 static bool SLHDSAKeyGen(const Span<const uint8_t> args[],
                          ReplyCallback write_reply) {
   const Span<const uint8_t> seed = args[0];
@@ -2728,6 +2754,18 @@ static constexpr struct {
     {"ML-KEM-1024/decap", 2,
      MLKEMDecap<BCM_mlkem1024_private_key, BCM_mlkem1024_parse_private_key,
                 BCM_mlkem1024_decap>},
+    {"ML-KEM-768/encapKeyCheck", 1,
+     MLKEMEncapKeyCheck<BCM_mlkem768_public_key,
+                        BCM_mlkem768_parse_public_key>},
+    {"ML-KEM-1024/encapKeyCheck", 1,
+     MLKEMEncapKeyCheck<BCM_mlkem1024_public_key,
+                        BCM_mlkem1024_parse_public_key>},
+    {"ML-KEM-768/decapKeyCheck", 1,
+     MLKEMDecapKeyCheck<BCM_mlkem768_private_key,
+                        BCM_mlkem768_parse_private_key>},
+    {"ML-KEM-1024/decapKeyCheck", 1,
+     MLKEMDecapKeyCheck<BCM_mlkem1024_private_key,
+                        BCM_mlkem1024_parse_private_key>},
     {"SLH-DSA-SHA2-128s/keyGen", 1, SLHDSAKeyGen},
     {"SLH-DSA-SHA2-128s/sigGen", 3, SLHDSASigGen},
     {"SLH-DSA-SHA2-128s/sigVer", 3, SLHDSASigVer},
