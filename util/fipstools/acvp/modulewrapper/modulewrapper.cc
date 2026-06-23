@@ -1013,17 +1013,13 @@ static bool SHAKEMCT(const Span<const uint8_t> args[],
 }
 
 static uint32_t GetIterations(const Span<const uint8_t> iterations_bytes) {
-  uint32_t iterations;
-  if (iterations_bytes.size() != sizeof(iterations)) {
-    LOG_ERROR(
-        "Expected %u-byte input for number of iterations, but found %u "
-        "bytes.\n",
-        static_cast<unsigned>(sizeof(iterations)),
-        static_cast<unsigned>(iterations_bytes.size()));
+  if (iterations_bytes.size() != sizeof(uint32_t)) {
+    LOG_ERROR("Iteration count value is %u bytes, not a uint32_t\n",
+              static_cast<unsigned>(iterations_bytes.size()));
     abort();
   }
 
-  memcpy(&iterations, iterations_bytes.data(), sizeof(iterations));
+  const uint32_t iterations = CRYPTO_load_u32_le(iterations_bytes.data());
   if (iterations == 0 || iterations == UINT32_MAX) {
     LOG_ERROR("Invalid number of iterations: %x.\n",
               static_cast<unsigned>(iterations));
@@ -1146,7 +1142,7 @@ static bool AES_CTR(const Span<const uint8_t> args[],
 static bool AESGCMSetup(EVP_AEAD_CTX *ctx, Span<const uint8_t> tag_len_span,
                         Span<const uint8_t> key) {
   if (tag_len_span.size() != sizeof(uint32_t)) {
-    LOG_ERROR("Tag size value is %u bytes, not an uint32_t\n",
+    LOG_ERROR("Tag size value is %u bytes, not a uint32_t\n",
               static_cast<unsigned>(tag_len_span.size()));
     return false;
   }
@@ -1183,7 +1179,7 @@ static bool AESGCMRandNonceSetup(EVP_AEAD_CTX *ctx,
                                  Span<const uint8_t> tag_len_span,
                                  Span<const uint8_t> key) {
   if (tag_len_span.size() != sizeof(uint32_t)) {
-    LOG_ERROR("Tag size value is %u bytes, not an uint32_t\n",
+    LOG_ERROR("Tag size value is %u bytes, not a uint32_t\n",
               static_cast<unsigned>(tag_len_span.size()));
     return false;
   }
@@ -1216,13 +1212,12 @@ static bool AESGCMRandNonceSetup(EVP_AEAD_CTX *ctx,
 
 static bool AESCCMSetup(EVP_AEAD_CTX *ctx, Span<const uint8_t> tag_len_span,
                         Span<const uint8_t> key) {
-  uint32_t tag_len_32;
-  if (tag_len_span.size() != sizeof(tag_len_32)) {
-    LOG_ERROR("Tag size value is %u bytes, not an uint32_t\n",
+  if (tag_len_span.size() != sizeof(uint32_t)) {
+    LOG_ERROR("Tag size value is %u bytes, not a uint32_t\n",
               static_cast<unsigned>(tag_len_span.size()));
     return false;
   }
-  memcpy(&tag_len_32, tag_len_span.data(), sizeof(tag_len_32));
+  const uint32_t tag_len_32 = CRYPTO_load_u32_le(tag_len_span.data());
   const EVP_AEAD *aead;
   switch (tag_len_32) {
     case 4:
@@ -1652,8 +1647,7 @@ static bool DRBG(const Span<const uint8_t> args[], ReplyCallback write_reply) {
     nonce = args[7];
   }
 
-  uint32_t out_len;
-  if (out_len_bytes.size() != sizeof(out_len) ||
+  if (out_len_bytes.size() != sizeof(uint32_t) ||
       entropy.size() < CTR_DRBG_MIN_ENTROPY_LEN ||
       entropy.size() > CTR_DRBG_MAX_ENTROPY_LEN ||
       (!reseed_entropy.empty() &&
@@ -1662,7 +1656,7 @@ static bool DRBG(const Span<const uint8_t> args[], ReplyCallback write_reply) {
       (nonce.size() != CTR_DRBG_NONCE_LEN && nonce.size() != 0)) {
     return false;
   }
-  memcpy(&out_len, out_len_bytes.data(), sizeof(out_len));
+  const uint32_t out_len = CRYPTO_load_u32_le(out_len_bytes.data());
   if (out_len > (1 << 24)) {
     return false;
   }
@@ -1859,11 +1853,10 @@ static bool CMAC_AES(const Span<const uint8_t> args[],
     return false;
   }
 
-  uint32_t mac_len;
-  if (args[0].size() != sizeof(mac_len)) {
+  if (args[0].size() != sizeof(uint32_t)) {
     return false;
   }
-  memcpy(&mac_len, args[0].data(), sizeof(mac_len));
+  const uint32_t mac_len = CRYPTO_load_u32_le(args[0].data());
   if (mac_len != sizeof(mac)) {
     return false;
   }
@@ -1910,11 +1903,10 @@ static RSA *GetRSAKey(unsigned bits) {
 
 static bool RSAKeyGen(const Span<const uint8_t> args[],
                       ReplyCallback write_reply) {
-  uint32_t bits;
-  if (args[0].size() != sizeof(bits)) {
+  if (args[0].size() != sizeof(uint32_t)) {
     return false;
   }
-  memcpy(&bits, args[0].data(), sizeof(bits));
+  const uint32_t bits = CRYPTO_load_u32_le(args[0].data());
 
   UniquePtr<RSA> key(RSA_new());
   if (!RSA_generate_key_fips(key.get(), bits, nullptr)) {
@@ -1938,11 +1930,10 @@ static bool RSAKeyGen(const Span<const uint8_t> args[],
 template <const EVP_MD *(MDFunc)(), bool UsePSS>
 static bool RSASigGen(const Span<const uint8_t> args[],
                       ReplyCallback write_reply) {
-  uint32_t bits;
-  if (args[0].size() != sizeof(bits)) {
+  if (args[0].size() != sizeof(uint32_t)) {
     return false;
   }
-  memcpy(&bits, args[0].data(), sizeof(bits));
+  const uint32_t bits = CRYPTO_load_u32_le(args[0].data());
   const Span<const uint8_t> msg = args[1];
 
   RSA *const key = GetRSAKey(bits);
@@ -1956,11 +1947,10 @@ static bool RSASigGen(const Span<const uint8_t> args[],
   std::vector<uint8_t> sig(RSA_size(key));
   size_t sig_len;
   if (UsePSS) {
-    uint32_t salt_len;
-    if (args[2].size() != sizeof(salt_len)) {
+    if (args[2].size() != sizeof(uint32_t)) {
       return false;
     }
-    memcpy(&salt_len, args[2].data(), sizeof(salt_len));
+    const uint32_t salt_len = CRYPTO_load_u32_le(args[2].data());
     if (salt_len != digest_len) {
       LOG_ERROR("PSS salt length %u does not match digest length %u.\n",
                 static_cast<unsigned>(salt_len),
@@ -2033,11 +2023,10 @@ static bool TLSKDF(const Span<const uint8_t> args[],
   const Span<const uint8_t> seed2 = args[4];
   const EVP_MD *md = MDFunc();
 
-  uint32_t out_len;
-  if (out_len_bytes.size() != sizeof(out_len)) {
-    return 0;
+  if (out_len_bytes.size() != sizeof(uint32_t)) {
+    return false;
   }
-  memcpy(&out_len, out_len_bytes.data(), sizeof(out_len));
+  const uint32_t out_len = CRYPTO_load_u32_le(out_len_bytes.data());
 
   std::vector<uint8_t> out(size_t{out_len});
   if (!CRYPTO_tls1_prf(md, out.data(), out.size(), secret.data(), secret.size(),
