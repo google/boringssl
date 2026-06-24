@@ -2310,7 +2310,10 @@ OPENSSL_EXPORT size_t SSL_CTX_sess_number(const SSL_CTX *ctx);
 
 // SSL_CTX_add_session inserts `session` into `ctx`'s internal session cache. It
 // returns one on success and zero on error or if `session` is already in the
-// cache. The caller retains its reference to `session`.
+// cache. The caller retains its reference to `session`. A `session` can be
+// only in one `ctx` at any given time; it is an error to add it to more.
+//
+// TODO(crbug.com/527997772): Remove this restriction.
 OPENSSL_EXPORT int SSL_CTX_add_session(SSL_CTX *ctx, SSL_SESSION *session);
 
 // SSL_CTX_remove_session removes `session` from `ctx`'s internal session cache.

@@ -11961,5 +11961,23 @@ TEST(SSLTest, HandshakeHints) {
   ASSERT_TRUE(CompleteHandshakes(client.get(), server.get()));
 }
 
+TEST(SSLTest, SessionCrossContextCache) {
+  UniquePtr<SSL_CTX> ctx_a(SSL_CTX_new(TLS_method()));
+  UniquePtr<SSL_CTX> ctx_b(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(ctx_a);
+  ASSERT_TRUE(ctx_b);
+
+  UniquePtr<SSL_SESSION> session(SSL_SESSION_new(ctx_b.get()));
+  ASSERT_TRUE(session);
+  uint8_t sid[32] = {};
+  ASSERT_TRUE(SSL_SESSION_set1_id(session.get(), sid, sizeof(sid)));
+
+  EXPECT_TRUE(SSL_CTX_add_session(ctx_a.get(), session.get()));
+
+  // This should fail because the session is already in ctx_a.
+  // TODO(crbug.com/527997772): Remove this restriction.
+  EXPECT_FALSE(SSL_CTX_add_session(ctx_b.get(), session.get()));
+}
+
 }  // namespace
 BSSL_NAMESPACE_END

@@ -718,6 +718,14 @@ static void SSL_SESSION_list_add(SSLContext *ctx, SSL_SESSION *session) {
 static bool add_session_locked(SSLContext *ctx,
                                UniquePtr<SSL_SESSION> session) {
   SSL_SESSION *new_session = session.get();
+
+  // Sessions have intrusive linked lists, so they cannot be stored in two
+  // SSLContexts at once.
+  // TODO(crbug.com/527997772): Remove this restriction.
+  if ((new_session->prev != nullptr || new_session->next != nullptr)) {
+    return false;
+  }
+
   SSL_SESSION *old_session;
   if (!lh_SSL_SESSION_insert(ctx->sessions, &old_session, new_session)) {
     return false;
@@ -730,11 +738,9 @@ static bool add_session_locked(SSLContext *ctx,
   session.reset(old_session);
 
   if (old_session != nullptr) {
-    if (old_session == new_session) {
-      // `session` was already in the cache. There are no linked list pointers
-      // to update.
-      return false;
-    }
+    // The session cannot have been in the session, due to the check above.
+    // TODO(crbug.com/527997772): Revisit this when we remove the check.
+    BSSL_CHECK(old_session != new_session);
 
     // There was a session ID collision. `old_session` was replaced with
     // `session` in the hash table, so `old_session` must be removed from the
