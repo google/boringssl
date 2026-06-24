@@ -1030,8 +1030,16 @@ static bool ext_sigalgs_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
   CBB contents, sigalgs_cbb;
   if (!CBB_add_u16(out_compressible, TLSEXT_TYPE_signature_algorithms) ||
       !CBB_add_u16_length_prefixed(out_compressible, &contents) ||
-      !CBB_add_u16_length_prefixed(&contents, &sigalgs_cbb) ||
-      !tls12_add_verify_sigalgs(hs, &sigalgs_cbb) ||
+      !CBB_add_u16_length_prefixed(&contents, &sigalgs_cbb)) {
+        return false;
+  }
+  // Add a fake signature algorithm. See RFC 8701.
+  if (hs->ssl->ctx->grease_sigalgs_enabled &&
+      !CBB_add_u16(&sigalgs_cbb,
+                   ssl_get_grease_value(hs, ssl_grease_signature_algorithm))) {
+    return false;
+  }
+  if (!tls12_add_verify_sigalgs(hs, &sigalgs_cbb) ||
       !CBB_flush(out_compressible)) {
     return false;
   }

@@ -5515,6 +5515,16 @@ OPENSSL_EXPORT void SSL_CTX_set_retain_only_sha256_of_client_certs(SSL_CTX *ctx,
 // GREASE. See RFC 8701.
 OPENSSL_EXPORT void SSL_CTX_set_grease_enabled(SSL_CTX *ctx, int enabled);
 
+// SSL_CTX_set_grease_sigalgs_enabled configures whether sockets on `ctx` should
+// send a GREASE value in signature_algorithms extensions in ClientHello
+// messages. See RFC 8701.
+// TODO(crbug.com/526597789): Fold this functionality into
+// `SSL_CTX_set_grease_enabled` once deployed safely.
+// TODO(crbug.com/529360100): signature_algorithms extensions in
+// CertificateRequest messages should also be GREASE'd.
+OPENSSL_EXPORT void SSL_CTX_set_grease_sigalgs_enabled(SSL_CTX *ctx,
+                                                       int enabled);
+
 // SSL_CTX_set_permute_extensions configures whether sockets on `ctx` should
 // permute extensions. For now, this is only implemented for the ClientHello.
 OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);

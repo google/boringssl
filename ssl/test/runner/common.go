@@ -2745,6 +2745,12 @@ func containsGREASE(values []uint16) bool {
 	return slices.ContainsFunc(values, isGREASEValue)
 }
 
+func containsSigAlgsGREASE(values []signatureAlgorithm) bool {
+	return slices.ContainsFunc(values, func(s signatureAlgorithm) bool {
+		return isGREASEValue(uint16(s))
+	})
+}
+
 func isAllZero(v []byte) bool {
 	for _, b := range v {
 		if b != 0 {

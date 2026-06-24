@@ -1665,7 +1665,8 @@ enum ssl_grease_index_t {
   ssl_grease_version,
   ssl_grease_ticket_extension,
   ssl_grease_ech_config_id,
-  ssl_grease_last_index = ssl_grease_ech_config_id,
+  ssl_grease_signature_algorithm,
+  ssl_grease_last_index = ssl_grease_signature_algorithm,
 };
 
 enum tls12_server_hs_state_t {
@@ -4159,6 +4160,11 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
 
   // grease_enabled is whether GREASE (RFC 8701) is enabled.
   bool grease_enabled : 1;
+
+  // grease_sigalgs_enabled controls whether GREASE signature algorithms may be
+  // sent.
+  // TODO(crbug.com/526597789): Fold into `grease_enabled` once deployed safely.
+  bool grease_sigalgs_enabled : 1;
 
   // permute_extensions is whether to permute extensions when sending messages.
   bool permute_extensions : 1;
