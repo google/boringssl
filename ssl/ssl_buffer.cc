@@ -47,7 +47,7 @@ void SSLBuffer::Clear() {
 }
 
 bool SSLBuffer::EnsureCap(size_t header_len, size_t new_cap) {
-  if (new_cap > 0xffff) {
+  if (new_cap > 0xffff - (SSL3_ALIGN_PAYLOAD - 1)) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }

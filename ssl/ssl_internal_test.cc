@@ -17,6 +17,7 @@
 #include <openssl/aead.h>
 #include <openssl/ssl.h>
 
+#include "../crypto/test/test_util.h"
 #include "internal.h"
 
 
@@ -541,6 +542,16 @@ TEST(SSLAEADContextTest, Lengths) {
       }
     }
   }
+}
+
+TEST(SSLBufferTest, EnsureCapBoundary) {
+  SSLBuffer buf;
+  // The maximum safe capacity is 0xffff - (SSL3_ALIGN_PAYLOAD - 1) = 65528.
+  EXPECT_TRUE(buf.EnsureCap(0, 65528));
+
+  // Anything larger should be rejected to prevent uint16_t overflow.
+  EXPECT_FALSE(buf.EnsureCap(0, 65529));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_SSL, ERR_R_INTERNAL_ERROR));
 }
 
 TEST(SSLTest, ECHPublicName) {
