@@ -1362,7 +1362,7 @@ static bool VerifyMTCProofSignaturePlants04(
 // Verifying Certificate Signatures.
 static bool VerifyMTCDraftPlants04(const ParsedCertificate &cert,
                                    const MTCAnchor *mtc_anchor,
-                                   SignatureVerifyCache *cache) {
+                                   VerifyCertificateChainDelegate *delegate) {
   // Step 1: Check that the TBSCertificate's signature field is id-alg-mtcProof
   // (kMtcProofDraftPlants04) with omitted parameters.
   if (cert.signature_algorithm() !=
@@ -1560,6 +1560,7 @@ static bool VerifyMTCDraftPlants04(const ParsedCertificate &cert,
   // party's cosigner requirements (Section 7.3). Unrecognized cosigners MUST
   // be ignored.
 
+  std::vector<std::vector<uint8_t>> valid_additional_cosigners;
   bool found_valid_ca_signature = false;
   Span<const uint8_t> prev_cosigner_id;
   while (CBS_len(&signatures)) {
@@ -1589,29 +1590,48 @@ static bool VerifyMTCDraftPlants04(const ParsedCertificate &cert,
       }
     }
 
+    // TODO(crbug.com/452983502): The non-CA cosignature verification results
+    // are ignored if the CA signature didn't validate successfully, so we
+    // could first find and verify the CA signature before bothering to check
+    // any of the other ones.
     if (cosigner_id == mtc_anchor->ca_id()) {
       found_valid_ca_signature = VerifyMTCProofSignaturePlants04(
           &cbs_cosigner_id, StringAsBytes(log_id_text), start, end,
           expected_subtree_hash.value(), signature,
-          mtc_anchor->ca_signature_algorithm(), mtc_anchor->ca_key(), cache);
+          mtc_anchor->ca_signature_algorithm(), mtc_anchor->ca_key(),
+          delegate->GetVerifyCache());
     } else {
-      // TODO(crbug.com/452983502): check other co-signatures too.
+      auto cosigner = delegate->GetMTCCosigner(cosigner_id);
+      // TODO(crbug.com/452983502): output debug logs or delegate data or
+      // something for non-success cases?
+      if (cosigner && VerifyMTCProofSignaturePlants04(
+                          &cbs_cosigner_id, StringAsBytes(log_id_text), start,
+                          end, expected_subtree_hash.value(), signature,
+                          cosigner->signature_algorithm, cosigner->key.get(),
+                          delegate->GetVerifyCache())) {
+        valid_additional_cosigners.emplace_back(cosigner_id.begin(),
+                                                cosigner_id.end());
+      }
     }
 
     prev_cosigner_id = cosigner_id;
   }
 
-  return found_valid_ca_signature;
+  if (found_valid_ca_signature) {
+    return delegate->IsCosignatureVerificationResultAcceptable(
+        mtc_anchor, std::move(valid_additional_cosigners));
+  }
+  return false;
 }
 
 static bool VerifyMTC(const ParsedCertificate &cert,
                       const MTCAnchor *mtc_anchor,
-                      SignatureVerifyCache *cache) {
+                      VerifyCertificateChainDelegate *delegate) {
   switch (mtc_anchor->spec_version()) {
     case MTCAnchor::MtcSpecVersion::kDavidben08:
       return VerifyMTCDraftDavidben08(cert, mtc_anchor);
     case MTCAnchor::MtcSpecVersion::kPlants04:
-      return VerifyMTCDraftPlants04(cert, mtc_anchor, cache);
+      return VerifyMTCDraftPlants04(cert, mtc_anchor, delegate);
   }
   return false;
 }
@@ -1653,8 +1673,7 @@ void PathVerifier::BasicCertificateProcessing(
     if (!is_target_cert) {
       *shortcircuit_chain_validation = true;
       errors->AddError(cert_errors::kMaxPathLengthViolated);
-    } else if (!VerifyMTC(cert, working_mtc_anchor_,
-                          delegate_->GetVerifyCache())) {
+    } else if (!VerifyMTC(cert, working_mtc_anchor_, delegate_)) {
       *shortcircuit_chain_validation = true;
       errors->AddError(cert_errors::kVerifySignedDataFailed);
     }
