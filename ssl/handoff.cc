@@ -821,7 +821,7 @@ int SSL_request_handshake_hints(SSL *ssl, const uint8_t *client_hello,
                                 size_t client_hello_len,
                                 const uint8_t *capabilities,
                                 size_t capabilities_len) {
-  if (SSL_is_dtls(ssl)) {
+  if (SSL_is_dtls(ssl) || ssl->s3->hs == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
@@ -1064,7 +1064,7 @@ static bool get_optional_implicit_null(CBS *cbs, bool *out_present,
 }
 
 int SSL_set_handshake_hints(SSL *ssl, const uint8_t *hints, size_t hints_len) {
-  if (SSL_is_dtls(ssl)) {
+  if (SSL_is_dtls(ssl) || ssl->s3->hs == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
