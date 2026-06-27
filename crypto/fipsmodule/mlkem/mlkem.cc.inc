@@ -714,14 +714,15 @@ void vector_encode(uint8_t *out, const vector<RANK> *a) {
   }
 }
 
-// The inverse of `scalar_encode`. Returns 1 iff the encoded scalar is valid,
-// i.e. all components are < `kPrime`. Otherwise, returns 0 and the value of
-// `out` is undefined.
+// scalar_decode parses `DEGREE * BITS` bits from `in` into `DEGREE` values in
+// `out`. This is the inverse of `scalar_encode`. This is only defined for `BITS
+// < 12`. Otherwise, the decoding is fallible and must use `scalar_decode_12`
+// instead.
 template <int BITS>
-int scalar_decode(scalar *out, const uint8_t *in);
+void scalar_decode(scalar *out, const uint8_t *in);
 
 template <>
-int scalar_decode<10>(scalar *out, const uint8_t in[320]) {
+void scalar_decode<10>(scalar *out, const uint8_t in[320]) {
   for (int i = 0; i < DEGREE; i += 4) {
     uint16_t s0 = (uint16_t)(in[0] | ((in[1] & 0x03) << 8));
     uint16_t s1 = (uint16_t)((in[1] >> 2) | ((in[2] & 0x0f) << 6));
@@ -733,29 +734,10 @@ int scalar_decode<10>(scalar *out, const uint8_t in[320]) {
     out->c[i + 3] = s3;
     in += 5;
   }
-  return 1;
 }
 
 template <>
-int scalar_decode<12>(scalar *out, const uint8_t in[384]) {
-  for (int i = 0; i < DEGREE; i += 2) {
-    uint16_t s0 = (uint16_t)(in[0] | ((in[1] & 0x0f) << 8));
-    uint16_t s1 = (uint16_t)((in[1] >> 4) | (in[2] << 4));
-    // This is only used with secret input when parsing the test-only
-    // semi-expanded format. Leaking information about invalid inputs is OK.
-    if (constant_time_declassify_int(s0 >= kPrime) ||
-        constant_time_declassify_int(s1 >= kPrime)) {
-      return 0;
-    }
-    out->c[i] = s0;
-    out->c[i + 1] = s1;
-    in += 3;
-  }
-  return 1;
-}
-
-template <>
-int scalar_decode<4>(scalar *out, const uint8_t in[128]) {
+void scalar_decode<4>(scalar *out, const uint8_t in[128]) {
   for (int i = 0; i < DEGREE; i += 2) {
     uint16_t s0 = (uint16_t)(in[0] & 0x0f);
     uint16_t s1 = (uint16_t)(in[0] >> 4);
@@ -764,14 +746,10 @@ int scalar_decode<4>(scalar *out, const uint8_t in[128]) {
     out->c[i + 1] = s1;
     in += 1;
   }
-  return 1;
 }
 
-// scalar_decode parses `DEGREE * bits` bits from `in` into `DEGREE` values in
-// `out`. It returns one on success and zero if any parsed value is >=
-// `kPrime`.
 template <>
-int scalar_decode<11>(scalar *out, const uint8_t in[352]) {
+void scalar_decode<11>(scalar *out, const uint8_t in[352]) {
   for (int i = 0; i < DEGREE; i += 8) {
     uint16_t s0 = (uint16_t)(in[0] | ((in[1] & 0x07) << 8));
     uint16_t s1 = (uint16_t)((in[1] >> 3) | ((in[2] & 0x3f) << 5));
@@ -793,11 +771,10 @@ int scalar_decode<11>(scalar *out, const uint8_t in[352]) {
     out->c[i + 7] = s7;
     in += 11;
   }
-  return 1;
 }
 
 template <>
-int scalar_decode<5>(scalar *out, const uint8_t in[160]) {
+void scalar_decode<5>(scalar *out, const uint8_t in[160]) {
   for (int i = 0; i < DEGREE; i += 8) {
     uint16_t s0 = (uint16_t)(in[0] & 0x1f);
     uint16_t s1 = (uint16_t)((in[0] >> 5) | ((in[1] & 0x03) << 3));
@@ -818,26 +795,54 @@ int scalar_decode<5>(scalar *out, const uint8_t in[160]) {
     out->c[i + 7] = s7;
     in += 5;
   }
-  return 1;
 }
 
 template <>
-int scalar_decode<1>(scalar *out, const uint8_t in[32]) {
+void scalar_decode<1>(scalar *out, const uint8_t in[32]) {
   for (int i = 0; i < DEGREE; i += 8) {
     uint8_t in_byte = in[i / 8];
     for (int j = 0; j < 8; j++) {
       out->c[i + j] = (in_byte >> j) & 1;
     }
   }
+}
+
+// The inverse of `scalar_encode<12>`. Returns 1 iff the encoded scalar is
+// valid, i.e. all components are < `kPrime`. Otherwise, returns 0 and the value
+// of `out` is undefined.
+int scalar_decode_12(scalar *out, const uint8_t in[384]) {
+  for (int i = 0; i < DEGREE; i += 2) {
+    uint16_t s0 = (uint16_t)(in[0] | ((in[1] & 0x0f) << 8));
+    uint16_t s1 = (uint16_t)((in[1] >> 4) | (in[2] << 4));
+    // This is only used with secret input when parsing the test-only
+    // semi-expanded format. Leaking information about invalid inputs is OK.
+    if (constant_time_declassify_int(s0 >= kPrime) ||
+        constant_time_declassify_int(s1 >= kPrime)) {
+      return 0;
+    }
+    out->c[i] = s0;
+    out->c[i + 1] = s1;
+    in += 3;
+  }
   return 1;
 }
 
-// Decodes 32*`RANK`*`bits` bytes from `in` into `out`. It returns one on
-// success or zero if any parsed value is >= `kPrime`.
+// Decodes 32*`RANK`*`bits` bytes from `in` into `out`. This only supports `bits
+// < 12`, necessary for decoding to be infallible.
 template <int bits, int RANK>
-inline int vector_decode(vector<RANK> *out, const uint8_t *in) {
+inline void vector_decode(vector<RANK> *out, const uint8_t *in) {
+  static_assert(bits < 12);
   for (int i = 0; i < RANK; i++) {
-    if (!scalar_decode<bits>(&out->v[i], in + i * bits * DEGREE / 8)) {
+    scalar_decode<bits>(&out->v[i], in + i * bits * DEGREE / 8);
+  }
+}
+
+// Decodes 32*`RANK`*12 bytes from `in` into `out` It returns one on success or
+// zero if any parsed value is >= `kPrime`.
+template <int RANK>
+inline int vector_decode_12(vector<RANK> *out, const uint8_t *in) {
+  for (int i = 0; i < RANK; i++) {
+    if (!scalar_decode_12(&out->v[i], in + i * 12 * DEGREE / 8)) {
       return 0;
     }
   }
@@ -1093,7 +1098,7 @@ int mlkem_parse_public_key_with_trailing_data(public_key<RANK> *pub, CBS *in) {
   CBS orig_in = *in;
   CBS t_bytes;
   if (!CBS_get_bytes(in, &t_bytes, encoded_vector_size(RANK)) ||
-      !vector_decode<kLog2Prime>(&pub->t, CBS_data(&t_bytes)) ||
+      !vector_decode_12(&pub->t, CBS_data(&t_bytes)) ||
       !CBS_copy_bytes(in, pub->rho, sizeof(pub->rho))) {
     return 0;
   }
@@ -1117,7 +1122,7 @@ template <int RANK>
 int mlkem_parse_private_key(private_key<RANK> *priv, CBS *in) {
   CBS s_bytes, public_key_hash;
   if (!CBS_get_bytes(in, &s_bytes, encoded_vector_size(RANK)) ||
-      !vector_decode<kLog2Prime>(&priv->s, CBS_data(&s_bytes)) ||
+      !vector_decode_12(&priv->s, CBS_data(&s_bytes)) ||
       !mlkem_parse_public_key_with_trailing_data(&priv->pub, in) ||
       // We compute the public key hash ourselves, but check it matched.
       !CBS_get_bytes(in, &public_key_hash, sizeof(priv->pub.public_key_hash)) ||
