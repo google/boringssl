@@ -741,10 +741,11 @@ int scalar_decode<12>(scalar *out, const uint8_t in[384]) {
   for (int i = 0; i < DEGREE; i += 2) {
     uint16_t s0 = (uint16_t)(in[0] | ((in[1] & 0x0f) << 8));
     uint16_t s1 = (uint16_t)((in[1] >> 4) | (in[2] << 4));
-    if (constant_time_declassify_int((s0 | s1) >= kPrime)) {
-      if (s0 >= kPrime || s1 >= kPrime) {
-        return 0;
-      }
+    // This is only used with secret input when parsing the test-only
+    // semi-expanded format. Leaking information about invalid inputs is OK.
+    if (constant_time_declassify_int(s0 >= kPrime) ||
+        constant_time_declassify_int(s1 >= kPrime)) {
+      return 0;
     }
     out->c[i] = s0;
     out->c[i + 1] = s1;
