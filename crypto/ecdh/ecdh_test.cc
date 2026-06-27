@@ -190,7 +190,7 @@ TEST(ECDHTest, WycheproofP384) {
                 RunWycheproofTest);
 }
 
-TEST(ECDHTest, WycheproofP512) {
+TEST(ECDHTest, WycheproofP521) {
   FileTestGTest("third_party/wycheproof_testvectors/ecdh_secp521r1_test.txt",
                 RunWycheproofTest);
 }
