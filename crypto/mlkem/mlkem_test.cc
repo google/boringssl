@@ -29,6 +29,7 @@
 #include "../internal.h"
 #include "../test/file_test.h"
 #include "../test/test_util.h"
+#include "../test/wycheproof_util.h"
 
 
 BSSL_NAMESPACE_BEGIN
@@ -458,6 +459,197 @@ TEST(MLKEMTest, DISABLE_IF_NOT_OPTIMIZED(Iterate1024)) {
       0xe7, 0x91, 0xff, 0x6d, 0xfc, 0x82, 0xe6, 0x94, 0xe6, 0x38, 0x24,
       0x04, 0xab, 0xdb, 0x94, 0x8b, 0x90, 0x8b, 0x75, 0xba, 0xd5};
   EXPECT_EQ(Bytes(result), Bytes(kExpected));
+}
+
+template <typename Traits>
+void MLKEMWycheproofKeyGenSeedTest(FileTest *t) {
+  t->IgnoreInstruction("parameterSet");
+  std::vector<uint8_t> seed, expected_ek, expected_dk;
+  ASSERT_TRUE(t->GetBytes(&seed, "seed"));
+  CONSTTIME_SECRET(seed.data(), seed.size());
+  ASSERT_TRUE(t->GetBytes(&expected_ek, "ek"));
+  ASSERT_TRUE(t->GetBytes(&expected_dk, "dk"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid();
+
+  typename Traits::PrivateKey priv_key;
+  if (!Traits::PrivateKeyFromSeed(&priv_key, seed.data(), seed.size())) {
+    EXPECT_FALSE(expect_valid);
+    return;
+  }
+
+  ASSERT_TRUE(expect_valid);
+
+  const std::vector<uint8_t> computed_dk =
+      Marshal(Traits::MarshalPrivateKey, &priv_key);
+  EXPECT_EQ(Bytes(Declassified(computed_dk)), Bytes(expected_dk));
+
+  typename Traits::PublicKey pub_key;
+  Traits::PublicFromPrivate(&pub_key, &priv_key);
+  const std::vector<uint8_t> computed_ek =
+      Marshal(Traits::MarshalPublicKey, &pub_key);
+  EXPECT_EQ(Bytes(computed_ek), Bytes(expected_ek));
+}
+
+TEST(MLKEMTest, WycheproofKeyGenSeed768) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/mlkem_768_keygen_seed_test.txt",
+      MLKEMWycheproofKeyGenSeedTest<MLKEM768Traits>);
+}
+
+TEST(MLKEMTest, WycheproofKeyGenSeed1024) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/mlkem_1024_keygen_seed_test.txt",
+      MLKEMWycheproofKeyGenSeedTest<MLKEM1024Traits>);
+}
+
+template <typename Traits>
+void MLKEMWycheproofDecapTest(FileTest *t) {
+  t->IgnoreInstruction("parameterSet");
+  std::vector<uint8_t> seed, c, K;
+  ASSERT_TRUE(t->GetBytes(&seed, "seed"));
+  CONSTTIME_SECRET(seed.data(), seed.size());
+  ASSERT_TRUE(t->GetBytes(&c, "c"));
+  ASSERT_TRUE(t->GetBytes(&K, "K"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid();
+
+  typename Traits::PrivateKey priv_key;
+  if (!Traits::PrivateKeyFromSeed(&priv_key, seed.data(), seed.size())) {
+    EXPECT_FALSE(expect_valid);
+    return;
+  }
+
+  // Verify that the derived public key matches the one in the test case.
+  if (t->HasAttribute("ek")) {
+    std::vector<uint8_t> ek;
+    ASSERT_TRUE(t->GetBytes(&ek, "ek"));
+    typename Traits::PublicKey pub_key;
+    Traits::PublicFromPrivate(&pub_key, &priv_key);
+    EXPECT_EQ(Bytes(Marshal(Traits::MarshalPublicKey, &pub_key)), Bytes(ek));
+  }
+
+  uint8_t computed_K[MLKEM_SHARED_SECRET_BYTES];
+  if (!Traits::Decap(computed_K, c.data(), c.size(), &priv_key)) {
+    EXPECT_FALSE(expect_valid);
+    return;
+  }
+
+  EXPECT_TRUE(expect_valid);
+  EXPECT_EQ(Bytes(Declassified(computed_K)), Bytes(K));
+}
+
+TEST(MLKEMTest, WycheproofDecap768) {
+  FileTestGTest("third_party/wycheproof_testvectors/mlkem_768_test.txt",
+                MLKEMWycheproofDecapTest<MLKEM768Traits>);
+}
+
+TEST(MLKEMTest, WycheproofDecap1024) {
+  FileTestGTest("third_party/wycheproof_testvectors/mlkem_1024_test.txt",
+                MLKEMWycheproofDecapTest<MLKEM1024Traits>);
+}
+
+template <typename Traits>
+void MLKEMWycheproofEncapTest(FileTest *t) {
+  t->IgnoreInstruction("parameterSet");
+  std::vector<uint8_t> ek, m, expected_c, expected_K;
+  ASSERT_TRUE(t->GetBytes(&ek, "ek"));
+  ASSERT_TRUE(t->GetBytes(&m, "m"));
+  ASSERT_TRUE(t->GetBytes(&expected_c, "c"));
+  ASSERT_TRUE(t->GetBytes(&expected_K, "K"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid();
+
+  typename Traits::PublicKey pub_key;
+  CBS cbs;
+  CBS_init(&cbs, ek.data(), ek.size());
+  if (!Traits::ParsePublicKey(&pub_key, &cbs) || CBS_len(&cbs) != 0) {
+    EXPECT_FALSE(expect_valid);
+    return;
+  }
+
+  ASSERT_TRUE(expect_valid);
+  ASSERT_EQ(m.size(), size_t{BCM_MLKEM_ENCAP_ENTROPY});
+  CONSTTIME_SECRET(m.data(), m.size());
+
+  uint8_t computed_c[Traits::kCiphertextBytes];
+  uint8_t computed_K[MLKEM_SHARED_SECRET_BYTES];
+  Traits::EncapExternalEntropy(computed_c, computed_K, &pub_key, m.data());
+
+  EXPECT_EQ(Bytes(computed_c), Bytes(expected_c));
+  EXPECT_EQ(Bytes(Declassified(computed_K)), Bytes(expected_K));
+}
+
+TEST(MLKEMTest, WycheproofEncap768) {
+  FileTestGTest("third_party/wycheproof_testvectors/mlkem_768_encaps_test.txt",
+                MLKEMWycheproofEncapTest<MLKEM768Traits>);
+}
+
+TEST(MLKEMTest, WycheproofEncap1024) {
+  FileTestGTest("third_party/wycheproof_testvectors/mlkem_1024_encaps_test.txt",
+                MLKEMWycheproofEncapTest<MLKEM1024Traits>);
+}
+
+template <typename Traits>
+void MLKEMWycheproofSemiExpandedDecapTest(FileTest *t) {
+  t->IgnoreInstruction("parameterSet");
+  std::vector<uint8_t> dk, ek, c, K;
+  ASSERT_TRUE(t->GetBytes(&dk, "dk"));
+  // We do not mark `dk` as `CONSTTIME_SECRET`. Only a portion of `dk` is
+  // secret. Since we do not support the semi-expanded key outside of testing,
+  // it is not worth accurately annotating this.
+  ASSERT_TRUE(t->GetBytes(&ek, "ek"));
+  ASSERT_TRUE(t->GetBytes(&c, "c"));
+
+  bool has_K = t->HasAttribute("K");
+  if (has_K) {
+    ASSERT_TRUE(t->GetBytes(&K, "K"));
+  }
+
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid();
+
+  typename Traits::PrivateKey priv_key;
+  CBS cbs;
+  CBS_init(&cbs, dk.data(), dk.size());
+  if (!bcm_success(Traits::ParsePrivateKey(&priv_key, &cbs)) ||
+      CBS_len(&cbs) != 0) {
+    EXPECT_FALSE(expect_valid);
+    return;
+  }
+
+  // Verify that the derived public key matches the expected public key.
+  typename Traits::PublicKey pub_key;
+  Traits::PublicFromPrivate(&pub_key, &priv_key);
+  EXPECT_EQ(Bytes(Marshal(Traits::MarshalPublicKey, &pub_key)), Bytes(ek));
+
+  uint8_t computed_K[MLKEM_SHARED_SECRET_BYTES];
+  const int decap_ok = Traits::Decap(computed_K, c.data(), c.size(), &priv_key);
+  EXPECT_EQ(decap_ok, expect_valid ? 1 : 0);
+  if (!decap_ok) {
+    return;
+  }
+
+  ASSERT_TRUE(has_K);
+  EXPECT_EQ(Bytes(Declassified(computed_K)), Bytes(K));
+}
+
+TEST(MLKEMTest, WycheproofSemiExpandedDecap768) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/"
+      "mlkem_768_semi_expanded_decaps_test.txt",
+      MLKEMWycheproofSemiExpandedDecapTest<MLKEM768Traits>);
+}
+
+TEST(MLKEMTest, WycheproofSemiExpandedDecap1024) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/"
+      "mlkem_1024_semi_expanded_decaps_test.txt",
+      MLKEMWycheproofSemiExpandedDecapTest<MLKEM1024Traits>);
 }
 
 TEST(MLKEMTest, Self) { ASSERT_TRUE(boringssl_self_test_mlkem()); }

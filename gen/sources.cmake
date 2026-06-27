@@ -1152,6 +1152,14 @@ set(
   third_party/wycheproof_testvectors/mldsa_87_sign_noseed_test.txt
   third_party/wycheproof_testvectors/mldsa_87_sign_seed_test.txt
   third_party/wycheproof_testvectors/mldsa_87_verify_test.txt
+  third_party/wycheproof_testvectors/mlkem_1024_encaps_test.txt
+  third_party/wycheproof_testvectors/mlkem_1024_keygen_seed_test.txt
+  third_party/wycheproof_testvectors/mlkem_1024_semi_expanded_decaps_test.txt
+  third_party/wycheproof_testvectors/mlkem_1024_test.txt
+  third_party/wycheproof_testvectors/mlkem_768_encaps_test.txt
+  third_party/wycheproof_testvectors/mlkem_768_keygen_seed_test.txt
+  third_party/wycheproof_testvectors/mlkem_768_semi_expanded_decaps_test.txt
+  third_party/wycheproof_testvectors/mlkem_768_test.txt
   third_party/wycheproof_testvectors/primality_test.txt
   third_party/wycheproof_testvectors/rsa_oaep_2048_sha1_mgf1sha1_test.txt
   third_party/wycheproof_testvectors/rsa_oaep_2048_sha224_mgf1sha1_test.txt
