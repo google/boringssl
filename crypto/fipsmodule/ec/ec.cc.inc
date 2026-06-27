@@ -768,7 +768,7 @@ int bssl::ec_point_mul_scalar(const EC_GROUP *group, EC_JACOBIAN *r,
 
   // Check the result is on the curve to defend against fault attacks or bugs.
   // This has negligible cost compared to the multiplication.
-  if (!ec_GFp_simple_is_on_curve(group, r)) {
+  if (!constant_time_declassify_int(ec_GFp_simple_is_on_curve(group, r))) {
     OPENSSL_PUT_ERROR(EC, ERR_R_INTERNAL_ERROR);
     return 0;
   }
@@ -810,7 +810,7 @@ int bssl::ec_point_mul_scalar_batch(
 
   // Check the result is on the curve to defend against fault attacks or bugs.
   // This has negligible cost compared to the multiplication.
-  if (!ec_GFp_simple_is_on_curve(group, r)) {
+  if (!constant_time_declassify_int(ec_GFp_simple_is_on_curve(group, r))) {
     OPENSSL_PUT_ERROR(EC, ERR_R_INTERNAL_ERROR);
     return 0;
   }
@@ -841,7 +841,7 @@ int bssl::ec_point_mul_scalar_precomp(
 
   // Check the result is on the curve to defend against fault attacks or bugs.
   // This has negligible cost compared to the multiplication.
-  if (!ec_GFp_simple_is_on_curve(group, r)) {
+  if (!constant_time_declassify_int(ec_GFp_simple_is_on_curve(group, r))) {
     OPENSSL_PUT_ERROR(EC, ERR_R_INTERNAL_ERROR);
     return 0;
   }
