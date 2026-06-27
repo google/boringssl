@@ -69,6 +69,7 @@ namespace {
     TRAIT_METHOD(MarshalPublicKey, MLDSA##kl##_marshal_public_key)          \
     TRAIT_METHOD(Verify, MLDSA##kl##_verify)                                \
     TRAIT_METHOD(VerifyInternal, BCM_mldsa##kl##_verify_internal)           \
+    TRAIT_METHOD(VerifyMu, MLDSA##kl##_verify_message_representative)       \
                                                                             \
     TRAIT_METHOD(PrehashInit, MLDSA##kl##_prehash_init)                     \
     TRAIT_METHOD(PrehashUpdate, MLDSA##kl##_prehash_update)                 \
@@ -494,6 +495,9 @@ void MLDSAWycheproofSignCommon(FileTest *t, typename Traits::PrivateKey *priv) {
                                                  mu.data(), zero_randomizer)));
   EXPECT_EQ(Bytes(computed_sig), Bytes(sig));
 
+  // Use the signature as a verification test for the mu-based API.
+  ASSERT_TRUE(Traits::VerifyMu(pub.get(), sig.data(), sig.size(), mu.data()));
+
   // Some tests provide the input message.
   if (t->HasAttribute("msg")) {
     ASSERT_TRUE(t->GetBytes(&msg, "msg"));
@@ -504,6 +508,11 @@ void MLDSAWycheproofSignCommon(FileTest *t, typename Traits::PrivateKey *priv) {
                              context.data(), context.size(), zero_randomizer)));
     EXPECT_EQ(Bytes(computed_sig), Bytes(sig));
 
+    // Use the signature as a verification test for the message-based API.
+    ASSERT_TRUE(Traits::Verify(pub.get(), sig.data(), sig.size(), msg.data(),
+                               msg.size(), context.data(), context.size()));
+
+    // Use the message as a test for computing mu.
     typename Traits::Prehash state;
     ASSERT_TRUE(
         Traits::PrehashInit(&state, pub.get(), context.data(), context.size()));
