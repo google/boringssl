@@ -61,6 +61,22 @@ luci.project(
 
 luci.bucket(name = "ci")
 
+# "Shadow" version of the "ci" bucket, for use with led.
+luci.bucket(
+    name = "ci.shadow",
+    shadows = "ci",
+    dynamic = True,
+    acls = [
+        acl.entry(
+            roles = acl.BUILDBUCKET_TRIGGERER,
+            groups = [
+                "project-boringssl-tryjob-access",
+                "service-account-cq",
+            ],
+        ),
+    ],
+)
+
 luci.bucket(
     name = "try",
     acls = [
@@ -73,6 +89,21 @@ luci.bucket(
             ],
         ),
     ],
+)
+
+# "Shadow" version of the "ci" bucket, for use with led.
+luci.bucket(
+    name = "try.shadow",
+    shadows = "try",
+    dynamic = True,
+    constraints = luci.bucket_constraints(
+        pools = [
+            "luci.flex.try",
+        ],
+        service_accounts = [
+            "boringssl-try-builder@chops-service-accounts.iam.gserviceaccount.com",
+        ],
+    ),
 )
 
 luci.milo(
@@ -352,6 +383,8 @@ def ci_builder(
         notifies = [notifier],
         triggered_by = [poller],
         properties = properties,
+        shadow_service_account = "boringssl-try-builder@chops-service-accounts.iam.gserviceaccount.com",
+        shadow_pool = "luci.flex.try",
     )
     luci.console_view_entry(
         builder = builder,
