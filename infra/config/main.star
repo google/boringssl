@@ -75,6 +75,14 @@ luci.bucket(
             ],
         ),
     ],
+    bindings = [
+        luci.binding(
+            roles = "role/buildbucket.creator",
+            groups = [
+                "project-boringssl-tryjob-access",
+            ],
+        ),
+    ],
 )
 
 luci.bucket(
@@ -104,6 +112,14 @@ luci.bucket(
             "boringssl-try-builder@chops-service-accounts.iam.gserviceaccount.com",
         ],
     ),
+    bindings = [
+        luci.binding(
+            roles = "role/buildbucket.creator",
+            groups = [
+                "project-boringssl-tryjob-access",
+            ],
+        ),
+    ],
 )
 
 luci.milo(
