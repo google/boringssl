@@ -3573,6 +3573,41 @@ TEST(X509Test, NameHash) {
         0x09, 0x00, 0x0a, 0x00, 0x0b, 0x00, 0x0c, 0x00, 0x0d, 0x00, 0x20},
        0xc90fba01,
        0xbe2dd8c8},
+
+      // OCTET STRING should never be canonicalized. It does not have a defined
+      // encoding.
+      //
+      // SEQUENCE {
+      //   SET {
+      //     SEQUENCE {
+      //       # commonName
+      //       OBJECT_IDENTIFIER { 2.5.4.3 }
+      //       OCTET_STRING { "Test Name" }
+      //     }
+      //   }
+      // }
+      {{0x30, 0x14, 0x31, 0x12, 0x30, 0x10, 0x06, 0x03, 0x55, 0x04, 0x03,
+        0x04, 0x09, 0x54, 0x65, 0x73, 0x74, 0x20, 0x4e, 0x61, 0x6d, 0x65},
+       0x4985589c,
+       0x457dbefa},
+
+      // The set of string types that we are canonicalized in `hash` cannot
+      // increase. (We also would not want to increase it anyway. Name
+      // canonicalization was a mistake.)
+      //
+      // SEQUENCE {
+      //   SET {
+      //     SEQUENCE {
+      //       # commonName
+      //       OBJECT_IDENTIFIER { 2.5.4.3 }
+      //       GeneralString { "Test Name" }
+      //     }
+      //   }
+      // }
+      {{0x30, 0x14, 0x31, 0x12, 0x30, 0x10, 0x06, 0x03, 0x55, 0x04, 0x03,
+        0x1b, 0x09, 0x54, 0x65, 0x73, 0x74, 0x20, 0x4e, 0x61, 0x6d, 0x65},
+       0xe6b4efbf,
+       0x186fd8dc},
   };
   for (const auto &t : kTests) {
     SCOPED_TRACE(Bytes(t.name_der));
