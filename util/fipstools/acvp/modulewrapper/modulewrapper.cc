@@ -53,6 +53,7 @@
 #include "../../../../crypto/fipsmodule/keccak/internal.h"
 #include "../../../../crypto/fipsmodule/rand/internal.h"
 #include "../../../../crypto/fipsmodule/tls/internal.h"
+#include "../../../../crypto/internal.h"
 #include "modulewrapper.h"
 
 
