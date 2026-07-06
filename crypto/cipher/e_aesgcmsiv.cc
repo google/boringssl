@@ -59,33 +59,36 @@ static_assert(alignof(union evp_aead_ctx_st_state) >= 8,
 
 extern "C" {
 // aes128gcmsiv_aes_ks writes an AES-128 key schedule for `key` to
-// `out_expanded_key`.
+// `out_expanded_key`. `out_expanded_key` must be 16-byte aligned.
 extern void aes128gcmsiv_aes_ks(const uint8_t key[16],
                                 uint8_t out_expanded_key[16 * 15]);
 
 // aes256gcmsiv_aes_ks writes an AES-256 key schedule for `key` to
-// `out_expanded_key`.
+// `out_expanded_key`. `out_expanded_key` must be 16-byte aligned.
 extern void aes256gcmsiv_aes_ks(const uint8_t key[32],
                                 uint8_t out_expanded_key[16 * 15]);
 
 // aesgcmsiv_polyval_horner updates the POLYVAL value in `in_out_poly` to
 // include a number (`in_blocks`) of 16-byte blocks of data from `in`, given
-// the POLYVAL key in `key`.
+// the POLYVAL key in `key`. `in_out_poly` and `key` must be 16-byte aligned.
 extern void aesgcmsiv_polyval_horner(const uint8_t in_out_poly[16],
                                      const uint8_t key[16], const uint8_t *in,
                                      size_t in_blocks);
 
 // aesgcmsiv_htable_init writes powers 1..8 of `auth_key` to `out_htable`.
+// `out_htable` and `auth_key` must be 16-byte aligned.
 extern void aesgcmsiv_htable_init(uint8_t out_htable[16 * 8],
                                   const uint8_t auth_key[16]);
 
 // aesgcmsiv_htable6_init writes powers 1..6 of `auth_key` to `out_htable`.
+// `out_htable` and `auth_key` must be 16-byte aligned.
 extern void aesgcmsiv_htable6_init(uint8_t out_htable[16 * 6],
                                    const uint8_t auth_key[16]);
 
 // aesgcmsiv_htable_polyval updates the POLYVAL value in `in_out_poly` to
 // include `in_len` bytes of data from `in`. (Where `in_len` must be a multiple
 // of 16.) It uses the precomputed powers of the key given in `htable`.
+// `in_out_poly` and `htable` must be 16-byte aligned.
 extern void aesgcmsiv_htable_polyval(const uint8_t htable[16 * 8],
                                      const uint8_t *in, size_t in_len,
                                      uint8_t in_out_poly[16]);
@@ -99,7 +102,8 @@ extern void aesgcmsiv_htable_polyval(const uint8_t htable[16 * 8],
 //    2. The claimed tag, which is needed to derive counter values.
 //
 // While decrypting, the whole of `in_out_calculated_tag_and_scratch` may be
-// used for other purposes. In order to decrypt and update the POLYVAL value, it
+// used for other purposes. `in_out_calculated_tag_and_scratch` and `htable`
+// must be 16-byte aligned. In order to decrypt and update the POLYVAL value, it
 // uses the expanded key from `key` and the table of powers in `htable`.
 extern void aes128gcmsiv_dec(const uint8_t *in, uint8_t *out,
                              uint8_t in_out_calculated_tag_and_scratch[16 * 8],
@@ -108,6 +112,7 @@ extern void aes128gcmsiv_dec(const uint8_t *in, uint8_t *out,
                              size_t in_len);
 
 // aes256gcmsiv_dec acts like `aes128gcmsiv_dec`, but for AES-256.
+// `in_out_calculated_tag_and_scratch` and `htable` must be 16-byte aligned.
 extern void aes256gcmsiv_dec(const uint8_t *in, uint8_t *out,
                              uint8_t in_out_calculated_tag_and_scratch[16 * 8],
                              const uint8_t htable[16 * 6],
@@ -117,37 +122,40 @@ extern void aes256gcmsiv_dec(const uint8_t *in, uint8_t *out,
 // aes128gcmsiv_kdf performs the AES-GCM-SIV KDF given the expanded key from
 // `key_schedule` and the nonce in `nonce`. Note that, while only 12 bytes of
 // the nonce are used, 16 bytes are read and so the value must be
-// right-padded.
+// right-padded. `nonce`, `out_key_material`, and `key_schedule` must be
+// 16-byte aligned.
 extern void aes128gcmsiv_kdf(const uint8_t nonce[16],
                              uint64_t out_key_material[8],
                              const uint8_t *key_schedule);
 
-// aes256gcmsiv_kdf acts like `aes128gcmsiv_kdf`, but for AES-256.
+// aes256gcmsiv_kdf acts like `aes128gcmsiv_kdf`, but for AES-256. `nonce`,
+// `out_key_material`, and `key_schedule` must be 16-byte aligned.
 extern void aes256gcmsiv_kdf(const uint8_t nonce[16],
                              uint64_t out_key_material[12],
                              const uint8_t *key_schedule);
 
 // aes128gcmsiv_aes_ks_enc_x1 performs a key expansion of the AES-128 key in
 // `key`, writes the expanded key to `out_expanded_key` and encrypts a single
-// block from `in` to `out`.
+// block from `in` to `out`. `in`, `out`, `out_expanded_key`, and `key` must be
+// 16-byte aligned.
 extern void aes128gcmsiv_aes_ks_enc_x1(const uint8_t in[16], uint8_t out[16],
                                        uint8_t out_expanded_key[16 * 15],
                                        const uint64_t key[2]);
 
 // aes256gcmsiv_aes_ks_enc_x1 acts like `aes128gcmsiv_aes_ks_enc_x1`, but for
-// AES-256.
+// AES-256. `in`, `out`, `out_expanded_key`, and `key` must be 16-byte aligned.
 extern void aes256gcmsiv_aes_ks_enc_x1(const uint8_t in[16], uint8_t out[16],
                                        uint8_t out_expanded_key[16 * 15],
                                        const uint64_t key[4]);
 
 // aes128gcmsiv_ecb_enc_block encrypts a single block from `in` to `out` using
-// the expanded key in `expanded_key`.
+// the expanded key in `expanded_key`. `in` and `out` must be 16-byte aligned.
 extern void aes128gcmsiv_ecb_enc_block(
     const uint8_t in[16], uint8_t out[16],
     const struct aead_aes_gcm_siv_asm_ctx *expanded_key);
 
 // aes256gcmsiv_ecb_enc_block acts like `aes128gcmsiv_ecb_enc_block`, but for
-// AES-256.
+// AES-256. `in` and `out` must be 16-byte aligned.
 extern void aes256gcmsiv_ecb_enc_block(
     const uint8_t in[16], uint8_t out[16],
     const struct aead_aes_gcm_siv_asm_ctx *expanded_key);
@@ -156,14 +164,14 @@ extern void aes256gcmsiv_ecb_enc_block(
 // expanded key from `key`. (The value of `in_len` must be a multiple of 16.)
 // The `in` and `out` buffers may be equal but must not otherwise overlap. The
 // initial counter is constructed from the given `tag` as required by
-// AES-GCM-SIV.
+// AES-GCM-SIV. `tag` must be 16-byte aligned.
 extern void aes128gcmsiv_enc_msg_x4(const uint8_t *in, uint8_t *out,
                                     const uint8_t *tag,
                                     const struct aead_aes_gcm_siv_asm_ctx *key,
                                     size_t in_len);
 
 // aes256gcmsiv_enc_msg_x4 acts like `aes128gcmsiv_enc_msg_x4`, but for
-// AES-256.
+// AES-256. `tag` must be 16-byte aligned.
 extern void aes256gcmsiv_enc_msg_x4(const uint8_t *in, uint8_t *out,
                                     const uint8_t *tag,
                                     const struct aead_aes_gcm_siv_asm_ctx *key,
@@ -229,7 +237,7 @@ int aead_aes_gcm_siv_asm_init(EVP_AEAD_CTX *ctx, const uint8_t *key,
 void aead_aes_gcm_siv_asm_cleanup(EVP_AEAD_CTX *ctx) {}
 
 // gcm_siv_asm_polyval evaluates POLYVAL at `auth_key` on the given plaintext
-// and AD. The result is written to `out_tag`.
+// and AD. The result is written to `out_tag`, which must be 16-byte aligned.
 void gcm_siv_asm_polyval(uint8_t out_tag[16], Span<const CRYPTO_IOVEC> iovecs,
                          Span<const CRYPTO_IVEC> aadvecs,
                          const uint8_t auth_key[16], const uint8_t nonce[12]) {
