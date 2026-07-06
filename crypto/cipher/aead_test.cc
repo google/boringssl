@@ -1383,6 +1383,71 @@ TEST(ChaChaPoly1305Test, ABI) {
 #endif
   }
 }
+
+#if defined(AES_GCM_SIV_ASM)
+TEST(AESGCMSIVTest, ABI) {
+  if (!aes_gcm_siv_asm_capable()) {
+    return;
+  }
+
+  uint8_t key128[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  uint8_t key256[32] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
+                        12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                        23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
+  aead_aes_gcm_siv_asm_ctx ctx128, ctx256;
+  CHECK_ABI(aes128gcmsiv_aes_ks, key128, &ctx128.key[0]);
+  ctx128.is_128_bit = 1;
+  CHECK_ABI(aes256gcmsiv_aes_ks, key256, &ctx256.key[0]);
+  ctx256.is_128_bit = 0;
+
+  alignas(16) uint8_t block[16] = {1, 2,  3,  4,  5,  6,  7,  8,
+                                   9, 10, 11, 12, 13, 14, 15, 16};
+  alignas(16) uint8_t out_block[16];
+  alignas(16) uint8_t expanded_key[16 * 15];
+  alignas(16) uint64_t record_enc_key[4] = {1, 2, 3, 4};
+  CHECK_ABI(aes128gcmsiv_aes_ks_enc_x1, block, out_block, expanded_key,
+            record_enc_key);
+  CHECK_ABI(aes256gcmsiv_aes_ks_enc_x1, block, out_block, expanded_key,
+            record_enc_key);
+
+  CHECK_ABI(aes128gcmsiv_ecb_enc_block, block, out_block, &ctx128);
+  CHECK_ABI(aes256gcmsiv_ecb_enc_block, block, out_block, &ctx256);
+
+  alignas(16) uint8_t padded_nonce[16] = {1, 2,  3,  4,  5, 6, 7, 8,
+                                          9, 10, 11, 12, 0, 0, 0, 0};
+  alignas(16) uint64_t out_key_material[12];
+  CHECK_ABI(aes128gcmsiv_kdf, padded_nonce, out_key_material, &ctx128.key[0]);
+  CHECK_ABI(aes256gcmsiv_kdf, padded_nonce, out_key_material, &ctx256.key[0]);
+
+  alignas(16) uint8_t auth_key[16] = {1, 2,  3,  4,  5,  6,  7,  8,
+                                      9, 10, 11, 12, 13, 14, 15, 16};
+  alignas(16) uint8_t htable8[16 * 8];
+  alignas(16) uint8_t htable6[16 * 6];
+  CHECK_ABI(aesgcmsiv_htable_init, htable8, auth_key);
+  CHECK_ABI(aesgcmsiv_htable6_init, htable6, auth_key);
+
+  uint8_t buf[256] = {0};
+  uint8_t out_buf[256] = {0};
+  alignas(16) uint8_t poly[16] = {0};
+  for (size_t blocks : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
+    CHECK_ABI(aesgcmsiv_polyval_horner, poly, auth_key, buf, blocks);
+  }
+
+  alignas(16) uint8_t tag[16] = {0};
+  alignas(16) uint8_t calculated_tag_and_scratch[16 * 8] = {0};
+  for (size_t len : {0, 16, 32, 48, 64, 80, 96, 112, 128, 144}) {
+    CHECK_ABI(aesgcmsiv_htable_polyval, htable8, buf, len, poly);
+    CHECK_ABI(aes128gcmsiv_enc_msg_x4, buf, out_buf, tag, &ctx128, len);
+    CHECK_ABI(aes256gcmsiv_enc_msg_x4, buf, out_buf, tag, &ctx256, len);
+    CHECK_ABI(aes128gcmsiv_enc_msg_x8, buf, out_buf, tag, &ctx128, len);
+    CHECK_ABI(aes256gcmsiv_enc_msg_x8, buf, out_buf, tag, &ctx256, len);
+    CHECK_ABI(aes128gcmsiv_dec, buf, out_buf, calculated_tag_and_scratch,
+              htable6, &ctx128, len);
+    CHECK_ABI(aes256gcmsiv_dec, buf, out_buf, calculated_tag_and_scratch,
+              htable6, &ctx256, len);
+  }
+}
+#endif  // AES_GCM_SIV_ASM
 #endif  // SUPPORTS_ABI_TEST
 
 TEST(AEADTest, AESCCMLargeAD) {
