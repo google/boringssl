@@ -131,22 +131,6 @@ impl core::fmt::Display for ConfigurationError {
     }
 }
 
-/// Cipher information
-#[derive(Clone)]
-#[non_exhaustive]
-pub struct CipherInfo {
-    /// Protocol ID as assigned by [IANA](https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4)
-    pub id: u32,
-    /// IETF Name of the cipher
-    pub ietf_name: String,
-    /// Indicates whether this cipher is an AEAD cipher
-    pub is_aead: bool,
-    /// Indicates whether this cipher is a block cipher
-    pub is_block_cipher: bool,
-    /// Cipher strength in bits
-    pub strength: u16,
-}
-
 /// Supported cipher suites as registered with [IANA].
 ///
 /// The following cipher suite values are assigned by IANA and correspond to
