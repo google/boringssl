@@ -22,8 +22,10 @@
 #include <openssl/poly1305.h>
 
 #include "../internal.h"
+#include "../test/abi_test.h"
 #include "../test/file_test.h"
 #include "../test/test_util.h"
+#include "internal.h"
 
 
 BSSL_NAMESPACE_BEGIN
@@ -114,6 +116,33 @@ TEST(Poly1305Test, TestVectors) {
     TestSIMD(48, key, in, mac);
   });
 }
+
+#if defined(SUPPORTS_ABI_TEST) && defined(OPENSSL_POLY1305_NEON)
+TEST(Poly1305Test, ABI) {
+  if (!CRYPTO_is_NEON_capable()) {
+    return;
+  }
+
+  fe1305x2 r, x, y, c;
+  OPENSSL_memset(&r, 0, sizeof(r));
+  OPENSSL_memset(&x, 1, sizeof(x));
+  OPENSSL_memset(&y, 2, sizeof(y));
+  OPENSSL_memset(&c, 3, sizeof(c));
+
+  CHECK_ABI(openssl_poly1305_neon2_addmulmod, &r, &x, &y, &c);
+
+  fe1305x2 h;
+  OPENSSL_memset(&h, 0, sizeof(h));
+
+  fe1305x2 precomp[2];
+  OPENSSL_memset(&precomp, 4, sizeof(precomp));
+
+  uint8_t buf[256] = {0};
+  for (size_t len : {0, 16, 32, 48, 64, 80}) {
+    CHECK_ABI(openssl_poly1305_neon2_blocks, &h, precomp, buf, len);
+  }
+}
+#endif
 
 }  // namespace
 BSSL_NAMESPACE_END
