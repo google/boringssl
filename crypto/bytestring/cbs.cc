@@ -277,10 +277,7 @@ int CBS_get_u64_decimal(CBS *cbs, uint64_t *out) {
   return seen_digit;
 }
 
-// parse_base128_integer reads a big-endian base-128 integer from `cbs` and sets
-// `*out` to the result. This is the encoding used in DER for both high tag
-// number form and OID components.
-static int parse_base128_integer(CBS *cbs, uint64_t *out) {
+int CBS_get_asn1_oid_component(CBS *cbs, uint64_t *out) {
   uint64_t v = 0;
   uint8_t b;
   do {
@@ -319,8 +316,9 @@ static int parse_asn1_tag(CBS *cbs, CBS_ASN1_TAG *out) {
   CBS_ASN1_TAG tag = ((CBS_ASN1_TAG)tag_byte & 0xe0) << CBS_ASN1_TAG_SHIFT;
   CBS_ASN1_TAG tag_number = tag_byte & 0x1f;
   if (tag_number == 0x1f) {
+    // High tag numbers are encoded in the same format as OID components.
     uint64_t v;
-    if (!parse_base128_integer(cbs, &v) ||
+    if (!CBS_get_asn1_oid_component(cbs, &v) ||
         // Check the tag number is within our supported bounds.
         v > CBS_ASN1_TAG_NUMBER_MASK ||
         // Small tag numbers should have used low tag number form, even in BER.
@@ -747,9 +745,9 @@ int CBS_is_valid_asn1_oid(const CBS *cbs) {
   uint8_t v, prev = 0;
   while (CBS_get_u8(&copy, &v)) {
     // OID encodings are a sequence of minimally-encoded base-128 integers (see
-    // `parse_base128_integer`). If `prev`'s MSB was clear, it was the last byte
-    // of an integer (or `v` is the first byte). `v` is then the first byte of
-    // the next integer. If first byte of an integer is 0x80, it is not
+    // `CBS_get_asn1_oid_component`). If `prev`'s MSB was clear, it was the last
+    // byte of an integer (or `v` is the first byte). `v` is then the first byte
+    // of the next integer. If first byte of an integer is 0x80, it is not
     // minimally-encoded.
     if ((prev & 0x80) == 0 && v == 0x80) {
       return 0;
@@ -770,7 +768,7 @@ char *CBS_asn1_oid_to_text(const CBS *cbs) {
 
   // The first component is 40 * value1 + value2, where value1 is 0, 1, or 2.
   uint64_t v;
-  if (!parse_base128_integer(&copy, &v)) {
+  if (!CBS_get_asn1_oid_component(&copy, &v)) {
     goto err;
   }
 
@@ -785,7 +783,7 @@ char *CBS_asn1_oid_to_text(const CBS *cbs) {
   }
 
   while (CBS_len(&copy) != 0) {
-    if (!parse_base128_integer(&copy, &v) || !CBB_add_u8(&cbb, '.') ||
+    if (!CBS_get_asn1_oid_component(&copy, &v) || !CBB_add_u8(&cbb, '.') ||
         !add_decimal(&cbb, v)) {
       goto err;
     }
@@ -817,12 +815,12 @@ char *CBS_asn1_relative_oid_to_text(const CBS *cbs) {
 
   // Relative OIDs must have at least one component.
   uint64_t v;
-  if (!parse_base128_integer(&copy, &v) || !add_decimal(cbb.get(), v)) {
+  if (!CBS_get_asn1_oid_component(&copy, &v) || !add_decimal(cbb.get(), v)) {
     return nullptr;
   }
 
   while (CBS_len(&copy) != 0) {
-    if (!parse_base128_integer(&copy, &v) || !CBB_add_u8(cbb.get(), '.') ||
+    if (!CBS_get_asn1_oid_component(&copy, &v) || !CBB_add_u8(cbb.get(), '.') ||
         !add_decimal(cbb.get(), v)) {
       return nullptr;
     }

@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -2183,6 +2184,66 @@ TEST(CBSTest, GetU64Decimal) {
     CBS_init(&cbs, reinterpret_cast<const uint8_t *>(invalid), strlen(invalid));
     uint64_t v;
     EXPECT_FALSE(CBS_get_u64_decimal(&cbs, &v));
+  }
+}
+
+TEST(CBSTest, OIDComponent) {
+  const struct {
+    // enc is an encoded OID component.
+    std::vector<uint8_t> enc;
+    // v is the decoded OID component, or nullopt if invalid.
+    std::optional<uint64_t> v;
+  } kTests[] = {
+      // The empty string is not an OID component.
+      {{}, std::nullopt},
+      // Some valid OID components.
+      {{0x00}, 0},
+      {{0x01}, 1},
+      {{0x7f}, 127},
+      {{0x81, 0x00}, 128},
+      {{0x81, 0x01}, 129},
+      {{0x81, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+       UINT64_MAX},
+      // 2^64 is too large and overflows.
+      {{0x82, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00},
+       std::nullopt},
+      // Non-minimal OID components are invalid.
+      {{0x80, 0x01}, std::nullopt},
+      {{0x80, 0x81, 0x00}, std::nullopt},
+      {{0x80, 0x81, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+       std::nullopt},
+      // Truncated OID component.
+      {{0xff}, std::nullopt},
+      {{0x81}, std::nullopt},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(Bytes(t.enc));
+    CBS cbs;
+    CBS_init(&cbs, t.enc.data(), t.enc.size());
+    uint64_t v;
+    if (!t.v.has_value()) {
+      EXPECT_FALSE(CBS_get_asn1_oid_component(&cbs, &v));
+      continue;
+    }
+
+    ASSERT_TRUE(CBS_get_asn1_oid_component(&cbs, &v));
+    EXPECT_EQ(v, t.v.value());
+    EXPECT_EQ(CBS_len(&cbs), 0u);
+
+    // Trailing data should be left in `cbs`.
+    std::vector<uint8_t> trailing_data = t.enc;
+    trailing_data.push_back(42);
+    CBS_init(&cbs, trailing_data.data(), trailing_data.size());
+    ASSERT_TRUE(CBS_get_asn1_oid_component(&cbs, &v));
+    EXPECT_EQ(v, t.v.value());
+    EXPECT_EQ(CBS_data(&cbs), trailing_data.data() + t.enc.size());
+    EXPECT_EQ(CBS_len(&cbs), 1u);
+
+    // Test serialization.
+    ScopedCBB cbb;
+    ASSERT_TRUE(CBB_init(cbb.get(), t.enc.size()));
+    ASSERT_TRUE(CBB_add_asn1_oid_component(cbb.get(), t.v.value()));
+    EXPECT_EQ(Bytes(CBBAsSpan(cbb.get())), Bytes(t.enc));
   }
 }
 
