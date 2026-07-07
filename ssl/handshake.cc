@@ -31,7 +31,7 @@
 
 BSSL_NAMESPACE_BEGIN
 
-SSL_HANDSHAKE::SSL_HANDSHAKE(SSL *ssl_arg)
+SSL_HANDSHAKE::SSL_HANDSHAKE(SSLImpl *ssl_arg)
     : ssl(ssl_arg),
       transcript(SSL_is_dtls(ssl_arg)),
       inner_transcript(SSL_is_dtls(ssl_arg)),
@@ -99,7 +99,7 @@ bool SSL_HANDSHAKE::GetClientHello(SSLMessage *out_msg,
   return true;
 }
 
-UniquePtr<SSL_HANDSHAKE> ssl_handshake_new(SSL *ssl) {
+UniquePtr<SSL_HANDSHAKE> ssl_handshake_new(SSLImpl *ssl) {
   UniquePtr<SSL_HANDSHAKE> hs = MakeUnique<SSL_HANDSHAKE>(ssl);
   if (!hs || !hs->transcript.Init()) {
     return nullptr;
@@ -112,7 +112,7 @@ UniquePtr<SSL_HANDSHAKE> ssl_handshake_new(SSL *ssl) {
   return hs;
 }
 
-bool ssl_check_message_type(SSL *ssl, const SSLMessage &msg, int type) {
+bool ssl_check_message_type(SSLImpl *ssl, const SSLMessage &msg, int type) {
   if (msg.type != type) {
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_UNEXPECTED_MESSAGE);
     OPENSSL_PUT_ERROR(SSL, SSL_R_UNEXPECTED_MESSAGE);
@@ -123,7 +123,7 @@ bool ssl_check_message_type(SSL *ssl, const SSLMessage &msg, int type) {
   return true;
 }
 
-bool ssl_add_message_cbb(SSL *ssl, CBB *cbb) {
+bool ssl_add_message_cbb(SSLImpl *ssl, CBB *cbb) {
   Array<uint8_t> msg;
   if (!ssl->method->finish_message(ssl, cbb, &msg) ||
       !ssl->method->add_message(ssl, std::move(msg))) {
@@ -133,7 +133,7 @@ bool ssl_add_message_cbb(SSL *ssl, CBB *cbb) {
   return true;
 }
 
-size_t ssl_max_handshake_message_len(const SSL *ssl) {
+size_t ssl_max_handshake_message_len(const SSLImpl *ssl) {
   // kMaxMessageLen is the default maximum message size for handshakes which do
   // not accept peer certificate chains.
   static const size_t kMaxMessageLen = 16384;
@@ -265,7 +265,7 @@ static bool peer_certificates_equal(const SSL_SESSION *session,
 }
 
 enum ssl_verify_result_t ssl_verify_peer_cert(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const SSL_SESSION *prev_session = ssl->s3->established_session.get();
   if (prev_session != nullptr) {
     // If renegotiating, the server must not change the server certificate. See
@@ -349,7 +349,7 @@ enum ssl_verify_result_t ssl_verify_peer_cert(SSL_HANDSHAKE *hs) {
 // 4. We only support custom verify callbacks.
 enum ssl_verify_result_t ssl_reverify_peer_cert(SSL_HANDSHAKE *hs,
                                                 bool send_alert) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   assert(ssl->s3->established_session == nullptr);
   assert(hs->config->verify_mode != SSL_VERIFY_NONE);
 
@@ -392,7 +392,7 @@ uint16_t ssl_get_grease_value(const SSL_HANDSHAKE *hs,
 }
 
 enum ssl_hs_wait_t ssl_get_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -446,7 +446,7 @@ enum ssl_hs_wait_t ssl_get_finished(SSL_HANDSHAKE *hs) {
 }
 
 bool ssl_send_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const SSL_SESSION *session = ssl_handshake_session(hs);
 
   uint8_t finished_buf[EVP_MAX_MD_SIZE];
@@ -524,7 +524,7 @@ const SSL_SESSION *ssl_handshake_session(const SSL_HANDSHAKE *hs) {
 }
 
 int ssl_run_handshake(SSL_HANDSHAKE *hs, bool *out_early_return) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   for (;;) {
     // If a timeout during the handshake triggered a DTLS ACK or retransmit, we
     // resolve that first. E.g., if `ssl_hs_private_key_operation` is slow, the

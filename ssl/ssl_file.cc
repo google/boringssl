@@ -130,6 +130,7 @@ int SSL_add_file_cert_subjects_to_stack(STACK_OF(X509_NAME) *out,
 }
 
 int SSL_use_certificate_file(SSL *ssl, const char *file, int type) {
+  SSLContext *ctx = FromOpaque(SSL_get_SSL_CTX(ssl));
   UniquePtr<BIO> in(BIO_new_file(file, "rb"));
   if (in == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
@@ -143,9 +144,8 @@ int SSL_use_certificate_file(SSL *ssl, const char *file, int type) {
     x.reset(d2i_X509_bio(in.get(), nullptr));
   } else if (type == SSL_FILETYPE_PEM) {
     reason_code = ERR_R_PEM_LIB;
-    x.reset(PEM_read_bio_X509(in.get(), nullptr,
-                              ssl->ctx->default_passwd_callback,
-                              ssl->ctx->default_passwd_callback_userdata));
+    x.reset(PEM_read_bio_X509(in.get(), nullptr, ctx->default_passwd_callback,
+                              ctx->default_passwd_callback_userdata));
   } else {
     OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_SSL_FILETYPE);
     return 0;
@@ -160,6 +160,7 @@ int SSL_use_certificate_file(SSL *ssl, const char *file, int type) {
 }
 
 int SSL_use_RSAPrivateKey_file(SSL *ssl, const char *file, int type) {
+  SSLContext *ctx = FromOpaque(SSL_get_SSL_CTX(ssl));
   UniquePtr<BIO> in(BIO_new_file(file, "rb"));
   if (in == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
@@ -174,8 +175,8 @@ int SSL_use_RSAPrivateKey_file(SSL *ssl, const char *file, int type) {
   } else if (type == SSL_FILETYPE_PEM) {
     reason_code = ERR_R_PEM_LIB;
     rsa.reset(PEM_read_bio_RSAPrivateKey(
-        in.get(), nullptr, ssl->ctx->default_passwd_callback,
-        ssl->ctx->default_passwd_callback_userdata));
+        in.get(), nullptr, ctx->default_passwd_callback,
+        ctx->default_passwd_callback_userdata));
   } else {
     OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_SSL_FILETYPE);
     return 0;
@@ -189,6 +190,7 @@ int SSL_use_RSAPrivateKey_file(SSL *ssl, const char *file, int type) {
 }
 
 int SSL_use_PrivateKey_file(SSL *ssl, const char *file, int type) {
+  SSLContext *ctx = FromOpaque(SSL_get_SSL_CTX(ssl));
   UniquePtr<BIO> in(BIO_new_file(file, "rb"));
   if (in == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
@@ -199,9 +201,9 @@ int SSL_use_PrivateKey_file(SSL *ssl, const char *file, int type) {
   UniquePtr<EVP_PKEY> pkey;
   if (type == SSL_FILETYPE_PEM) {
     reason_code = ERR_R_PEM_LIB;
-    pkey.reset(PEM_read_bio_PrivateKey(
-        in.get(), nullptr, ssl->ctx->default_passwd_callback,
-        ssl->ctx->default_passwd_callback_userdata));
+    pkey.reset(PEM_read_bio_PrivateKey(in.get(), nullptr,
+                                       ctx->default_passwd_callback,
+                                       ctx->default_passwd_callback_userdata));
   } else if (type == SSL_FILETYPE_ASN1) {
     reason_code = ERR_R_ASN1_LIB;
     pkey.reset(d2i_PrivateKey_bio(in.get(), nullptr));

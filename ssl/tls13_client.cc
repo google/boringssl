@@ -57,7 +57,7 @@ static const uint8_t kZeroes[EVP_MAX_MD_SIZE] = {0};
 // end_of_early_data closes the early data stream for `hs` and switches the
 // encryption level to `level`. It returns true on success and false on error.
 static bool close_early_data(SSL_HANDSHAKE *hs, ssl_encryption_level_t level) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   assert(hs->in_early_data);
 
   // Note `can_early_write` may already be false if `SSL_write` exceeded the
@@ -182,7 +182,7 @@ static bool check_ech_confirmation(const SSL_HANDSHAKE *hs, bool *out_accepted,
 }
 
 static enum ssl_hs_wait_t do_read_hello_retry_request(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   assert(ssl->s3->version != 0);
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
@@ -383,7 +383,7 @@ static enum ssl_hs_wait_t do_send_second_client_hello(SSL_HANDSHAKE *hs) {
 
 static bool check_session(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
                           const SSL_SESSION *session) {
-  const SSL *const ssl = hs->ssl;
+  const SSLImpl *const ssl = hs->ssl;
   if (session->ssl_version != ssl->s3->version) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_OLD_SESSION_VERSION_NOT_RETURNED);
     *out_alert = SSL_AD_ILLEGAL_PARAMETER;
@@ -407,7 +407,7 @@ static bool check_session(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
 
 static bool check_imported_psk(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
                                const SSLImportedPSK &imported) {
-  const SSL *const ssl = hs->ssl;
+  const SSLImpl *const ssl = hs->ssl;
   const EVP_MD *md =
       ssl_get_handshake_digest(ssl_protocol_version(ssl), hs->new_cipher);
   if (imported.md != md || imported.protocol != ssl->s3->version) {
@@ -419,7 +419,7 @@ static bool check_imported_psk(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
 }
 
 static bool using_certificate(const SSL_HANDSHAKE *hs) {
-  const SSL *const ssl = hs->ssl;
+  const SSLImpl *const ssl = hs->ssl;
   // Resumption is not a certificate-based handshake.
   if (ssl->s3->session_reused) {
     return false;
@@ -432,7 +432,7 @@ static bool using_certificate(const SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_server_hello(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -663,7 +663,7 @@ static enum ssl_hs_wait_t do_read_server_hello(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_encrypted_extensions(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -744,7 +744,7 @@ static enum ssl_hs_wait_t do_read_encrypted_extensions(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_certificate_request(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   // CertificateRequest may only be sent in certificate-based handshakes.
   if (!using_certificate(hs)) {
     if (ssl->s3->session_reused && ssl->ctx->reverify_on_resume &&
@@ -816,7 +816,7 @@ static enum ssl_hs_wait_t do_read_certificate_request(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_server_certificate(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -838,7 +838,7 @@ static enum ssl_hs_wait_t do_read_server_certificate(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_server_certificate_verify(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -879,7 +879,7 @@ static enum ssl_hs_wait_t do_server_certificate_reverify(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_server_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -907,7 +907,7 @@ static enum ssl_hs_wait_t do_read_server_finished(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_end_of_early_data(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (ssl->s3->early_data_accepted) {
     // DTLS and QUIC omit the EndOfEarlyData message. See RFC 9001, section 8.3,
@@ -933,7 +933,7 @@ static enum ssl_hs_wait_t do_send_end_of_early_data(SSL_HANDSHAKE *hs) {
 
 static enum ssl_hs_wait_t do_send_client_encrypted_extensions(
     SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   // For now, only one extension uses client EncryptedExtensions. This function
   // may be generalized if others use it in the future.
   if (hs->new_session->has_application_settings &&
@@ -984,7 +984,7 @@ static bool check_credential(SSL_HANDSHAKE *hs, const SSLCredential *cred,
 }
 
 static enum ssl_hs_wait_t do_send_client_certificate(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   // The peer didn't request a certificate.
   if (!hs->cert_request) {
@@ -1077,7 +1077,7 @@ static enum ssl_hs_wait_t do_send_client_certificate_verify(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_complete_second_flight(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   hs->can_release_private_key = true;
 
   // Send a Channel ID assertion if necessary.
@@ -1215,7 +1215,7 @@ const char *tls13_client_handshake_state(SSL_HANDSHAKE *hs) {
   return "TLS 1.3 client unknown";
 }
 
-bool tls13_process_new_session_ticket(SSL *ssl, const SSLMessage &msg) {
+bool tls13_process_new_session_ticket(SSLImpl *ssl, const SSLMessage &msg) {
   if (ssl->s3->write_shutdown != ssl_shutdown_none) {
     // Ignore tickets on shutdown. Callers tend to indiscriminately call
     // `SSL_shutdown` before destroying an `SSL`, at which point calling the new
@@ -1239,7 +1239,8 @@ bool tls13_process_new_session_ticket(SSL *ssl, const SSLMessage &msg) {
   return true;
 }
 
-UniquePtr<SSL_SESSION> tls13_create_session_with_ticket(SSL *ssl, CBS *body) {
+UniquePtr<SSL_SESSION> tls13_create_session_with_ticket(SSLImpl *ssl,
+                                                        CBS *body) {
   UniquePtr<SSL_SESSION> session = SSL_SESSION_dup(
       ssl->s3->established_session.get(), SSL_SESSION_INCLUDE_NONAUTH);
   if (!session) {

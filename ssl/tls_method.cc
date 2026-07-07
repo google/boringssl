@@ -25,7 +25,7 @@
 
 BSSL_NAMESPACE_BEGIN
 
-static void tls_on_handshake_complete(SSL *ssl) {
+static void tls_on_handshake_complete(SSLImpl *ssl) {
   // The handshake should have released its final message.
   assert(!ssl->s3->has_message);
 
@@ -40,7 +40,7 @@ static void tls_on_handshake_complete(SSL *ssl) {
   }
 }
 
-static bool tls_set_read_state(SSL *ssl, ssl_encryption_level_t level,
+static bool tls_set_read_state(SSLImpl *ssl, ssl_encryption_level_t level,
                                UniquePtr<SSLAEADContext> aead_ctx,
                                Span<const uint8_t> traffic_secret) {
   // Cipher changes are forbidden if the current epoch has leftover data.
@@ -72,7 +72,7 @@ static bool tls_set_read_state(SSL *ssl, ssl_encryption_level_t level,
   return true;
 }
 
-static bool tls_set_write_state(SSL *ssl, ssl_encryption_level_t level,
+static bool tls_set_write_state(SSLImpl *ssl, ssl_encryption_level_t level,
                                 UniquePtr<SSLAEADContext> aead_ctx,
                                 Span<const uint8_t> traffic_secret) {
   if (!tls_flush_pending_hs_data(ssl)) {
@@ -101,12 +101,12 @@ static bool tls_set_write_state(SSL *ssl, ssl_encryption_level_t level,
   return true;
 }
 
-static void tls_finish_flight(SSL *ssl) {
+static void tls_finish_flight(SSLImpl *ssl) {
   // We don't track whether a flight is complete in TLS and instead always flush
   // every queued message in `tls_flush`, whether the flight is complete or not.
 }
 
-static void tls_schedule_ack(SSL *ssl) {
+static void tls_schedule_ack(SSLImpl *ssl) {
   // TLS does not use ACKs.
 }
 

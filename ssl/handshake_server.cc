@@ -65,7 +65,7 @@ bool ssl_client_cipher_list_contains_cipher(
 
 static bool negotiate_version(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                               const SSL_CLIENT_HELLO *client_hello) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   assert(ssl->s3->version == 0);
   CBS supported_versions, versions;
   if (ssl_client_hello_get_extension(client_hello, &supported_versions,
@@ -158,7 +158,7 @@ static UniquePtr<STACK_OF(SSL_CIPHER)> ssl_parse_client_cipher_list(
 static const SSL_CIPHER *choose_cipher(SSL_HANDSHAKE *hs,
                                        const STACK_OF(SSL_CIPHER) *client_pref,
                                        uint32_t mask_k, uint32_t mask_a) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const STACK_OF(SSL_CIPHER) *prio, *allow;
   // in_group_flags will either be NULL, or will point to an array of bytes
   // which indicate equal-preference groups in the `prio` stack. See the
@@ -404,7 +404,7 @@ static bool is_probably_jdk11_with_tls13(const SSL_CLIENT_HELLO *client_hello) {
 
 static bool decrypt_ech(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                         const SSL_CLIENT_HELLO *client_hello) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   CBS body;
   if (!ssl_client_hello_get_extension(client_hello, &body,
                                       TLSEXT_TYPE_encrypted_client_hello)) {
@@ -482,7 +482,7 @@ static bool decrypt_ech(SSL_HANDSHAKE *hs, uint8_t *out_alert,
 
 static bool extract_sni(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                         const SSL_CLIENT_HELLO *client_hello) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   CBS sni;
   if (!ssl_client_hello_get_extension(client_hello, &sni,
                                       TLSEXT_TYPE_server_name)) {
@@ -532,7 +532,7 @@ static bool extract_sni(SSL_HANDSHAKE *hs, uint8_t *out_alert,
 }
 
 static enum ssl_hs_wait_t do_read_client_hello(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
@@ -588,7 +588,7 @@ static enum ssl_hs_wait_t do_read_client_hello(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_hello_after_ech(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   SSLMessage msg_unused;
   SSL_CLIENT_HELLO client_hello;
@@ -674,7 +674,7 @@ static enum ssl_hs_wait_t do_read_client_hello_after_ech(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_cert_callback(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   // Call `cert_cb` to update server certificates if required.
   if (hs->config->cert->cert_cb != nullptr) {
@@ -733,7 +733,7 @@ static enum ssl_hs_wait_t do_tls13(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   SSL_CLIENT_HELLO client_hello;
   if (!hs->GetClientHello(&msg, &client_hello)) {
@@ -913,7 +913,7 @@ static void copy_suffix(Span<uint8_t> out, Span<const uint8_t> in) {
 }
 
 static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   // We only accept ChannelIDs on connections with ECDHE in order to avoid a
   // known attack while we fix ChannelID itself.
@@ -1003,7 +1003,7 @@ static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_server_certificate(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   ScopedCBB cbb;
 
   if (ssl_cipher_uses_certificate_auth(hs->new_cipher)) {
@@ -1114,7 +1114,7 @@ static enum ssl_hs_wait_t do_send_server_certificate(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_server_key_exchange(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (hs->server_params.size() == 0) {
     hs->state = state12_send_server_hello_done;
@@ -1184,7 +1184,7 @@ static enum ssl_hs_wait_t do_send_server_key_exchange(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_server_hello_done(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (hs->pending_hints != nullptr) {
     return ssl_hs_hints_ready;
   }
@@ -1221,7 +1221,7 @@ static enum ssl_hs_wait_t do_send_server_hello_done(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (hs->handback && hs->new_cipher->algorithm_mkey == SSL_kECDHE) {
     return ssl_hs_handback;
@@ -1317,7 +1317,7 @@ static enum ssl_hs_wait_t do_verify_client_certificate(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_key_exchange(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -1532,7 +1532,7 @@ static enum ssl_hs_wait_t do_read_client_key_exchange(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_certificate_verify(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   // Only RSA and ECDSA client certificates are supported, so a
   // CertificateVerify is required if and only if there's a client certificate.
@@ -1632,7 +1632,7 @@ static enum ssl_hs_wait_t do_process_change_cipher_spec(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_next_proto(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (!hs->next_proto_neg_seen) {
     hs->state = state12_read_channel_id;
@@ -1668,7 +1668,7 @@ static enum ssl_hs_wait_t do_read_next_proto(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_channel_id(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (!hs->channel_id_negotiated) {
     hs->state = state12_read_client_finished;
@@ -1692,7 +1692,7 @@ static enum ssl_hs_wait_t do_read_channel_id(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   enum ssl_hs_wait_t wait = ssl_get_finished(hs);
   if (wait != ssl_hs_ok) {
     return wait;
@@ -1716,7 +1716,7 @@ static enum ssl_hs_wait_t do_read_client_finished(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_server_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (hs->ticket_expected) {
     const SSL_SESSION *session;
@@ -1768,7 +1768,7 @@ static enum ssl_hs_wait_t do_send_server_finished(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_finish_server_handshake(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (hs->handback) {
     return ssl_hs_handback;

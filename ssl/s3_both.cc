@@ -39,7 +39,7 @@
 
 BSSL_NAMESPACE_BEGIN
 
-static bool add_record_to_flight(SSL *ssl, uint8_t type,
+static bool add_record_to_flight(SSLImpl *ssl, uint8_t type,
                                  Span<const uint8_t> in) {
   // The caller should have flushed `pending_hs_data` first.
   assert(!ssl->s3->pending_hs_data);
@@ -73,7 +73,7 @@ static bool add_record_to_flight(SSL *ssl, uint8_t type,
   return true;
 }
 
-bool tls_init_message(const SSL *ssl, CBB *cbb, CBB *body, uint8_t type) {
+bool tls_init_message(const SSLImpl *ssl, CBB *cbb, CBB *body, uint8_t type) {
   // Pick a modest size hint to save most of the `realloc` calls.
   if (!CBB_init(cbb, 64) ||      //
       !CBB_add_u8(cbb, type) ||  //
@@ -86,11 +86,11 @@ bool tls_init_message(const SSL *ssl, CBB *cbb, CBB *body, uint8_t type) {
   return true;
 }
 
-bool tls_finish_message(const SSL *ssl, CBB *cbb, Array<uint8_t> *out_msg) {
+bool tls_finish_message(const SSLImpl *ssl, CBB *cbb, Array<uint8_t> *out_msg) {
   return CBBFinishArray(cbb, out_msg);
 }
 
-bool tls_add_message(SSL *ssl, Array<uint8_t> msg) {
+bool tls_add_message(SSLImpl *ssl, Array<uint8_t> msg) {
   // Pack handshake data into the minimal number of records. This avoids
   // unnecessary encryption overhead, notably in TLS 1.3 where we send several
   // encrypted messages in a row. For now, we do not do this for the null
@@ -146,7 +146,7 @@ bool tls_add_message(SSL *ssl, Array<uint8_t> msg) {
   return true;
 }
 
-bool tls_flush_pending_hs_data(SSL *ssl) {
+bool tls_flush_pending_hs_data(SSLImpl *ssl) {
   if (!ssl->s3->pending_hs_data || ssl->s3->pending_hs_data->length == 0) {
     return true;
   }
@@ -167,7 +167,7 @@ bool tls_flush_pending_hs_data(SSL *ssl) {
   return add_record_to_flight(ssl, SSL3_RT_HANDSHAKE, data);
 }
 
-bool tls_add_change_cipher_spec(SSL *ssl) {
+bool tls_add_change_cipher_spec(SSLImpl *ssl) {
   if (SSL_is_quic(ssl)) {
     return true;
   }
@@ -184,7 +184,7 @@ bool tls_add_change_cipher_spec(SSL *ssl) {
   return true;
 }
 
-int tls_flush(SSL *ssl) {
+int tls_flush(SSLImpl *ssl) {
   if (!tls_flush_pending_hs_data(ssl)) {
     return -1;
   }
@@ -255,7 +255,8 @@ int tls_flush(SSL *ssl) {
   return 1;
 }
 
-static ssl_open_record_t read_v2_client_hello(SSL *ssl, size_t *out_consumed,
+static ssl_open_record_t read_v2_client_hello(SSLImpl *ssl,
+                                              size_t *out_consumed,
                                               Span<const uint8_t> in) {
   *out_consumed = 0;
   assert(in.size() >= SSL3_RT_HEADER_LENGTH);
@@ -376,7 +377,7 @@ static ssl_open_record_t read_v2_client_hello(SSL *ssl, size_t *out_consumed,
   return ssl_open_record_success;
 }
 
-static bool parse_message(const SSL *ssl, SSLMessage *out,
+static bool parse_message(const SSLImpl *ssl, SSLMessage *out,
                           size_t *out_bytes_needed) {
   if (!ssl->s3->hs_buf) {
     *out_bytes_needed = 4;
@@ -404,7 +405,7 @@ static bool parse_message(const SSL *ssl, SSLMessage *out,
   return true;
 }
 
-bool tls_get_message(const SSL *ssl, SSLMessage *out) {
+bool tls_get_message(const SSLImpl *ssl, SSLMessage *out) {
   size_t unused;
   if (!parse_message(ssl, out, &unused)) {
     return false;
@@ -418,7 +419,7 @@ bool tls_get_message(const SSL *ssl, SSLMessage *out) {
   return true;
 }
 
-bool tls_can_accept_handshake_data(const SSL *ssl, uint8_t *out_alert) {
+bool tls_can_accept_handshake_data(const SSLImpl *ssl, uint8_t *out_alert) {
   // If there is a complete message, the caller must have consumed it first.
   SSLMessage msg;
   size_t bytes_needed;
@@ -438,7 +439,7 @@ bool tls_can_accept_handshake_data(const SSL *ssl, uint8_t *out_alert) {
   return true;
 }
 
-bool tls_has_unprocessed_handshake_data(const SSL *ssl) {
+bool tls_has_unprocessed_handshake_data(const SSLImpl *ssl) {
   size_t msg_len = 0;
   if (ssl->s3->has_message) {
     SSLMessage msg;
@@ -451,7 +452,7 @@ bool tls_has_unprocessed_handshake_data(const SSL *ssl) {
   return ssl->s3->hs_buf && ssl->s3->hs_buf->length > msg_len;
 }
 
-bool tls_append_handshake_data(SSL *ssl, Span<const uint8_t> data) {
+bool tls_append_handshake_data(SSLImpl *ssl, Span<const uint8_t> data) {
   // Re-create the handshake buffer if needed.
   if (!ssl->s3->hs_buf) {
     ssl->s3->hs_buf.reset(BUF_MEM_new());
@@ -460,7 +461,7 @@ bool tls_append_handshake_data(SSL *ssl, Span<const uint8_t> data) {
          BUF_MEM_append(ssl->s3->hs_buf.get(), data.data(), data.size());
 }
 
-ssl_open_record_t tls_open_handshake(SSL *ssl, size_t *out_consumed,
+ssl_open_record_t tls_open_handshake(SSLImpl *ssl, size_t *out_consumed,
                                      uint8_t *out_alert, Span<uint8_t> in) {
   *out_consumed = 0;
   // Bypass the record layer for the first message to handle V2ClientHello.
@@ -528,7 +529,7 @@ ssl_open_record_t tls_open_handshake(SSL *ssl, size_t *out_consumed,
   return ssl_open_record_success;
 }
 
-void tls_next_message(SSL *ssl) {
+void tls_next_message(SSLImpl *ssl) {
   SSLMessage msg;
   if (!tls_get_message(ssl, &msg) ||  //
       !ssl->s3->hs_buf ||             //

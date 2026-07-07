@@ -70,7 +70,7 @@ static bool resolve_pake_secret(SSL_HANDSHAKE *hs) {
 
 static bool resolve_ecdhe_secret(SSL_HANDSHAKE *hs,
                                  const SSL_CLIENT_HELLO *client_hello) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const uint16_t group_id = hs->new_session->group_id;
 
   bool found_key_share;
@@ -137,7 +137,7 @@ static int ssl_ext_supported_versions_add_serverhello(SSL_HANDSHAKE *hs,
 }
 
 static const SSL_CIPHER *choose_tls13_cipher(
-    const SSL *ssl, const SSL_CLIENT_HELLO *client_hello) {
+    const SSLImpl *ssl, const SSL_CLIENT_HELLO *client_hello) {
   CBS cipher_suites;
   CBS_init(&cipher_suites, client_hello->cipher_suites,
            client_hello->cipher_suites_len);
@@ -152,7 +152,7 @@ static const SSL_CIPHER *choose_tls13_cipher(
 }
 
 static bool add_new_session_tickets(SSL_HANDSHAKE *hs, bool *out_sent_tickets) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (  // If the client doesn't accept resumption with PSK_DHE_KE, don't send a
         // session ticket.
       !hs->accept_psk_mode ||
@@ -325,7 +325,7 @@ static bool check_pake_credential(SSL_HANDSHAKE *hs,
 static bool check_psk_credential(SSL_HANDSHAKE *hs, const SSLCredential *cred,
                                  const std::optional<SSLOfferedPSKs> &psks) {
   assert(cred->type == SSLCredentialType::kPreSharedKey);
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (!psks) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_MISSING_EXTENSION);
     return false;
@@ -357,7 +357,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   // the common handshake logic. Resolve the remaining non-resumption
   // parameters. First, parse out another copy of the ClientHello and important
   // extensions.
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   SSL_CLIENT_HELLO client_hello;
   if (!hs->GetClientHello(&msg, &client_hello)) {
@@ -482,7 +482,7 @@ static enum ssl_ticket_aead_result_t select_session(
     SSL_HANDSHAKE *hs, uint8_t *out_alert, UniquePtr<SSL_SESSION> *out_session,
     int32_t *out_ticket_age_skew, bool *out_offered_ticket,
     const SSLMessage &msg, const SSL_CLIENT_HELLO *client_hello) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   *out_session = nullptr;
 
   CBS pre_shared_key;
@@ -595,7 +595,7 @@ static bool using_certificate(const SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_select_session(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   SSL_CLIENT_HELLO client_hello;
   if (!hs->GetClientHello(&msg, &client_hello)) {
@@ -825,7 +825,7 @@ static enum ssl_hs_wait_t do_select_session(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_hello_retry_request(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (hs->pending_hints != nullptr) {
     return ssl_hs_hints_ready;
   }
@@ -887,7 +887,7 @@ static enum ssl_hs_wait_t do_send_hello_retry_request(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_second_client_hello(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -998,7 +998,7 @@ static enum ssl_hs_wait_t do_read_second_client_hello(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_server_hello(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   Span<uint8_t> random(ssl->s3->server_random);
 
@@ -1147,7 +1147,7 @@ static enum ssl_hs_wait_t do_send_server_certificate_verify(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_server_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (hs->pending_hints != nullptr) {
     return ssl_hs_hints_ready;
   }
@@ -1169,7 +1169,7 @@ static enum ssl_hs_wait_t do_send_server_finished(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_half_rtt_ticket(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
 
   if (ssl->s3->early_data_accepted) {
     // If accepting 0-RTT, we send tickets half-RTT. This gets the tickets on
@@ -1218,14 +1218,14 @@ static enum ssl_hs_wait_t do_send_half_rtt_ticket(SSL_HANDSHAKE *hs) {
   return ssl_hs_flush;
 }
 
-static bool uses_end_of_early_data(const SSL *ssl) {
+static bool uses_end_of_early_data(const SSLImpl *ssl) {
   // DTLS and QUIC omit the EndOfEarlyData message. See RFC 9001, section 8.3,
   // and RFC 9147, section 5.6.
   return !SSL_is_quic(ssl) && !SSL_is_dtls(ssl);
 }
 
 static enum ssl_hs_wait_t do_read_second_client_flight(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (ssl->s3->early_data_accepted) {
     if (!tls13_set_traffic_key(ssl, ssl_encryption_early_data, evp_aead_open,
                                hs->new_session.get(),
@@ -1255,7 +1255,7 @@ static enum ssl_hs_wait_t do_read_second_client_flight(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_process_end_of_early_data(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   // In protocols that use EndOfEarlyData, we must consume the extra message and
   // switch to client_handshake_secret after the early return.
   if (uses_end_of_early_data(ssl)) {
@@ -1288,7 +1288,7 @@ static enum ssl_hs_wait_t do_process_end_of_early_data(SSL_HANDSHAKE *hs) {
 
 static enum ssl_hs_wait_t do_read_client_encrypted_extensions(
     SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   // For now, only one extension uses client EncryptedExtensions. This function
   // may be generalized if others use it in the future.
   if (hs->new_session->has_application_settings &&
@@ -1344,7 +1344,7 @@ static enum ssl_hs_wait_t do_read_client_encrypted_extensions(
 }
 
 static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (!hs->cert_request) {
     if (!ssl->s3->session_reused) {
       // OpenSSL returns X509_V_OK when no certificates are requested. This is
@@ -1378,7 +1378,7 @@ static enum ssl_hs_wait_t do_read_client_certificate(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_certificate_verify(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (!ssl_session_has_peer_cred(hs->new_session.get())) {
     // Skip this state.
     hs->tls13_state = state13_read_channel_id;
@@ -1412,7 +1412,7 @@ static enum ssl_hs_wait_t do_read_client_certificate_verify(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_channel_id(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (!hs->channel_id_negotiated) {
     hs->tls13_state = state13_read_client_finished;
     return ssl_hs_ok;
@@ -1434,7 +1434,7 @@ static enum ssl_hs_wait_t do_read_channel_id(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_read_client_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   SSLMessage msg;
   if (!ssl->method->get_message(ssl, &msg)) {
     return ssl_hs_read_message;
@@ -1479,7 +1479,7 @@ static enum ssl_hs_wait_t do_read_client_finished(SSL_HANDSHAKE *hs) {
 }
 
 static enum ssl_hs_wait_t do_send_new_session_ticket(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   bool sent_tickets;
   if (!add_new_session_tickets(hs, &sent_tickets)) {
     return ssl_hs_error;

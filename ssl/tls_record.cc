@@ -46,7 +46,7 @@ static const uint8_t kMaxWarningAlerts = 4;
 
 // ssl_needs_record_splitting returns one if `ssl`'s current outgoing cipher
 // state needs record-splitting and zero otherwise.
-bool ssl_needs_record_splitting(const SSL *ssl) {
+bool ssl_needs_record_splitting(const SSLImpl *ssl) {
   return !CRYPTO_fuzzer_mode_enabled() &&
          !ssl->s3->aead_write_ctx->is_null_cipher() &&
          ssl_protocol_version(ssl) < TLS1_1_VERSION &&
@@ -54,12 +54,12 @@ bool ssl_needs_record_splitting(const SSL *ssl) {
          SSL_CIPHER_is_block_cipher(ssl->s3->aead_write_ctx->cipher());
 }
 
-size_t ssl_record_prefix_len(const SSL *ssl) {
+size_t ssl_record_prefix_len(const SSLImpl *ssl) {
   assert(!SSL_is_dtls(ssl));
   return SSL3_RT_HEADER_LENGTH + ssl->s3->aead_read_ctx->ExplicitNonceLen();
 }
 
-static ssl_open_record_t skip_early_data(SSL *ssl, uint8_t *out_alert,
+static ssl_open_record_t skip_early_data(SSLImpl *ssl, uint8_t *out_alert,
                                          size_t consumed) {
   ssl->s3->early_data_skipped += consumed;
   if (ssl->s3->early_data_skipped < consumed) {
@@ -75,7 +75,7 @@ static ssl_open_record_t skip_early_data(SSL *ssl, uint8_t *out_alert,
   return ssl_open_record_discard;
 }
 
-static uint16_t tls_record_version(const SSL *ssl) {
+static uint16_t tls_record_version(const SSLImpl *ssl) {
   if (ssl->s3->version == 0) {
     // Before the version is determined, outgoing records use TLS 1.0 for
     // historical compatibility requirements.
@@ -88,7 +88,7 @@ static uint16_t tls_record_version(const SSL *ssl) {
                                                      : ssl->s3->version;
 }
 
-ssl_open_record_t tls_open_record(SSL *ssl, uint8_t *out_type,
+ssl_open_record_t tls_open_record(SSLImpl *ssl, uint8_t *out_type,
                                   Span<uint8_t> *out, size_t *out_consumed,
                                   uint8_t *out_alert, Span<uint8_t> in) {
   *out_consumed = 0;
@@ -263,7 +263,7 @@ ssl_open_record_t tls_open_record(SSL *ssl, uint8_t *out_type,
   return ssl_open_record_success;
 }
 
-static bool do_seal_record(SSL *ssl, uint8_t *out_prefix, uint8_t *out,
+static bool do_seal_record(SSLImpl *ssl, uint8_t *out_prefix, uint8_t *out,
                            uint8_t *out_suffix, uint8_t type, const uint8_t *in,
                            const size_t in_len) {
   SSLAEADContext *aead = ssl->s3->aead_write_ctx.get();
@@ -316,7 +316,7 @@ static bool do_seal_record(SSL *ssl, uint8_t *out_prefix, uint8_t *out,
   return true;
 }
 
-static size_t tls_seal_scatter_prefix_len(const SSL *ssl, uint8_t type,
+static size_t tls_seal_scatter_prefix_len(const SSLImpl *ssl, uint8_t type,
                                           size_t in_len) {
   size_t ret = SSL3_RT_HEADER_LENGTH;
   if (type == SSL3_RT_APPLICATION_DATA && in_len > 1 &&
@@ -333,8 +333,9 @@ static size_t tls_seal_scatter_prefix_len(const SSL *ssl, uint8_t type,
   return ret;
 }
 
-static bool tls_seal_scatter_suffix_len(const SSL *ssl, size_t *out_suffix_len,
-                                        uint8_t type, size_t in_len) {
+static bool tls_seal_scatter_suffix_len(const SSLImpl *ssl,
+                                        size_t *out_suffix_len, uint8_t type,
+                                        size_t in_len) {
   size_t extra_in_len = 0;
   if (!ssl->s3->aead_write_ctx->is_null_cipher() &&
       ssl_protocol_version(ssl) >= TLS1_3_VERSION) {
@@ -361,9 +362,10 @@ static bool tls_seal_scatter_suffix_len(const SSL *ssl, size_t *out_suffix_len,
 // returns one on success and zero on error. If enabled,
 // `tls_seal_scatter_record` implements TLS 1.0 CBC 1/n-1 record splitting and
 // may write two records concatenated.
-static bool tls_seal_scatter_record(SSL *ssl, uint8_t *out_prefix, uint8_t *out,
-                                    uint8_t *out_suffix, uint8_t type,
-                                    const uint8_t *in, size_t in_len) {
+static bool tls_seal_scatter_record(SSLImpl *ssl, uint8_t *out_prefix,
+                                    uint8_t *out, uint8_t *out_suffix,
+                                    uint8_t type, const uint8_t *in,
+                                    size_t in_len) {
   if (type == SSL3_RT_APPLICATION_DATA && in_len > 1 &&
       ssl_needs_record_splitting(ssl)) {
     assert(ssl->s3->aead_write_ctx->ExplicitNonceLen() == 0);
@@ -406,7 +408,7 @@ static bool tls_seal_scatter_record(SSL *ssl, uint8_t *out_prefix, uint8_t *out,
   return do_seal_record(ssl, out_prefix, out, out_suffix, type, in, in_len);
 }
 
-bool tls_seal_record(SSL *ssl, uint8_t *out, size_t *out_len,
+bool tls_seal_record(SSLImpl *ssl, uint8_t *out, size_t *out_len,
                      size_t max_out_len, uint8_t type, const uint8_t *in,
                      size_t in_len) {
   if (buffers_alias(in, in_len, out, max_out_len)) {
@@ -440,7 +442,7 @@ bool tls_seal_record(SSL *ssl, uint8_t *out, size_t *out_len,
   return true;
 }
 
-enum ssl_open_record_t ssl_process_alert(SSL *ssl, uint8_t *out_alert,
+enum ssl_open_record_t ssl_process_alert(SSLImpl *ssl, uint8_t *out_alert,
                                          Span<const uint8_t> in) {
   // Alerts records may not contain fragmented or multiple alerts.
   if (in.size() != 2) {
@@ -502,19 +504,20 @@ BSSL_NAMESPACE_END
 using namespace bssl;
 
 size_t SSL_max_seal_overhead(const SSL *ssl) {
-  if (SSL_is_dtls(ssl)) {
+  const auto *ssl_impl = FromOpaque(ssl);
+  if (SSL_is_dtls(ssl_impl)) {
     // TODO(crbug.com/381113363): Use the 0-RTT epoch if writing 0-RTT.
-    return dtls_max_seal_overhead(ssl, ssl->d1->write_epoch.epoch());
+    return dtls_max_seal_overhead(ssl_impl, ssl_impl->d1->write_epoch.epoch());
   }
 
   size_t ret = SSL3_RT_HEADER_LENGTH;
-  ret += ssl->s3->aead_write_ctx->MaxOverhead();
+  ret += ssl_impl->s3->aead_write_ctx->MaxOverhead();
   // TLS 1.3 needs an extra byte for the encrypted record type.
-  if (!ssl->s3->aead_write_ctx->is_null_cipher() &&
-      ssl_protocol_version(ssl) >= TLS1_3_VERSION) {
+  if (!ssl_impl->s3->aead_write_ctx->is_null_cipher() &&
+      ssl_protocol_version(ssl_impl) >= TLS1_3_VERSION) {
     ret += 1;
   }
-  if (ssl_needs_record_splitting(ssl)) {
+  if (ssl_needs_record_splitting(ssl_impl)) {
     ret *= 2;
   }
   return ret;

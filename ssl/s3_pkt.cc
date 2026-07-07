@@ -32,10 +32,10 @@
 
 BSSL_NAMESPACE_BEGIN
 
-static int do_tls_write(SSL *ssl, size_t *out_bytes_written, uint8_t type,
+static int do_tls_write(SSLImpl *ssl, size_t *out_bytes_written, uint8_t type,
                         Span<const uint8_t> in);
 
-int tls_write_app_data(SSL *ssl, bool *out_needs_handshake,
+int tls_write_app_data(SSLImpl *ssl, bool *out_needs_handshake,
                        size_t *out_bytes_written, Span<const uint8_t> in) {
   assert(ssl_can_write(ssl));
   assert(!ssl->s3->aead_write_ctx->is_null_cipher());
@@ -114,7 +114,7 @@ int tls_write_app_data(SSL *ssl, bool *out_needs_handshake,
 //
 // TODO(davidben): Is this alignment valuable? Record-splitting makes this a
 // mess.
-static size_t tls_seal_align_prefix_len(const SSL *ssl) {
+static size_t tls_seal_align_prefix_len(const SSLImpl *ssl) {
   size_t ret =
       SSL3_RT_HEADER_LENGTH + ssl->s3->aead_write_ctx->ExplicitNonceLen();
   if (ssl_needs_record_splitting(ssl)) {
@@ -127,7 +127,7 @@ static size_t tls_seal_align_prefix_len(const SSL *ssl) {
 // do_tls_write writes an SSL record of the given type. On success, it sets
 // `*out_bytes_written` to number of bytes successfully written and returns one.
 // On error, it returns a value <= 0 from the underlying `BIO`.
-static int do_tls_write(SSL *ssl, size_t *out_bytes_written, uint8_t type,
+static int do_tls_write(SSLImpl *ssl, size_t *out_bytes_written, uint8_t type,
                         Span<const uint8_t> in) {
   // If there is a pending write, the retry must be consistent.
   if (!ssl->s3->pending_write.empty() &&
@@ -233,7 +233,7 @@ static int do_tls_write(SSL *ssl, size_t *out_bytes_written, uint8_t type,
   return 1;
 }
 
-ssl_open_record_t tls_open_app_data(SSL *ssl, Span<uint8_t> *out,
+ssl_open_record_t tls_open_app_data(SSLImpl *ssl, Span<uint8_t> *out,
                                     size_t *out_consumed, uint8_t *out_alert,
                                     Span<uint8_t> in) {
   assert(ssl_can_read(ssl));
@@ -289,7 +289,8 @@ ssl_open_record_t tls_open_app_data(SSL *ssl, Span<uint8_t> *out,
   return ssl_open_record_success;
 }
 
-ssl_open_record_t tls_open_change_cipher_spec(SSL *ssl, size_t *out_consumed,
+ssl_open_record_t tls_open_change_cipher_spec(SSLImpl *ssl,
+                                              size_t *out_consumed,
                                               uint8_t *out_alert,
                                               Span<uint8_t> in) {
   uint8_t type;
@@ -315,7 +316,7 @@ ssl_open_record_t tls_open_change_cipher_spec(SSL *ssl, size_t *out_consumed,
   return ssl_open_record_success;
 }
 
-void ssl_send_alert(SSL *ssl, int level, int desc) {
+void ssl_send_alert(SSLImpl *ssl, int level, int desc) {
   // This function is called in response to a fatal error from the peer. Ignore
   // any failures writing the alert and report only the original error. In
   // particular, if the transport uses `SSL_write`, our existing error will be
@@ -332,7 +333,7 @@ void ssl_send_alert(SSL *ssl, int level, int desc) {
   ERR_restore_state(err_state.get());
 }
 
-int ssl_send_alert_impl(SSL *ssl, int level, int desc) {
+int ssl_send_alert_impl(SSLImpl *ssl, int level, int desc) {
   // It is illegal to send an alert when we've already sent a closing one.
   if (ssl->s3->write_shutdown != ssl_shutdown_none) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_PROTOCOL_IS_SHUTDOWN);
@@ -360,7 +361,7 @@ int ssl_send_alert_impl(SSL *ssl, int level, int desc) {
   return -1;
 }
 
-int tls_dispatch_alert(SSL *ssl) {
+int tls_dispatch_alert(SSLImpl *ssl) {
   if (SSL_is_quic(ssl)) {
     if (!ssl->quic_method->send_alert(ssl, ssl->s3->quic_write_level,
                                       ssl->s3->send_alert[1])) {

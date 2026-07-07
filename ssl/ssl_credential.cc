@@ -668,8 +668,9 @@ int SSL_CTX_add1_credential(SSL_CTX *ctx, const SSL_CREDENTIAL *cred) {
 }
 
 int SSL_add1_credential(SSL *ssl, const SSL_CREDENTIAL *cred) {
+  auto *ssl_impl = FromOpaque(ssl);
   auto *cred_impl = FromOpaque(cred);
-  if (ssl->config == nullptr) {
+  if (ssl_impl->config == nullptr) {
     return 0;
   }
 
@@ -677,14 +678,15 @@ int SSL_add1_credential(SSL *ssl, const SSL_CREDENTIAL *cred) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
-  return ssl->config->cert->credentials.Push(UpRef(cred_impl));
+  return ssl_impl->config->cert->credentials.Push(UpRef(cred_impl));
 }
 
 const SSL_CREDENTIAL *SSL_get0_selected_credential(const SSL *ssl) {
-  if (ssl->s3->hs == nullptr) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (ssl_impl->s3->hs == nullptr) {
     return nullptr;
   }
-  return ssl->s3->hs->credential.get();
+  return ssl_impl->s3->hs->credential.get();
 }
 
 int SSL_CREDENTIAL_get_ex_new_index(long argl, void *argp,

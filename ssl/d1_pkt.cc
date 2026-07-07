@@ -32,7 +32,7 @@
 
 BSSL_NAMESPACE_BEGIN
 
-ssl_open_record_t dtls1_process_ack(SSL *ssl, uint8_t *out_alert,
+ssl_open_record_t dtls1_process_ack(SSLImpl *ssl, uint8_t *out_alert,
                                     DTLSRecordNumber ack_record_number,
                                     Span<const uint8_t> data) {
   // As a DTLS-1.3-capable client, it is possible to receive an ACK before we
@@ -157,7 +157,7 @@ ssl_open_record_t dtls1_process_ack(SSL *ssl, uint8_t *out_alert,
   return ssl_open_record_discard;
 }
 
-ssl_open_record_t dtls1_open_app_data(SSL *ssl, Span<uint8_t> *out,
+ssl_open_record_t dtls1_open_app_data(SSLImpl *ssl, Span<uint8_t> *out,
                                       size_t *out_consumed, uint8_t *out_alert,
                                       Span<uint8_t> in) {
   assert(!SSL_in_init(ssl));
@@ -234,7 +234,7 @@ ssl_open_record_t dtls1_open_app_data(SSL *ssl, Span<uint8_t> *out,
   return ssl_open_record_success;
 }
 
-int dtls1_write_app_data(SSL *ssl, bool *out_needs_handshake,
+int dtls1_write_app_data(SSLImpl *ssl, bool *out_needs_handshake,
                          size_t *out_bytes_written, Span<const uint8_t> in) {
   assert(!SSL_in_init(ssl));
   *out_needs_handshake = false;
@@ -265,7 +265,7 @@ int dtls1_write_app_data(SSL *ssl, bool *out_needs_handshake,
   return 1;
 }
 
-int dtls1_write_record(SSL *ssl, int type, Span<const uint8_t> in,
+int dtls1_write_record(SSLImpl *ssl, int type, Span<const uint8_t> in,
                        uint16_t epoch) {
   SSLBuffer *buf = &ssl->s3->write_buffer;
   assert(in.size() <= SSL3_RT_MAX_PLAIN_LENGTH);
@@ -298,7 +298,7 @@ int dtls1_write_record(SSL *ssl, int type, Span<const uint8_t> in,
   return 1;
 }
 
-int dtls1_dispatch_alert(SSL *ssl) {
+int dtls1_dispatch_alert(SSLImpl *ssl) {
   int ret = dtls1_write_record(ssl, SSL3_RT_ALERT, ssl->s3->send_alert,
                                ssl->d1->write_epoch.epoch());
   if (ret <= 0) {

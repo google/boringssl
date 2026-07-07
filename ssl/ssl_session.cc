@@ -157,7 +157,7 @@ UniquePtr<SSL_SESSION> SSL_SESSION_dup(const SSL_SESSION *session,
   return new_session;
 }
 
-void ssl_session_rebase_time(SSL *ssl, SSL_SESSION *session) {
+void ssl_session_rebase_time(SSLImpl *ssl, SSL_SESSION *session) {
   OPENSSL_timeval now = ssl_ctx_get_current_time(ssl->ctx.get());
 
   // To avoid overflows and underflows, if we've gone back in time, update the
@@ -185,7 +185,7 @@ void ssl_session_rebase_time(SSL *ssl, SSL_SESSION *session) {
   }
 }
 
-void ssl_session_renew_timeout(SSL *ssl, SSL_SESSION *session,
+void ssl_session_renew_timeout(SSLImpl *ssl, SSL_SESSION *session,
                                uint32_t timeout) {
   // Rebase the timestamp relative to the current time so `timeout` is measured
   // correctly.
@@ -219,7 +219,7 @@ const EVP_MD *ssl_session_get_digest(const SSL_SESSION *session) {
 }
 
 bool ssl_get_new_session(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (ssl->mode & SSL_MODE_NO_SESSION_CREATION) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_SESSION_MAY_NOT_BE_CREATED);
     return false;
@@ -401,7 +401,7 @@ static int ssl_encrypt_ticket_with_cipher_ctx(SSL_HANDSHAKE *hs, CBB *out,
 static int ssl_encrypt_ticket_with_method(SSL_HANDSHAKE *hs, CBB *out,
                                           const uint8_t *session_buf,
                                           size_t session_len) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const SSL_TICKET_AEAD_METHOD *method = ssl->session_ctx->ticket_aead_method;
   const size_t max_overhead = method->max_overhead(ssl);
   const size_t max_out = session_len + max_overhead;
@@ -469,7 +469,7 @@ bool ssl_session_is_context_valid(const SSL_HANDSHAKE *hs,
          Span(session->sid_ctx) == hs->config->cert->sid_ctx;
 }
 
-bool ssl_session_is_time_valid(const SSL *ssl, const SSL_SESSION *session) {
+bool ssl_session_is_time_valid(const SSLImpl *ssl, const SSL_SESSION *session) {
   if (session == nullptr) {
     return false;
   }
@@ -486,7 +486,7 @@ bool ssl_session_is_time_valid(const SSL *ssl, const SSL_SESSION *session) {
 
 bool ssl_session_is_resumable(const SSL_HANDSHAKE *hs,
                               const SSL_SESSION *session) {
-  const SSL *const ssl = hs->ssl;
+  const SSLImpl *const ssl = hs->ssl;
   return ssl_session_is_context_valid(hs, session) &&
          // The session must have been created by the same type of end point as
          // we're now using it with.
@@ -518,7 +518,7 @@ bool ssl_session_is_resumable(const SSL_HANDSHAKE *hs,
 static enum ssl_hs_wait_t ssl_lookup_session(
     SSL_HANDSHAKE *hs, UniquePtr<SSL_SESSION> *out_session,
     Span<const uint8_t> session_id) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   out_session->reset();
 
   if (session_id.empty() || session_id.size() > SSL_MAX_SSL_SESSION_ID_LENGTH) {
@@ -660,7 +660,7 @@ static bool remove_session(SSLContext *ctx, SSL_SESSION *session, bool lock) {
   return found;
 }
 
-void ssl_set_session(SSL *ssl, SSL_SESSION *session) {
+void ssl_set_session(SSLImpl *ssl, SSL_SESSION *session) {
   if (ssl->session.get() == session) {
     return;
   }
@@ -767,7 +767,7 @@ static bool add_session_locked(SSLContext *ctx,
   return true;
 }
 
-void ssl_update_cache(SSL *ssl) {
+void ssl_update_cache(SSLImpl *ssl) {
   SSLContext *ctx = ssl->session_ctx.get();
   SSL_SESSION *session = ssl->s3->established_session.get();
   int mode = SSL_is_server(ssl) ? SSL_SESS_CACHE_SERVER : SSL_SESS_CACHE_CLIENT;
@@ -1055,6 +1055,7 @@ SSL_SESSION *SSL_magic_pending_session_ptr() {
 }
 
 SSL_SESSION *SSL_get_session(const SSL *ssl) {
+  const auto *ssl_impl = FromOpaque(ssl);
   // Once the initially handshake completes, we return the most recently
   // established session. In particular, if there is a pending renegotiation, we
   // do not return information about it until it completes.
@@ -1062,14 +1063,14 @@ SSL_SESSION *SSL_get_session(const SSL *ssl) {
   // Code in the handshake must either use `hs->new_session` (if updating a
   // partial session) or `ssl_handshake_session` (if trying to query properties
   // consistently across TLS 1.2 resumption and other handshakes).
-  if (ssl->s3->established_session != nullptr) {
-    return ssl->s3->established_session.get();
+  if (ssl_impl->s3->established_session != nullptr) {
+    return ssl_impl->s3->established_session.get();
   }
 
   // Otherwise, we must be in the initial handshake.
-  SSL_HANDSHAKE *hs = ssl->s3->hs.get();
+  SSL_HANDSHAKE *hs = ssl_impl->s3->hs.get();
   assert(hs != nullptr);
-  assert(!ssl->s3->initial_handshake_complete);
+  assert(!ssl_impl->s3->initial_handshake_complete);
 
   // Return the 0-RTT session, if in the 0-RTT state. While the handshake has
   // not actually completed, the public accessors all report properties as if
@@ -1117,14 +1118,15 @@ int SSL_CTX_remove_session(SSL_CTX *ctx, SSL_SESSION *session) {
 }
 
 int SSL_set_session(SSL *ssl, SSL_SESSION *session) {
+  auto *ssl_impl = FromOpaque(ssl);
   // SSL_set_session may only be called before the handshake has started.
-  if (ssl->s3->initial_handshake_complete ||  //
-      ssl->s3->hs == nullptr ||               //
-      ssl->s3->hs->state != 0) {
+  if (ssl_impl->s3->initial_handshake_complete ||  //
+      ssl_impl->s3->hs == nullptr ||               //
+      ssl_impl->s3->hs->state != 0) {
     abort();
   }
 
-  ssl_set_session(ssl, session);
+  ssl_set_session(ssl_impl, session);
   return 1;
 }
 
@@ -1228,7 +1230,7 @@ void SSL_CTX_set_resumption_across_names_enabled(SSL_CTX *ctx, int enabled) {
 }
 
 void SSL_set_resumption_across_names_enabled(SSL *ssl, int enabled) {
-  ssl->resumption_across_names_enabled = !!enabled;
+  FromOpaque(ssl)->resumption_across_names_enabled = !!enabled;
 }
 
 void SSL_CTX_set_info_callback(SSL_CTX *ctx, void (*cb)(const SSL *ssl,

@@ -47,7 +47,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *buf, size_t len) {
   uint8_t alert_unused;
   bssl::Array<uint8_t> client_hello_inner;
   bssl::ssl_decode_client_hello_inner(
-      ssl.get(), &alert_unused, &client_hello_inner, encoded_client_hello_inner,
-      &client_hello_outer);
+      bssl::FromOpaque(ssl.get()), &alert_unused, &client_hello_inner,
+      encoded_client_hello_inner, &client_hello_outer);
   return 0;
 }

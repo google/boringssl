@@ -243,7 +243,7 @@ bool ssl_get_version_range(const SSL_HANDSHAKE *hs, uint16_t *out_min_version,
   return true;
 }
 
-static uint16_t ssl_version(const SSL *ssl) {
+static uint16_t ssl_version(const SSLImpl *ssl) {
   // In early data, we report the predicted version. Note it is possible that we
   // have a predicted version and a *different* true version. This means 0-RTT
   // has been rejected, but until the reject has reported to the application and
@@ -260,12 +260,12 @@ static uint16_t ssl_version(const SSL *ssl) {
   return SSL_is_dtls(ssl) ? DTLS1_2_VERSION : TLS1_2_VERSION;
 }
 
-bool ssl_has_final_version(const SSL *ssl) {
+bool ssl_has_final_version(const SSLImpl *ssl) {
   return ssl->s3->version != 0 &&
          (ssl->s3->hs == nullptr || !ssl->s3->hs->is_early_version);
 }
 
-uint16_t ssl_protocol_version(const SSL *ssl) {
+uint16_t ssl_protocol_version(const SSLImpl *ssl) {
   assert(ssl->s3->version != 0);
   uint16_t version;
   if (!ssl_protocol_version_from_wire(&version, ssl->s3->version)) {
@@ -278,7 +278,7 @@ uint16_t ssl_protocol_version(const SSL *ssl) {
 }
 
 bool ssl_supports_version(const SSL_HANDSHAKE *hs, uint16_t version) {
-  const SSL *const ssl = hs->ssl;
+  const SSLImpl *const ssl = hs->ssl;
   uint16_t protocol_version;
   if (!ssl_method_supports_version(ssl->method, version) ||
       !ssl_protocol_version_from_wire(&protocol_version, version) ||
@@ -369,41 +369,47 @@ uint16_t SSL_CTX_get_max_proto_version(const SSL_CTX *ctx) {
 }
 
 int SSL_set_min_proto_version(SSL *ssl, uint16_t version) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     return 0;
   }
-  return set_min_version(ssl->method, &ssl->config->conf_min_version, version);
+  return set_min_version(ssl_impl->method, &ssl_impl->config->conf_min_version,
+                         version);
 }
 
 int SSL_set_max_proto_version(SSL *ssl, uint16_t version) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     return 0;
   }
-  return set_max_version(ssl->method, &ssl->config->conf_max_version, version);
+  return set_max_version(ssl_impl->method, &ssl_impl->config->conf_max_version,
+                         version);
 }
 
 uint16_t SSL_get_min_proto_version(const SSL *ssl) {
-  if (!ssl->config) {
-    assert(ssl->config);
+  const auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
+    assert(ssl_impl->config);
     return 0;
   }
-  return ssl->config->conf_min_version;
+  return ssl_impl->config->conf_min_version;
 }
 
 uint16_t SSL_get_max_proto_version(const SSL *ssl) {
-  if (!ssl->config) {
-    assert(ssl->config);
+  const auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
+    assert(ssl_impl->config);
     return 0;
   }
-  return ssl->config->conf_max_version;
+  return ssl_impl->config->conf_max_version;
 }
 
 int SSL_version(const SSL *ssl) {
-  return wire_version_to_api(ssl_version(ssl));
+  return wire_version_to_api(ssl_version(FromOpaque(ssl)));
 }
 
 const char *SSL_get_version(const SSL *ssl) {
-  return ssl_version_to_string(ssl_version(ssl));
+  return ssl_version_to_string(ssl_version(FromOpaque(ssl)));
 }
 
 size_t SSL_get_all_version_names(const char **out, size_t max_out) {

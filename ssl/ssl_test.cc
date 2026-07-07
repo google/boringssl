@@ -704,12 +704,13 @@ TEST(SSLTest, DefaultCurves) {
 
     bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
     ASSERT_TRUE(ssl);
-    EXPECT_THAT(ssl->config->supported_group_list,
+    EXPECT_THAT(FromOpaque(ssl.get())->config->supported_group_list,
                 Not(ElementsAreArray(kDefaults)));
 
     // Setting an empty list restores the defaults.
     ASSERT_TRUE(SSL_set1_group_ids(ssl.get(), nullptr, 0));
-    EXPECT_THAT(ssl->config->supported_group_list, ElementsAreArray(kDefaults));
+    EXPECT_THAT(FromOpaque(ssl.get())->config->supported_group_list,
+                ElementsAreArray(kDefaults));
     ASSERT_TRUE(SSL_CTX_set1_group_ids(ctx.get(), nullptr, 0));
     EXPECT_THAT(FromOpaque(ctx.get())->supported_group_list,
                 ElementsAreArray(kDefaults));
@@ -732,12 +733,13 @@ TEST(SSLTest, DefaultCurves) {
 
     bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
     ASSERT_TRUE(ssl);
-    EXPECT_THAT(ssl->config->supported_group_list,
+    EXPECT_THAT(FromOpaque(ssl.get())->config->supported_group_list,
                 Not(ElementsAreArray(kDefaults)));
 
     // Setting an empty list restores the defaults.
     ASSERT_TRUE(SSL_set1_groups(ssl.get(), nullptr, 0));
-    EXPECT_THAT(ssl->config->supported_group_list, ElementsAreArray(kDefaults));
+    EXPECT_THAT(FromOpaque(ssl.get())->config->supported_group_list,
+                ElementsAreArray(kDefaults));
     ASSERT_TRUE(SSL_CTX_set1_groups(ctx.get(), nullptr, 0));
     EXPECT_THAT(FromOpaque(ctx.get())->supported_group_list,
                 ElementsAreArray(kDefaults));
@@ -832,7 +834,8 @@ TEST(SSLTest, SetClientKeyShares) {
     ASSERT_TRUE(ctx);
     bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
     ASSERT_TRUE(ssl);
-    ASSERT_FALSE(ssl->config->client_key_share_selections.has_value());
+    ASSERT_FALSE(
+        FromOpaque(ssl.get())->config->client_key_share_selections.has_value());
 
     ASSERT_TRUE(SSL_set1_group_ids(ssl.get(), t.supported_groups.data(),
                                    t.supported_groups.size()));
@@ -840,9 +843,11 @@ TEST(SSLTest, SetClientKeyShares) {
                                          t.key_shares.size()),
               t.expected_success);
     if (t.expected_success) {
-      ASSERT_TRUE(ssl->config->client_key_share_selections.has_value());
-      EXPECT_THAT(ssl->config->client_key_share_selections.value(),
-                  ElementsAreArray(t.key_shares));
+      ASSERT_TRUE(FromOpaque(ssl.get())
+                      ->config->client_key_share_selections.has_value());
+      EXPECT_THAT(
+          FromOpaque(ssl.get())->config->client_key_share_selections.value(),
+          ElementsAreArray(t.key_shares));
     }
   }
 }
@@ -855,7 +860,8 @@ TEST(SSLTest, ClientKeySharesResetAfterChangingGroups) {
   ASSERT_TRUE(ctx);
   bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
   ASSERT_TRUE(ssl);
-  ASSERT_FALSE(ssl->config->client_key_share_selections.has_value());
+  ASSERT_FALSE(
+      FromOpaque(ssl.get())->config->client_key_share_selections.has_value());
 
   // An initial groups list and key shares that are compatible.
   const uint16_t kGroups1[] = {SSL_GROUP_X25519_MLKEM768, SSL_GROUP_X25519};
@@ -863,22 +869,27 @@ TEST(SSLTest, ClientKeySharesResetAfterChangingGroups) {
   ASSERT_TRUE(SSL_set1_group_ids(ssl.get(), kGroups1, std::size(kGroups1)));
   ASSERT_TRUE(
       SSL_set1_client_key_shares(ssl.get(), kKeyShares, std::size(kKeyShares)));
-  ASSERT_TRUE(ssl->config->client_key_share_selections.has_value());
-  EXPECT_EQ(ssl->config->client_key_share_selections->size(), 2u);
+  ASSERT_TRUE(
+      FromOpaque(ssl.get())->config->client_key_share_selections.has_value());
+  EXPECT_EQ(FromOpaque(ssl.get())->config->client_key_share_selections->size(),
+            2u);
 
   // A new groups list that is still compatible with the previously set key
   // shares.
   const uint16_t kGroups2[] = {SSL_GROUP_MLKEM1024, SSL_GROUP_X25519_MLKEM768,
                                SSL_GROUP_X25519};
   ASSERT_TRUE(SSL_set1_group_ids(ssl.get(), kGroups2, std::size(kGroups2)));
-  ASSERT_TRUE(ssl->config->client_key_share_selections.has_value());
-  EXPECT_EQ(ssl->config->client_key_share_selections->size(), 2u);
+  ASSERT_TRUE(
+      FromOpaque(ssl.get())->config->client_key_share_selections.has_value());
+  EXPECT_EQ(FromOpaque(ssl.get())->config->client_key_share_selections->size(),
+            2u);
 
   // A new groups list that is no longer compatible with the previously set key
   // shares.
   const uint16_t kGroups3[] = {SSL_GROUP_MLKEM1024, SSL_GROUP_X25519};
   ASSERT_TRUE(SSL_set1_group_ids(ssl.get(), kGroups3, std::size(kGroups3)));
-  EXPECT_FALSE(ssl->config->client_key_share_selections.has_value());
+  EXPECT_FALSE(
+      FromOpaque(ssl.get())->config->client_key_share_selections.has_value());
 }
 
 TEST(SSLTest, ServerSupportedGroupsHint) {
@@ -957,7 +968,7 @@ TEST(SSLTest, ServerSupportedGroupsHint) {
     ASSERT_TRUE(SSL_connect(ssl.get()));
 
     std::vector<uint16_t> key_shares;
-    for (const auto &key_share : ssl->s3->hs->key_shares) {
+    for (const auto &key_share : FromOpaque(ssl.get())->s3->hs->key_shares) {
       key_shares.push_back(key_share->GroupID());
     }
     EXPECT_THAT(key_shares, ElementsAreArray(t.expected_key_shares));
@@ -976,19 +987,22 @@ TEST(SSLTest, ServerHintOverridesClientKeyShareSelections) {
   const uint16_t kKeyShares[] = {SSL_GROUP_SECP256R1};
   ASSERT_TRUE(
       SSL_set1_client_key_shares(ssl.get(), kKeyShares, std::size(kKeyShares)));
-  ASSERT_TRUE(ssl->config->client_key_share_selections.has_value());
-  EXPECT_THAT(ssl->config->client_key_share_selections.value(),
-              ElementsAreArray(kKeyShares));
+  ASSERT_TRUE(
+      FromOpaque(ssl.get())->config->client_key_share_selections.has_value());
+  EXPECT_THAT(
+      FromOpaque(ssl.get())->config->client_key_share_selections.value(),
+      ElementsAreArray(kKeyShares));
   const uint16_t kServerHint[] = {SSL_GROUP_X25519};
   ASSERT_TRUE(SSL_set1_server_supported_groups_hint(ssl.get(), kServerHint,
                                                     std::size(kServerHint)));
-  EXPECT_THAT(ssl->config->server_supported_groups_hint,
+  EXPECT_THAT(FromOpaque(ssl.get())->config->server_supported_groups_hint,
               ElementsAreArray(kServerHint));
 
   // The group predicted based on the server hint should win.
   ASSERT_TRUE(SSL_connect(ssl.get()));
-  ASSERT_EQ(ssl->s3->hs->key_shares.size(), 1u);
-  EXPECT_EQ(kServerHint[0], ssl->s3->hs->key_shares[0]->GroupID());
+  ASSERT_EQ(FromOpaque(ssl.get())->s3->hs->key_shares.size(), 1u);
+  EXPECT_EQ(kServerHint[0],
+            FromOpaque(ssl.get())->s3->hs->key_shares[0]->GroupID());
 }
 
 TEST(SSLTest, ServerHintOverridesEmptyClientKeyShareSelections) {
@@ -1001,17 +1015,19 @@ TEST(SSLTest, ServerHintOverridesEmptyClientKeyShareSelections) {
   ASSERT_TRUE(SSL_set1_group_ids(ssl.get(), kGroups, std::size(kGroups)));
 
   ASSERT_TRUE(SSL_set1_client_key_shares(ssl.get(), nullptr, 0));
-  EXPECT_TRUE(ssl->config->client_key_share_selections->empty());
+  EXPECT_TRUE(
+      FromOpaque(ssl.get())->config->client_key_share_selections->empty());
   const uint16_t kServerHint[] = {SSL_GROUP_X25519};
   ASSERT_TRUE(SSL_set1_server_supported_groups_hint(ssl.get(), kServerHint,
                                                     std::size(kServerHint)));
-  EXPECT_THAT(ssl->config->server_supported_groups_hint,
+  EXPECT_THAT(FromOpaque(ssl.get())->config->server_supported_groups_hint,
               ElementsAreArray(kServerHint));
 
   // The group predicted based on the server hint should win.
   ASSERT_TRUE(SSL_connect(ssl.get()));
-  ASSERT_EQ(ssl->s3->hs->key_shares.size(), 1u);
-  EXPECT_EQ(kServerHint[0], ssl->s3->hs->key_shares[0]->GroupID());
+  ASSERT_EQ(FromOpaque(ssl.get())->s3->hs->key_shares.size(), 1u);
+  EXPECT_EQ(kServerHint[0],
+            FromOpaque(ssl.get())->s3->hs->key_shares[0]->GroupID());
 }
 
 // kOpenSSLSession is a serialized SSL_SESSION.
@@ -2341,7 +2357,7 @@ TEST(SSLTest, SetGroupIdsWithFlags_DefaultGroups) {
   // Should set the default groups, and corresponding default (zero) flags.
   EXPECT_TRUE(
       SSL_set1_group_ids_with_flags(server.get(), nullptr, kBogusFlags, 0));
-  EXPECT_THAT(server->config->supported_group_list,
+  EXPECT_THAT(FromOpaque(server.get())->config->supported_group_list,
               ElementsAreArray(kDefaultGroups));
 
   // Set up and run the handshake to show that the bogus "equal preference with
@@ -7192,12 +7208,13 @@ TEST(SSLTest, ApplyHandoffRemovesUnsupportedCurves) {
   };
 
   // The default list of groups is used before applying the handoff.
-  EXPECT_THAT(server->config->supported_group_list,
+  EXPECT_THAT(FromOpaque(server.get())->config->supported_group_list,
               ElementsAreArray({SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
                                 SSL_GROUP_SECP384R1}));
   ASSERT_TRUE(SSL_apply_handoff(server.get(), handoff));
-  EXPECT_EQ(1u, server->config->supported_group_list.size());
-  EXPECT_EQ(SSL_GROUP_SECP256R1, server->config->supported_group_list[0]);
+  EXPECT_EQ(1u, FromOpaque(server.get())->config->supported_group_list.size());
+  EXPECT_EQ(SSL_GROUP_SECP256R1,
+            FromOpaque(server.get())->config->supported_group_list[0]);
 }
 
 TEST(SSLTest, ZeroSizedWiteFlushesHandshakeMessages) {

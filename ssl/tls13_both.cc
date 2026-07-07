@@ -104,7 +104,7 @@ bool tls13_get_cert_verify_signature_input(
 
 bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
                                bool allow_anonymous) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   CBS body = msg.body;
   bssl::UniquePtr<CRYPTO_BUFFER> decompressed;
 
@@ -364,7 +364,7 @@ bool tls13_process_certificate(SSL_HANDSHAKE *hs, const SSLMessage &msg,
 
 bool tls13_process_certificate_verify(SSL_HANDSHAKE *hs,
                                       const SSLMessage &msg) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   if (hs->peer_pubkey == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
@@ -408,7 +408,7 @@ bool tls13_process_certificate_verify(SSL_HANDSHAKE *hs,
 
 bool tls13_process_finished(SSL_HANDSHAKE *hs, const SSLMessage &msg,
                             bool use_saved_value) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   uint8_t verify_data_buf[EVP_MAX_MD_SIZE];
   Span<const uint8_t> verify_data;
   if (use_saved_value) {
@@ -437,7 +437,7 @@ bool tls13_process_finished(SSL_HANDSHAKE *hs, const SSLMessage &msg,
 }
 
 bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const SSLCredential *cred = hs->credential.get();
 
   ScopedCBB cbb;
@@ -612,7 +612,7 @@ bool tls13_add_certificate(SSL_HANDSHAKE *hs) {
 }
 
 enum ssl_private_key_result_t tls13_add_certificate_verify(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   assert(hs->signature_algorithm != 0);
   ScopedCBB cbb;
   CBB body;
@@ -656,7 +656,7 @@ enum ssl_private_key_result_t tls13_add_certificate_verify(SSL_HANDSHAKE *hs) {
 }
 
 bool tls13_add_finished(SSL_HANDSHAKE *hs) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   size_t verify_data_len;
   uint8_t verify_data[EVP_MAX_MD_SIZE];
 
@@ -677,7 +677,7 @@ bool tls13_add_finished(SSL_HANDSHAKE *hs) {
   return true;
 }
 
-bool tls13_add_key_update(SSL *ssl, int request_type) {
+bool tls13_add_key_update(SSLImpl *ssl, int request_type) {
   if (ssl->s3->key_update_pending) {
     return true;
   }
@@ -713,7 +713,7 @@ bool tls13_add_key_update(SSL *ssl, int request_type) {
   return true;
 }
 
-static bool tls13_receive_key_update(SSL *ssl, const SSLMessage &msg) {
+static bool tls13_receive_key_update(SSLImpl *ssl, const SSLMessage &msg) {
   CBS body = msg.body;
   uint8_t key_update_request;
   if (!CBS_get_u8(&body, &key_update_request) ||              //
@@ -738,7 +738,7 @@ static bool tls13_receive_key_update(SSL *ssl, const SSLMessage &msg) {
   return true;
 }
 
-bool tls13_post_handshake(SSL *ssl, const SSLMessage &msg) {
+bool tls13_post_handshake(SSLImpl *ssl, const SSLMessage &msg) {
   if (msg.type == SSL3_MT_NEW_SESSION_TICKET && !ssl->server) {
     return tls13_process_new_session_ticket(ssl, msg);
   }

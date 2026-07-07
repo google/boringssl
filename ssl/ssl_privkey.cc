@@ -142,7 +142,7 @@ bssl::UniquePtr<EVP_PKEY> ssl_parse_peer_subject_public_key_info(
       spki.data(), spki.size(), algs, std::size(algs)));
 }
 
-bool ssl_pkey_supports_algorithm(const SSL *ssl, EVP_PKEY *pkey,
+bool ssl_pkey_supports_algorithm(const SSLImpl *ssl, EVP_PKEY *pkey,
                                  uint16_t sigalg, bool is_verify) {
   const SSL_SIGNATURE_ALGORITHM *alg = get_signature_algorithm(sigalg);
   if (alg == nullptr || EVP_PKEY_id(pkey) != alg->pkey_type) {
@@ -197,7 +197,7 @@ bool ssl_pkey_supports_algorithm(const SSL *ssl, EVP_PKEY *pkey,
   return true;
 }
 
-static bool setup_ctx(SSL *ssl, EVP_MD_CTX *ctx, EVP_PKEY *pkey,
+static bool setup_ctx(SSLImpl *ssl, EVP_MD_CTX *ctx, EVP_PKEY *pkey,
                       uint16_t sigalg, bool is_verify) {
   if (!ssl_pkey_supports_algorithm(ssl, pkey, sigalg, is_verify)) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_WRONG_SIGNATURE_TYPE);
@@ -229,7 +229,7 @@ static bool setup_ctx(SSL *ssl, EVP_MD_CTX *ctx, EVP_PKEY *pkey,
 enum ssl_private_key_result_t ssl_private_key_sign(
     SSL_HANDSHAKE *hs, uint8_t *out, size_t *out_len, size_t max_out,
     uint16_t sigalg, Span<const uint8_t> in) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const SSLCredential *const cred = hs->credential.get();
   Array<uint8_t> spki;
   if (hs->provided_hints != nullptr || hs->pending_hints != nullptr) {
@@ -304,7 +304,7 @@ enum ssl_private_key_result_t ssl_private_key_sign(
   return ssl_private_key_success;
 }
 
-bool ssl_public_key_verify(SSL *ssl, Span<const uint8_t> signature,
+bool ssl_public_key_verify(SSLImpl *ssl, Span<const uint8_t> signature,
                            uint16_t sigalg, EVP_PKEY *pkey,
                            Span<const uint8_t> in) {
   ScopedEVP_MD_CTX ctx;
@@ -325,7 +325,7 @@ enum ssl_private_key_result_t ssl_private_key_decrypt(SSL_HANDSHAKE *hs,
                                                       size_t *out_len,
                                                       size_t max_out,
                                                       Span<const uint8_t> in) {
-  SSL *const ssl = hs->ssl;
+  SSLImpl *const ssl = hs->ssl;
   const SSLCredential *const cred = hs->credential.get();
   assert(!hs->can_release_private_key);
   if (cred->key_method != nullptr) {
@@ -372,7 +372,7 @@ BSSL_NAMESPACE_END
 using namespace bssl;
 
 int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa) {
-  if (rsa == nullptr || ssl->config == nullptr) {
+  if (rsa == nullptr || FromOpaque(ssl)->config == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
@@ -398,13 +398,14 @@ int SSL_use_RSAPrivateKey_ASN1(SSL *ssl, const uint8_t *der, size_t der_len) {
 }
 
 int SSL_use_PrivateKey(SSL *ssl, EVP_PKEY *pkey) {
-  if (pkey == nullptr || ssl->config == nullptr) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (pkey == nullptr || ssl_impl->config == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
 
   return SSL_CREDENTIAL_set1_private_key(
-      ssl->config->cert->legacy_credential.get(), pkey);
+      ssl_impl->config->cert->legacy_credential.get(), pkey);
 }
 
 int SSL_use_PrivateKey_ASN1(int type, SSL *ssl, const uint8_t *der,
@@ -479,11 +480,12 @@ int SSL_CTX_use_PrivateKey_ASN1(int type, SSL_CTX *ctx, const uint8_t *der,
 
 void SSL_set_private_key_method(SSL *ssl,
                                 const SSL_PRIVATE_KEY_METHOD *key_method) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     return;
   }
   BSSL_CHECK(SSL_CREDENTIAL_set_private_key_method(
-      ssl->config->cert->legacy_credential.get(), key_method));
+      ssl_impl->config->cert->legacy_credential.get(), key_method));
 }
 
 void SSL_CTX_set_private_key_method(SSL_CTX *ctx,
@@ -659,11 +661,12 @@ int SSL_CTX_set_signing_algorithm_prefs(SSL_CTX *ctx, const uint16_t *prefs,
 
 int SSL_set_signing_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
                                     size_t num_prefs) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     return 0;
   }
   return SSL_CREDENTIAL_set1_signing_algorithm_prefs(
-      ssl->config->cert->legacy_credential.get(), prefs, num_prefs);
+      ssl_impl->config->cert->legacy_credential.get(), prefs, num_prefs);
 }
 
 static constexpr struct {
@@ -739,7 +742,8 @@ int SSL_CTX_set1_sigalgs(SSL_CTX *ctx, const int *values, size_t num_values) {
 }
 
 int SSL_set1_sigalgs(SSL *ssl, const int *values, size_t num_values) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
@@ -749,8 +753,10 @@ int SSL_set1_sigalgs(SSL *ssl, const int *values, size_t num_values) {
     return 0;
   }
 
-  if (!SSL_set_signing_algorithm_prefs(ssl, sigalgs.data(), sigalgs.size()) ||
-      !SSL_set_verify_algorithm_prefs(ssl, sigalgs.data(), sigalgs.size())) {
+  if (!SSL_set_signing_algorithm_prefs(ssl_impl, sigalgs.data(),
+                                       sigalgs.size()) ||
+      !SSL_set_verify_algorithm_prefs(ssl_impl, sigalgs.data(),
+                                      sigalgs.size())) {
     return 0;
   }
 
@@ -927,7 +933,8 @@ int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str) {
 }
 
 int SSL_set1_sigalgs_list(SSL *ssl, const char *str) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
@@ -937,8 +944,10 @@ int SSL_set1_sigalgs_list(SSL *ssl, const char *str) {
     return 0;
   }
 
-  if (!SSL_set_signing_algorithm_prefs(ssl, sigalgs.data(), sigalgs.size()) ||
-      !SSL_set_verify_algorithm_prefs(ssl, sigalgs.data(), sigalgs.size())) {
+  if (!SSL_set_signing_algorithm_prefs(ssl_impl, sigalgs.data(),
+                                       sigalgs.size()) ||
+      !SSL_set_verify_algorithm_prefs(ssl_impl, sigalgs.data(),
+                                      sigalgs.size())) {
     return 0;
   }
 
@@ -953,10 +962,12 @@ int SSL_CTX_set_verify_algorithm_prefs(SSL_CTX *ctx, const uint16_t *prefs,
 
 int SSL_set_verify_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
                                    size_t num_prefs) {
-  if (!ssl->config) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
-  return set_sigalg_prefs(&ssl->config->verify_sigalgs, Span(prefs, num_prefs));
+  return set_sigalg_prefs(&ssl_impl->config->verify_sigalgs,
+                          Span(prefs, num_prefs));
 }

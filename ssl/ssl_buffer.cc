@@ -116,7 +116,7 @@ void SSLBuffer::DiscardConsumed() {
   }
 }
 
-static int dtls_read_buffer_next_packet(SSL *ssl) {
+static int dtls_read_buffer_next_packet(SSLImpl *ssl) {
   SSLBuffer *buf = &ssl->s3->read_buffer;
 
   if (!buf->empty()) {
@@ -137,7 +137,7 @@ static int dtls_read_buffer_next_packet(SSL *ssl) {
   return 1;
 }
 
-static int tls_read_buffer_extend_to(SSL *ssl, size_t len) {
+static int tls_read_buffer_extend_to(SSLImpl *ssl, size_t len) {
   SSLBuffer *buf = &ssl->s3->read_buffer;
 
   if (len > buf->cap()) {
@@ -161,7 +161,7 @@ static int tls_read_buffer_extend_to(SSL *ssl, size_t len) {
   return 1;
 }
 
-int ssl_read_buffer_extend_to(SSL *ssl, size_t len) {
+int ssl_read_buffer_extend_to(SSLImpl *ssl, size_t len) {
   // `ssl_read_buffer_extend_to` implicitly discards any consumed data.
   ssl->s3->read_buffer.DiscardConsumed();
 
@@ -202,7 +202,7 @@ int ssl_read_buffer_extend_to(SSL *ssl, size_t len) {
   return ret;
 }
 
-int ssl_handle_open_record(SSL *ssl, bool *out_retry, ssl_open_record_t ret,
+int ssl_handle_open_record(SSLImpl *ssl, bool *out_retry, ssl_open_record_t ret,
                            size_t consumed, uint8_t alert) {
   *out_retry = false;
   if (ret != ssl_open_record_partial) {
@@ -255,7 +255,7 @@ static_assert(DTLS1_RT_MAX_HEADER_LENGTH + SSL3_RT_SEND_MAX_ENCRYPTED_OVERHEAD +
                   0xffff,
               "maximum DTLS write buffer is too large");
 
-static int tls_write_buffer_flush(SSL *ssl) {
+static int tls_write_buffer_flush(SSLImpl *ssl) {
   SSLBuffer *buf = &ssl->s3->write_buffer;
   while (!buf->empty()) {
     size_t written;
@@ -269,7 +269,7 @@ static int tls_write_buffer_flush(SSL *ssl) {
   return 1;
 }
 
-static int dtls_write_buffer_flush(SSL *ssl) {
+static int dtls_write_buffer_flush(SSLImpl *ssl) {
   SSLBuffer *buf = &ssl->s3->write_buffer;
   if (buf->empty()) {
     return 1;
@@ -288,7 +288,7 @@ static int dtls_write_buffer_flush(SSL *ssl) {
   return 1;
 }
 
-int ssl_write_buffer_flush(SSL *ssl) {
+int ssl_write_buffer_flush(SSLImpl *ssl) {
   if (ssl->wbio == nullptr) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_BIO_NOT_SET);
     return -1;
