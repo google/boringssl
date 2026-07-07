@@ -28,9 +28,9 @@ BSSL_NAMESPACE_BEGIN
 
 #if defined(OPENSSL_POLY1305_NEON)
 
-typedef struct {
+struct alignas(16) fe1305x2 {
   uint32_t v[12];  // for alignment; only using 10
-} fe1305x2;
+};
 
 #define addmulmod openssl_poly1305_neon2_addmulmod
 #define blocks openssl_poly1305_neon2_blocks
@@ -169,7 +169,7 @@ static void fe1305x2_frombytearray(fe1305x2 *r, const uint8_t *x, size_t xlen) {
   }
 }
 
-static const fe1305x2 zero alignas(16) = {0};
+static const fe1305x2 zero = {0};
 
 struct poly1305_state_st {
   fe1305x2 r, h, c, precomp[2];
