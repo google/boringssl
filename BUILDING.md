@@ -80,16 +80,21 @@ version r16b of the NDK.
 Unpack the Android NDK somewhere and export `ANDROID_NDK` to point to the
 directory. Then run CMake like this:
 
-    cmake -DANDROID_ABI=armeabi-v7a \
-          -DANDROID_PLATFORM=android-19 \
+    cmake -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-21 \
           -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake \
           -GNinja -B build
 
 Once you've run that, Ninja should produce Android-compatible binaries.  You
-can replace `armeabi-v7a` in the above with `arm64-v8a` and use API level 21 or
-higher to build aarch64 binaries.
+can replace `arm64-v8a` with `armeabi-v7a` in the above to build aarch64
+binaries.
 
 For other options, see the documentation in the toolchain file.
+
+To run tests, you can use the `util/run_android_tests.go` script. Individual
+binaries can also be pushed to the device with `adb`, but note that some tests
+require test data. The `-upload-only` flag to `run_android_tests.go` may be
+useful.
 
 To debug the resulting binaries on an Android device with `gdb`, run the
 commands below. Replace `ARCH` with the architecture of the target device, e.g.
