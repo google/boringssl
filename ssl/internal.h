@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <atomic>
 #include <bitset>
+#include <cstdint>
 #include <initializer_list>
 #include <limits>
 #include <new>
@@ -1430,6 +1431,14 @@ enum class SSLCredentialType {
   kRawPublicKey,
 };
 
+struct SSLTrustAnchorRange {
+  Array<uint8_t> base;
+  uint64_t min = 0;
+  uint64_t max = 0;
+
+  bool Contains(Span<const uint8_t> id) const;
+};
+
 class SSLCredential : public ssl_credential_st,
                       public RefCounted<SSLCredential> {
  public:
@@ -1551,6 +1560,10 @@ class SSLCredential : public ssl_credential_st,
   // trust_anchor_id, if non-empty, is the trust anchor ID for the root of the
   // chain in `chain`.
   Array<uint8_t> trust_anchor_id;
+
+  // trust_anchor_group_inclusions describes trust anchor groups that also match
+  // this credential.
+  Vector<SSLTrustAnchorRange> trust_anchor_group_inclusions;
 
   CRYPTO_EX_DATA ex_data;
 

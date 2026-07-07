@@ -856,8 +856,8 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
                                                      CRYPTO_BUFFER *ocsp);
 
 // SSL_CREDENTIAL_set1_certificate_properties parses
-// `certificate_property_list` as a CertificatePropertyList (see Section 6 of
-// draft-ietf-tls-trust-anchor-ids-00) and applies recognized properties to
+// `certificate_property_list` as a CertificatePropertyList (see Section 7 of
+// draft-ietf-tls-trust-anchor-ids-04) and applies recognized properties to
 // `cred`. It returns one on success and zero on error. It is an error if
 // `certificate_property_list` does not parse correctly, or if any recognized
 // properties from `certificate_property_list` cannot be applied to `cred`.
@@ -868,7 +868,9 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
 // logic, without requiring application changes for each property defined.
 //
 // BoringSSL currently supports the following properties:
-// * trust_anchor_identifier (see `SSL_CREDENTIAL_set1_trust_anchor_id`)
+// * trust_anchor_id (see `SSL_CREDENTIAL_set1_trust_anchor_id`)
+// * trust_anchor_group_inclusions (see
+//   `SSL_CREDENTIAL_add1_trust_anchor_group_inclusion`)
 //
 // Note this function does not automatically enable issuer matching. Callers
 // must separately call `SSL_CREDENTIAL_set_must_match_issuer` if desired.
@@ -3245,18 +3247,28 @@ OPENSSL_EXPORT int SSL_add_bio_cert_subjects_to_stack(STACK_OF(X509_NAME) *out,
 // SSL_CREDENTIAL_set1_trust_anchor_id sets `cred`'s trust anchor ID to `id`, or
 // clears it if `id_len` is zero. It returns one on success and zero on
 // error. If not clearing, `id` must be in binary format (Section 3 of
-// draft-ietf-tls-trust-anchor-ids-00) of length `id_len`, and describe the
+// draft-ietf-tls-trust-anchor-ids-04) of length `id_len`, and describe the
 // issuer of the final certificate in `cred`'s certificate chain.
 //
 // Additionally, `cred` must enable issuer matching (see
 // `SSL_CREDENTIAL_set_must_match_issuer`) for this value to take effect.
 //
-// For better extensibility, callers are recommended to configure this
-// information with a CertificatePropertyList instead. See
-// `SSL_CREDENTIAL_set1_certificate_properties`.
+// For extensibility, callers are recommended to configure this information with
+// a CertificatePropertyList. See `SSL_CREDENTIAL_set1_certificate_properties`.
 OPENSSL_EXPORT int SSL_CREDENTIAL_set1_trust_anchor_id(SSL_CREDENTIAL *cred,
                                                        const uint8_t *id,
                                                        size_t id_len);
+
+// SSL_CREDENTIAL_add1_trust_anchor_group_inclusion specifies that `cred`
+// matches all trust anchor IDs equal to `base` followed some component between
+// `min` and `max`, inclusive. It returns one on success and zero on error. This
+// function may be called multiple times to register multiple group inclusions.
+//
+// For extensibility, callers are recommended to configure this information with
+// a CertificatePropertyList. See `SSL_CREDENTIAL_set1_certificate_properties`.
+OPENSSL_EXPORT int SSL_CREDENTIAL_add1_trust_anchor_group_inclusion(
+    SSL_CREDENTIAL *cred, const uint8_t *base, size_t base_len, uint64_t min,
+    uint64_t max);
 
 // SSL_CTX_set1_requested_trust_anchors configures `ctx` to request a
 // certificate issued by one of the trust anchors in `ids`. It returns one on
@@ -3265,10 +3277,10 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_trust_anchor_id(SSL_CREDENTIAL *cred,
 //
 // The list may describe application's full list of supported trust anchors, or
 // a, possibly empty, subset. Applications can select this subset using
-// out-of-band information, such as the DNS hint in Section 5 of
-// draft-ietf-tls-trust-anchor-ids-00. Client applications sending a subset
+// out-of-band information, such as the DNS hint in Section 6 of
+// draft-ietf-tls-trust-anchor-ids-04. Client applications sending a subset
 // should use `SSL_get0_peer_available_trust_anchors` to implement the retry
-// flow from Section 4.3 of draft-ietf-tls-trust-anchor-ids-00.
+// flow from Section 4.3 of draft-ietf-tls-trust-anchor-ids-04.
 //
 // If empty (`ids_len` is zero), the trust_anchors extension will still be sent
 // in ClientHello. This may be used by a client application to signal support
@@ -3307,7 +3319,7 @@ OPENSSL_EXPORT int SSL_peer_matched_trust_anchor(const SSL *ssl);
 // This value is only available during the handshake and is expected to be
 // called in the event of certificate verification failure. Client applications
 // can use it to retry the connection, requesting different trust anchors. See
-// Section 4.3 of draft-ietf-tls-trust-anchor-ids-00 for details.
+// Section 4.3 of draft-ietf-tls-trust-anchor-ids-04 for details.
 // `CBS_get_u8_length_prefixed` may be used to iterate over the format.
 //
 // If needed in other contexts, callers may save the value during certificate

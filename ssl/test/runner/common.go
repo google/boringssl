@@ -2434,16 +2434,23 @@ func (c *Config) verifySignatureAlgorithms() []signatureAlgorithm {
 	return supportedSignatureAlgorithms
 }
 
+type TrustAnchorRange struct {
+	Base     []byte
+	Min, Max uint64
+}
+
 const (
-	certPropTrustAnchorID uint16 = 0
+	certPropTrustAnchorID              uint16 = 0
+	certPropTrustAnchorGroupInclusions uint16 = 1
 )
 
 type CertificatePropertyList struct {
-	TrustAnchorID []byte
+	TrustAnchorID              []byte
+	TrustAnchorGroupInclusions []TrustAnchorRange
 }
 
 func (c *CertificatePropertyList) Empty() bool {
-	return len(c.TrustAnchorID) == 0
+	return len(c.TrustAnchorID) == 0 && len(c.TrustAnchorGroupInclusions) == 0
 }
 
 func (c *CertificatePropertyList) Marshal() []byte {
@@ -2454,6 +2461,18 @@ func (c *CertificatePropertyList) Marshal() []byte {
 			// The ID is encoded directly in the property data, with
 			// no additional length prefix.
 			addUint16LengthPrefixedBytes(props, c.TrustAnchorID)
+		}
+		if len(c.TrustAnchorGroupInclusions) != 0 {
+			props.AddUint16(certPropTrustAnchorGroupInclusions)
+			props.AddUint16LengthPrefixed(func(prop *cryptobyte.Builder) {
+				prop.AddUint16LengthPrefixed(func(ranges *cryptobyte.Builder) {
+					for _, r := range c.TrustAnchorGroupInclusions {
+						addUint8LengthPrefixedBytes(ranges, r.Base)
+						ranges.AddUint64(r.Min)
+						ranges.AddUint64(r.Max)
+					}
+				})
+			})
 		}
 	})
 	return bb.BytesOrPanic()
@@ -2588,6 +2607,12 @@ func (c *Credential) WithTrustAnchorID(id []byte) *Credential {
 	ret := *c
 	ret.Properties.TrustAnchorID = id
 	ret.MustMatchIssuer = true
+	return &ret
+}
+
+func (c *Credential) WithProperties(props CertificatePropertyList) *Credential {
+	ret := *c
+	ret.Properties = props
 	return &ret
 }
 
