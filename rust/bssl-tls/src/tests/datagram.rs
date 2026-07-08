@@ -61,6 +61,7 @@ fn dumb_dtls_server_client() -> Result<
 }
 
 #[cfg(unix)]
+#[ignore = "https://crbug.com/532601068"]
 #[test]
 fn dtls() {
     use crate::{io::sync_io::NoAsync, io::unix::StdDatagram, tests::sync_ping_pong};
@@ -74,6 +75,7 @@ fn dtls() {
     sync_ping_pong(server_conn, client_conn).unwrap();
 }
 
+#[ignore = "https://crbug.com/532601068"]
 #[test]
 fn test_async_dtls() -> Result<(), Error> {
     use crate::io::IoStatus;

@@ -141,6 +141,7 @@ async fn async_ping_pong(
 }
 
 #[tokio::test]
+#[ignore = "https://crbug.com/532601068"]
 async fn async_dtls() -> Result<(), Error> {
     let (mut server_conn, mut client_conn) = dumb_dtls_server_client().unwrap();
     let (server_sock, client_sock) = tokio::net::UnixDatagram::pair().unwrap();
@@ -151,6 +152,7 @@ async fn async_dtls() -> Result<(), Error> {
 }
 
 #[tokio::test]
+#[ignore = "https://crbug.com/532601068"]
 async fn async_dtls_over_fd() -> Result<(), Error> {
     let (mut server_conn, mut client_conn) = dumb_dtls_server_client().unwrap();
     let (server_sock, client_sock) = std::os::unix::net::UnixDatagram::pair().unwrap();
