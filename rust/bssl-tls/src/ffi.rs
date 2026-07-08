@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::{
+    iter::FusedIterator,
     marker::PhantomData,
     mem::{
         MaybeUninit,
@@ -275,6 +276,11 @@ impl core::ops::Deref for ReceiveBuffer<'_> {
     }
 }
 
+pub(crate) trait CryptoBufferWrapper {
+    /// Safety: `buf` must be exclusively owned.
+    unsafe fn from_crypto_buffer(buf: core::ptr::NonNull<::bssl_sys::CRYPTO_BUFFER>) -> Self;
+}
+
 pub(crate) unsafe trait BsslStack: Sized {
     type Element: StackElement;
 
@@ -282,6 +288,9 @@ pub(crate) unsafe trait BsslStack: Sized {
 
     /// Safety: `this` handle must be a live `stack_st_*` handle.
     unsafe fn size(this: *const Self) -> usize;
+
+    /// Safety: `this` handle must be live and `idx` must be in bounds.
+    unsafe fn index(this: *const Self, idx: usize) -> *const Self::Element;
 
     /// Safety: both `this` and `elem` cannot be aliased.
     unsafe fn push(this: *mut Self, elem: *mut Self::Element);
@@ -310,6 +319,13 @@ unsafe impl BsslStack for bssl_sys::stack_st_CRYPTO_BUFFER {
         unsafe {
             // Safety: `this` is still live and valid.
             bssl_sys::sk_CRYPTO_BUFFER_num(this)
+        }
+    }
+
+    unsafe fn index(this: *const Self, idx: usize) -> *const Self::Element {
+        unsafe {
+            // Safety: `this` is valid and live
+            bssl_sys::sk_CRYPTO_BUFFER_value(this, idx)
         }
     }
 
@@ -377,3 +393,60 @@ impl<T: StackElement> Stack<T> {
         ptr
     }
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct StackIterator<'a, T: StackElement> {
+    sk: *const T::Stack,
+    len: usize,
+    curr: usize,
+    _p: PhantomData<&'a fn() -> T>,
+}
+
+impl<'a, T: StackElement> StackIterator<'a, T> {
+    /// Safety: caller must ensure that `sk` outlives `'a`.
+    pub(crate) unsafe fn new(sk: *const T::Stack) -> Self {
+        let len = if sk.is_null() {
+            0
+        } else {
+            unsafe {
+                // Safety: `sk` is valid now.
+                T::Stack::size(sk)
+            }
+        };
+        Self {
+            sk,
+            len,
+            curr: 0,
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<'a, T: StackElement> Iterator for StackIterator<'a, T> {
+    type Item = *const T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.curr >= self.len {
+            return None;
+        }
+        let elem = unsafe {
+            // Safety: `self.sk` is still valid now and `self.curr` is within the bound.
+            T::Stack::index(self.sk, self.curr)
+        };
+        self.curr += 1;
+        if elem.is_null() {
+            // Fuse the iterator.
+            self.curr = self.len;
+            return None;
+        }
+        Some(elem)
+    }
+}
+
+impl<T: StackElement> ExactSizeIterator for StackIterator<'_, T> {
+    fn len(&self) -> usize {
+        self.len - self.curr
+    }
+}
+
+impl<T: StackElement> FusedIterator for StackIterator<'_, T> {}

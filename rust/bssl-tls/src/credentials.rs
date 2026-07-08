@@ -65,7 +65,9 @@ use crate::{
     ffi::{
         Alloc,
         Bio,
+        CryptoBufferWrapper,
         Stack,
+        StackIterator,
         sanitize_slice,
         slice_into_ffi_raw_parts, //
     },
@@ -919,67 +921,55 @@ where
 /// Certificate chain iterator.
 ///
 /// This iterator will supply the peer leaf certificate as the first element in the chain, if any.
+pub type CertificateChainIterator<'a> = CryptoBufferIterator<'a, Certificate>;
+
 #[derive(Clone, Copy)]
-pub struct CertificateChainIterator<'a> {
-    certs: *const bssl_sys::stack_st_CRYPTO_BUFFER,
-    len: usize,
-    curr: usize,
-    _p: PhantomData<&'a ()>,
+#[doc(hidden)]
+pub struct CryptoBufferIterator<'a, T> {
+    inner: StackIterator<'a, bssl_sys::CRYPTO_BUFFER>,
+    _p: PhantomData<fn() -> T>,
 }
 
-impl<'a> CertificateChainIterator<'a> {
-    /// Safety: caller must ensure that `certs` is outlived by,
-    /// or in other words stays alive as long as, `'a`.
-    pub(crate) unsafe fn new(certs: *const bssl_sys::stack_st_CRYPTO_BUFFER) -> Self {
-        let len = if certs.is_null() {
-            0
-        } else {
-            unsafe {
-                // Safety: `certs` is valid now.
-                bssl_sys::sk_CRYPTO_BUFFER_num(certs)
-            }
-        };
+impl<T: CryptoBufferWrapper> CryptoBufferIterator<'_, T> {
+    /// Safety: caller must ensure that `sk` outlives `'a`.
+    pub(crate) unsafe fn new(sk: *const bssl_sys::stack_st_CRYPTO_BUFFER) -> Self {
         Self {
-            certs,
-            len,
-            curr: 0,
+            inner: unsafe {
+                // Safety: `sk` outlives `'a` per pre-condition.
+                StackIterator::new(sk)
+            },
             _p: PhantomData,
         }
     }
 }
 
-impl<'a> Iterator for CertificateChainIterator<'a> {
-    type Item = Certificate;
+impl<T: CryptoBufferWrapper> Iterator for CryptoBufferIterator<'_, T> {
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.curr >= self.len {
-            return None;
-        }
-        let cert = unsafe {
-            // Safety: `self.certs` is still valid now and `self.curr` is within the bound.
-            bssl_sys::sk_CRYPTO_BUFFER_value(self.certs, self.curr)
-        };
-        self.curr += 1;
-        let Some(cert) = NonNull::new(cert) else {
-            // Fuse the iterator.
-            self.curr = self.len;
-            return None;
-        };
-        unsafe {
-            // Safety: `cert` is valid here.
-            bssl_sys::CRYPTO_BUFFER_up_ref(cert.as_ptr());
-        }
-        Some(Certificate(cert))
+        self.inner
+            .next()
+            .map(|buf| unsafe {
+                // Safety: we are only bumping the ref-count
+                bssl_sys::CRYPTO_BUFFER_dup_ref(buf)
+            })
+            .and_then(|ptr| NonNull::new(ptr as *mut _))
+            .map(|buf| {
+                unsafe {
+                    // Safety: `buf` is now exclusively owned.
+                    T::from_crypto_buffer(buf)
+                }
+            })
     }
 }
 
-impl ExactSizeIterator for CertificateChainIterator<'_> {
+impl<T: CryptoBufferWrapper> ExactSizeIterator for CryptoBufferIterator<'_, T> {
     fn len(&self) -> usize {
-        self.len - self.curr
+        self.inner.len()
     }
 }
 
-impl FusedIterator for CertificateChainIterator<'_> {}
+impl<T: CryptoBufferWrapper> FusedIterator for CryptoBufferIterator<'_, T> {}
 
 /// Safety: this callback stub must be installed with a context object allocated
 /// as a `Box<dyn VerifyCertificate>`.
