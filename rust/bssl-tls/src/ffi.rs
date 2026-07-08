@@ -14,7 +14,10 @@
 
 use core::{
     marker::PhantomData,
-    mem::MaybeUninit,
+    mem::{
+        MaybeUninit,
+        forget, //
+    },
     ptr::{
         NonNull,
         null,
@@ -269,5 +272,108 @@ impl core::ops::Deref for ReceiveBuffer<'_> {
 
     fn deref(&self) -> &Self::Target {
         self.filled()
+    }
+}
+
+pub(crate) unsafe trait BsslStack: Sized {
+    type Element: StackElement;
+
+    fn new() -> *mut Self;
+
+    /// Safety: `this` handle must be a live `stack_st_*` handle.
+    unsafe fn size(this: *const Self) -> usize;
+
+    /// Safety: both `this` and `elem` cannot be aliased.
+    unsafe fn push(this: *mut Self, elem: *mut Self::Element);
+
+    const POP_FREE: unsafe extern "C" fn(
+        *mut Self,
+        Option<unsafe extern "C" fn(*mut Self::Element)>,
+    );
+}
+
+unsafe impl BsslStack for bssl_sys::stack_st_CRYPTO_BUFFER {
+    type Element = bssl_sys::CRYPTO_BUFFER;
+
+    fn new() -> *mut Self {
+        let st = unsafe {
+            // Safety: this call only allocates memory
+            bssl_sys::sk_CRYPTO_BUFFER_new_null()
+        };
+        if st.is_null() {
+            panic!("allocation failed")
+        }
+        st
+    }
+
+    unsafe fn size(this: *const Self) -> usize {
+        unsafe {
+            // Safety: `this` is still live and valid.
+            bssl_sys::sk_CRYPTO_BUFFER_num(this)
+        }
+    }
+
+    unsafe fn push(this: *mut Self, elem: *mut bssl_sys::CRYPTO_BUFFER) {
+        let rc = unsafe {
+            // Safety: `this` and `elem` are exclusively owned and valid.
+            bssl_sys::sk_CRYPTO_BUFFER_push(this, elem)
+        };
+        if rc == 0 {
+            panic!("allocation failed")
+        }
+    }
+
+    const POP_FREE: unsafe extern "C" fn(
+        *mut Self,
+        Option<unsafe extern "C" fn(*mut Self::Element)>,
+    ) = bssl_sys::sk_CRYPTO_BUFFER_pop_free;
+}
+
+pub(crate) unsafe trait StackElement: Sized {
+    type Stack: BsslStack<Element = Self>;
+
+    const FREE: unsafe extern "C" fn(*mut Self);
+}
+
+unsafe impl StackElement for bssl_sys::CRYPTO_BUFFER {
+    type Stack = bssl_sys::stack_st_CRYPTO_BUFFER;
+
+    const FREE: unsafe extern "C" fn(*mut Self) = bssl_sys::CRYPTO_BUFFER_free;
+}
+
+pub(crate) struct Stack<T: StackElement> {
+    inner: *mut T::Stack,
+    _p: PhantomData<T>,
+}
+
+impl<T: StackElement> Drop for Stack<T> {
+    fn drop(&mut self) {
+        unsafe {
+            // Safety: we still own the stack at this moment
+            T::Stack::POP_FREE(self.inner, Some(T::FREE))
+        }
+    }
+}
+
+impl<T: StackElement> Stack<T> {
+    pub fn new() -> Self {
+        Self {
+            inner: T::Stack::new(),
+            _p: PhantomData,
+        }
+    }
+
+    // Safety: `elem` must not alias because its ownership will be transferred.
+    pub unsafe fn push(&mut self, elem: *mut T) {
+        unsafe {
+            // Safety: `this` is owned by the caller.
+            T::Stack::push(self.inner, elem);
+        }
+    }
+
+    pub fn into_raw(self) -> *mut T::Stack {
+        let ptr = self.inner;
+        forget(self);
+        ptr
     }
 }

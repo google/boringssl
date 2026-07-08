@@ -31,6 +31,7 @@ use bssl_x509::{
 
 use super::{
     Client,
+    Server,
     TlsConnection,
     TlsConnectionBuilder,
     lifecycle::{
@@ -46,6 +47,7 @@ use crate::{
     credentials::{
         CertificateType,
         CertificateVerificationMode,
+        DistinguishedName,
         PrivateKeyDelegate,
         SignatureAlgorithm,
         TlsCredential,
@@ -493,5 +495,27 @@ impl<R, M> TlsConnection<R, M> {
             NonNull::new(bssl_sys::SSL_get0_peer_rpk(self.ptr()))?
         };
         Some(crate::credentials::marshal_evp_into_spki(pkey))
+    }
+}
+
+/// # Certificate authorities - Server
+///
+/// TLS can send a list of supported certificate authorities to guide the peer in certificate
+/// selection.
+impl<M> TlsConnectionInHandshake<'_, Server, M> {
+    /// This setting advertises the list of certificate authorities names in the
+    /// `certificate_authorities` extension to send the client.
+    pub fn set_ca_names(
+        &mut self,
+        names: impl IntoIterator<Item = DistinguishedName>,
+    ) -> &mut Self {
+        unsafe {
+            // Safety: this call only transfers the ownership of the stack.
+            bssl_sys::SSL_set0_CA_names(
+                self.ptr(),
+                DistinguishedName::into_crypto_buffer_stack(names),
+            )
+        }
+        self
     }
 }

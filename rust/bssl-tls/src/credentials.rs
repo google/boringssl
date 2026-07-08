@@ -65,6 +65,7 @@ use crate::{
     ffi::{
         Alloc,
         Bio,
+        Stack,
         sanitize_slice,
         slice_into_ffi_raw_parts, //
     },
@@ -1120,6 +1121,29 @@ pub(crate) fn marshal_evp_into_spki(pkey: NonNull<bssl_sys::EVP_PKEY>) -> Vec<u8
         );
     });
     buffer.as_ref().to_vec()
+}
+
+crypto_buffer_wrapper! {
+    /// A name `DistinguishedName` encoded into DER per [RFC 5280].
+    /// Typically this is used to enclose a certificate authority name.
+    ///
+    /// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1>
+    pub struct DistinguishedName
+}
+
+impl DistinguishedName {
+    pub(crate) fn into_crypto_buffer_stack(
+        names: impl IntoIterator<Item = Self>,
+    ) -> *mut bssl_sys::stack_st_CRYPTO_BUFFER {
+        let mut sk = Stack::new();
+        for name in names {
+            unsafe {
+                // Safety: `name` is owned at the moment.
+                sk.push(name.into_raw());
+            }
+        }
+        sk.into_raw()
+    }
 }
 
 #[cfg(test)]
