@@ -1184,9 +1184,9 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 		if config.Bugs.AlwaysMatchTrustAnchorID {
 			certMsg.matchedTrustAnchor = true
 		} else {
-			if hs.clientHello.trustAnchors != nil && useCert.TrustAnchorID != nil {
+			if hs.clientHello.trustAnchors != nil && useCert.Properties.TrustAnchorID != nil {
 				for _, id := range hs.clientHello.trustAnchors {
-					if bytes.Equal(useCert.TrustAnchorID, id) {
+					if bytes.Equal(useCert.Properties.TrustAnchorID, id) {
 						certMsg.matchedTrustAnchor = true
 					}
 				}

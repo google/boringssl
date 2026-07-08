@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"boringssl.googlesource.com/boringssl.git/ssl/test/runner/hpke"
+	"golang.org/x/crypto/cryptobyte"
 )
 
 const (
@@ -2433,6 +2434,31 @@ func (c *Config) verifySignatureAlgorithms() []signatureAlgorithm {
 	return supportedSignatureAlgorithms
 }
 
+const (
+	certPropTrustAnchorID uint16 = 0
+)
+
+type CertificatePropertyList struct {
+	TrustAnchorID []byte
+}
+
+func (c *CertificatePropertyList) Empty() bool {
+	return len(c.TrustAnchorID) == 0
+}
+
+func (c *CertificatePropertyList) Marshal() []byte {
+	bb := cryptobyte.NewBuilder(nil)
+	bb.AddUint16LengthPrefixed(func(props *cryptobyte.Builder) {
+		if len(c.TrustAnchorID) != 0 {
+			props.AddUint16(certPropTrustAnchorID)
+			// The ID is encoded directly in the property data, with
+			// no additional length prefix.
+			addUint16LengthPrefixedBytes(props, c.TrustAnchorID)
+		}
+	})
+	return bb.BytesOrPanic()
+}
+
 type CredentialType int
 
 const (
@@ -2522,9 +2548,9 @@ type Credential struct {
 	// AppendToImportedPSKIdentity is a byte string that is appended to the
 	// imported PSK identity.
 	AppendToImportedPSKIdentity []byte
-	// TrustAnchorID, if not empty, is the trust anchor ID for the issuer
-	// of the certificate chain.
-	TrustAnchorID []byte
+	// Properties is the certificate properties (draft-ietf-tls-trust-anchor-ids)
+	// associated with this credential.
+	Properties CertificatePropertyList
 }
 
 func (c *Credential) WithSignatureAlgorithms(sigAlgs ...signatureAlgorithm) *Credential {
@@ -2560,7 +2586,7 @@ func (c *Credential) signatureAlgorithms() []signatureAlgorithm {
 
 func (c *Credential) WithTrustAnchorID(id []byte) *Credential {
 	ret := *c
-	ret.TrustAnchorID = id
+	ret.Properties.TrustAnchorID = id
 	ret.MustMatchIssuer = true
 	return &ret
 }

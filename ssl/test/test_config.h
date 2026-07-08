@@ -46,7 +46,7 @@ struct CredentialConfig {
   std::vector<uint8_t> pake_client_id;
   std::vector<uint8_t> pake_server_id;
   std::vector<uint8_t> pake_password;
-  std::vector<uint8_t> trust_anchor_id;
+  std::vector<uint8_t> cert_properties;
   bool wrong_pake_role = false;
   std::vector<uint8_t> psk;
   std::vector<uint8_t> psk_identity;

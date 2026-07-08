@@ -1613,7 +1613,9 @@ func appendCredentialFlags(flags []string, cred *Credential, prefix string, newC
 	default:
 		panic(fmt.Sprintf("unknown PSK hash %s", cred.PSKHash))
 	}
-	handleBase64Field("trust-anchor-id", cred.TrustAnchorID)
+	if !cred.Properties.Empty() {
+		handleBase64Field("cert-properties", cred.Properties.Marshal())
+	}
 	return flags
 }
 
