@@ -233,17 +233,6 @@ impl<R, M> DerefMut for EstablishedTlsConnection<'_, R, M> {
     }
 }
 
-impl<'a, R, M> EstablishedTlsConnection<'a, R, M> {
-    /// Get the current session.
-    pub fn get_session(&self) -> Option<crate::sessions::TlsSession> {
-        let session = unsafe {
-            // Safety: self.ptr() is valid.
-            bssl_sys::SSL_get1_session(self.ptr())
-        };
-        core::ptr::NonNull::new(session).map(crate::sessions::TlsSession)
-    }
-}
-
 impl<R, M> EstablishedTlsConnection<'_, R, M>
 where
     M: HasTlsConnectionMethod + HasBasicIo,
