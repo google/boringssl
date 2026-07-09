@@ -2180,6 +2180,7 @@ pki_test_data = [
     "pki/testdata/ocsp_unittest/bad_status.pem",
     "pki/testdata/ocsp_unittest/future_response.pem",
     "pki/testdata/ocsp_unittest/good_response.pem",
+    "pki/testdata/ocsp_unittest/good_response_invalid_serial.pem",
     "pki/testdata/ocsp_unittest/good_response_next_update.pem",
     "pki/testdata/ocsp_unittest/good_response_sha256.pem",
     "pki/testdata/ocsp_unittest/has_critical_ct_extension.pem",
