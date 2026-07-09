@@ -168,6 +168,12 @@ impl<R> TlsConnection<R, TlsMode> {
 #[repr(transparent)]
 pub struct TlsConnectionInHandshake<'a, R, M>(pub(crate) &'a mut TlsConnection<R, M>);
 
+impl<R, M> TlsConnectionInHandshake<'_, R, M> {
+    pub(crate) fn ptr(&self) -> *mut bssl_sys::SSL {
+        self.0.ptr()
+    }
+}
+
 /// # Handshake
 impl<R, M> TlsConnection<R, M>
 where

@@ -86,16 +86,18 @@ where
         &mut self,
         key_method: Option<Box<dyn PrivateKeyDelegate>>,
     ) -> &mut Self {
-        let ctx = self.0.ptr();
         if key_method.is_some() {
             unsafe {
                 // Safety: we only install our own vtable.
-                bssl_sys::SSL_set_private_key_method(ctx, <M as HasPrivateKeyMethods>::METHODS);
+                bssl_sys::SSL_set_private_key_method(
+                    self.ptr(),
+                    <M as HasPrivateKeyMethods>::METHODS,
+                );
             }
         } else {
             unsafe {
                 // Safety: we only uninstall the vtable.
-                bssl_sys::SSL_set_private_key_method(ctx, core::ptr::null());
+                bssl_sys::SSL_set_private_key_method(self.ptr(), core::ptr::null());
             }
         }
         self.0.get_connection_methods().private_key_delegate = key_method;
@@ -185,10 +187,9 @@ where
         &mut self,
         mode: CertificateVerificationMode,
     ) -> &mut Self {
-        let ctx = self.0.ptr();
         unsafe {
             // Safety: this method only updates the mode value.
-            bssl_sys::SSL_set_verify(ctx, mode as _, None);
+            bssl_sys::SSL_set_verify(self.ptr(), mode as _, None);
         }
         self
     }
@@ -202,11 +203,10 @@ where
     where
         V: VerifyCertificate + 'static,
     {
-        let ctx = self.0.ptr();
         unsafe {
             // Safety: we only install our own vtable.
             bssl_sys::SSL_set_custom_verify(
-                ctx,
+                self.ptr(),
                 mode as _,
                 Some(cert_cb::<super::methods::RustConnectionMethods<M>>),
             );
@@ -217,10 +217,9 @@ where
 
     /// Remove custom certificate verifier.
     pub fn remove_certificate_verifier(&mut self, mode: CertificateVerificationMode) -> &mut Self {
-        let ctx = self.0.ptr();
         unsafe {
             // Safety: we only uninstall the vtable.
-            bssl_sys::SSL_set_custom_verify(ctx, mode as _, None);
+            bssl_sys::SSL_set_custom_verify(self.ptr(), mode as _, None);
         }
         self.0.get_connection_methods().verify_certificate_methods = None;
         self
@@ -230,7 +229,7 @@ where
     pub fn get_certificate_verification_mode(&self) -> Option<CertificateVerificationMode> {
         unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            bssl_sys::SSL_get_verify_mode(self.0.ptr())
+            bssl_sys::SSL_get_verify_mode(self.ptr())
         }
         .try_into()
         .ok()
@@ -249,7 +248,7 @@ where
     pub fn add_credential(&mut self, credential: &TlsCredential) -> Result<&mut Self, Error> {
         check_lib_error!(unsafe {
             // Safety: `credential` is still valid.
-            bssl_sys::SSL_add1_credential(self.0.ptr(), credential.ptr())
+            bssl_sys::SSL_add1_credential(self.ptr(), credential.ptr())
         });
         Ok(self)
     }
@@ -258,7 +257,7 @@ where
     pub fn clear_credentials(&mut self) -> &mut Self {
         unsafe {
             // Safety: `credential` is still valid.
-            bssl_sys::SSL_certs_clear(self.0.ptr());
+            bssl_sys::SSL_certs_clear(self.ptr());
         }
         self
     }
@@ -275,7 +274,7 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
     pub fn enable_signed_certificate_timestamps(&mut self) -> &mut Self {
         unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            bssl_sys::SSL_enable_signed_cert_timestamps(self.0.ptr());
+            bssl_sys::SSL_enable_signed_cert_timestamps(self.ptr());
         }
         self
     }
@@ -290,7 +289,7 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
             // - the validity of the handle `self.0` is witnessed by `self`.
             // - when pending handshake, the assignment is always successful.
             // - `SSL_set1_verify_cert_store` bumps the ref-count on the store.
-            bssl_sys::SSL_set1_verify_cert_store(self.0.ptr(), store.as_mut_ptr());
+            bssl_sys::SSL_set1_verify_cert_store(self.ptr(), store.as_mut_ptr());
         }
         self
     }
@@ -314,7 +313,7 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
         let (prefs, prefs_len) = slice_into_ffi_raw_parts(algs);
         check_lib_error!(unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            bssl_sys::SSL_set_verify_algorithm_prefs(self.0.ptr(), prefs, prefs_len)
+            bssl_sys::SSL_set_verify_algorithm_prefs(self.ptr(), prefs, prefs_len)
         });
         Ok(self)
     }
@@ -330,7 +329,7 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
             // Safety:
             // - the validity of the handle `self.0` is witnessed by `self`.
             // - the host name string has been sanitised for internal NUL-bytes and NUL-terminated.
-            bssl_sys::SSL_set1_host(self.0.ptr(), host_name.as_ptr())
+            bssl_sys::SSL_set1_host(self.ptr(), host_name.as_ptr())
         });
         Ok(self)
     }
@@ -359,7 +358,7 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
             .map_err(|_| Error::Configuration(ConfigurationError::ValueOutOfRange))?;
         unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            bssl_sys::SSL_set_verify_depth(self.0.ptr(), depth);
+            bssl_sys::SSL_set_verify_depth(self.ptr(), depth);
         }
         Ok(self)
     }
@@ -370,7 +369,7 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
     pub fn get_verify_depth(&self) -> Option<u16> {
         unsafe {
             // Safety: the validity and state of the handle `self.0` is witnessed by `self`.
-            bssl_sys::SSL_get_verify_depth(self.0.ptr()).try_into().ok()
+            bssl_sys::SSL_get_verify_depth(self.ptr()).try_into().ok()
         }
     }
 
@@ -383,7 +382,7 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
             // Safety:
             // - the validity of the handle `self.0` is witnessed by `self`.
             // - `SSL_set1_param` claims shared ownership of `params` by bumping ref-count.
-            bssl_sys::SSL_set1_param(self.0.ptr(), params.as_ptr())
+            bssl_sys::SSL_set1_param(self.ptr(), params.as_ptr())
         });
         Ok(self)
     }
@@ -393,10 +392,12 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
 impl<R, M> TlsConnectionInHandshake<'_, R, M> {
     /// Disable session creation.
     pub fn disable_session(&mut self) -> &mut Self {
-        let ptr = self.0.ptr();
         unsafe {
             // Safety: the validity of the handle `ptr` is witnessed by `self`.
-            bssl_sys::SSL_set_mode(ptr, super::ConnectionMode::MODE_NO_SESSION_CREATION.bits());
+            bssl_sys::SSL_set_mode(
+                self.ptr(),
+                super::ConnectionMode::MODE_NO_SESSION_CREATION.bits(),
+            );
         }
         self
     }
@@ -405,7 +406,7 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
     pub fn set_session(&mut self, session: &crate::sessions::TlsSession) -> &mut Self {
         unsafe {
             // Safety: self.ptr and session.0 are valid.
-            bssl_sys::SSL_set_session(self.0.ptr.as_ptr(), session.0.as_ptr());
+            bssl_sys::SSL_set_session(self.ptr(), session.ptr());
         }
         self
     }
@@ -423,7 +424,7 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
             // Safety:
             // - `self.ptr()` is a valid handle.
             // - `CertificateType` is a `u8` with acceptable values by construction.
-            bssl_sys::SSL_set1_accepted_peer_cert_types(self.0.ptr(), types as *const _, types_len)
+            bssl_sys::SSL_set1_accepted_peer_cert_types(self.ptr(), types as *const _, types_len)
         });
         Ok(self)
     }
