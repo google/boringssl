@@ -90,14 +90,7 @@ impl<R, M> TlsConnection<R, M> {
     /// Access handshake-related options if a handshake is completed and
     /// the connection is initialised.
     pub fn established<'a>(&'a mut self) -> Option<EstablishedTlsConnection<'a, R, M>> {
-        let session = unsafe {
-            // Safety: the validity of the handle `self.0` is witnessed by `self`.
-            bssl_sys::SSL_get_session(self.ptr())
-        };
-        if session.is_null() {
-            return None;
-        }
-        Some(EstablishedTlsConnection(self))
+        (!self.is_in_handshake()).then_some(EstablishedTlsConnection(self))
     }
 }
 
