@@ -1119,6 +1119,50 @@ OPENSSL_EXPORT int EVP_PKEY_CTX_get0_rsa_oaep_label(EVP_PKEY_CTX *ctx,
 
 // EC specific control functions.
 
+// The following functions decode `len` bytes from `in` as an EC public key in
+// compressed or uncompressed X9.62 format, respectively. The EC curve is
+// determined by `alg`, which must be an EC algorithm (i.e. one of
+// `EVP_pkey_ec_*`).
+//
+// The functions return a newly-allocated `EVP_PKEY` on success or NULL on
+// error.
+//
+// To support both uncompressed and compressed forms, call
+// `EVP_PKEY_from_ec_uncompressed_point` when the input begins with 0x04 and
+// `EVP_PKEY_from_ec_compressed_point` otherwise. Uncompressed form is more
+// common.
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_from_ec_uncompressed_point(
+    const EVP_PKEY_ALG *alg, const uint8_t *in, size_t len);
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_from_ec_compressed_point(
+    const EVP_PKEY_ALG *alg, const uint8_t *in, size_t len);
+
+// The following functions marshal `key`'s EC public key in compressed or
+// uncompressed X9.62 format, respectively, and write the result to `cbb`. They
+// return one on success and zero on error. It is an error if `key` is not an EC
+// key.
+OPENSSL_EXPORT int EVP_PKEY_marshal_ec_uncompressed_point(CBB *cbb,
+                                                          const EVP_PKEY *key);
+OPENSSL_EXPORT int EVP_PKEY_marshal_ec_compressed_point(CBB *cbb,
+                                                        const EVP_PKEY *key);
+
+// EVP_PKEY_from_ec_private_scalar decodes `len` bytes from `in` as an EC
+// private key, encoded as a big-endian, zero-padded integer. The EC curve is
+// determined by `alg`, which must be an EC algorithm (i.e. one of
+// `EVP_pkey_ec_*`). The input must be fully reduced and padded to the size of
+// the group order (e.g. 32 bytes for P-256) or the import will fail.
+//
+// This function returns a newly-allocated `EVP_PKEY` on success or NULL on
+// error.
+OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_from_ec_private_scalar(
+    const EVP_PKEY_ALG *alg, const uint8_t *in, size_t len);
+
+// EVP_PKEY_marshal_ec_private_scalar marshals `key`'s private key as a
+// big-endian, zero-padded integer EC scalar and writes the result to `cbb`. It
+// returns one on success or zero on error. It is an error if `key` is not an EC
+// key.
+OPENSSL_EXPORT int EVP_PKEY_marshal_ec_private_scalar(CBB *cbb,
+                                                      const EVP_PKEY *key);
+
 // EVP_PKEY_get_ec_curve_nid returns `pkey`'s curve as a NID constant, such as
 // `NID_X9_62_prime256v1`, or `NID_undef` if `pkey` is not an EC key.
 OPENSSL_EXPORT int EVP_PKEY_get_ec_curve_nid(const EVP_PKEY *pkey);

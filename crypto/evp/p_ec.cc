@@ -575,6 +575,127 @@ EC_KEY *EVP_PKEY_get1_EC_KEY(const EVP_PKEY *pkey) {
   return ec_key;
 }
 
+static const EC_GROUP *alg_to_group(const EVP_PKEY_ALG *alg) {
+  if (alg->method->pkey_id != EVP_PKEY_EC) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+    return nullptr;
+  }
+  auto *alg_ec = static_cast<const EVP_PKEY_ALG_EC *>(alg);
+  if (alg_ec->ec_group == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
+    return nullptr;
+  }
+  return alg_ec->ec_group();
+}
+
+static EVP_PKEY *pkey_from_ec_point(const EC_GROUP *group, const uint8_t *in,
+                                    size_t len) {
+  UniquePtr<EVP_PKEY> pkey(EVP_PKEY_new());
+  UniquePtr<EC_KEY> ec_key(EC_KEY_new());
+  if (pkey == nullptr || ec_key == nullptr ||
+      !EC_KEY_set_group(ec_key.get(), group) ||
+      !EC_KEY_oct2key(ec_key.get(), in, len, nullptr)) {
+    return nullptr;
+  }
+  EVP_PKEY_assign_EC_KEY(pkey.get(), ec_key.release());
+  return pkey.release();
+}
+
+EVP_PKEY *EVP_PKEY_from_ec_uncompressed_point(
+    const EVP_PKEY_ALG *alg, const uint8_t *in, size_t len) {
+  const EC_GROUP *group = alg_to_group(alg);
+  if (group == nullptr) {
+    return nullptr;
+  }
+  // The `EC_KEY` APIs are not separated by uncompressed and compressed.
+  if (len == 0 || in[0] != 0x04) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
+    return nullptr;
+  }
+  return pkey_from_ec_point(group, in, len);
+}
+
+EVP_PKEY *EVP_PKEY_from_ec_compressed_point(const EVP_PKEY_ALG *alg,
+                                            const uint8_t *in, size_t len) {
+  const EC_GROUP *group = alg_to_group(alg);
+  if (group == nullptr) {
+    return nullptr;
+  }
+  // The `EC_KEY` APIs are not separated by uncompressed and compressed.
+  if (len == 0 || in[0] == 0x04) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
+    return nullptr;
+  }
+  return pkey_from_ec_point(group, in, len);
+}
+
+static int marshal_ec_point(CBB *cbb, const EVP_PKEY *key,
+                            point_conversion_form_t form) {
+  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(key);
+  if (ec_key == nullptr) {
+    return 0;
+  }
+  const EC_GROUP *group = EC_KEY_get0_group(ec_key);
+  const EC_POINT *pub = EC_KEY_get0_public_key(ec_key);
+  if (group == nullptr || pub == nullptr) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PUBLIC_KEY);
+    return 0;
+  }
+  return EC_POINT_point2cbb(cbb, group, pub, form, nullptr);
+}
+
+int EVP_PKEY_marshal_ec_uncompressed_point(CBB *cbb, const EVP_PKEY *key) {
+  return marshal_ec_point(cbb, key, POINT_CONVERSION_UNCOMPRESSED);
+}
+
+int EVP_PKEY_marshal_ec_compressed_point(CBB *cbb, const EVP_PKEY *key) {
+  return marshal_ec_point(cbb, key, POINT_CONVERSION_COMPRESSED);
+}
+
+EVP_PKEY *EVP_PKEY_from_ec_private_scalar(const EVP_PKEY_ALG *alg,
+                                          const uint8_t *in, size_t len) {
+  const EC_GROUP *group = alg_to_group(alg);
+  if (group == nullptr) {
+    return nullptr;
+  }
+  UniquePtr<EVP_PKEY> pkey(EVP_PKEY_new());
+  UniquePtr<EC_KEY> ec_key(EC_KEY_new());
+  if (pkey == nullptr || ec_key == nullptr ||
+      !EC_KEY_set_group(ec_key.get(), group) ||
+      !EC_KEY_oct2priv(ec_key.get(), in, len)) {
+    return nullptr;
+  }
+  // TODO(crbug.com/42290404): `EC_KEY_oct2priv` should fill in the public key
+  // internally.
+  UniquePtr<EC_POINT> pub(EC_POINT_new(group));
+  if (pub == nullptr ||
+      !EC_POINT_mul(group, pub.get(), EC_KEY_get0_private_key(ec_key.get()),
+                    nullptr, nullptr, nullptr) ||
+      !EC_KEY_set_public_key(ec_key.get(), pub.get())) {
+    return 0;
+  }
+
+  EVP_PKEY_assign_EC_KEY(pkey.get(), ec_key.release());
+  return pkey.release();
+}
+
+int EVP_PKEY_marshal_ec_private_scalar(CBB *cbb, const EVP_PKEY *key) {
+  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(key);
+  if (ec_key == nullptr) {
+    return 0;
+  }
+  size_t len = EC_KEY_priv2oct(ec_key, nullptr, 0);
+  if (len == 0) {
+    return 0;
+  }
+  uint8_t *out;
+  if (!CBB_reserve(cbb, &out, len)) {
+    return 0;
+  }
+  len = EC_KEY_priv2oct(ec_key, out, len);
+  return len != 0 && CBB_did_write(cbb, len);
+}
+
 int EVP_PKEY_get_ec_curve_nid(const EVP_PKEY *pkey) {
   const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
   if (ec_key == nullptr) {

@@ -112,9 +112,7 @@ struct AlgorithmInfo {
 };
 
 const std::map<std::string, AlgorithmInfo> kAllAlgorithms = {
-    {"RSA",
-     {EVP_pkey_rsa(),
-      /*kem=*/nullptr, EVP_PKEY_RSA, true}},
+    {"RSA", {EVP_pkey_rsa(), /*kem=*/nullptr, EVP_PKEY_RSA, true}},
 
     {"RSA-PSS-SHA-256",
      {EVP_pkey_rsa_pss_sha256(), /*kem=*/nullptr, EVP_PKEY_RSA_PSS, false}},
@@ -307,7 +305,8 @@ bool ImportWithAlgCommon(FileTest *t, KeySet *key_set, KeyRole key_role,
                          EVP_PKEY *(*parse_func)(const EVP_PKEY_ALG *,
                                                  const uint8_t *, size_t)) {
   SCOPED_TRACE(attr);
-  if (!t->HasAttribute(attr)) {
+  if (!t->HasAttribute(attr) ||
+      t->HasAttribute("SkipImport" + std::string(attr))) {
     return true;  // Nothing to import.
   }
   std::vector<uint8_t> input;
@@ -521,6 +520,12 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
                            alg_info, &EVP_PKEY_from_raw_private_key) ||
       !ImportWithAlgCommon(t, &key_set, KeyRole::kPrivate, "PrivateSeed",
                            alg_info, &EVP_PKEY_from_private_seed) ||
+      !ImportWithAlgCommon(t, &key_set, KeyRole::kPublic, "ECUncompressedPoint",
+                           alg_info, &EVP_PKEY_from_ec_uncompressed_point) ||
+      !ImportWithAlgCommon(t, &key_set, KeyRole::kPublic, "ECCompressedPoint",
+                           alg_info, &EVP_PKEY_from_ec_compressed_point) ||
+      !ImportWithAlgCommon(t, &key_set, KeyRole::kPrivate, "ECPrivateScalar",
+                           alg_info, &EVP_PKEY_from_ec_private_scalar) ||
       !ImportRSAPublicParams(t, &key_set, alg_info) ||
       !ImportRSAPrivateParams(t, &key_set, alg_info)) {
     return false;
@@ -605,7 +610,13 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
         !CheckRawKey(t, "RawPublic", KeyRoleSelect::kAny, key,
                      EVP_PKEY_get_raw_public_key) ||
         !CheckRawKey(t, "PrivateSeed", KeyRoleSelect::kPrivate, key,
-                     EVP_PKEY_get_private_seed)) {
+                     EVP_PKEY_get_private_seed) ||
+        !CheckMarshalCBB(t, "ECUncompressedPoint", KeyRoleSelect::kAny, key,
+                         EVP_PKEY_marshal_ec_uncompressed_point) ||
+        !CheckMarshalCBB(t, "ECCompressedPoint", KeyRoleSelect::kAny, key,
+                         EVP_PKEY_marshal_ec_compressed_point) ||
+        !CheckMarshalCBB(t, "ECPrivateScalar", KeyRoleSelect::kPrivate, key,
+                         EVP_PKEY_marshal_ec_private_scalar)) {
       return false;
     }
   }

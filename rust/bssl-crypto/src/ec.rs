@@ -357,6 +357,9 @@ impl Key {
 
         // BoringSSL allows an `EC_KEY` to have a private scalar without a
         // public point, but `Key` is never exposed in that state.
+        //
+        // TODO(crbug.com/42290404): `EC_KEY_oct2priv` should fill in the public
+        // key.
 
         // Safety: `key.0` is valid by construction. The returned value is
         // still owned the `EC_KEY`.
