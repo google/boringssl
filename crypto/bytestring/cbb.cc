@@ -74,6 +74,7 @@ void CBB_cleanup(CBB *cbb) {
 static int cbb_buffer_reserve(struct cbb_buffer_st *base, uint8_t **out,
                               size_t len) {
   if (base == nullptr) {
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
 
@@ -137,6 +138,7 @@ int CBB_finish(CBB *cbb, uint8_t **out_data, size_t *out_len) {
 
   if (cbb->u.base.can_resize && (out_data == nullptr || out_len == nullptr)) {
     // `out_data` and `out_len` can only be NULL if the CBB is fixed.
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
@@ -190,6 +192,7 @@ int CBB_flush(CBB *cbb) {
   // memory.
   struct cbb_buffer_st *base = cbb_get_base(cbb);
   if (base == nullptr || base->error) {
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
@@ -204,8 +207,11 @@ int CBB_flush(CBB *cbb) {
   size_t child_start = child->offset + child->pending_len_len;
 
   size_t len;
-  if (!CBB_flush(cbb->child) || child_start < child->offset ||
-      base->len < child_start) {
+  if (!CBB_flush(cbb->child)) {
+    goto err;
+  }
+  if (child_start < child->offset || base->len < child_start) {
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_INTERNAL_ERROR);
     goto err;
   }
 
@@ -424,6 +430,7 @@ int CBB_did_write(CBB *cbb, size_t len) {
   struct cbb_buffer_st *base = cbb_get_base(cbb);
   size_t newlen = base->len + len;
   if (cbb->child != nullptr || newlen < base->len || newlen > base->cap) {
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
   base->len = newlen;
@@ -443,6 +450,7 @@ static int cbb_add_u(CBB *cbb, uint64_t v, size_t len_len) {
 
   // `v` must fit in `len_len` bytes.
   if (v != 0) {
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_OVERFLOW);
     cbb_on_error(cbb);
     return 0;
   }
@@ -754,7 +762,7 @@ bool bssl::CBBFinishArray(CBB *cbb, Array<uint8_t> *out) {
   uint8_t *ptr;
   size_t len;
   if (!CBB_finish(cbb, &ptr, &len)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_INTERNAL_ERROR);
     return false;
   }
   out->Reset(ptr, len);
