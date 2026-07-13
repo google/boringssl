@@ -32,24 +32,6 @@ use crate::{
 /// A TLS session.
 ///
 /// See [RFC 8446 Section 2.2](https://datatracker.ietf.org/doc/html/rfc8446#section-2.2).
-///
-/// # Example
-///
-/// ```rust,no_run
-/// # use bssl_tls::{context::TlsContext, sessions::TlsSession};
-/// # use bssl_tls::context::{Client, TlsMode};
-/// # use bssl_tls::connection::lifecycle::EstablishedTlsConnection;
-/// // Assuming `conn` is an `EstablishedTlsConnection`
-/// # let conn: EstablishedTlsConnection<'_, Client, TlsMode> = todo!();
-/// # let ctx: TlsContext = todo!();
-/// if let Some(session) = conn.get_session() {
-///     // Serialize the session to store it
-///     let session_bytes = session.to_bytes().unwrap();
-///
-///     // Deserialize the session to resume it later
-///     let recovered_session = TlsSession::from_bytes(&session_bytes, &ctx).unwrap();
-/// }
-/// ```
 pub struct TlsSession(pub(crate) NonNull<bssl_sys::SSL_SESSION>);
 
 // Safety: once constructed an `SSL_SESSION` is immutable and has no thread-local data.
