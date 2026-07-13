@@ -31,10 +31,7 @@ use crate::{
         TlsConnection, //
     },
     context::TlsContextBuilder,
-    credentials::{
-        Certificate,
-        TlsCredentialBuilder, //
-    },
+    credentials::{Certificate, TlsCredential, TlsCredentialBuilder},
     errors::Error,
     io::{
         AbstractReader,
@@ -49,7 +46,10 @@ use bssl_x509::{
     certificates::X509Certificate,
     keys::PrivateKey,
     params::Trust,
-    store::X509StoreBuilder, //
+    store::{
+        X509Store,
+        X509StoreBuilder, //
+    },
 };
 use futures::future::join;
 
@@ -70,28 +70,13 @@ mod transport;
 
 /// Dumb server-client pair that does no certificate verification.
 fn dumb_server_client() -> Result<(TlsConnection<Server>, TlsConnection<Client>), Error> {
-    let ca = Certificate::parse_one_from_pem(CA, None)?;
-    let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None)?;
-    let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!())?;
-
     let mut server_ctx_builder = TlsContextBuilder::new_tls();
-    let server_cred = {
-        let mut builder = TlsCredentialBuilder::new();
-        builder
-            .with_certificate_chain(&[server_cert, ca])?
-            .with_private_key(server_key)?;
-        builder.build()
-    };
-    server_ctx_builder.with_credential(server_cred.unwrap())?;
+    server_ctx_builder.with_credential(load_x509_credential())?;
     let server_ctx = server_ctx_builder.build();
     let server_conn = server_ctx.new_server_connection().build();
 
     let mut client_ctx_builder = TlsContextBuilder::new_tls();
-    let mut cert_store = X509StoreBuilder::new();
-    cert_store
-        .set_trust(Trust::SslServer)?
-        .add_cert(X509Certificate::parse_one_from_pem(CA)?)?;
-    let cert_store = cert_store.build();
+    let cert_store = load_trust_store(Trust::SslServer);
     client_ctx_builder.with_certificate_store(&cert_store);
     let client_ctx = client_ctx_builder.build();
     let client_conn = client_ctx.new_client_connection().build();
@@ -374,6 +359,33 @@ pub(crate) fn create_mock_datagram() -> (
     MockExecutor,
 ) {
     create_mock_socket::<MockDatagram>()
+}
+
+/// Builds a [`TlsCredential`] from the test RSA certificate chain (server cert + CA)
+/// and private key.
+pub(crate) fn load_x509_credential() -> TlsCredential {
+    let ca = Certificate::parse_one_from_pem(CA, None).unwrap();
+    let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None).unwrap();
+    let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!()).unwrap();
+
+    let mut builder = TlsCredentialBuilder::new();
+    builder
+        .with_certificate_chain(&[server_cert, ca])
+        .unwrap()
+        .with_private_key(server_key)
+        .unwrap();
+    builder.build().unwrap()
+}
+
+/// Builds an X509 trust store with the test CA certificate.
+pub(crate) fn load_trust_store(trust: Trust) -> X509Store {
+    let mut cert_store = X509StoreBuilder::new();
+    cert_store
+        .set_trust(trust)
+        .unwrap()
+        .add_cert(X509Certificate::parse_one_from_pem(CA).unwrap())
+        .unwrap();
+    cert_store.build()
 }
 
 #[test]
