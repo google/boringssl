@@ -694,6 +694,7 @@ void SSL_set0_client_CAs(SSL *ssl, STACK_OF(CRYPTO_BUFFER) *name_list) {
 void SSL_set0_CA_names(SSL *ssl, STACK_OF(CRYPTO_BUFFER) *name_list) {
   auto *ssl_impl = FromOpaque(ssl);
   if (!ssl_impl->config) {
+    sk_CRYPTO_BUFFER_pop_free(name_list, CRYPTO_BUFFER_free);
     return;
   }
   ssl_impl->config->CA_names.reset(name_list);
