@@ -62,7 +62,27 @@ pub enum DtlsMode {}
 /// QUIC mode
 pub enum QuicMode {}
 
+/// TLS mode without built-in X.509 support.
+///
+/// This mode uses `TLS_with_buffers_method`, which avoids all use of crypto/x509.
+/// All client connections will fail unless a certificate verifier is installed with
+/// [`TlsContextBuilder::with_certificate_verifier`].
+pub enum TlsExternalVerifierMode {}
+
+/// DTLS mode without built-in X.509 support.
+///
+/// This mode uses `DTLS_with_buffers_method`, which avoids all use of crypto/x509.
+/// All client connections will fail unless a certificate verifier is installed with
+/// [`TlsContextBuilder::with_certificate_verifier`].
+pub enum DtlsExternalVerifierMode {}
+
 pub(crate) trait HasBasicIo {}
+
+/// A marker trait for modes that have built-in X.509 support.
+pub trait UseBuiltinX509 {}
+
+impl UseBuiltinX509 for TlsMode {}
+impl UseBuiltinX509 for DtlsMode {}
 
 /// A collection of supported mode of operations.
 pub trait SupportedMode:
@@ -73,9 +93,13 @@ pub trait SupportedMode:
 impl SupportedMode for TlsMode {}
 impl SupportedMode for DtlsMode {}
 impl SupportedMode for QuicMode {}
+impl SupportedMode for TlsExternalVerifierMode {}
+impl SupportedMode for DtlsExternalVerifierMode {}
 
 impl HasBasicIo for TlsMode {}
 impl HasBasicIo for DtlsMode {}
+impl HasBasicIo for TlsExternalVerifierMode {}
+impl HasBasicIo for DtlsExternalVerifierMode {}
 
 /// General TLS configuration
 ///
@@ -138,6 +162,34 @@ impl TlsContextBuilder<DtlsMode> {
         Self::new_inner(unsafe {
             // Safety: this call returns a static immutable data
             bssl_sys::DTLS_method()
+        })
+    }
+}
+
+/// # Make a TLS context builder without built-in X.509 support
+impl TlsContextBuilder<TlsExternalVerifierMode> {
+    /// Creates a new TLS context builder without X.509 support.
+    ///
+    /// All client connections will fail unless a certificate verifier is installed
+    /// with [`TlsContextBuilder::with_certificate_verifier`].
+    pub fn new_tls_no_x509() -> Self {
+        Self::new_inner(unsafe {
+            // Safety: this call returns a static immutable data
+            bssl_sys::TLS_with_buffers_method()
+        })
+    }
+}
+
+/// # Make a DTLS context builder without built-in X.509 support
+impl TlsContextBuilder<DtlsExternalVerifierMode> {
+    /// Creates a new DTLS context builder without X.509 support.
+    ///
+    /// All client connections will fail unless a certificate verifier is installed
+    /// with [`TlsContextBuilder::with_certificate_verifier`].
+    pub fn new_dtls_no_x509() -> Self {
+        Self::new_inner(unsafe {
+            // Safety: this call returns a static immutable data
+            bssl_sys::DTLS_with_buffers_method()
         })
     }
 }

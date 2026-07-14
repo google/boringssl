@@ -35,9 +35,11 @@ use crate::{
     VerifyCertificateMethods,
     abort_on_panic,
     context::{
+        DtlsExternalVerifierMode,
         DtlsMode,
         QuicMode,
-        TlsMode, //
+        TlsExternalVerifierMode, //
+        TlsMode,
     },
     credentials::{
         PrivateKeyDelegate,
@@ -300,63 +302,54 @@ pub(crate) trait HasTlsConnectionMethod {
     fn registration() -> c_int;
 }
 
-impl HasTlsConnectionMethod for TlsMode {
-    #[inline(always)]
-    fn registration() -> c_int {
-        static TLS_CONTEXT_METHOD: Lazy<c_int> =
-            Lazy::new(register_tls_connection_vtable::<TlsMode>);
-        *TLS_CONTEXT_METHOD
-    }
+macro_rules! impl_has_tls_connection_method {
+    ($($mode:ty),+ $(,)?) => {
+        $(
+            impl HasTlsConnectionMethod for $mode {
+                #[inline(always)]
+                fn registration() -> c_int {
+                    static TLS_CONTEXT_METHOD: Lazy<c_int> =
+                        Lazy::new(register_tls_connection_vtable::<$mode>);
+                    *TLS_CONTEXT_METHOD
+                }
+            }
+        )+
+    };
 }
 
-impl HasTlsConnectionMethod for DtlsMode {
-    #[inline(always)]
-    fn registration() -> c_int {
-        static TLS_CONTEXT_METHOD: Lazy<c_int> =
-            Lazy::new(register_tls_connection_vtable::<DtlsMode>);
-        *TLS_CONTEXT_METHOD
-    }
-}
-
-impl HasTlsConnectionMethod for QuicMode {
-    #[inline(always)]
-    fn registration() -> c_int {
-        static TLS_CONTEXT_METHOD: Lazy<c_int> =
-            Lazy::new(register_tls_connection_vtable::<QuicMode>);
-        *TLS_CONTEXT_METHOD
-    }
+impl_has_tls_connection_method! {
+    TlsMode,
+    TlsExternalVerifierMode,
+    DtlsMode,
+    DtlsExternalVerifierMode,
+    QuicMode,
 }
 
 pub(super) trait HasPrivateKeyMethods {
     const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD;
 }
 
-impl HasPrivateKeyMethods for TlsMode {
-    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
-        &bssl_sys::SSL_PRIVATE_KEY_METHOD {
-            sign: Some(sign::<RustConnectionMethods<TlsMode>>),
-            decrypt: Some(decrypt::<RustConnectionMethods<TlsMode>>),
-            complete: Some(complete::<RustConnectionMethods<TlsMode>>),
-        } as _
+macro_rules! impl_private_key_methods {
+    ($wrapper:ident, $($mode:ty),+ $(,)?) => {
+        $(
+            impl HasPrivateKeyMethods for $mode {
+                const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
+                    &bssl_sys::SSL_PRIVATE_KEY_METHOD {
+                        sign: Some(sign::<$wrapper<$mode>>),
+                        decrypt: Some(decrypt::<$wrapper<$mode>>),
+                        complete: Some(complete::<$wrapper<$mode>>),
+                    } as _
+                };
+            }
+        )+
     };
 }
 
-impl HasPrivateKeyMethods for DtlsMode {
-    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
-        &bssl_sys::SSL_PRIVATE_KEY_METHOD {
-            sign: Some(sign::<RustConnectionMethods<DtlsMode>>),
-            decrypt: Some(decrypt::<RustConnectionMethods<DtlsMode>>),
-            complete: Some(complete::<RustConnectionMethods<DtlsMode>>),
-        } as _
-    };
-}
-
-impl HasPrivateKeyMethods for QuicMode {
-    const METHODS: *const bssl_sys::SSL_PRIVATE_KEY_METHOD = {
-        &bssl_sys::SSL_PRIVATE_KEY_METHOD {
-            sign: Some(sign::<RustConnectionMethods<QuicMode>>),
-            decrypt: Some(decrypt::<RustConnectionMethods<QuicMode>>),
-            complete: Some(complete::<RustConnectionMethods<QuicMode>>),
-        } as _
-    };
+impl_private_key_methods! {
+    RustConnectionMethods,
+    TlsMode,
+    DtlsMode,
+    QuicMode,
+    TlsExternalVerifierMode,
+    DtlsExternalVerifierMode,
 }

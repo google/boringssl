@@ -240,8 +240,15 @@ where
     }
 }
 
-/// # Certificate verification
-impl<M> TlsContextBuilder<M> {
+/// # Certificate verification, X.509
+///
+/// These methods require built-in X.509 support and are not available for
+/// [`TlsNoX509Mode`](super::TlsNoX509Mode) or
+/// [`DtlsNoX509Mode`](super::DtlsNoX509Mode).
+impl<M> TlsContextBuilder<M>
+where
+    M: super::UseBuiltinX509,
+{
     /// Set certificate verification parameters.
     pub fn with_certificate_verification_params(
         &mut self,
@@ -283,7 +290,10 @@ impl<M> TlsContextBuilder<M> {
         }
         self
     }
+}
 
+/// # Signature algorithm preferences
+impl<M> TlsContextBuilder<M> {
     /// Set a preference list of signature algorithms for verification.
     ///
     /// This method returns [`ConfigurationError::InvalidParameters`] if the list of algorithms
