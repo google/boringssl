@@ -334,6 +334,20 @@ impl<M> TlsConnectionInHandshake<'_, Client, M> {
         });
         Ok(self)
     }
+
+    /// Set SNI extension hostname.
+    pub fn set_tlsext_host_name(&mut self, host_name: &str) -> Result<&mut Self, Error> {
+        let host_name = CString::new(host_name)
+            .map_err(|_| Error::Configuration(ConfigurationError::InvalidString))?;
+        check_lib_error!(unsafe {
+            // Safety:
+            // - the validity of the handle `self.0` is witnessed by `self`.
+            // - the host name string has been sanitised for internal NUL-bytes and NUL-terminated.
+            // - BoringSSL copies the string internally, so the pointer does not need to outlive the call.
+            bssl_sys::SSL_set_tlsext_host_name(self.0.ptr(), host_name.as_ptr())
+        });
+        Ok(self)
+    }
 }
 
 /// # Certificate verification - Certificate Chain Verification
