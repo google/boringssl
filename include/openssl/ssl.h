@@ -5135,8 +5135,7 @@ OPENSSL_EXPORT void SSL_set_msg_callback_arg(SSL *ssl, void *arg);
 // should log `line` followed by a newline, synchronizing with any concurrent
 // access to the log.
 //
-// The format is described in
-// https://www.ietf.org/archive/id/draft-ietf-tls-keylogfile-01.html
+// The format is described in RFC 9850.
 //
 // WARNING: The data in `line` allows an attacker to break security properties
 // of the TLS protocol, including confidentiality, integrity, and forward
