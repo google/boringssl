@@ -75,7 +75,7 @@
 //! #
 //! #     let server_task = tokio::spawn(async move {
 //! #         let (stream, _) = listener.accept().await.unwrap();
-//! #         let mut conn = server_ctx.new_server_connection(None).unwrap().build();
+//! #         let mut conn = server_ctx.new_server_connection().unwrap().build();
 //! #         conn.set_io(TokioIo(stream)).unwrap();
 //! #         conn.async_handshake().await.unwrap();
 //! #         
@@ -90,7 +90,7 @@
 //!
 //!     let client_ctx = client_ctx_builder.build();
 //!
-//!     let mut conn = client_ctx.new_client_connection(None).unwrap().build();
+//!     let mut conn = client_ctx.new_client_connection().unwrap().build();
 //!     conn.in_handshake().unwrap().set_host("www.google.com")?;
 //!     conn.set_io(TokioIo(stream))?;
 //!
@@ -524,7 +524,7 @@ impl TlsConnector {
     where
         S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
-        let mut conn = self.ctx.new_client_connection(None)?.build();
+        let mut conn = self.ctx.new_client_connection()?.build();
         conn.in_handshake().unwrap().set_host(domain)?;
 
         conn.set_io(TokioIo(stream))?;
@@ -554,7 +554,7 @@ impl TlsAcceptor {
     where
         S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
-        let mut conn = self.ctx.new_server_connection(None)?.build();
+        let mut conn = self.ctx.new_server_connection()?.build();
 
         conn.set_io(TokioIo(stream))?;
 
@@ -629,7 +629,7 @@ impl DtlsConnector {
     where
         S: AbstractSocket + Send + Unpin + 'static,
     {
-        let mut conn = self.ctx.new_client_connection(None)?.build();
+        let mut conn = self.ctx.new_client_connection()?.build();
         conn.in_handshake().unwrap().set_host(domain)?;
         conn.set_io(stream)?;
         conn.async_handshake().await?;
@@ -657,7 +657,7 @@ impl DtlsAcceptor {
     where
         S: AbstractSocket + Send + Unpin + 'static,
     {
-        let mut conn = self.ctx.new_server_connection(None)?.build();
+        let mut conn = self.ctx.new_server_connection()?.build();
         conn.set_io(stream)?;
         conn.async_handshake().await?;
 

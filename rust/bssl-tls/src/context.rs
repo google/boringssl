@@ -26,7 +26,6 @@ use bssl_crypto::FfiSlice;
 use crate::{
     check_lib_error,
     config::{
-        CompliancePolicy,
         ConfigurationError,
         KeyExchangeGroupFlag,
         KeyExchangeGroups,
@@ -456,21 +455,12 @@ impl<M> TlsContext<M>
 where
     M: HasTlsContextMethod + HasTlsConnectionMethod,
 {
-    fn new_connection(
-        &self,
-        compliance_policy: Option<CompliancePolicy>,
-    ) -> NonNull<bssl_sys::SSL> {
+    fn new_connection(&self) -> NonNull<bssl_sys::SSL> {
         let conn = unsafe {
             // Safety: in this type-state, our SSL_CTX is effectively immutable,
             // so we can freely alias.
             bssl_sys::SSL_new(self.ptr())
         };
-        if let Some(policy) = compliance_policy {
-            unsafe {
-                // Safety: `policy` is a valid enum value per construction.
-                bssl_sys::SSL_set_compliance_policy(conn, policy as _);
-            }
-        }
         NonNull::new(conn).expect("allocation failure")
     }
 
@@ -480,11 +470,8 @@ where
     /// from the server.
     /// To override this default, use
     /// [`TlsConnectionBuilder::with_certificate_verification_mode`].
-    pub fn new_client_connection(
-        &self,
-        compliance_policy: Option<CompliancePolicy>,
-    ) -> Result<TlsConnectionBuilder<Client, M>, Error> {
-        let conn = self.new_connection(compliance_policy);
+    pub fn new_client_connection(&self) -> Result<TlsConnectionBuilder<Client, M>, Error> {
+        let conn = self.new_connection();
         unsafe {
             // Safety: the connection is still valid here
             bssl_sys::SSL_set_connect_state(conn.as_ptr());
@@ -499,11 +486,8 @@ where
     }
 
     /// Make a new server-half connection inheriting the configuration of this context
-    pub fn new_server_connection(
-        &self,
-        compliance_policy: Option<CompliancePolicy>,
-    ) -> Result<TlsConnectionBuilder<Server, M>, Error> {
-        let conn = self.new_connection(compliance_policy);
+    pub fn new_server_connection(&self) -> Result<TlsConnectionBuilder<Server, M>, Error> {
+        let conn = self.new_connection();
         unsafe {
             // Safety: the connection is still valid here
             bssl_sys::SSL_set_accept_state(conn.as_ptr());

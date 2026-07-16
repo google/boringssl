@@ -159,8 +159,8 @@ fn psk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
     let (client_socket, server_socket, mut executor) = create_mock_pipe();
 
-    let mut client_conn = client_ctx.new_client_connection(None)?.build();
-    let mut server_conn = server_ctx.new_server_connection(None)?.build();
+    let mut client_conn = client_ctx.new_client_connection()?.build();
+    let mut server_conn = server_ctx.new_server_connection()?.build();
 
     client_conn.set_io(client_socket)?;
     server_conn.set_io(server_socket)?;
@@ -213,8 +213,8 @@ fn psk_tls13_handshake_sync() -> Result<(), Box<dyn std::error::Error + Send + S
     client_ctx.with_credential(cred)?;
     let client_ctx = client_ctx.build();
 
-    let mut client_conn = client_ctx.new_client_connection(None)?.build();
-    let mut server_conn = server_ctx.new_server_connection(None)?.build();
+    let mut client_conn = client_ctx.new_client_connection()?.build();
+    let mut server_conn = server_ctx.new_server_connection()?.build();
 
     client_conn.set_split_io(client_reader, client_writer)?;
     server_conn.set_split_io(server_reader, server_writer)?;
@@ -256,7 +256,7 @@ fn rpk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     client_ctx.with_accepted_peer_cert_types(&[CertificateType::Rpk])?;
     let client_ctx = client_ctx.build();
 
-    let mut client_conn_builder = client_ctx.new_client_connection(None)?;
+    let mut client_conn_builder = client_ctx.new_client_connection()?;
     client_conn_builder.with_certificate_verification_mode(CertificateVerificationMode::None);
     let mut client_conn = client_conn_builder.build();
     unsafe {
@@ -269,7 +269,7 @@ fn rpk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
             Some(accept_any_verify),
         );
     }
-    let mut server_conn = server_ctx.new_server_connection(None)?.build();
+    let mut server_conn = server_ctx.new_server_connection()?.build();
 
     let (sock_client, sock_server, mut executor) = create_mock_pipe();
 
@@ -455,10 +455,10 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
         let (sock_client, sock_server, mut executor) = create_mock_pipe();
 
-        let mut server_conn = server_ctx.new_server_connection(None)?.build();
+        let mut server_conn = server_ctx.new_server_connection()?.build();
         server_conn.set_io(sock_server)?;
 
-        let mut client_conn_builder = client_ctx.new_client_connection(None)?;
+        let mut client_conn_builder = client_ctx.new_client_connection()?;
         client_conn_builder
             .with_certificate_verification_mode(CertificateVerificationMode::None)
             .with_certificate_verifier(

@@ -46,7 +46,7 @@ fn dumb_dtls_server_client() -> Result<
     };
     server_ctx_builder.with_credential(server_cred.unwrap())?;
     let server_ctx = server_ctx_builder.build();
-    let server_conn = server_ctx.new_server_connection(None)?.build();
+    let server_conn = server_ctx.new_server_connection()?.build();
 
     let mut client_ctx_builder = TlsContextBuilder::new_dtls();
     let ca = X509Certificate::parse_one_from_pem(super::CA)?;
@@ -55,7 +55,7 @@ fn dumb_dtls_server_client() -> Result<
     let cert_store = cert_store.build();
     client_ctx_builder.with_certificate_store(&cert_store);
     let client_ctx = client_ctx_builder.build();
-    let client_conn = client_ctx.new_client_connection(None)?.build();
+    let client_conn = client_ctx.new_client_connection()?.build();
 
     Ok((server_conn, client_conn))
 }
