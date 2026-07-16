@@ -470,7 +470,7 @@ where
     /// from the server.
     /// To override this default, use
     /// [`TlsConnectionBuilder::with_certificate_verification_mode`].
-    pub fn new_client_connection(&self) -> Result<TlsConnectionBuilder<Client, M>, Error> {
+    pub fn new_client_connection(&self) -> TlsConnectionBuilder<Client, M> {
         let conn = self.new_connection();
         unsafe {
             // Safety: the connection is still valid here
@@ -482,17 +482,17 @@ where
         builder.with_certificate_verification_mode(
             crate::credentials::CertificateVerificationMode::PeerCertRequested,
         );
-        Ok(builder)
+        builder
     }
 
     /// Make a new server-half connection inheriting the configuration of this context
-    pub fn new_server_connection(&self) -> Result<TlsConnectionBuilder<Server, M>, Error> {
+    pub fn new_server_connection(&self) -> TlsConnectionBuilder<Server, M> {
         let conn = self.new_connection();
         unsafe {
             // Safety: the connection is still valid here
             bssl_sys::SSL_set_accept_state(conn.as_ptr());
         }
-        Ok(TlsConnectionBuilder::from_ssl(conn))
+        TlsConnectionBuilder::from_ssl(conn)
     }
 
     /// Expose the fully built BoringSSL's `SSL_CTX` pointer.

@@ -117,7 +117,7 @@ fn test_private_key_methods() -> Result<(), Box<dyn std::error::Error + Send + S
     };
     server_ctx_builder.with_credential(server_cred)?;
     let server_ctx = server_ctx_builder.build();
-    let mut server_conn = server_ctx.new_server_connection()?.build();
+    let mut server_conn = server_ctx.new_server_connection().build();
 
     let mut client_ctx_builder = TlsContextBuilder::new_tls();
     let mut cert_store = X509StoreBuilder::new();
@@ -127,7 +127,7 @@ fn test_private_key_methods() -> Result<(), Box<dyn std::error::Error + Send + S
     let cert_store = cert_store.build();
     client_ctx_builder.with_certificate_store(&cert_store);
     let client_ctx = client_ctx_builder.build();
-    let mut client_conn = client_ctx.new_client_connection()?;
+    let mut client_conn = client_ctx.new_client_connection();
     client_conn.with_certificate_verification_mode(CertificateVerificationMode::PeerCertMandatory);
     let mut client_conn = client_conn.build();
     client_conn

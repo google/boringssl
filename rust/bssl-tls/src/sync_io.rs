@@ -50,7 +50,7 @@ impl TlsConnector {
     where
         S: Read + Write + Send + 'static,
     {
-        let mut conn = self.ctx.new_client_connection()?.build();
+        let mut conn = self.ctx.new_client_connection().build();
         {
             conn.in_handshake()
                 .expect("connection is freshly constructed and it cannot already be established")
@@ -82,7 +82,7 @@ impl TlsAcceptor {
     where
         S: Read + Write + Send + 'static,
     {
-        let mut conn = self.ctx.new_server_connection()?.build();
+        let mut conn = self.ctx.new_server_connection().build();
         conn.set_io(StdIoWithReactor::new(stream, NoAsync))?;
         conn.do_handshake()?;
 
