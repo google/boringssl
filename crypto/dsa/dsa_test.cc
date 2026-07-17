@@ -296,11 +296,13 @@ TEST(DSATest, MissingParameters) {
   ASSERT_TRUE(dsa);
   EXPECT_EQ(-1, DSA_verify(0, fips_digest, sizeof(fips_digest), fips_sig,
                            sizeof(fips_sig), dsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DSA, DSA_R_MISSING_PARAMETERS}}));
 
   std::vector<uint8_t> sig(DSA_size(dsa.get()));
   unsigned sig_len;
   EXPECT_FALSE(DSA_sign(0, fips_digest, sizeof(fips_digest), sig.data(),
                         &sig_len, dsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DSA, DSA_R_MISSING_PARAMETERS}}));
 }
 
 // Verifying should cleanly fail when the public key is missing.
@@ -309,6 +311,7 @@ TEST(DSATest, MissingPublic) {
   ASSERT_TRUE(dsa);
   EXPECT_EQ(-1, DSA_verify(0, fips_digest, sizeof(fips_digest), fips_sig,
                            sizeof(fips_sig), dsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DSA, DSA_R_MISSING_PARAMETERS}}));
 }
 
 // Signing should cleanly fail when the private key is missing.
@@ -320,6 +323,7 @@ TEST(DSATest, MissingPrivate) {
   unsigned sig_len;
   EXPECT_FALSE(DSA_sign(0, fips_digest, sizeof(fips_digest), sig.data(),
                         &sig_len, dsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DSA, DSA_R_MISSING_PARAMETERS}}));
 }
 
 // A zero private key is invalid and can cause signing to loop forever.
@@ -336,6 +340,7 @@ TEST(DSATest, ZeroPrivateKey) {
   unsigned sig_len;
   EXPECT_FALSE(DSA_sign(0, kZeroDigest, sizeof(kZeroDigest), sig.data(),
                         &sig_len, dsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DSA, DSA_R_INVALID_PARAMETERS}}));
 }
 
 // If the "field" is actually a ring and the "generator" of the multiplicative
@@ -359,6 +364,7 @@ Epvg
   unsigned sig_len;
   EXPECT_FALSE(DSA_sign(0, fips_digest, sizeof(fips_digest), sig.data(),
                         &sig_len, dsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DSA, DSA_R_TOO_MANY_ITERATIONS}}));
 }
 
 TEST(DSATest, Overwrite) {

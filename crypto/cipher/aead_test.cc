@@ -342,6 +342,8 @@ TEST_P(PerAEADTest, TestExtraInput) {
             tag_buf.size(), nonce.data(), nonce.size(), in.data(),
             in.size() - extra_in_size, in.data() + in.size() - extra_in_size,
             extra_in_size, ad.data(), ad.size()));
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_CIPHER, CIPHER_R_BUFFER_TOO_SMALL}}));
       }
       {
         std::vector<uint8_t> tag_buf(extra_in_size + tag.size() - 1);
@@ -350,6 +352,8 @@ TEST_P(PerAEADTest, TestExtraInput) {
             tag_buf.size(), nonce.data(), nonce.size(), in.data(),
             in.size() - extra_in_size, in.data() + in.size() - extra_in_size,
             extra_in_size, ad.data(), ad.size()));
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_CIPHER, CIPHER_R_BUFFER_TOO_SMALL}}));
       }
     }
   });
@@ -1548,12 +1552,14 @@ static void RunWycheproofTestCase(FileTest *t, const EVP_AEAD *aead) {
     EXPECT_FALSE(EVP_AEAD_CTX_open(ctx.get(), out.data(), &out_len, out.size(),
                                    iv.data(), iv.size(), ct_and_tag.data(),
                                    ct_and_tag.size(), aad.data(), aad.size()));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CIPHER, std::nullopt}}));
 
     // Decryption in-place should also fail.
     out = ct_and_tag;
     EXPECT_FALSE(EVP_AEAD_CTX_open(ctx.get(), out.data(), &out_len, out.size(),
                                    iv.data(), iv.size(), out.data(), out.size(),
                                    aad.data(), aad.size()));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CIPHER, std::nullopt}}));
   }
 }
 

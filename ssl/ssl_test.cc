@@ -9471,6 +9471,8 @@ TEST(SSLTest, ProcessTLS13NewSessionTicket) {
   // Servers cannot call `SSL_process_tls13_new_session_ticket`.
   ASSERT_FALSE(SSL_process_tls13_new_session_ticket(server.get(), kTicket,
                                                     sizeof(kTicket)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   // Clients cannot call `SSL_process_tls13_new_session_ticket` before the
   // handshake completes.
@@ -9479,6 +9481,8 @@ TEST(SSLTest, ProcessTLS13NewSessionTicket) {
   SSL_set_connect_state(client2.get());
   ASSERT_FALSE(SSL_process_tls13_new_session_ticket(client2.get(), kTicket,
                                                     sizeof(kTicket)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 }
 
 TEST(SSLTest, BIO) {

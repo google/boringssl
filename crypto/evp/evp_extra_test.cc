@@ -857,7 +857,11 @@ TEST(EVPExtraTest, BadECKey) {
 
   UniquePtr<EVP_PKEY> pkey(EVP_PKCS82PKEY(p8inf.get()));
   ASSERT_FALSE(pkey) << "Imported invalid EC key";
-  ERR_clear_error();
+  EXPECT_TRUE(ErrorsAreAndClear({
+      {ERR_LIB_EC, EC_R_INVALID_SCALAR},
+      {ERR_LIB_EC, EC_R_INVALID_PRIVATE_KEY},
+      {ERR_LIB_EVP, EVP_R_DECODE_ERROR},
+  }));
 }
 
 // Tests `EVP_marshal_public_key` on an empty key.
@@ -881,18 +885,22 @@ TEST(EVPExtraTest, d2i_PrivateKey) {
   EXPECT_TRUE(ParsePrivateKey(EVP_PKEY_EC, kExampleECKeyDER));
 
   EXPECT_FALSE(ParsePrivateKey(EVP_PKEY_EC, kExampleBadECKeyDER));
-  ERR_clear_error();
+  EXPECT_TRUE(ErrorsAreAndClear({
+      {ERR_LIB_EC, EC_R_INVALID_SCALAR},
+      {ERR_LIB_EC, EC_R_INVALID_PRIVATE_KEY},
+      {ERR_LIB_EVP, EVP_R_DECODE_ERROR},
+  }));
 
   // Copy the input into a `malloc`'d vector to flag memory errors.
   std::vector<uint8_t> copy(
       kExampleBadECKeyDER2,
       kExampleBadECKeyDER2 + sizeof(kExampleBadECKeyDER2));
   EXPECT_FALSE(ParsePrivateKey(EVP_PKEY_EC, copy));
-  ERR_clear_error();
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DECODE_ERROR}}));
 
   // Test that an RSA key may not be imported as an EC key.
   EXPECT_FALSE(ParsePrivateKey(EVP_PKEY_EC, kExampleRSAKeyPKCS8));
-  ERR_clear_error();
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DIFFERENT_KEY_TYPES}}));
 }
 
 TEST(EVPExtraTest, Ed25519) {
@@ -1452,6 +1460,7 @@ TEST(EVPExtraTest, Parameters) {
   // RSA-PSS keys' parameters are not compatible with RSA keys.
   EXPECT_FALSE(EVP_PKEY_parameters_eq(rsa_pss_sha256.get(), rsa.get()));
   EXPECT_FALSE(EVP_PKEY_copy_parameters(rsa_pss_sha256.get(), rsa.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DIFFERENT_KEY_TYPES}}));
 
   // Different RSA-PSS key types are not compatible.
   alg = EVP_pkey_rsa_pss_sha384();
@@ -1463,6 +1472,7 @@ TEST(EVPExtraTest, Parameters) {
       EVP_PKEY_parameters_eq(rsa_pss_sha256.get(), rsa_pss_sha384.get()));
   EXPECT_FALSE(
       EVP_PKEY_copy_parameters(rsa_pss_sha256.get(), rsa_pss_sha384.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DIFFERENT_PARAMETERS}}));
 
   // EC keys have parameters, but it is possible to initialize an `EVP_PKEY`
   // with a completely empty `EC_KEY`.
@@ -1503,8 +1513,10 @@ TEST(EVPExtraTest, Parameters) {
 
   // `EVP_PKEY_copy_parameters` cannot change a key's type or curve.
   EXPECT_FALSE(EVP_PKEY_copy_parameters(rsa.get(), p256.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DIFFERENT_KEY_TYPES}}));
   EXPECT_EQ(EVP_PKEY_RSA, EVP_PKEY_id(rsa.get()));
   EXPECT_FALSE(EVP_PKEY_copy_parameters(rsa.get(), p256.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DIFFERENT_KEY_TYPES}}));
   EXPECT_EQ(EVP_PKEY_RSA, EVP_PKEY_id(rsa.get()));
 }
 
@@ -1552,12 +1564,16 @@ TEST(EVPExtraTest, RawKeyUnsupported) {
   static const uint8_t kKey[] = {1, 2, 3, 4};
   EXPECT_FALSE(
       EVP_PKEY_new_raw_public_key(EVP_PKEY_RSA, nullptr, kKey, sizeof(kKey)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_FALSE(
       EVP_PKEY_new_raw_private_key(EVP_PKEY_RSA, nullptr, kKey, sizeof(kKey)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_FALSE(
       EVP_PKEY_from_raw_public_key(EVP_pkey_rsa(), kKey, sizeof(kKey)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_FALSE(
       EVP_PKEY_from_raw_private_key(EVP_pkey_rsa(), kKey, sizeof(kKey)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
 }
 
 // The default salt length for PSS should be `RSA_PSS_SALTLEN_DIGEST`.
@@ -1711,21 +1727,21 @@ TEST(EVPExtraTest, EmptyKey) {
   EXPECT_EQ(EVP_PKEY_id(empty.get()), EVP_PKEY_NONE);
 
   EXPECT_EQ(EVP_PKEY_get_raw_private_key(empty.get(), nullptr, nullptr), 0);
-  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
-                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
   EXPECT_EQ(EVP_PKEY_get_private_seed(empty.get(), nullptr, nullptr), 0);
-  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
-                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
   EXPECT_EQ(EVP_PKEY_get_raw_public_key(empty.get(), nullptr, nullptr), 0);
-  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
-                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
 
   EXPECT_EQ(EVP_PKEY_get1_tls_encodedpoint(empty.get(), nullptr), 0u);
-  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
-                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
   EXPECT_EQ(EVP_PKEY_set1_tls_encodedpoint(empty.get(), nullptr, 0u), 0);
-  EXPECT_TRUE(ErrorEquals(ERR_peek_last_error(), ERR_LIB_EVP,
-                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
 }
 
 // Due to an OpenSSL API flaw, it is possible to make a half-empty X25519 key.

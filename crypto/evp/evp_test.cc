@@ -276,6 +276,7 @@ bool ImportSPKIOrPKCS8WithAlg(FileTest *t, KeySet *key_set, KeyRole key_role,
         UniquePtr<EVP_PKEY> parsed(
             parse_func(rewritten.data(), rewritten.size(), &alg_info.alg, 1));
         EXPECT_FALSE(parsed);
+        EXPECT_TRUE(ErrorsAreAndClear({{std::nullopt, std::nullopt}}));
       });
   EXPECT_TRUE(ok);
 
@@ -289,6 +290,9 @@ bool ImportSPKIOrPKCS8WithAlg(FileTest *t, KeySet *key_set, KeyRole key_role,
     EXPECT_FALSE(alg_info.is_default);
     if (alg_info.is_default) {
       ERR_clear_error();
+    } else {
+      EXPECT_TRUE(
+          ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
     }
   } else {
     EXPECT_TRUE(alg_info.is_default);
@@ -461,6 +465,7 @@ bool CheckRawKey(FileTest *t, std::string_view attr_name,
   raw.resize(expected_len - 1);
   len = raw.size();
   EXPECT_FALSE(getter(key.pkey.get(), raw.data(), &len));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_BUFFER_TOO_SMALL}}));
 
   // Long buffer should be accepted and the proper length written out.
   raw.resize(expected_len + 1);
@@ -591,6 +596,7 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
                 t->GetAttributeOrDie("ECCurve"));
     } else {
       EXPECT_EQ(EVP_PKEY_get_ec_curve_nid(key.pkey.get()), NID_undef);
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_EXPECTING_A_EC_KEY}}));
     }
 
     CheckRSAParam(t, "RSAParamN", key.pkey.get(), RSA_get0_n);

@@ -1352,15 +1352,25 @@ TEST(RSATest, Negative) {
   ASSERT_TRUE(neg_iqmp);
 
   EXPECT_FALSE(RSA_new_public_key(neg_n.get(), e));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_RSA_PARAMETERS}}));
   EXPECT_FALSE(RSA_new_public_key(n, neg_e.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_E_VALUE}}));
   EXPECT_FALSE(RSA_new_private_key(neg_n.get(), e, d, p, q, dmp1, dmq1, iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_RSA_PARAMETERS}}));
   EXPECT_FALSE(RSA_new_private_key(n, neg_e.get(), d, p, q, dmp1, dmq1, iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_E_VALUE}}));
   EXPECT_FALSE(RSA_new_private_key(n, e, neg_d.get(), p, q, dmp1, dmq1, iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_D_OUT_OF_RANGE}}));
   EXPECT_FALSE(RSA_new_private_key(n, e, d, neg_p.get(), q, dmp1, dmq1, iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_N_NOT_EQUAL_P_Q}}));
   EXPECT_FALSE(RSA_new_private_key(n, e, d, p, neg_q.get(), dmp1, dmq1, iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_N_NOT_EQUAL_P_Q}}));
   EXPECT_FALSE(RSA_new_private_key(n, e, d, p, q, neg_dmp1.get(), dmq1, iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_CRT_VALUES_INCORRECT}}));
   EXPECT_FALSE(RSA_new_private_key(n, e, d, p, q, dmp1, neg_dmq1.get(), iqmp));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_CRT_VALUES_INCORRECT}}));
   EXPECT_FALSE(RSA_new_private_key(n, e, d, p, q, dmp1, dmq1, neg_iqmp.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_CRT_VALUES_INCORRECT}}));
 }
 
 TEST(RSATest, LargeE) {
@@ -1378,9 +1388,11 @@ TEST(RSATest, LargeE) {
   // By default, the large exponent is not allowed as e.
   UniquePtr<RSA> pub(RSA_new_public_key(n, /*e=*/d));
   EXPECT_FALSE(pub);
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_E_VALUE}}));
   UniquePtr<RSA> priv(RSA_new_private_key(n, /*e=*/d, /*d=*/e, p, q,
                                           /*dmp1=*/e, /*dmq1=*/e, iqmp));
   EXPECT_FALSE(priv);
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_E_VALUE}}));
 
   // Constructing such a key piecemeal gives back an object that fails all
   // operations.
@@ -1396,6 +1408,7 @@ TEST(RSATest, LargeE) {
                                  kDigest, sizeof(kDigest), EVP_sha256(),
                                  EVP_sha256(),
                                  /*salt_len=*/32));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_BAD_E_VALUE}}));
 
   // But the "large e" APIs tolerate it.
   pub.reset(RSA_new_public_key_large_e(n, /*e=*/d));

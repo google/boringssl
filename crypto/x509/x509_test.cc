@@ -8503,6 +8503,7 @@ TEST(X509Test, NameAttributeValues) {
     const uint8_t *inp = encoded.data();
     UniquePtr<X509_NAME> name(d2i_X509_NAME(nullptr, &inp, encoded.size()));
     EXPECT_FALSE(name);
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, std::nullopt}}));
   }
 }
 

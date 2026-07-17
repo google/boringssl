@@ -220,6 +220,7 @@ TEST(ECTest, ZeroPadding) {
 
   // Buffer too small.
   EXPECT_EQ(0u, EC_KEY_priv2oct(key.get(), buf, sizeof(buf) - 1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_BUFFER_TOO_SMALL}}));
 
   // Extra space in buffer.
   uint8_t large_buf[33];
@@ -254,10 +255,12 @@ TEST(ECTest, ZeroPadding) {
   ASSERT_TRUE(key);
   EXPECT_FALSE(EC_KEY_oct2priv(key.get(), kECKeyWithZerosRawPrivate + 1,
                                sizeof(kECKeyWithZerosRawPrivate) - 1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_DECODE_ERROR}}));
   uint8_t padded[sizeof(kECKeyWithZerosRawPrivate) + 1] = {0};
   memcpy(padded + 1, kECKeyWithZerosRawPrivate,
          sizeof(kECKeyWithZerosRawPrivate));
   EXPECT_FALSE(EC_KEY_oct2priv(key.get(), padded, sizeof(padded)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_DECODE_ERROR}}));
 }
 
 TEST(ECTest, SpecifiedCurve) {
@@ -1494,19 +1497,24 @@ TEST(ECTest, HashToCurve) {
   static const uint8_t kMessage[] = {4, 5, 6, 7};
   EXPECT_FALSE(ec_hash_to_curve_p384_xmd_sha384_sswu(
       EC_group_p224(), &raw, kDST, sizeof(kDST), kMessage, sizeof(kMessage)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_GROUP_MISMATCH}}));
   EXPECT_FALSE(EC_hash_to_curve_p384_xmd_sha384_sswu(
       EC_group_p224(), p_p224.get(), kDST, sizeof(kDST), kMessage,
       sizeof(kMessage)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_GROUP_MISMATCH}}));
   EXPECT_FALSE(EC_hash_to_curve_p384_xmd_sha384_sswu(
       EC_group_p224(), p_p384.get(), kDST, sizeof(kDST), kMessage,
       sizeof(kMessage)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_INCOMPATIBLE_OBJECTS}}));
   EXPECT_FALSE(EC_hash_to_curve_p384_xmd_sha384_sswu(
       EC_group_p384(), p_p224.get(), kDST, sizeof(kDST), kMessage,
       sizeof(kMessage)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_INCOMPATIBLE_OBJECTS}}));
 
   // Zero-length DSTs are not allowed.
   EXPECT_FALSE(ec_hash_to_curve_p384_xmd_sha384_sswu(
       EC_group_p384(), &raw, nullptr, 0, kMessage, sizeof(kMessage)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, std::nullopt}}));
 }
 
 // Test the WPA3 SAE hash-to-curve construction. Test vector from Appendix J.10
