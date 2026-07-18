@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -43,6 +44,7 @@
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#include <openssl/span.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
@@ -9587,6 +9589,90 @@ TEST(SSLTest, ALPNConfig) {
   // Empty lists are valid and are interpreted as disabling ALPN.
   EXPECT_EQ(0, SSL_CTX_set_alpn_protos(ctx.get(), nullptr, 0));
   check_alpn_proto({});
+}
+
+TEST(SSLTest, DeclarativeServerALPN) {
+  bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+  bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(client_ctx);
+  ASSERT_TRUE(server_ctx);
+  bssl::UniquePtr<X509> cert = GetTestCertificate();
+  bssl::UniquePtr<EVP_PKEY> key = GetTestKey();
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(key);
+  ASSERT_TRUE(SSL_CTX_use_certificate(server_ctx.get(), cert.get()));
+  ASSERT_TRUE(SSL_CTX_use_PrivateKey(server_ctx.get(), key.get()));
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
+
+  // Helper to run connection and check negotiated ALPN.
+  auto check_negotiation =
+      [&](bssl::Span<const uint8_t> client_protos,
+          bssl::Span<const uint8_t> server_protos,
+          std::optional<bssl::Span<const uint8_t>> expected_alpn) {
+        ASSERT_EQ(
+            0, SSL_CTX_set_alpn_protos(client_ctx.get(), client_protos.data(),
+                                       client_protos.size()));
+        ASSERT_EQ(
+            0, SSL_CTX_set_alpn_protos(server_ctx.get(), server_protos.data(),
+                                       server_protos.size()));
+
+        bssl::UniquePtr<SSL> client, server;
+        bool success = ConnectClientAndServer(
+            &client, &server, client_ctx.get(), server_ctx.get());
+        if (!expected_alpn.has_value()) {
+          EXPECT_FALSE(success);
+          return;
+        }
+
+        ASSERT_TRUE(success);
+        const uint8_t *alpn = nullptr;
+        unsigned alpn_len = 0;
+        SSL_get0_alpn_selected(client.get(), &alpn, &alpn_len);
+        EXPECT_EQ(Bytes(*expected_alpn), Bytes(alpn, alpn_len));
+        SSL_get0_alpn_selected(server.get(), &alpn, &alpn_len);
+        EXPECT_EQ(Bytes(*expected_alpn), Bytes(alpn, alpn_len));
+      };
+  const auto kBar = bssl::StringAsBytes("bar");
+  const auto kH2 = bssl::StringAsBytes("h2");
+
+  // 1. Basic match: Client ["foo", "bar"], Server ["bar", "baz"] ->
+  // negotiates "bar"
+  const uint8_t kClient1[] = {3, 'f', 'o', 'o', 3, 'b', 'a', 'r'};
+  const uint8_t kServer1[] = {3, 'b', 'a', 'r', 3, 'b', 'a', 'z'};
+  check_negotiation(kClient1, kServer1, kBar);
+
+  // 2. Client preference: Client ["bar", "foo"], Server ["foo", "bar"] ->
+  // negotiates "bar"
+  const uint8_t kClient2[] = {3, 'b', 'a', 'r', 3, 'f', 'o', 'o'};
+  const uint8_t kServer2[] = {3, 'f', 'o', 'o', 3, 'b', 'a', 'r'};
+  check_negotiation(kClient2, kServer2, kBar);
+
+  // 3. No overlap -> Handshake fails
+  const uint8_t kClient3[] = {3, 'f', 'o', 'o'};
+  const uint8_t kServer3[] = {3, 'b', 'a', 'r'};
+  check_negotiation(kClient3, kServer3, std::nullopt);
+
+  // 4. HTTP/2 example.
+  SSL_CTX_set_min_proto_version(client_ctx.get(), TLS1_2_VERSION);
+  SSL_CTX_set_max_proto_version(client_ctx.get(), TLS1_2_VERSION);
+  SSL_CTX_set_min_proto_version(server_ctx.get(), TLS1_2_VERSION);
+  SSL_CTX_set_max_proto_version(server_ctx.get(), TLS1_2_VERSION);
+
+  const uint8_t kClientH2[] = {2,   'h', '2', 8,   'h', 't',
+                               't', 'p', '/', '1', '.', '1'};
+  const uint8_t kServerH2[] = {2, 'h', '2'};
+
+  ASSERT_TRUE(
+      SSL_CTX_set_cipher_list(client_ctx.get(), "ECDHE-RSA-AES128-SHA256"));
+  ASSERT_TRUE(
+      SSL_CTX_set_cipher_list(server_ctx.get(), "ECDHE-RSA-AES128-SHA256"));
+
+  // Yes, this is a violation of RFC 7540, Section 9.2.
+  // However, we made a conscious decision to negotiate "h2" anyway.
+  // Users should install their own ALPN callback to enforce the cipher suite
+  // restrictions.
+  check_negotiation(kClientH2, kServerH2, kH2);
 }
 
 TEST(SSLTest, AcceptedPeerCertTypesConfig) {

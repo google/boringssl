@@ -3425,7 +3425,13 @@ OPENSSL_EXPORT SSL_CTX *SSL_set_SSL_CTX(SSL *ssl, SSL_CTX *ctx);
 // `protos`. `protos` must be in wire-format (i.e. a series of non-empty, 8-bit
 // length-prefixed strings), or the empty string to disable ALPN. It returns
 // zero on success and one on failure. Configuring a non-empty string enables
-// ALPN on a client.
+// ALPN on a client. On a client, it will advertise these protocols. On a
+// server, it will use them to automatically select a protocol if the client
+// supports ALPN and no select callback is set.
+//
+// Those configuring HTTP/2 must also configure the cipher suite set on the
+// SSL_CTX so that the selected cipher is compliant with RFC 7540 Section 9.2.
+// Servers should install their own ALPN callback to comply with the RFC.
 //
 // WARNING: this function is dangerous because it breaks the usual return value
 // convention.
@@ -3436,7 +3442,13 @@ OPENSSL_EXPORT int SSL_CTX_set_alpn_protos(SSL_CTX *ctx, const uint8_t *protos,
 // `protos` must be in wire-format (i.e. a series of non-empty, 8-bit
 // length-prefixed strings), or the empty string to disable ALPN. It returns
 // zero on success and one on failure. Configuring a non-empty string enables
-// ALPN on a client.
+// ALPN on a client. On a client, it will advertise these protocols. On a
+// server, it will use them to automatically select a protocol if the client
+// supports ALPN and no select callback is set.
+//
+// Those configuring HTTP/2 must also configure the cipher suite set on the
+// SSL_CTX so that the selected cipher is compliant with RFC 7540 Section 9.2.
+// Servers should install their own ALPN callback to comply with the RFC.
 //
 // WARNING: this function is dangerous because it breaks the usual return value
 // convention.

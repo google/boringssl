@@ -16,6 +16,7 @@
 
 #include <assert.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,6 +39,7 @@
 #include <openssl/nid.h>
 #include <openssl/pool.h>
 #include <openssl/rand.h>
+#include <openssl/span.h>
 
 #include "../crypto/bytestring/internal.h"
 #include "../crypto/internal.h"
@@ -1031,7 +1033,7 @@ static bool ext_sigalgs_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
   if (!CBB_add_u16(out_compressible, TLSEXT_TYPE_signature_algorithms) ||
       !CBB_add_u16_length_prefixed(out_compressible, &contents) ||
       !CBB_add_u16_length_prefixed(&contents, &sigalgs_cbb)) {
-        return false;
+    return false;
   }
   // Add a fake signature algorithm. See RFC 8701.
   if (hs->ssl->ctx->grease_sigalgs_enabled &&
@@ -1501,14 +1503,51 @@ bool ssl_alpn_list_contains_protocol(Span<const uint8_t> list,
   return false;
 }
 
+static int default_alpn_select_cb(SSL *ssl, const uint8_t **out,
+                                  uint8_t *out_len, const uint8_t *in,
+                                  unsigned inlen, void *arg) {
+  auto *ssl_impl = FromOpaque(ssl);
+  SSL_HANDSHAKE *hs = ssl_impl->s3->hs.get();
+  if (hs == nullptr) {
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+  }
+
+  bssl::Span<const uint8_t> client_protos(in, inlen);
+  CBS cbs = client_protos;
+  CBS proto;
+  while (CBS_len(&cbs) != 0) {
+    if (!CBS_get_u8_length_prefixed(&cbs, &proto) || CBS_len(&proto) == 0) {
+      return SSL_TLSEXT_ERR_ALERT_FATAL;
+    }
+    if (ssl_alpn_list_contains_protocol(hs->config->alpn_client_proto_list,
+                                        proto)) {
+      *out = CBS_data(&proto);
+      *out_len = static_cast<uint8_t>(CBS_len(&proto));
+      return SSL_TLSEXT_ERR_OK;
+    }
+  }
+
+  return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
 bool ssl_negotiate_alpn(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                         const SSL_CLIENT_HELLO *client_hello) {
   SSLImpl *const ssl = hs->ssl;
   CBS contents;
-  if (ssl->ctx->alpn_select_cb == nullptr ||
-      !ssl_client_hello_get_extension(
-          client_hello, &contents,
-          TLSEXT_TYPE_application_layer_protocol_negotiation)) {
+  const bool has_extension = ssl_client_hello_get_extension(
+      client_hello, &contents,
+      TLSEXT_TYPE_application_layer_protocol_negotiation);
+
+  auto alpn_select_cb = ssl->ctx->alpn_select_cb;
+  void *alpn_select_cb_arg = ssl->ctx->alpn_select_cb_arg;
+
+  if (alpn_select_cb == nullptr &&
+      !hs->config->alpn_client_proto_list.empty()) {
+    alpn_select_cb = default_alpn_select_cb;
+    alpn_select_cb_arg = nullptr;
+  }
+
+  if (!has_extension || alpn_select_cb == nullptr) {
     if (SSL_is_quic(ssl)) {
       // ALPN is required when QUIC is used.
       OPENSSL_PUT_ERROR(SSL, SSL_R_NO_APPLICATION_PROTOCOL);
@@ -1533,12 +1572,11 @@ bool ssl_negotiate_alpn(SSL_HANDSHAKE *hs, uint8_t *out_alert,
 
   // `protocol_name_list` fits in `unsigned` because TLS extensions use 16-bit
   // lengths.
-  const uint8_t *selected;
-  uint8_t selected_len;
-  int ret = ssl->ctx->alpn_select_cb(
+  const uint8_t *selected = nullptr;
+  uint8_t selected_len = 0;
+  int ret = alpn_select_cb(
       ssl, &selected, &selected_len, CBS_data(&protocol_name_list),
-      static_cast<unsigned>(CBS_len(&protocol_name_list)),
-      ssl->ctx->alpn_select_cb_arg);
+      static_cast<unsigned>(CBS_len(&protocol_name_list)), alpn_select_cb_arg);
   // ALPN is required when QUIC is used.
   if (SSL_is_quic(ssl) &&
       (ret == SSL_TLSEXT_ERR_NOACK || ret == SSL_TLSEXT_ERR_ALERT_WARNING)) {
