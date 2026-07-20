@@ -148,7 +148,6 @@ use bssl_tls::{
         lifecycle::ShutdownStatus, //
     },
     context::{
-        DtlsMode,
         TlsContext,
         TlsContextBuilder,
         TlsMode, //
@@ -613,89 +612,6 @@ impl<Role, S: Unpin> AsyncWrite for TlsStream<Role, S> {
     }
 }
 
-/// A wrapper around `TlsContext` for creating Tokio-based DTLS client connections.
-pub struct DtlsConnector {
-    ctx: TlsContext<DtlsMode>,
-}
-
-impl DtlsConnector {
-    /// Construct a new `DtlsConnector`.
-    pub(crate) fn new(ctx: TlsContext<DtlsMode>) -> Self {
-        Self { ctx }
-    }
-
-    /// Connect to the given domain using the provided datagram stream.
-    pub async fn connect<S>(&self, domain: &str, stream: S) -> Result<DtlsStream<Client, S>, Error>
-    where
-        S: AbstractSocket + Send + Unpin + 'static,
-    {
-        let mut conn = self.ctx.new_client_connection().build();
-        conn.in_handshake().unwrap().set_host(domain)?;
-        conn.set_io(stream)?;
-        conn.async_handshake().await?;
-
-        Ok(DtlsStream {
-            conn,
-            _marker: PhantomData,
-        })
-    }
-}
-
-/// A wrapper around `TlsContext` for creating Tokio-based DTLS server connections.
-pub struct DtlsAcceptor {
-    ctx: TlsContext<DtlsMode>,
-}
-
-impl DtlsAcceptor {
-    /// Construct a new `DtlsAcceptor`.
-    pub(crate) fn new(ctx: TlsContext<DtlsMode>) -> Self {
-        Self { ctx }
-    }
-
-    /// Accept a new connection using the provided datagram stream.
-    pub async fn accept<S>(&self, stream: S) -> Result<DtlsStream<Server, S>, Error>
-    where
-        S: AbstractSocket + Send + Unpin + 'static,
-    {
-        let mut conn = self.ctx.new_server_connection().build();
-        conn.set_io(stream)?;
-        conn.async_handshake().await?;
-
-        Ok(DtlsStream {
-            conn,
-            _marker: PhantomData,
-        })
-    }
-}
-
-/// A DTLS stream driven by Tokio.
-pub struct DtlsStream<Role, S> {
-    conn: TlsConnection<Role, DtlsMode>,
-    _marker: PhantomData<S>,
-}
-
-impl<Role, S> DtlsStream<Role, S> {
-    /// Get a reference to the underlying `TlsConnection`.
-    pub fn get_ref(&self) -> &TlsConnection<Role, DtlsMode> {
-        &self.conn
-    }
-
-    /// Get a mutable reference to the underlying `TlsConnection`.
-    pub fn get_mut(&mut self) -> &mut TlsConnection<Role, DtlsMode> {
-        &mut self.conn
-    }
-
-    /// Send application data over DTLS.
-    pub async fn send(&mut self, buf: &[u8]) -> Result<IoStatus, Error> {
-        self.conn.as_pin_mut().async_write(buf).await
-    }
-
-    /// Receive application data over DTLS.
-    pub async fn recv(&mut self, buf: &mut [u8]) -> Result<IoStatus, Error> {
-        self.conn.as_pin_mut().async_read(buf).await
-    }
-}
-
 /// Extension trait for `TlsContextBuilder` to support Tokio TLS.
 pub trait TokioTlsExt {
     /// Build a `TlsConnector`.
@@ -711,23 +627,5 @@ impl TokioTlsExt for TlsContextBuilder<TlsMode> {
 
     fn build_tokio_acceptor(self) -> TlsAcceptor {
         TlsAcceptor::new(self.build())
-    }
-}
-
-/// Extension trait for `TlsContextBuilder` to support Tokio DTLS.
-pub trait TokioDtlsExt {
-    /// Build a `DtlsConnector`.
-    fn build_dtls_tokio_connector(self) -> DtlsConnector;
-    /// Build a `DtlsAcceptor`.
-    fn build_dtls_tokio_acceptor(self) -> DtlsAcceptor;
-}
-
-impl TokioDtlsExt for TlsContextBuilder<DtlsMode> {
-    fn build_dtls_tokio_connector(self) -> DtlsConnector {
-        DtlsConnector::new(self.build())
-    }
-
-    fn build_dtls_tokio_acceptor(self) -> DtlsAcceptor {
-        DtlsAcceptor::new(self.build())
     }
 }
