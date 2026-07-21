@@ -42,7 +42,7 @@ use core::{
 
 use bssl_x509::{
     errors::PemReason,
-    keys::PrivateKey, //
+    keys::{PrivateKey, PublicKey},
 };
 
 use crate::{
@@ -86,10 +86,10 @@ pub enum X509Mode {}
 /// Raw Public Key credential
 pub enum RawPublicKeyMode {}
 
-pub(crate) trait NeedsPrivateKey {}
+pub(crate) trait HasPrivateKey {}
 
-impl NeedsPrivateKey for X509Mode {}
-impl NeedsPrivateKey for RawPublicKeyMode {}
+impl HasPrivateKey for X509Mode {}
+impl HasPrivateKey for RawPublicKeyMode {}
 
 // Safety: At this type state, the credential handle is exclusively owned.
 unsafe impl<M> Send for TlsCredentialBuilder<M> {}
@@ -152,56 +152,6 @@ impl TlsCredentialBuilder<X509Mode> {
         );
         this.set_ex_data()
     }
-}
-
-impl TlsCredentialBuilder<RawPublicKeyMode> {
-    /// Construct raw public key credential instance.
-    ///
-    /// TLS connection may use this credential to perform authentication per [RFC 7250].
-    ///
-    /// [RFC 7250]: <https://tools.ietf.org/html/rfc7250>
-    pub fn new_raw_public_key(mut key: PrivateKey) -> Self {
-        let this = Self(
-            NonNull::new(unsafe {
-                // Safety:
-                // - the `PrivateKey` type already contains both public and private key parts.
-                // - the constructor call also claims the ownership of the key.
-                bssl_sys::SSL_CREDENTIAL_new_raw_public_key(key.as_mut_ptr())
-            })
-            .expect("allocation failure"),
-            PhantomData,
-        );
-        this.set_ex_data()
-    }
-}
-
-impl<M> TlsCredentialBuilder<M>
-where
-    M: NeedsPrivateKey,
-{
-    /// Set [`SignatureAlgorithm`] preferences.
-    ///
-    /// This controls which signature algorithms will be used with this credential.
-    pub fn with_signing_algorithm_preferences(
-        &mut self,
-        algs: &[SignatureAlgorithm],
-    ) -> Result<&mut Self, Error> {
-        let algs: &[u16] = unsafe {
-            // Safety: `SignatureAlgorithm` has a `repr(u16)`
-            core::mem::transmute(algs)
-        };
-        if has_duplicates(algs) {
-            return Err(Error::Configuration(
-                ConfigurationError::DuplicatedParameters,
-            ));
-        }
-        let (ptr, len) = slice_into_ffi_raw_parts(algs);
-        check_lib_error!(unsafe {
-            // Safety
-            bssl_sys::SSL_CREDENTIAL_set1_signing_algorithm_prefs(self.ptr(), ptr, len)
-        });
-        Ok(self)
-    }
 
     /// Set private key delegate.
     ///
@@ -248,9 +198,6 @@ where
             Ok(self)
         }
     }
-}
-
-impl TlsCredentialBuilder<X509Mode> {
     /// Set certificate chain.
     ///
     /// The leaf, also known as end-entity, certificate **must come first** in `certs`.
@@ -302,6 +249,85 @@ impl TlsCredentialBuilder<X509Mode> {
             // Safety: `self.0` is still valid.
             bssl_sys::SSL_CREDENTIAL_set_must_match_issuer(self.ptr(), if match_ { 1 } else { 0 });
         }
+        Ok(self)
+    }
+}
+
+impl TlsCredentialBuilder<RawPublicKeyMode> {
+    /// Construct raw public key credential instance.
+    ///
+    /// TLS connection may use this credential to perform authentication per [RFC 7250].
+    ///
+    /// [RFC 7250]: <https://tools.ietf.org/html/rfc7250>
+    pub fn new_raw_public_key(mut key: PrivateKey) -> Self {
+        let this = Self(
+            NonNull::new(unsafe {
+                // Safety:
+                // - the `PrivateKey` type already contains both public and private key parts.
+                // - the constructor call also claims the ownership of the key.
+                bssl_sys::SSL_CREDENTIAL_new_raw_public_key(key.as_mut_ptr())
+            })
+            .expect("allocation failure"),
+            PhantomData,
+        );
+        this.set_ex_data()
+    }
+
+    /// Construct raw public key credential, with a private key delegate.
+    ///
+    /// This credential is suitable for cases where the private key is stored off the device or in a
+    /// credential store.
+    /// TLS connection may use this credential to perform authentication per [RFC 7250].
+    ///
+    /// [RFC 7250]: <https://tools.ietf.org/html/rfc7250>
+    pub fn new_raw_public_key_with_delegate<T: PrivateKeyDelegate + 'static>(
+        mut key: PublicKey,
+        delegate: T,
+    ) -> Self {
+        let mut this = Self(
+            NonNull::new(unsafe {
+                // Safety:
+                // - the `PublicKey` type contains the public key part.
+                // - the constructor bumps the ref-count on the public key.
+                bssl_sys::SSL_CREDENTIAL_new_raw_public_key_custom(
+                    key.as_mut_ptr(),
+                    methods::PRIVATE_KEY_METHODS,
+                )
+            })
+            .expect("allocation failure"),
+            PhantomData,
+        )
+        .set_ex_data();
+        this.get_credential_methods().private_key_methods = Some(Box::new(delegate) as _);
+        this
+    }
+}
+
+impl<M> TlsCredentialBuilder<M>
+where
+    M: HasPrivateKey,
+{
+    /// Set [`SignatureAlgorithm`] preferences.
+    ///
+    /// This controls which signature algorithms will be used with this credential.
+    pub fn with_signing_algorithm_preferences(
+        &mut self,
+        algs: &[SignatureAlgorithm],
+    ) -> Result<&mut Self, Error> {
+        let algs: &[u16] = unsafe {
+            // Safety: `SignatureAlgorithm` has a `repr(u16)`
+            core::mem::transmute(algs)
+        };
+        if has_duplicates(algs) {
+            return Err(Error::Configuration(
+                ConfigurationError::DuplicatedParameters,
+            ));
+        }
+        let (ptr, len) = slice_into_ffi_raw_parts(algs);
+        check_lib_error!(unsafe {
+            // Safety
+            bssl_sys::SSL_CREDENTIAL_set1_signing_algorithm_prefs(self.ptr(), ptr, len)
+        });
         Ok(self)
     }
 }

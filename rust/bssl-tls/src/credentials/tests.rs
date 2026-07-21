@@ -12,13 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bssl_x509::keys::PrivateKeyAlgorithm;
+use core::future::{
+    Ready,
+    ready, //
+};
+
+use bssl_crypto::ecdsa::ParsedPrivateKey;
+use bssl_x509::keys::{
+    PrivateKey,
+    PrivateKeyAlgorithm, //
+};
 use futures::future::try_join;
 
 use super::*;
 use crate::{
-    context::TlsMode,
-    tests::create_mock_pipe, //
+    context::{
+        TlsContextBuilder,
+        TlsMode, //
+    },
+    errors::Error,
+    tests::{
+        P256_SERVER_KEY,
+        P256_SERVER_KEY_DER,
+        create_mock_pipe, //
+    }, //
 };
 
 #[test]
@@ -148,10 +165,10 @@ fn psk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
     let cred = TlsCredential::new_pre_shared_key(key, identity, PskHash::Sha256, context)?;
 
-    let mut server_ctx = crate::context::TlsContextBuilder::new_tls();
+    let mut server_ctx = TlsContextBuilder::new_tls();
     server_ctx.with_credential(cred.clone())?;
 
-    let mut client_ctx = crate::context::TlsContextBuilder::new_tls();
+    let mut client_ctx = TlsContextBuilder::new_tls();
     client_ctx.with_credential(cred)?;
 
     let server_ctx = server_ctx.build();
@@ -168,16 +185,16 @@ fn psk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     let test_future = async {
         let client_handshake = async {
             assert!(client_conn.async_handshake().await?.is_none());
-            Ok::<(), crate::errors::Error>(())
+            Ok::<(), Error>(())
         };
 
         let server_handshake = async {
             assert!(server_conn.async_handshake().await?.is_none());
-            Ok::<(), crate::errors::Error>(())
+            Ok::<(), Error>(())
         };
 
         try_join(client_handshake, server_handshake).await?;
-        Ok::<(), crate::errors::Error>(())
+        Ok::<(), Error>(())
     };
 
     executor.run(test_future)?;
@@ -205,11 +222,11 @@ fn psk_tls13_handshake_sync() -> Result<(), Box<dyn std::error::Error + Send + S
 
     let cred = TlsCredential::new_pre_shared_key(key, identity, PskHash::Sha256, context)?;
 
-    let mut server_ctx = crate::context::TlsContextBuilder::new_tls();
+    let mut server_ctx = TlsContextBuilder::new_tls();
     server_ctx.with_credential(cred.clone())?;
     let server_ctx = server_ctx.build();
 
-    let mut client_ctx = crate::context::TlsContextBuilder::new_tls();
+    let mut client_ctx = TlsContextBuilder::new_tls();
     client_ctx.with_credential(cred)?;
     let client_ctx = client_ctx.build();
 
@@ -231,44 +248,22 @@ fn psk_tls13_handshake_sync() -> Result<(), Box<dyn std::error::Error + Send + S
     Ok(())
 }
 
-unsafe extern "C" fn accept_any_verify(
-    _ssl: *mut bssl_sys::SSL,
-    _out_alert: *mut u8,
-) -> bssl_sys::ssl_verify_result_t {
-    bssl_sys::ssl_verify_result_t_ssl_verify_ok
-}
-
-#[test]
-fn rpk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use bssl_x509::keys::PrivateKey;
-
-    let priv_key = PrivateKey::from_pem(crate::tests::RSA_SERVER_KEY, || unreachable!()).unwrap();
-
-    let cred = TlsCredentialBuilder::<RawPublicKeyMode>::new_raw_public_key(priv_key)
-        .build()
-        .unwrap();
-
-    let mut server_ctx = crate::context::TlsContextBuilder::new_tls();
-    server_ctx.with_credential(cred.clone())?;
+/// Helper: perform an RPK handshake with the given server credential and client verifier.
+fn rpk_handshake_test(
+    cred: TlsCredential,
+    verifier: impl VerifyCertificate + 'static,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut server_ctx = TlsContextBuilder::new_tls();
+    server_ctx.with_credential(cred)?;
     let server_ctx = server_ctx.build();
 
-    let mut client_ctx = crate::context::TlsContextBuilder::new_tls();
-    client_ctx.with_accepted_peer_cert_types(&[CertificateType::Rpk])?;
+    let mut client_ctx = TlsContextBuilder::new_tls();
+    client_ctx
+        .with_accepted_peer_cert_types(&[CertificateType::Rpk])?
+        .with_certificate_verifier(CertificateVerificationMode::PeerCertMandatory, verifier);
     let client_ctx = client_ctx.build();
 
-    let mut client_conn_builder = client_ctx.new_client_connection();
-    client_conn_builder.with_certificate_verification_mode(CertificateVerificationMode::None);
-    let mut client_conn = client_conn_builder.build();
-    unsafe {
-        // Safety:
-        // - `client_conn.ptr()` is a valid `SSL` handle.
-        // - `accept_any_verify` is a valid callback.
-        bssl_sys::SSL_set_custom_verify(
-            client_conn.ptr(),
-            bssl_sys::SSL_VERIFY_PEER as _,
-            Some(accept_any_verify),
-        );
-    }
+    let mut client_conn = client_ctx.new_client_connection().build();
     let mut server_conn = server_ctx.new_server_connection().build();
 
     let (sock_client, sock_server, mut executor) = create_mock_pipe();
@@ -287,6 +282,61 @@ fn rpk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     );
 
     Ok(())
+}
+
+#[test]
+fn rpk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let priv_key = PrivateKey::from_pem(crate::tests::RSA_SERVER_KEY, || unreachable!()).unwrap();
+
+    let cred = TlsCredentialBuilder::new_raw_public_key(priv_key)
+        .build()
+        .unwrap();
+
+    rpk_handshake_test(cred, AcceptAnyVerifier)
+}
+
+#[test]
+fn rpk_tls13_handshake_with_delegate() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::credentials::{
+        AsyncPrivateKeyDelegate, AsyncPrivateKeyDelegateAdapter, SignatureAlgorithm,
+    };
+
+    let priv_key = PrivateKey::from_pem(P256_SERVER_KEY, || unreachable!()).unwrap();
+    let pub_key = priv_key.to_public_key().clone();
+    let expected_spki_der = pub_key.to_der();
+
+    struct P256KeyDelegate {
+        key_der: &'static [u8],
+    }
+
+    impl AsyncPrivateKeyDelegate for P256KeyDelegate {
+        type SignOp = Ready<Option<Vec<u8>>>;
+        type DecryptOp = Ready<Option<Vec<u8>>>;
+
+        fn sign(&self, message: &[u8], algorithm: SignatureAlgorithm) -> Self::SignOp {
+            assert!(matches!(
+                algorithm,
+                SignatureAlgorithm::EcdsaSecp256r1Sha256
+            ));
+            let Some(ParsedPrivateKey::P256(key)) = ParsedPrivateKey::from_der(self.key_der) else {
+                panic!("failed to parse P256 key")
+            };
+            ready(Some(key.sign(message)))
+        }
+
+        fn decrypt(&self, _ciphertext: &[u8]) -> Self::DecryptOp {
+            unreachable!()
+        }
+    }
+
+    let delegate = AsyncPrivateKeyDelegateAdapter(P256KeyDelegate {
+        key_der: P256_SERVER_KEY_DER,
+    });
+    let cred = TlsCredentialBuilder::new_raw_public_key_with_delegate(pub_key, delegate)
+        .build()
+        .unwrap();
+
+    rpk_handshake_test(cred, RpkVerifier { expected_spki_der })
 }
 
 struct AcceptAnyVerifier;
@@ -389,6 +439,7 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
                 .is_some();
 
             if offered_rpk {
+                // TODO: switch to `try` block on stabilisation
                 if (|| {
                     client_hello
                         .connection_mut()
@@ -396,7 +447,7 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
                         .set_certificate_verification_mode(
                             CertificateVerificationMode::PeerCertMandatory,
                         );
-                    Ok::<_, crate::errors::Error>(())
+                    Ok::<_, Error>(())
                 })()
                 .is_err()
                 {
@@ -478,7 +529,7 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
             if !offer_psk && !offer_rpk {
                 assert!(handshake_result.is_err(), "Handshake should have failed");
-                return Ok::<(), crate::errors::Error>(());
+                return Ok::<(), Error>(());
             }
 
             handshake_result?;
@@ -497,7 +548,7 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
             assert!(matches!(read_len, IoStatus::Ok(5)));
             assert_eq!(&client_buf, b"world");
 
-            Ok::<(), crate::errors::Error>(())
+            Ok::<(), Error>(())
         };
 
         executor.run(test_future)?;
