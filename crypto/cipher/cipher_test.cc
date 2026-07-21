@@ -319,6 +319,13 @@ static void TestCipherAPI(const EVP_CIPHER *cipher, Operation op, bool padding,
         break;
       }
     }
+    if (is_custom_cipher) {
+      // AEAD and custom cipher implementations do not queue an OpenSSL error
+      // code upon tag verfification failure.
+      EXPECT_EQ(0u, ERR_peek_error());
+    } else {
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CIPHER, std::nullopt}}));
+    }
   } else {
     ASSERT_TRUE(MaybeCopyCipherContext(copy, &ctx));
     size_t max = EVP_CIPHER_CTX_max_final(ctx.get());
@@ -566,6 +573,8 @@ static void TestSizedAPIRangeChecks(const EVP_CIPHER *cipher, Operation op,
         EXPECT_FALSE(EVP_CipherUpdate_ex(thisctx.get(), buf.data(), &len,
                                          buf.size(), in1.data(), in1.size()));
         EXPECT_EQ(len, size_t{0});
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_CIPHER, CIPHER_R_BUFFER_TOO_SMALL}}));
         continue;
       } else {
         std::vector<uint8_t> buf(update1_size);
@@ -579,6 +588,8 @@ static void TestSizedAPIRangeChecks(const EVP_CIPHER *cipher, Operation op,
         EXPECT_FALSE(EVP_CipherUpdate_ex(thisctx.get(), buf.data(), &len,
                                          buf.size(), in2.data(), in2.size()));
         EXPECT_EQ(len, size_t{0});
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_CIPHER, CIPHER_R_BUFFER_TOO_SMALL}}));
         continue;
       } else {
         std::vector<uint8_t> buf(update2_size);
@@ -593,6 +604,8 @@ static void TestSizedAPIRangeChecks(const EVP_CIPHER *cipher, Operation op,
         EXPECT_FALSE(
             EVP_CipherFinal_ex2(thisctx.get(), buf.data(), &len, buf.size()));
         EXPECT_EQ(len, size_t{0});
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_CIPHER, CIPHER_R_BUFFER_TOO_SMALL}}));
         continue;
       } else {
         std::vector<uint8_t> buf(final_size);

@@ -24,6 +24,7 @@
 #include <openssl/base.h>
 #include <openssl/curve25519.h>
 #include <openssl/digest.h>
+#include <openssl/ec.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -660,11 +661,13 @@ TEST(HPKETest, InvalidP256PrivateKey) {
   ScopedEVP_HPKE_KEY key;
   EXPECT_FALSE(EVP_HPKE_KEY_init(key.get(), EVP_hpke_p256_hkdf_sha256(),
                                  zero_key, sizeof(zero_key)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DECODE_ERROR}}));
 
   uint8_t all_ones_key[32];
   OPENSSL_memset(all_ones_key, 0xff, sizeof(all_ones_key));
   EXPECT_FALSE(EVP_HPKE_KEY_init(key.get(), EVP_hpke_p256_hkdf_sha256(),
                                  all_ones_key, sizeof(all_ones_key)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_INVALID_SCALAR}}));
 }
 
 TEST(HPKETest, InternalParseIntSafe) {

@@ -2563,6 +2563,8 @@ TEST(SSLTest, ECHKeyConsistency) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 wrong_key.get()));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_SSL, SSL_R_ECH_SERVER_CONFIG_AND_PRIVATE_KEY_MISMATCH}}));
 
   // Adding an ECHConfig with a truncated public key is an error.
   ECHConfigParams truncated;
@@ -2572,6 +2574,8 @@ TEST(SSLTest, ECHKeyConsistency) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 key.get()));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_SSL, SSL_R_ECH_SERVER_CONFIG_AND_PRIVATE_KEY_MISMATCH}}));
 
   // Adding an ECHConfig with the right public key, but wrong KEM ID, is an
   // error.
@@ -2582,6 +2586,8 @@ TEST(SSLTest, ECHKeyConsistency) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 key.get()));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_SSL, SSL_R_ECH_SERVER_CONFIG_AND_PRIVATE_KEY_MISMATCH}}));
 }
 
 // Test that `SSL_CTX_set1_ech_keys` fails when the config list
@@ -2630,6 +2636,8 @@ TEST(SSLTest, UnsupportedECHConfig) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 key.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNSUPPORTED_ECH_SERVER_CONFIG}}));
 
   // Unsupported cipher suites are rejected. (We only support HKDF-SHA256.)
   ECHConfigParams unsupported_kdf;
@@ -2640,6 +2648,8 @@ TEST(SSLTest, UnsupportedECHConfig) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 key.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNSUPPORTED_ECH_SERVER_CONFIG}}));
   ECHConfigParams unsupported_aead;
   unsupported_aead.key = key.get();
   unsupported_aead.cipher_suites = {EVP_HPKE_HKDF_SHA256, 0xffff};
@@ -2647,6 +2657,8 @@ TEST(SSLTest, UnsupportedECHConfig) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 key.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNSUPPORTED_ECH_SERVER_CONFIG}}));
 
 
   // Unsupported extensions are rejected.
@@ -3053,9 +3065,11 @@ TEST(SSLTest, TLS13ExporterAvailability) {
   EXPECT_FALSE(SSL_export_keying_material(client.get(), buffer.data(),
                                           buffer.size(), label, strlen(label),
                                           nullptr, 0, 0));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_HANDSHAKE_NOT_COMPLETE}}));
   EXPECT_FALSE(SSL_export_keying_material(server.get(), buffer.data(),
                                           buffer.size(), label, strlen(label),
                                           nullptr, 0, 0));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_HANDSHAKE_NOT_COMPLETE}}));
 
   // Send all the server's handshake messages.
   int server_ret = SSL_do_handshake(server.get());
@@ -3068,6 +3082,7 @@ TEST(SSLTest, TLS13ExporterAvailability) {
   EXPECT_FALSE(SSL_export_keying_material(client.get(), buffer.data(),
                                           buffer.size(), label, strlen(label),
                                           nullptr, 0, 0));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_HANDSHAKE_NOT_COMPLETE}}));
   EXPECT_TRUE(SSL_export_keying_material(server.get(), buffer.data(),
                                          buffer.size(), label, strlen(label),
                                          nullptr, 0, 0));
@@ -4730,11 +4745,17 @@ TEST(SSLTest, SetVersion) {
 
   // Invalid TLS versions are rejected.
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), DTLS1_VERSION));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), 0x0200));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), 0x1234));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), DTLS1_VERSION));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), 0x0200));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), 0x1234));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
 
   // Zero is the default version.
   EXPECT_TRUE(SSL_CTX_set_max_proto_version(ctx.get(), 0));
@@ -4744,6 +4765,7 @@ TEST(SSLTest, SetVersion) {
 
   // SSL 3.0 is not available.
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), SSL3_VERSION));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
 
   ctx.reset(SSL_CTX_new(DTLS_method()));
   ASSERT_TRUE(ctx);
@@ -4761,13 +4783,21 @@ TEST(SSLTest, SetVersion) {
 
   // Invalid DTLS versions are rejected.
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), TLS1_VERSION));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), 0xfefe /* DTLS 1.1 */));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), 0xfffe /* DTLS 0.1 */));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_max_proto_version(ctx.get(), 0x1234));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), TLS1_VERSION));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), 0xfefe /* DTLS 1.1 */));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), 0xfffe /* DTLS 0.1 */));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
   EXPECT_FALSE(SSL_CTX_set_min_proto_version(ctx.get(), 0x1234));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNKNOWN_SSL_VERSION}}));
 
   // Zero is the default version.
   EXPECT_TRUE(SSL_CTX_set_max_proto_version(ctx.get(), 0));
@@ -8063,8 +8093,12 @@ TEST_F(QUICMethodTest, Basic) {
   Span<const uint8_t> read_secret, write_secret;
   EXPECT_FALSE(
       SSL_get_traffic_secrets(client_.get(), &read_secret, &write_secret));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(
       SSL_get_traffic_secrets(server_.get(), &read_secret, &write_secret));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   // The server sent NewSessionTicket messages in the handshake.
   EXPECT_FALSE(g_last_session);
@@ -10832,15 +10866,23 @@ TEST(SSLTest, InvalidSignatureAlgorithm) {
   static const uint16_t kInvalidPrefs[] = {1234};
   EXPECT_FALSE(SSL_CTX_set_signing_algorithm_prefs(ctx.get(), kInvalidPrefs,
                                                    std::size(kInvalidPrefs)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_INVALID_SIGNATURE_ALGORITHM}}));
   EXPECT_FALSE(SSL_CTX_set_verify_algorithm_prefs(ctx.get(), kInvalidPrefs,
                                                   std::size(kInvalidPrefs)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_INVALID_SIGNATURE_ALGORITHM}}));
 
   static const uint16_t kDuplicatePrefs[] = {SSL_SIGN_RSA_PKCS1_SHA256,
                                              SSL_SIGN_RSA_PKCS1_SHA256};
   EXPECT_FALSE(SSL_CTX_set_signing_algorithm_prefs(ctx.get(), kDuplicatePrefs,
                                                    std::size(kDuplicatePrefs)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_DUPLICATE_SIGNATURE_ALGORITHM}}));
   EXPECT_FALSE(SSL_CTX_set_verify_algorithm_prefs(ctx.get(), kDuplicatePrefs,
                                                   std::size(kDuplicatePrefs)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_DUPLICATE_SIGNATURE_ALGORITHM}}));
 }
 
 TEST(SSLTest, InvalidGroups) {
@@ -10850,21 +10892,27 @@ TEST(SSLTest, InvalidGroups) {
   static const uint16_t kInvalidIDs[] = {1234};
   EXPECT_FALSE(
       SSL_CTX_set1_group_ids(ctx.get(), kInvalidIDs, std::size(kInvalidIDs)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNSUPPORTED_ELLIPTIC_CURVE}}));
 
   // This is a valid NID, but it is not a valid group.
   static const int kInvalidNIDs[] = {NID_rsaEncryption};
   EXPECT_FALSE(
       SSL_CTX_set1_groups(ctx.get(), kInvalidNIDs, std::size(kInvalidNIDs)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNSUPPORTED_ELLIPTIC_CURVE}}));
 
   // Duplicates are not allowed.
   static const uint16_t kDuplicateIDs[] = {SSL_GROUP_X25519_MLKEM768,
                                            SSL_GROUP_X25519, SSL_GROUP_X25519};
   EXPECT_FALSE(SSL_CTX_set1_group_ids(ctx.get(), kDuplicateIDs,
                                       std::size(kDuplicateIDs)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_DUPLICATE_GROUP}}));
   static const int kDuplicateNIDs[] = {NID_X25519, NID_X9_62_prime256v1,
                                        NID_X25519};
   EXPECT_FALSE(SSL_CTX_set1_groups(ctx.get(), kDuplicateNIDs,
                                    std::size(kDuplicateNIDs)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_DUPLICATE_GROUP}}));
 }
 
 TEST(SSLTest, NameLists) {
@@ -11172,8 +11220,23 @@ TEST_P(SSLVersionTest, GetIVs) {
     size_t client_iv_len, server_iv_len;
     bool client_ivs_ok = SSL_get_ivs(client_.get(), &client_read_iv,
                                      &client_write_iv, &client_iv_len);
+    if (is_dtls()) {
+      EXPECT_TRUE(ErrorsAreAndClear(
+          {{ERR_LIB_SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
+    } else if (version() != TLS1_VERSION) {
+      EXPECT_TRUE(ErrorsAreAndClear(
+          {{ERR_LIB_CIPHER, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
+    }
+
     bool server_ivs_ok = SSL_get_ivs(server_.get(), &server_read_iv,
                                      &server_write_iv, &server_iv_len);
+    if (is_dtls()) {
+      EXPECT_TRUE(ErrorsAreAndClear(
+          {{ERR_LIB_SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
+    } else if (version() != TLS1_VERSION) {
+      EXPECT_TRUE(ErrorsAreAndClear(
+          {{ERR_LIB_CIPHER, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
+    }
 
     // Only TLS 1.0 should support `SSL_get_ivs`. Other cases should cleanly
     // fail this operation.
