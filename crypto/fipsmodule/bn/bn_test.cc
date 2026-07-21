@@ -889,8 +889,10 @@ static void TestGCD(BIGNUMFileTest *t, BN_CTX *ctx) {
   if (!BN_is_one(gcd.get())) {
     EXPECT_FALSE(BN_mod_inverse(ret.get(), a.get(), b.get(), ctx))
         << "A^-1 (mod B) computed, but it does not exist";
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_BN, std::nullopt}}));
     EXPECT_FALSE(BN_mod_inverse(ret.get(), b.get(), a.get(), ctx))
         << "B^-1 (mod A) computed, but it does not exist";
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_BN, std::nullopt}}));
 
     if (!BN_is_zero(b.get())) {
       UniquePtr<BIGNUM> a_reduced(BN_new());
@@ -901,6 +903,7 @@ static void TestGCD(BIGNUMFileTest *t, BN_CTX *ctx) {
                                             a_reduced.get(), b.get(), ctx))
           << "A^-1 (mod B) computed, but it does not exist";
       EXPECT_TRUE(no_inverse);
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_BN, std::nullopt}}));
     }
 
     if (!BN_is_zero(a.get())) {
@@ -912,6 +915,7 @@ static void TestGCD(BIGNUMFileTest *t, BN_CTX *ctx) {
                                             b_reduced.get(), a.get(), ctx))
           << "B^-1 (mod A) computed, but it does not exist";
       EXPECT_TRUE(no_inverse);
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_BN, std::nullopt}}));
     }
   }
 
@@ -2740,7 +2744,9 @@ TEST_F(BNTest, ModSqrtInvalid) {
   // infinite loop. (For some invalid inputs, it may even be non-deterministic.)
   // See CVE-2022-0778.
   BN_free(BN_mod_sqrt(nullptr, bn2140141.get(), bn4588033.get(), ctx()));
+  ERR_clear_error();
   BN_free(BN_mod_sqrt(nullptr, bn2140142.get(), bn4588033.get(), ctx()));
+  ERR_clear_error();
 }
 
 // Test that constructing Montgomery contexts for large bignums is not possible.
@@ -2754,6 +2760,7 @@ TEST_F(BNTest, MontgomeryLarge) {
   UniquePtr<BN_MONT_CTX> mont(
       BN_MONT_CTX_new_for_modulus(large_bignum.get(), ctx()));
   EXPECT_FALSE(mont);
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_BN, BN_R_BIGNUM_TOO_LONG}}));
 
   // The same limit should apply when `BN_mod_exp_mont_consttime` internally
   // constructs a `BN_MONT_CTX`.
@@ -2762,6 +2769,7 @@ TEST_F(BNTest, MontgomeryLarge) {
   EXPECT_FALSE(BN_mod_exp_mont_consttime(r.get(), BN_value_one(),
                                          large_bignum.get(), large_bignum.get(),
                                          ctx(), nullptr));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_BN, BN_R_BIGNUM_TOO_LONG}}));
 }
 
 TEST_F(BNTest, FormatWord) {

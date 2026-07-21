@@ -428,15 +428,20 @@ TEST(DHTest, InvalidParameters) {
   auto check_invalid_group = [](DH *dh) {
     // All operations on egregiously invalid groups should fail.
     EXPECT_FALSE(DH_generate_key(dh));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DH, DH_R_INVALID_PARAMETERS}}));
     int check_result;
     EXPECT_FALSE(DH_check(dh, &check_result));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DH, DH_R_INVALID_PARAMETERS}}));
     UniquePtr<BIGNUM> pub_key(BN_new());
     ASSERT_TRUE(pub_key);
     ASSERT_TRUE(BN_set_u64(pub_key.get(), 42));
     EXPECT_FALSE(DH_check_pub_key(dh, pub_key.get(), &check_result));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DH, DH_R_INVALID_PARAMETERS}}));
     uint8_t buf[1024];
     EXPECT_EQ(DH_compute_key(buf, pub_key.get(), dh), -1);
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DH, DH_R_INVALID_PARAMETERS}}));
     EXPECT_EQ(DH_compute_key_padded(buf, pub_key.get(), dh), -1);
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DH, DH_R_INVALID_PARAMETERS}}));
   };
 
   UniquePtr<BIGNUM> p(BN_get_rfc3526_prime_2048(nullptr));

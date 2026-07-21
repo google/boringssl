@@ -283,6 +283,7 @@ TEST(DigestTest, ASN1) {
   ScopedCBB cbb;
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   EXPECT_FALSE(EVP_marshal_digest_algorithm(cbb.get(), EVP_md5_sha1()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DIGEST, DIGEST_R_UNKNOWN_HASH}}));
 
   static const uint8_t kSHA256NullParam[] = {0x30, 0x0d, 0x06, 0x09, 0x60,
                                              0x86, 0x48, 0x01, 0x65, 0x03,
@@ -319,6 +320,7 @@ TEST(DigestTest, ASN1) {
   // Garbage parameters are not.
   CBS_init(&cbs, kSHA256GarbageParam, sizeof(kSHA256GarbageParam));
   EXPECT_FALSE(EVP_parse_digest_algorithm(&cbs));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_DIGEST, DIGEST_R_DECODE_ERROR}}));
 }
 
 TEST(DigestTest, TransformBlocks) {

@@ -22,11 +22,12 @@
 
 #include <gtest/gtest.h>
 
+#include "../test/test_util.h"
 #include "internal.h"
-
 
 BSSL_NAMESPACE_BEGIN
 namespace {
+
 
 // A `CONF` is an unordered list of sections, where each section contains an
 // ordered list of (name, value) pairs.
@@ -436,6 +437,7 @@ key2 = value2
     UniquePtr<CONF> conf(NCONF_new(nullptr));
     ASSERT_TRUE(conf);
     EXPECT_FALSE(NCONF_load_bio(conf.get(), bio.get(), nullptr));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CONF, std::nullopt}}));
   }
 }
 

@@ -262,6 +262,7 @@ TEST(X509ExtensionTest, ParseCertificatePolicies) {
     const uint8_t *p = in.data();
     EXPECT_FALSE(UniquePtr<CERTIFICATEPOLICIES>(
         d2i_CERTIFICATEPOLICIES(nullptr, &p, in.size())));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, std::nullopt}}));
   }
 }
 

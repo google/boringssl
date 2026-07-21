@@ -603,6 +603,7 @@ TEST(BIOTest, ReadASN1) {
     int ok = BIO_read_asn1(bio.get(), &out, &out_len, t.max_len);
     if (!ok) {
       out = nullptr;
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, std::nullopt}}));
     }
     UniquePtr<uint8_t> out_storage(out);
 

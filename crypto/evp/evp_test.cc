@@ -1307,6 +1307,7 @@ void RunEVPTests(const char *path) {
     } else if (!result) {
       ADD_FAILURE() << "Operation unexpectedly failed.";
     }
+    ERR_clear_error();
   });
 }
 
@@ -1417,6 +1418,9 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
       int ret = EVP_DigestVerify(ctx.get(), sig.data(), sig.size(), msg.data(),
                                  msg.size());
       EXPECT_EQ(ret, expect_valid ? 1 : 0);
+      if (!expect_valid) {
+        ERR_clear_error();
+      }
     }
   });
 }

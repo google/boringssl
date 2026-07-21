@@ -481,6 +481,7 @@ TEST(CBBTest, Fixed) {
   ASSERT_TRUE(CBB_init_fixed(&cbb, buf, 1));
   ASSERT_TRUE(CBB_add_u8(&cbb, 1));
   EXPECT_FALSE(CBB_add_u8(&cbb, 2));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
   // We do not need `CBB_cleanup` or |bssl::ScopedCBB| here because a fixed
   // `CBB` has no allocations. Leak-checking tools will confirm there was
   // nothing to clean up.
@@ -490,6 +491,7 @@ TEST(CBBTest, Fixed) {
   ASSERT_TRUE(CBB_init_fixed(&cbb2, buf, 1));
   ASSERT_TRUE(CBB_add_u8(&cbb2, 1));
   EXPECT_FALSE(CBB_add_u8(&cbb2, 2));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
   CBB_cleanup(&cbb2);
 }
 
@@ -504,6 +506,8 @@ TEST(CBBTest, FinishChild) {
   ASSERT_TRUE(CBB_add_u8_length_prefixed(cbb.get(), &child));
 
   EXPECT_FALSE(CBB_finish(&child, &out_buf, &out_size));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   ASSERT_TRUE(CBB_finish(cbb.get(), &out_buf, &out_size));
   UniquePtr<uint8_t> scoper(out_buf);
@@ -654,12 +658,26 @@ TEST(CBBTest, Misuse) {
   // Since we wrote to `cbb`, `child` is now invalid and attempts to write to
   // it should fail.
   EXPECT_FALSE(CBB_add_u8(&child, 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_add_u16(&child, 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_add_u24(&child, 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_add_u8_length_prefixed(&child, &contents));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_add_u16_length_prefixed(&child, &contents));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_add_asn1(&child, &contents, 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_add_bytes(&child, (const uint8_t *)"a", 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   ASSERT_TRUE(CBB_finish(cbb.get(), &buf, &buf_len));
   UniquePtr<uint8_t> scoper(buf);
@@ -1324,6 +1342,7 @@ TEST(CBBTest, Reserve) {
   ASSERT_TRUE(CBB_init_fixed(cbb.get(), buf, sizeof(buf)));
   // Too large.
   EXPECT_FALSE(CBB_reserve(cbb.get(), &ptr, 11));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
 
   cbb.Reset();
   ASSERT_TRUE(CBB_init_fixed(cbb.get(), buf, sizeof(buf)));
@@ -1347,40 +1366,59 @@ TEST(CBBTest, StickyError) {
   ASSERT_TRUE(CBB_add_u8_length_prefixed(cbb.get(), &child));
   ASSERT_TRUE(CBB_add_bytes(&child, kZeros, sizeof(kZeros)));
   ASSERT_FALSE(CBB_flush(cbb.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
 
   // All future operations should fail.
   uint8_t *ptr;
   size_t len;
   EXPECT_FALSE(CBB_add_u8(cbb.get(), 0));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_finish(cbb.get(), &ptr, &len));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   // Write an input that cannot fit in a fixed CBB.
   cbb.Reset();
   uint8_t buf;
   ASSERT_TRUE(CBB_init_fixed(cbb.get(), &buf, 1));
   ASSERT_FALSE(CBB_add_bytes(cbb.get(), kZeros, sizeof(kZeros)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
 
   // All future operations should fail.
   EXPECT_FALSE(CBB_add_u8(cbb.get(), 0));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_finish(cbb.get(), &ptr, &len));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   // Write a u32 that cannot fit in a u24.
   cbb.Reset();
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   ASSERT_FALSE(CBB_add_u24(cbb.get(), 1u << 24));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
 
   // All future operations should fail.
   EXPECT_FALSE(CBB_add_u8(cbb.get(), 0));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   EXPECT_FALSE(CBB_finish(cbb.get(), &ptr, &len));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 
   // Write a u64 that cannot fit in a u48.
   cbb.Reset();
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   ASSERT_FALSE(CBB_add_u48(cbb.get(), uint64_t{1} << 48));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_OVERFLOW}}));
 
   // All future operations should fail.
   EXPECT_FALSE(CBB_add_u8(cbb.get(), 0));
   EXPECT_FALSE(CBB_finish(cbb.get(), &ptr, &len));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
 }
 
 TEST(CBSTest, BitString) {
@@ -1745,6 +1783,8 @@ TEST(CBBTest, FlushASN1SetOf) {
     ASSERT_TRUE(CBB_add_asn1(cbb.get(), &child, CBS_ASN1_SET));
     ASSERT_TRUE(CBB_add_bytes(&child, t.data(), t.size()));
     EXPECT_FALSE(CBB_flush_asn1_set_of(&child));
+    EXPECT_TRUE(ErrorsAreAndClear(
+        {{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
   }
 }
 

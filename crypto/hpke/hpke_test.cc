@@ -503,17 +503,20 @@ TEST(HPKETest, X25519EncapSmallOrderPoint) {
           sender_ctx.get(), enc, &enc_len, sizeof(enc),
           EVP_hpke_x25519_hkdf_sha256(), kdf(), aead(), kSmallOrderPoint,
           sizeof(kSmallOrderPoint), nullptr, 0));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY}}));
 
       // Likewise with auth.
       EXPECT_FALSE(EVP_HPKE_CTX_setup_auth_sender(
           sender_ctx.get(), enc, &enc_len, sizeof(enc), key.get(), kdf(),
           aead(), kSmallOrderPoint, sizeof(kSmallOrderPoint), nullptr, 0));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY}}));
 
       // Set up the recipient, passing in kSmallOrderPoint as `enc`.
       ScopedEVP_HPKE_CTX recipient_ctx;
       EXPECT_FALSE(EVP_HPKE_CTX_setup_recipient(
           recipient_ctx.get(), key.get(), kdf(), aead(), kSmallOrderPoint,
           sizeof(kSmallOrderPoint), nullptr, 0));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY}}));
 
       // Likewise with auth. With auth, a small-order point could appear as
       // either `enc` or the peer public key.
@@ -521,10 +524,12 @@ TEST(HPKETest, X25519EncapSmallOrderPoint) {
           recipient_ctx.get(), key.get(), kdf(), aead(), kSmallOrderPoint,
           sizeof(kSmallOrderPoint), nullptr, 0, kValidPoint,
           sizeof(kValidPoint)));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY}}));
       EXPECT_FALSE(EVP_HPKE_CTX_setup_auth_recipient(
           recipient_ctx.get(), key.get(), kdf(), aead(), kValidPoint,
           sizeof(kValidPoint), nullptr, 0, kSmallOrderPoint,
           sizeof(kSmallOrderPoint)));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY}}));
     }
   }
 }

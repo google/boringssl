@@ -381,6 +381,8 @@ TEST(ASN1Test, Integer) {
       } else {
         uint64_t v;
         EXPECT_FALSE(ASN1_INTEGER_get_uint64(&v, obj));
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_INTEGER}}));
       }
 
       if (fits_in_i64) {
@@ -390,6 +392,8 @@ TEST(ASN1Test, Integer) {
       } else {
         int64_t v;
         EXPECT_FALSE(ASN1_INTEGER_get_int64(&v, obj));
+        EXPECT_TRUE(
+            ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_INTEGER}}));
       }
 
       if (fits_in_long) {
@@ -1029,12 +1033,22 @@ TEST(ASN1Test, SetBitString) {
 
   // All unused bits must be zero.
   EXPECT_FALSE(set1(val.get(), {0xff}, 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT}}));
   EXPECT_FALSE(set1(val.get(), {0xf0}, 5));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT}}));
 
   // Invalid unused bit counts.
   EXPECT_FALSE(set1(val.get(), {0x00, 0x00}, 8));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT}}));
   EXPECT_FALSE(set1(val.get(), {0x00, 0x00}, -1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT}}));
   EXPECT_FALSE(set1(val.get(), {}, 1));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_INVALID_BIT_STRING_BITS_LEFT}}));
 
   // `ASN1_STRING_set` and `ASN1_STRING_set0` should clear the count of unused
   // bits, rather then carry it over.
@@ -2223,12 +2237,16 @@ TEST(ASN1Test, InvalidChoice) {
   EXPECT_EQ(-1, name->type);
   // `name` should fail to encode.
   EXPECT_EQ(-1, i2d_GENERAL_NAME(name.get(), nullptr));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_NO_MATCHING_CHOICE_TYPE}}));
 
   // The error should be propagated through types containing `name`.
   UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
   ASSERT_TRUE(names);
   EXPECT_TRUE(PushToStack(names.get(), std::move(name)));
   EXPECT_EQ(-1, i2d_GENERAL_NAMES(names.get(), nullptr));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_NO_MATCHING_CHOICE_TYPE}}));
 }
 
 // Encoding NID-only `ASN1_OBJECT`s should fail.
@@ -2251,6 +2269,7 @@ TEST(ASN1Test, EncodeInvalidASN1Type) {
   ASSERT_TRUE(obj);
   EXPECT_EQ(-1, obj->type);
   EXPECT_EQ(-1, i2d_ASN1_TYPE(obj.get(), nullptr));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_WRONG_TYPE}}));
 
   // The historical in-memory representation of [UNIVERSAL 128] was for both
   // `obj->type` and `obj->value.asn1_string->type` to be 128. This is no longer
@@ -2261,6 +2280,7 @@ TEST(ASN1Test, EncodeInvalidASN1Type) {
   obj->value.asn1_string = ASN1_STRING_type_new(128);
   ASSERT_TRUE(obj->value.asn1_string);
   EXPECT_EQ(-1, i2d_ASN1_TYPE(obj.get(), nullptr));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_WRONG_TYPE}}));
 }
 
 // Encoding invalid MSTRING types should fail. An MSTRING is a CHOICE of
@@ -2639,18 +2659,21 @@ TEST(ASN1Test, GetObject) {
   int tag_class;
   EXPECT_EQ(0x80, ASN1_get_object(&ptr, &length, &tag, &tag_class,
                                   sizeof(kTruncated)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_HEADER_TOO_LONG}}));
 
   // Indefinite-length encoding is not allowed in DER.
   static const uint8_t kIndefinite[] = {0x30, 0x80, 0x00, 0x00};
   ptr = kIndefinite;
   EXPECT_EQ(0x80, ASN1_get_object(&ptr, &length, &tag, &tag_class,
                                   sizeof(kIndefinite)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_HEADER_TOO_LONG}}));
 
   // DER requires lengths be minimally-encoded. This should be {0x30, 0x00}.
   static const uint8_t kNonMinimal[] = {0x30, 0x81, 0x00};
   ptr = kNonMinimal;
   EXPECT_EQ(0x80, ASN1_get_object(&ptr, &length, &tag, &tag_class,
                                   sizeof(kNonMinimal)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_HEADER_TOO_LONG}}));
 
   // This should be {0x04, 0x81, 0x80, ...}.
   std::vector<uint8_t> non_minimal = {0x04, 0x82, 0x00, 0x80};
@@ -2658,6 +2681,7 @@ TEST(ASN1Test, GetObject) {
   ptr = non_minimal.data();
   EXPECT_EQ(0x80, ASN1_get_object(&ptr, &length, &tag, &tag_class,
                                   non_minimal.size()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_HEADER_TOO_LONG}}));
 }
 
 template <typename T>
@@ -2762,12 +2786,18 @@ TEST(ASN1Test, StringEncoding) {
       inp = t.in.data();
       UniquePtr<ASN1_STRING> str(t.d2i(nullptr, &inp, t.in.size()));
       EXPECT_EQ(t.valid, str != nullptr);
+      if (!t.valid) {
+        EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, std::nullopt}}));
+      }
     }
 
     // Also test with the ANY parser.
     inp = t.in.data();
     UniquePtr<ASN1_TYPE> any(d2i_ASN1_TYPE(nullptr, &inp, t.in.size()));
     EXPECT_EQ(t.valid, any != nullptr);
+    if (!t.valid) {
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, std::nullopt}}));
+    }
   }
 }
 
@@ -2827,11 +2857,13 @@ TEST(ASN1Test, LargeString) {
   // crashes, and actually allocating 512 MiB in a test is likely to break.
   char b = 0;
   EXPECT_FALSE(ASN1_STRING_set(str.get(), &b, INT_MAX / 4));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ERR_R_OVERFLOW}}));
 
 #if defined(OPENSSL_64_BIT)
   // `ASN1_STRING_set` should tolerate lengths that exceed `int` without
   // overflow.
   EXPECT_FALSE(ASN1_STRING_set(str.get(), &b, 1 + (ossl_ssize_t{1} << 48)));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ERR_R_OVERFLOW}}));
 #endif
 }
 
@@ -3040,6 +3072,7 @@ IMPLEMENT_ASN1_FUNCTIONS(REQUIRED_FIELD)
 // the full combination of tagging and SEQUENCE OF.
 TEST(ASN1Test, MissingRequiredField) {
   EXPECT_EQ(-1, i2d_REQUIRED_FIELD(nullptr, nullptr));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_MISSING_VALUE}}));
 
   std::unique_ptr<REQUIRED_FIELD, decltype(&REQUIRED_FIELD_free)> obj(
       nullptr, REQUIRED_FIELD_free);
@@ -3050,6 +3083,7 @@ TEST(ASN1Test, MissingRequiredField) {
     ASN1_INTEGER_free((*obj).*field);
     (*obj).*field = nullptr;
     EXPECT_EQ(-1, i2d_REQUIRED_FIELD(obj.get(), nullptr));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_MISSING_VALUE}}));
   }
 
   for (auto field : {&REQUIRED_FIELD::seq, &REQUIRED_FIELD::seq_imp,
@@ -3059,6 +3093,7 @@ TEST(ASN1Test, MissingRequiredField) {
     sk_ASN1_INTEGER_pop_free((*obj).*field, ASN1_INTEGER_free);
     (*obj).*field = nullptr;
     EXPECT_EQ(-1, i2d_REQUIRED_FIELD(obj.get(), nullptr));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_MISSING_VALUE}}));
   }
 
   for (auto field : {&REQUIRED_FIELD::null, &REQUIRED_FIELD::null_imp,
@@ -3067,6 +3102,7 @@ TEST(ASN1Test, MissingRequiredField) {
     ASSERT_TRUE(obj);
     (*obj).*field = nullptr;
     EXPECT_EQ(-1, i2d_REQUIRED_FIELD(obj.get(), nullptr));
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_MISSING_VALUE}}));
   }
 }
 

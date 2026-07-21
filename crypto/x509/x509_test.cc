@@ -2576,6 +2576,7 @@ TEST(X509Test, TestPSS) {
     UniquePtr<EVP_PKEY> pkey(X509_get_pubkey(cert.get()));
     ASSERT_TRUE(pkey);
     EXPECT_FALSE(X509_verify(cert.get(), pkey.get()));
+    EXPECT_TRUE(ErrorsAreAndClear({{std::nullopt, std::nullopt}}));
   }
 }
 
@@ -3811,11 +3812,13 @@ wr6JtaX2G+pOmwcSPymZC4u2TncAP7KHgS8UGcMw8CE=
   UniquePtr<STACK_OF(X509_INFO)> infos2(
       PEM_X509_INFO_read_bio(bio.get(), nullptr, nullptr, nullptr));
   EXPECT_FALSE(infos2);
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
 
   bio.reset(BIO_new_mem_buf(bad_pem.data(), bad_pem.size()));
   ASSERT_TRUE(bio);
   EXPECT_FALSE(
       PEM_X509_INFO_read_bio(bio.get(), infos.get(), nullptr, nullptr));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_EQ(2 * std::size(kExpected), sk_X509_INFO_num(infos.get()));
 }
 
@@ -4427,17 +4430,30 @@ TEST(X509Test, InvalidVersion) {
   // https://crbug.com/42290225.
   EXPECT_TRUE(CertFromPEM(kExplicitDefaultVersionPEM));
   EXPECT_FALSE(CRLFromPEM(kExplicitDefaultVersionCRLPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(CertFromPEM(kNegativeVersionPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_FALSE(CertFromPEM(kFutureVersionPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(CertFromPEM(kOverflowVersionPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_FALSE(CertFromPEM(kV1WithExtensionsPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_FALSE(CertFromPEM(kV2WithExtensionsPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_FALSE(CertFromPEM(kV1WithIssuerUniqueIDPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_FALSE(CertFromPEM(kV1WithSubjectUniqueIDPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
   EXPECT_FALSE(CRLFromPEM(kV1CRLWithExtensionsPEM));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_FIELD_FOR_VERSION}}));
   EXPECT_FALSE(CRLFromPEM(kV1CRLWithEntryExtensionsPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(CRLFromPEM(kV3CRLPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(CSRFromPEM(kV2CSRPEM));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
 
   // kV3CSRPEM is invalid but, for now, we accept it. See
   // https://github.com/certbot/certbot/pull/9334
@@ -4446,14 +4462,20 @@ TEST(X509Test, InvalidVersion) {
   UniquePtr<X509> x509(X509_new());
   ASSERT_TRUE(x509);
   EXPECT_FALSE(X509_set_version(x509.get(), -1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(X509_set_version(x509.get(), X509_VERSION_3 + 1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(X509_set_version(x509.get(), 9999));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
 
   UniquePtr<X509_CRL> crl(X509_CRL_new());
   ASSERT_TRUE(crl);
   EXPECT_FALSE(X509_CRL_set_version(crl.get(), -1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(X509_CRL_set_version(crl.get(), X509_CRL_VERSION_2 + 1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
   EXPECT_FALSE(X509_CRL_set_version(crl.get(), 9999));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_INVALID_VERSION}}));
 
   UniquePtr<X509_REQ> req(X509_REQ_new());
   ASSERT_TRUE(req);
@@ -4960,6 +4982,7 @@ TEST(X509Test, Attribute) {
       // `X509_ATTRIBUTE_get0_data` requires the type match.
       EXPECT_FALSE(
           X509_ATTRIBUTE_get0_data(attr, idx, V_ASN1_OCTET_STRING, nullptr));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_WRONG_TYPE}}));
       const ASN1_BMPSTRING *bmpstring = static_cast<const ASN1_BMPSTRING *>(
           X509_ATTRIBUTE_get0_data(attr, idx, V_ASN1_BMPSTRING, nullptr));
       ASSERT_TRUE(bmpstring);
@@ -5896,6 +5919,9 @@ TEST(X509Test, Names) {
       SCOPED_TRACE(dns);
       EXPECT_EQ(0, X509_check_host(cert.get(), dns.data(), dns.size(), t.flags,
                                    /*peername=*/nullptr));
+      if (t.cert_invalid_subject_alt_name) {
+        EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ASN1, ASN1_R_DECODE_ERROR}}));
+      }
       EXPECT_EQ(t.cert_invalid_subject_alt_name ? X509_V_ERR_INVALID_EXTENSION
                                                 : X509_V_ERR_HOSTNAME_MISMATCH,
                 Verify(cert.get(), {root.get()}, /*intermediates=*/{},
@@ -6423,6 +6449,7 @@ TEST(X509Test, AddExt) {
   EXPECT_EQ(
       0, X509_add1_ext_i2d(x509.get(), NID_basic_constraints, basic2_obj.get(),
                            /*crit=*/0, X509V3_ADD_DEFAULT));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509V3, X509V3_R_EXTENSION_EXISTS}}));
   expect_extensions({{NID_basic_constraints, true, basic1_der},
                      {NID_subject_key_identifier, false, skid1_der}});
 
@@ -6456,12 +6483,16 @@ TEST(X509Test, AddExt) {
   // Not finding an extension to delete is an error.
   EXPECT_EQ(0, X509_add1_ext_i2d(x509.get(), NID_basic_constraints, nullptr, 0,
                                  X509V3_ADD_DELETE));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_X509V3, X509V3_R_EXTENSION_NOT_FOUND}}));
   expect_extensions({{NID_subject_key_identifier, true, skid2_der}});
 
   // `X509V3_ADD_REPLACE_EXISTING` fails if it cannot find a match.
   EXPECT_EQ(
       0, X509_add1_ext_i2d(x509.get(), NID_basic_constraints, basic1_obj.get(),
                            /*crit=*/1, X509V3_ADD_REPLACE_EXISTING));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_X509V3, X509V3_R_EXTENSION_NOT_FOUND}}));
   expect_extensions({{NID_subject_key_identifier, true, skid2_der}});
 
   // `X509V3_ADD_REPLACE` adds a new extension if not present.

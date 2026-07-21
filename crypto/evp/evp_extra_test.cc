@@ -1680,9 +1680,11 @@ TEST(EVPExtraTest, CustomCurve) {
   ScopedCBB cbb;
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   EXPECT_FALSE(EVP_marshal_public_key(cbb.get(), pkey.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_UNKNOWN_GROUP}}));
   cbb.Reset();
   ASSERT_TRUE(CBB_init(cbb.get(), 0));
   EXPECT_FALSE(EVP_marshal_private_key(cbb.get(), pkey.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_UNKNOWN_GROUP}}));
 }
 
 // APIs should avoid creating an `EVP_PKEY` that is missing its underlying data.
@@ -1693,21 +1695,25 @@ TEST(EVPExtraTest, NoHalfEmptyKeys) {
   ASSERT_TRUE(pkey);
 
   EXPECT_FALSE(EVP_PKEY_set_type(pkey.get(), EVP_PKEY_RSA));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
   EXPECT_FALSE(EVP_PKEY_set1_RSA(pkey.get(), nullptr));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
 
   EXPECT_FALSE(EVP_PKEY_set_type(pkey.get(), EVP_PKEY_EC));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
   EXPECT_FALSE(EVP_PKEY_set1_EC_KEY(pkey.get(), nullptr));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
 
   EXPECT_FALSE(EVP_PKEY_set_type(pkey.get(), EVP_PKEY_DH));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
   EXPECT_FALSE(EVP_PKEY_set1_DH(pkey.get(), nullptr));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
 
   EXPECT_FALSE(EVP_PKEY_set_type(pkey.get(), EVP_PKEY_DSA));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);
   EXPECT_FALSE(EVP_PKEY_set1_DSA(pkey.get(), nullptr));
   EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_NONE);

@@ -614,6 +614,7 @@ TEST(SSLTest, CipherRules) {
     // Test strict mode.
     if (t.strict_fail) {
       EXPECT_FALSE(SSL_CTX_set_strict_cipher_list(ctx.get(), t.rule));
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_INVALID_COMMAND}}));
     } else {
       ASSERT_TRUE(SSL_CTX_set_strict_cipher_list(ctx.get(), t.rule));
       EXPECT_TRUE(CipherListsEqual(ctx.get(), t.expected))
@@ -2708,6 +2709,8 @@ TEST(SSLTest, UnsupportedECHConfig) {
   EXPECT_FALSE(SSL_ECH_KEYS_add(keys.get(), /*is_retry_config=*/1,
                                 ech_config.data(), ech_config.size(),
                                 key.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_UNSUPPORTED_ECH_SERVER_CONFIG}}));
 
   // Invalid public names are rejected.
   ECHConfigParams invalid_public_name;
@@ -3088,9 +3091,11 @@ TEST(SSLTest, TLS13ExporterAvailability) {
   EXPECT_FALSE(SSL_export_keying_material(client.get(), buffer.data(),
                                           buffer.size(), label, strlen(label),
                                           nullptr, 0, 0));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_HANDSHAKE_NOT_COMPLETE}}));
   EXPECT_FALSE(SSL_export_keying_material(server.get(), buffer.data(),
                                           buffer.size(), label, strlen(label),
                                           nullptr, 0, 0));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_HANDSHAKE_NOT_COMPLETE}}));
 
   // Send the client's first flight of handshake messages.
   int client_ret = SSL_do_handshake(client.get());
@@ -5512,17 +5517,24 @@ TEST(SSLTest, CertThenKeyMismatch) {
 
   // There is no key or certificate, so `SSL_CTX_check_private_key` fails.
   EXPECT_FALSE(SSL_CTX_check_private_key(ctx.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED}}));
 
   // With only a certificate, `SSL_CTX_check_private_key` still fails.
   ASSERT_TRUE(SSL_CTX_use_certificate(ctx.get(), leaf.get()));
   EXPECT_FALSE(SSL_CTX_check_private_key(ctx.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED}}));
 
   // The private key does not match the certificate, so it should fail.
   EXPECT_FALSE(SSL_CTX_use_PrivateKey(ctx.get(), key.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_X509, X509_R_KEY_VALUES_MISMATCH}}));
 
   // Checking the private key fails, but this is really because there is still
   // no private key.
   EXPECT_FALSE(SSL_CTX_check_private_key(ctx.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED}}));
   EXPECT_EQ(nullptr, SSL_CTX_get0_privatekey(ctx.get()));
 }
 
@@ -5537,10 +5549,14 @@ TEST(SSLTest, KeyThenCertMismatch) {
 
   // There is no key or certificate, so `SSL_CTX_check_private_key` fails.
   EXPECT_FALSE(SSL_CTX_check_private_key(ctx.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED}}));
 
   // With only a key, `SSL_CTX_check_private_key` still fails.
   ASSERT_TRUE(SSL_CTX_use_PrivateKey(ctx.get(), key.get()));
   EXPECT_FALSE(SSL_CTX_check_private_key(ctx.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_NO_CERTIFICATE_ASSIGNED}}));
 
   // If configuring a certificate that doesn't match the key, configuration
   // actually succeeds. We just silently drop the private key.
@@ -5552,6 +5568,8 @@ TEST(SSLTest, KeyThenCertMismatch) {
   // by way of noticing there is no private key. The actual consistency check
   // happened in `SSL_CTX_use_certificate`.
   EXPECT_FALSE(SSL_CTX_check_private_key(ctx.get()));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_NO_PRIVATE_KEY_ASSIGNED}}));
 }
 
 TEST(SSLTest, OverrideCertAndKey) {
@@ -11146,16 +11164,22 @@ TEST_P(SSLVersionTest, GetTrafficSecrets) {
   Span<const uint8_t> client_read, client_write, server_read, server_write;
   bool client_ok =
       SSL_get_traffic_secrets(client_.get(), &client_read, &client_write);
-  bool server_ok =
-      SSL_get_traffic_secrets(server_.get(), &server_read, &server_write);
   if (!is_dtls() && version() >= TLS1_3_VERSION) {
+    bool server_ok =
+        SSL_get_traffic_secrets(server_.get(), &server_read, &server_write);
     ASSERT_TRUE(client_ok);
     ASSERT_TRUE(server_ok);
     EXPECT_EQ(Bytes(client_read), Bytes(server_write));
     EXPECT_EQ(Bytes(server_read), Bytes(client_write));
   } else {
     EXPECT_FALSE(client_ok);
+    int expected_reason =
+        is_dtls() ? ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED : SSL_R_WRONG_SSL_VERSION;
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, expected_reason}}));
+    bool server_ok =
+        SSL_get_traffic_secrets(server_.get(), &server_read, &server_write);
     EXPECT_FALSE(server_ok);
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, expected_reason}}));
   }
 }
 

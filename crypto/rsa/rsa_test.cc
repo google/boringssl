@@ -1479,10 +1479,15 @@ TEST(RSATest, KeyLimits) {
   // TODO(crbug.com/42290480): Raise the lower bound. 512-bit RSA was factored
   // in 1999.
   EXPECT_FALSE(generate_key(511u));
-  EXPECT_TRUE(
-      ErrorEquals(ERR_get_error(), ERR_LIB_RSA, RSA_R_KEY_SIZE_TOO_SMALL));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_KEY_SIZE_TOO_SMALL}}));
   EXPECT_FALSE(read_private_key("crypto/rsa/test/rsa511.pem"));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DECODE_ERROR}}));
   EXPECT_FALSE(read_public_key("crypto/rsa/test/rsa511pub.pem"));
+  EXPECT_TRUE(ErrorsAreAndClear({
+      {ERR_LIB_RSA, RSA_R_KEY_SIZE_TOO_SMALL},
+      {ERR_LIB_RSA, RSA_R_BAD_RSA_PARAMETERS},
+      {ERR_LIB_RSA, RSA_R_BAD_ENCODING},
+  }));
 
   UniquePtr<RSA> rsa = read_private_key("crypto/rsa/test/rsa512.pem");
   ASSERT_TRUE(rsa);
@@ -1517,8 +1522,15 @@ TEST(RSATest, KeyLimits) {
   EXPECT_EQ(RSA_bits(rsa.get()), 16384u);
 
   EXPECT_FALSE(read_private_key("crypto/rsa/test/rsa16385.pem"));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DECODE_ERROR}}));
   EXPECT_FALSE(read_public_key("crypto/rsa/test/rsa16385pub.pem"));
+  EXPECT_TRUE(ErrorsAreAndClear({
+      {ERR_LIB_RSA, RSA_R_MODULUS_TOO_LARGE},
+      {ERR_LIB_RSA, RSA_R_BAD_RSA_PARAMETERS},
+      {ERR_LIB_RSA, RSA_R_BAD_ENCODING},
+  }));
   EXPECT_FALSE(generate_key(16385u));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_RSA, RSA_R_MODULUS_TOO_LARGE}}));
 }
 
 #if defined(OPENSSL_THREADS)
