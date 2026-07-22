@@ -948,7 +948,9 @@ both_builders(
         },
     },
 )
-both_builders(
+
+# TODO(crbug.com/537679390): Back to both_builders once it works manually again!
+cq_builders(
     "linux32_sde",
     LINUX_HOST,
     cq_enabled = False,
