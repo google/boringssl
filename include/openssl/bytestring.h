@@ -638,6 +638,10 @@ OPENSSL_EXPORT int CBB_add_u32(CBB *cbb, uint32_t value);
 // It returns one on success and zero otherwise.
 OPENSSL_EXPORT int CBB_add_u32le(CBB *cbb, uint32_t value);
 
+// CBB_add_u48 appends a 48-bit, big-endian number from `value` to `cbb`. It
+// returns one on success and zero otherwise.
+OPENSSL_EXPORT int CBB_add_u48(CBB *cbb, uint64_t value);
+
 // CBB_add_u64 appends a 64-bit, big-endian number from `value` to `cbb`. It
 // returns one on success and zero otherwise.
 OPENSSL_EXPORT int CBB_add_u64(CBB *cbb, uint64_t value);

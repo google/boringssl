@@ -477,6 +477,8 @@ int CBB_add_u32le(CBB *cbb, uint32_t value) {
   return CBB_add_u32(cbb, CRYPTO_bswap4(value));
 }
 
+int CBB_add_u48(CBB *cbb, uint64_t value) { return cbb_add_u(cbb, value, 6); }
+
 int CBB_add_u64(CBB *cbb, uint64_t value) { return cbb_add_u(cbb, value, 8); }
 
 int CBB_add_u64le(CBB *cbb, uint64_t value) {
