@@ -2420,5 +2420,108 @@ read hs 4
 			},
 			expectations: connectionExpectations{echAccepted: true},
 		})
+		unsupportedConfig := generateServerECHConfig(&ECHConfig{
+			ConfigID:     42,
+			KEM:          0x9999,
+			CipherSuites: []HPKECipherSuite{{KDF: 0x1111, AEAD: 0x2222}},
+		})
+		testCases = append(testCases, testCase{
+			testType: clientTest,
+			protocol: protocol,
+			name:     prefix + "ECH-Client-RejectUnusableConfig-Success",
+			config: Config{
+				MinVersion:       VersionTLS13,
+				MaxVersion:       VersionTLS13,
+				ServerECHConfigs: []ServerECHConfig{echConfig},
+				Credential:       &echSecretCertificate,
+			},
+			flags: []string{
+				"-reject-unusable-ech-config",
+				"-ech-config-list", base64FlagValue(CreateECHConfigList(echConfig.ECHConfig.Raw)),
+				"-host-name", "secret.example",
+				"-expect-ech-accept",
+			},
+			expectations: connectionExpectations{echAccepted: true},
+		})
+		testCases = append(testCases, testCase{
+			testType: clientTest,
+			protocol: protocol,
+			name:     prefix + "ECH-Client-RejectUnusableConfig-UnsupportedConfig",
+			config: Config{
+				MinVersion: VersionTLS13,
+				MaxVersion: VersionTLS13,
+			},
+			flags: []string{
+				"-reject-unusable-ech-config",
+				"-ech-config-list", base64FlagValue(CreateECHConfigList(unsupportedConfig.ECHConfig.Raw)),
+			},
+			shouldFail:    true,
+			expectedError: ":UNUSABLE_ECH_CONFIG_LIST:",
+		})
+		testCases = append(testCases, testCase{
+			testType: clientTest,
+			protocol: protocol,
+			name:     prefix + "ECH-Client-RejectUnusableConfig-PartialUnsupportedConfig",
+			config: Config{
+				MinVersion:       VersionTLS13,
+				MaxVersion:       VersionTLS13,
+				ServerECHConfigs: []ServerECHConfig{echConfig},
+				Credential:       &echSecretCertificate,
+			},
+			flags: []string{
+				"-reject-unusable-ech-config",
+				"-ech-config-list", base64FlagValue(CreateECHConfigList(unsupportedConfig.ECHConfig.Raw, echConfig.ECHConfig.Raw)),
+				"-host-name", "secret.example",
+				"-expect-ech-accept",
+			},
+			expectations: connectionExpectations{echAccepted: true},
+		})
+		testCases = append(testCases, testCase{
+			testType: clientTest,
+			protocol: protocol,
+			name:     prefix + "ECH-Client-RejectUnusableConfig-Unset",
+			config: Config{
+				MinVersion: VersionTLS13,
+				MaxVersion: VersionTLS13,
+			},
+			flags: []string{
+				"-reject-unusable-ech-config",
+			},
+			shouldFail:    true,
+			expectedError: ":UNUSABLE_ECH_CONFIG_LIST:",
+		})
+		if protocol == tls {
+			testCases = append(testCases, testCase{
+				testType: clientTest,
+				protocol: protocol,
+				name:     prefix + "ECH-Client-RejectUnusableConfig-TLS12",
+				config: Config{
+					MaxVersion: VersionTLS12,
+				},
+				flags: []string{
+					"-reject-unusable-ech-config",
+					"-max-version", strconv.Itoa(VersionTLS12),
+					"-ech-config-list", base64FlagValue(CreateECHConfigList(echConfig.ECHConfig.Raw)),
+				},
+				shouldFail:    true,
+				expectedError: ":UNUSABLE_ECH_CONFIG_LIST:",
+			})
+		} else if protocol == dtls {
+			testCases = append(testCases, testCase{
+				testType: clientTest,
+				protocol: protocol,
+				name:     prefix + "ECH-Client-RejectUnusableConfig-TLS12",
+				config: Config{
+					MaxVersion: VersionDTLS12,
+				},
+				flags: []string{
+					"-reject-unusable-ech-config",
+					"-max-version", strconv.Itoa(VersionDTLS12),
+					"-ech-config-list", base64FlagValue(CreateECHConfigList(echConfig.ECHConfig.Raw)),
+				},
+				shouldFail:    true,
+				expectedError: ":UNUSABLE_ECH_CONFIG_LIST:",
+			})
+		}
 	}
 }

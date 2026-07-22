@@ -583,6 +583,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
 SSL_CONFIG::SSL_CONFIG(SSLImpl *ssl_arg)
     : ssl(ssl_arg),
       ech_grease_enabled(false),
+      reject_unusable_ech_config(false),
       signed_cert_timestamps_enabled(false),
       ocsp_stapling_enabled(false),
       channel_id_enabled(false),

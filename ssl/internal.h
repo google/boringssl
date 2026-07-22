@@ -3504,6 +3504,10 @@ struct SSL_CONFIG {
   // ClientHello.
   bool ech_grease_enabled : 1;
 
+  // reject_unusable_ech_config controls whether the client will fail the
+  // handshake if ECH cannot be offered.
+  bool reject_unusable_ech_config : 1;
+
   // Enable signed certificate time stamps. Currently client only.
   bool signed_cert_timestamps_enabled : 1;
 

@@ -79,6 +79,7 @@ struct TestConfig {
   std::string trust_cert;
   std::string expect_server_name;
   bool enable_ech_grease = false;
+  bool reject_unusable_ech_config = false;
   std::vector<std::vector<uint8_t>> ech_server_configs;
   std::vector<std::vector<uint8_t>> ech_server_keys;
   std::vector<int> ech_is_retry_config;
