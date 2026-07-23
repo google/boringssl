@@ -821,7 +821,8 @@ if(BUILD_TESTING)
   if(PROJECT_IS_TOP_LEVEL AND NOT CMAKE_GENERATOR MATCHES "^Visual Studio ")
     if(GO_EXECUTABLE)
       add_custom_target(
-          run_tests
+          run_unit_tests
+          COMMAND ${CMAKE_COMMAND} -E echo
           COMMAND ${CMAKE_COMMAND} -E echo "Checking pregenerated files"
           COMMAND ${GO_EXECUTABLE} run ./util/pregenerate -check
           COMMAND ${CMAKE_COMMAND} -E echo
@@ -831,15 +832,24 @@ if(BUILD_TESTING)
           COMMAND ${CMAKE_COMMAND} -E echo "Running unit tests"
           COMMAND ${GO_EXECUTABLE} run util/all_tests.go -build-dir
                   ${CMAKE_CURRENT_BINARY_DIR}
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          DEPENDS boringssl_all_tests fips_specific_tests_if_any
+          USES_TERMINAL)
+      add_custom_target(
+          run_tests
           COMMAND ${CMAKE_COMMAND} -E echo
           COMMAND ${CMAKE_COMMAND} -E echo "Running SSL tests"
           COMMAND cd ssl/test/runner &&
                   ${GO_EXECUTABLE} test -shim-path $<TARGET_FILE:bssl_shim>
                     ${HANDSHAKER_ARGS} ${RUNNER_ARGS}
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          DEPENDS boringssl_all_tests bssl_shim handshaker fips_specific_tests_if_any
+          DEPENDS run_unit_tests bssl_shim handshaker
           USES_TERMINAL)
     else()
+      add_custom_target(
+          run_unit_tests
+          COMMAND ${CMAKE_COMMAND} -E echo "Running tests requires Go"
+          COMMAND ${CMAKE_COMMAND} -E false)
       add_custom_target(
           run_tests
           COMMAND ${CMAKE_COMMAND} -E echo "Running tests requires Go"
