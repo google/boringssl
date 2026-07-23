@@ -243,8 +243,8 @@ where
 /// # Certificate verification, X.509
 ///
 /// These methods require built-in X.509 support and are not available for
-/// [`TlsNoX509Mode`](super::TlsNoX509Mode) or
-/// [`DtlsNoX509Mode`](super::DtlsNoX509Mode).
+/// [`TlsExternalVerifierMode`](super::TlsExternalVerifierMode) or
+/// [`DtlsExternalVerifierMode`](super::DtlsExternalVerifierMode).
 impl<M> TlsContextBuilder<M>
 where
     M: super::UseBuiltinX509,

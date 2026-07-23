@@ -621,7 +621,7 @@ pub struct DecryptionOperation<'a> {
 ///
 /// This protocol allows for asynchronous signing and decryption operations.
 /// BoringSSL will call one of [`Self::sign`] or [`Self::decrypt`] for operation initiation,
-/// and call [`Self::complete`] to poll for completion as long as
+/// and call [`PrivateKeyOperation::complete`] to poll for completion as long as
 /// [`PrivateKeyOperationResult::Pending`] is returned.
 pub trait PrivateKeyDelegate: Send + Sync {
     /// Sign operation.
