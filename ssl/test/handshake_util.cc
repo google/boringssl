@@ -417,18 +417,22 @@ bool GetHandshakeHint(SSL *ssl, SettingsWriter *writer, bool is_resume,
 
   bool has_hints;
   std::vector<uint8_t> hints;
-  if (!RequestHandshakeHint(GetTestConfig(ssl), is_resume,
+  const TestConfig *config = GetTestConfig(ssl);
+  if (!RequestHandshakeHint(config, is_resume,
                             Span(CBB_data(input.get()), CBB_len(input.get())),
                             &has_hints, &hints)) {
     return false;
   }
-  if (has_hints &&
-      (!writer->WriteHints(hints) ||
-       !SSL_set_handshake_hints(ssl, hints.data(), hints.size()))) {
-    return false;
+  if (!has_hints) {
+    // The handshaker successfully communicated to us that its handshake failed
+    // before getting hints. Continue with the handshake on the shim side (and
+    // presumably eventually report the error there).
+    return true;
   }
-
-  return true;
+  return writer->WriteHintTrace(bssl::Span(client_hello->client_hello,
+                                           client_hello->client_hello_len),
+                                hints) &&
+         SSL_set_handshake_hints(ssl, hints.data(), hints.size());
 }
 
 #endif  // defined(HANDSHAKER_SUPPORTED)

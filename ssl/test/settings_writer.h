@@ -22,24 +22,35 @@
 
 #include "test_config.h"
 
+// SettingsWriter persists data about a test handshake to files. If non-empty,
+// `config->write_settings` controls the output path for fuzzing input data, and
+// `config->write_hint_trace` controls the output path for handshake hint
+// replay test traces.
 struct SettingsWriter {
  public:
-  SettingsWriter();
+  SettingsWriter() = default;
 
-  // Init initializes the writer for a new connection, given by `i`.  Each
-  // connection gets a unique output file.
+  // Init initializes the writer for a new connection with index given by `i`.
+  // Each connection gets a unique output file. Buffers pre-handshake data found
+  // in `config` and `session` to be written later.
   bool Init(int i, const TestConfig *config, SSL_SESSION *session);
 
   // Commit writes the buffered data to disk.
   bool Commit();
 
-  bool WriteHints(bssl::Span<const uint8_t> hints);
+  // Buffers handshake hint and client hello data to be written to handshake
+  // hint replay test traces, and to fuzzing corpus. Should be called after the
+  // ClientHello.
+  bool WriteHintTrace(bssl::Span<const uint8_t> client_hello,
+                      bssl::Span<const uint8_t> hints);
 
  private:
-  bool WriteData(uint16_t tag, bssl::Span<const uint8_t> data);
-
-  std::string path_;
-  bssl::ScopedCBB cbb_;
+  // Path prefix and CBB for fuzzing corpus.
+  std::string settings_path_;
+  bssl::ScopedCBB settings_cbb_;
+  // Path prefix and CBB for handshake hint replay test traces.
+  std::string hint_trace_path_;
+  bssl::ScopedCBB hint_trace_cbb_;
 };
 
 #endif  // HEADER_SETTINGS_WRITER

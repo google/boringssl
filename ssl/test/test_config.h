@@ -64,6 +64,7 @@ struct TestConfig {
   bool is_quic = false;
   int resume_count = 0;
   std::string write_settings;
+  std::string write_hint_trace;
 #if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
   bool fuzzer_mode = false;
 #endif

@@ -16,92 +16,111 @@
 
 #include <stdio.h>
 
+#include <optional>
+
 #include <openssl/ssl.h>
 
 #include "fuzzer_tags.h"
 #include "test_config.h"
 
 
-SettingsWriter::SettingsWriter() {}
+namespace {
+
+bool WriteData(CBB *cbb, bssl::Span<const uint8_t> data,
+               std::optional<uint16_t> tag = std::nullopt) {
+  CBB child;
+  return (!tag.has_value() || CBB_add_u16(cbb, *tag)) &&
+         CBB_add_u24_length_prefixed(cbb, &child) &&
+         CBB_add_bytes(&child, data.data(), data.size()) &&  //
+         CBB_flush(cbb);
+}
+
+}  // namespace
 
 bool SettingsWriter::Init(int i, const TestConfig *config,
                           SSL_SESSION *session) {
-  if (config->write_settings.empty()) {
-    return true;
-  }
-  // Treat write_settings as a path prefix for each connection in the run.
-  char buf[DECIMAL_SIZE(int)];
-  snprintf(buf, sizeof(buf), "%d", i);
-  path_ = config->write_settings + buf;
+  // Treat provided flags as a path prefix for each connection in the run, and
+  // append the connection index to write each connection's data to a separate
+  // file.
+  char conn_index[DECIMAL_SIZE(int)];
+  snprintf(conn_index, sizeof(conn_index), "%d", i);
 
-  if (!CBB_init(cbb_.get(), 64)) {
-    return false;
-  }
-
-  if (session != nullptr) {
-    uint8_t *data;
-    size_t len;
-    if (!SSL_SESSION_to_bytes(session, &data, &len)) {
+  if (!config->write_settings.empty()) {
+    settings_path_ = config->write_settings + conn_index;
+    if (!CBB_init(settings_cbb_.get(), 64)) {
       return false;
     }
-    bssl::UniquePtr<uint8_t> free_data(data);
-    CBB child;
-    if (!CBB_add_u16(cbb_.get(), kSessionTag) ||
-        !CBB_add_u24_length_prefixed(cbb_.get(), &child) ||
-        !CBB_add_bytes(&child, data, len) || !CBB_flush(cbb_.get())) {
+
+    if (session != nullptr) {
+      uint8_t *data;
+      size_t len;
+      if (!SSL_SESSION_to_bytes(session, &data, &len)) {
+        return false;
+      }
+      bssl::UniquePtr<uint8_t> free_data(data);
+      if (!WriteData(settings_cbb_.get(), bssl::Span(data, len), kSessionTag)) {
+        return false;
+      }
+    }
+    if (config->is_server &&
+        (config->require_any_client_certificate || config->verify_peer) &&
+        !CBB_add_u16(settings_cbb_.get(), kRequestClientCert)) {
       return false;
     }
   }
 
-  if (config->is_server &&
-      (config->require_any_client_certificate || config->verify_peer) &&
-      !CBB_add_u16(cbb_.get(), kRequestClientCert)) {
-    return false;
+  if (!config->write_hint_trace.empty()) {
+    hint_trace_path_ = config->write_hint_trace + conn_index;
+    if (!CBB_init(hint_trace_cbb_.get(), 64)) {
+      return false;
+    }
   }
-
   return true;
 }
 
 bool SettingsWriter::Commit() {
-  if (path_.empty()) {
-    return true;
-  }
-
-  uint8_t *settings;
-  size_t settings_len;
-  if (!CBB_add_u16(cbb_.get(), kDataTag) ||
-      !CBB_finish(cbb_.get(), &settings, &settings_len)) {
-    return false;
-  }
-  bssl::UniquePtr<uint8_t> free_settings(settings);
-
   struct FileCloser {
     void operator()(FILE *f) const { fclose(f); }
   };
   using ScopedFILE = std::unique_ptr<FILE, FileCloser>;
-  ScopedFILE file(fopen(path_.c_str(), "w"));
-  if (!file) {
-    return false;
+  if (!settings_path_.empty()) {
+    uint8_t *settings;
+    size_t settings_len;
+    if (!CBB_add_u16(settings_cbb_.get(), kDataTag) ||
+        !CBB_finish(settings_cbb_.get(), &settings, &settings_len)) {
+      return false;
+    }
+    bssl::UniquePtr<uint8_t> free_settings(settings);
+    ScopedFILE file(fopen(settings_path_.c_str(), "w"));
+    if (!file || fwrite(settings, settings_len, 1, file.get()) != 1) {
+      return false;
+    }
   }
 
-  return fwrite(settings, settings_len, 1, file.get()) == 1;
-}
-
-bool SettingsWriter::WriteHints(bssl::Span<const uint8_t> hints) {
-  return WriteData(kHintsTag, hints);
-}
-
-bool SettingsWriter::WriteData(uint16_t tag, bssl::Span<const uint8_t> data) {
-  if (path_.empty()) {
-    return true;
+  if (!hint_trace_path_.empty()) {
+    uint8_t *hints_trace;
+    size_t hints_trace_len;
+    if (!CBB_finish(hint_trace_cbb_.get(), &hints_trace, &hints_trace_len)) {
+      return false;
+    }
+    bssl::UniquePtr<uint8_t> free_hints_trace(hints_trace);
+    // Skip if there were no hints.
+    if (hints_trace_len > 0) {
+      ScopedFILE file(fopen(hint_trace_path_.c_str(), "w"));
+      if (!file || fwrite(hints_trace, hints_trace_len, 1, file.get()) != 1) {
+        return false;
+      }
+    }
   }
 
-  CBB child;
-  if (!CBB_add_u16(cbb_.get(), tag) ||
-      !CBB_add_u24_length_prefixed(cbb_.get(), &child) ||
-      !CBB_add_bytes(&child, data.data(), data.size()) ||
-      !CBB_flush(cbb_.get())) {
-    return false;
-  }
   return true;
+}
+
+bool SettingsWriter::WriteHintTrace(bssl::Span<const uint8_t> client_hello,
+                                    bssl::Span<const uint8_t> hints) {
+  return (settings_path_.empty() ||
+          WriteData(settings_cbb_.get(), hints, kHintsTag)) &&
+         (hint_trace_path_.empty() ||
+          (WriteData(hint_trace_cbb_.get(), client_hello) &&
+           WriteData(hint_trace_cbb_.get(), hints)));
 }
