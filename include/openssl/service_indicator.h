@@ -17,3 +17,5 @@
 // an older version of library.
 //
 // TODO(davidben): Remove this header from downstream code and remove the file.
+
+#include "base.h"
