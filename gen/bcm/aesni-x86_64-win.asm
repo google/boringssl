@@ -2499,7 +2499,7 @@ $L$key_rcon1b:
 	DB	32,98,121,32,60,97,112,112,114,111,64,111,112,101,110,115
 	DB	115,108,46,111,114,103,62,0
 ALIGN	64
-section	.text
+section	.text code align=64
 
 EXTERN	__imp_RtlVirtualUnwind
 
@@ -2695,7 +2695,7 @@ $L$SEH_info_ctr32:
 $L$SEH_info_cbc:
 	DB	9,0,0,0
 	DD	cbc_se_handler wrt ..imagebase
-section	.pdata
+section	.pdata rdata align=4
 ALIGN	4
 	DD	$L$SEH_begin_aes_hw_set_encrypt_key_base_1 wrt ..imagebase
 	DD	$L$SEH_end_aes_hw_set_encrypt_key_base_4 wrt ..imagebase
@@ -2706,7 +2706,7 @@ ALIGN	4
 	DD	$L$SEH_info_aes_hw_set_encrypt_key_alt_0 wrt ..imagebase
 
 
-section	.xdata
+section	.xdata rdata align=8
 ALIGN	4
 $L$SEH_info_aes_hw_set_encrypt_key_base_0:
 	DB	1  ; version 1, no flags

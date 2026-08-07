@@ -1062,27 +1062,6 @@ ____
     }
 }
 { package directive;	# pick up directives, which start with .
-    my %sections;
-    sub nasm_section {
-	my ($name, $qualifiers) = @_;
-	my $ret = "section\t$name";
-	if (exists $sections{$name}) {
-	    # Work around https://bugzilla.nasm.us/show_bug.cgi?id=3392701. Only
-	    # emit section qualifiers the first time a section is referenced.
-	    # For all subsequent references, require the qualifiers match and
-	    # omit them.
-	    #
-	    # See also https://crbug.com/1422018 and b/270643835.
-	    my $old = $sections{$name};
-	    die "Inconsistent qualifiers: $qualifiers vs $old" if ($qualifiers ne "" && $qualifiers ne $old);
-	} else {
-	    $sections{$name} = $qualifiers;
-	    if ($qualifiers ne "") {
-		$ret .= " $qualifiers";
-	    }
-	}
-	return $ret;
-    }
     sub re {
 	my	($class, $line) = @_;
 	my	$self = {};
@@ -1191,7 +1170,7 @@ ____
 	    SWITCH: for ($dir) {
 		/\.text/    && do { my $v=undef;
 				    if ($nasm) {
-					$v=nasm_section(".text", "code align=64")."\n";
+					$v="section	.text code align=64\n";
 				    } else {
 					$v="$current_segment\tENDS\n" if ($current_segment);
 					$current_segment = ".text\$";
@@ -1204,7 +1183,7 @@ ____
 				  };
 		/\.data/    && do { my $v=undef;
 				    if ($nasm) {
-					$v=nasm_section(".data", "data align=8")."\n";
+					$v="section	.data data align=8\n";
 				    } else {
 					$v="$current_segment\tENDS\n" if ($current_segment);
 					$current_segment = "_DATA";
@@ -1218,14 +1197,13 @@ ____
 				    $$line = ".CRT\$XCU" if ($$line eq ".init");
 				    $$line = ".rdata" if ($$line eq ".rodata");
 				    if ($nasm) {
-					my $qualifiers = "";
+					$v="section	$$line";
 					if ($$line=~/\.([prx])data/) {
-					    $qualifiers = "rdata align=";
-					    $qualifiers .= $1 eq "p"? 4 : 8;
+					    $v.=" rdata align=";
+					    $v.=$1 eq "p"? 4 : 8;
 					} elsif ($$line=~/\.CRT\$/i) {
-					    $qualifiers = "rdata align=8";
+					    $v.=" rdata align=8";
 					}
-					$v = nasm_section($$line, $qualifiers);
 				    } else {
 					$v="$current_segment\tENDS\n" if ($current_segment);
 					$v.="$$line\tSEGMENT";

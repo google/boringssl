@@ -1846,7 +1846,7 @@ $L$inc:
 	DD	2,2,2,2,3,3,3,3
 	DD	4,4,4,4,4,4,4,4
 ALIGN	64
-section	.text
+section	.text code align=64
 
 EXTERN	__imp_RtlVirtualUnwind
 

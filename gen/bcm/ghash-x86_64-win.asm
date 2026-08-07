@@ -1214,7 +1214,7 @@ ALIGN	64
 	DB	60,97,112,112,114,111,64,111,112,101,110,115,115,108,46,111
 	DB	114,103,62,0
 ALIGN	64
-section	.text
+section	.text code align=64
 
 section	.pdata rdata align=4
 ALIGN	4

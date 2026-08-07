@@ -1348,7 +1348,7 @@ $L$ctr_add_two:
 	DB	85,110,105,118,101,114,115,105,116,121,41,0
 ALIGN	64
 
-section	.text
+section	.text code align=64
 
 EXTERN	__imp_RtlVirtualUnwind
 
