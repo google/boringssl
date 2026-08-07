@@ -358,6 +358,7 @@ boringssl_crypto_sources := \
   crypto/cpu_arm_linux.cc \
   crypto/cpu_intel.cc \
   crypto/crypto.cc \
+  crypto/curve25519/cpace.cc \
   crypto/curve25519/curve25519.cc \
   crypto/curve25519/curve25519_64_adx.cc \
   crypto/curve25519/spake25519.cc \
@@ -751,6 +752,7 @@ boringssl_crypto_test_sources := \
   crypto/constant_time_test.cc \
   crypto/cpu_arm_linux_test.cc \
   crypto/crypto_test.cc \
+  crypto/curve25519/cpace_test.cc \
   crypto/curve25519/curve25519_test.cc \
   crypto/curve25519/ed25519_test.cc \
   crypto/curve25519/spake25519_test.cc \
