@@ -1869,14 +1869,14 @@ int SSL_CTX_set_tlsext_ticket_key_cb(
   return 1;
 }
 
-static bool check_no_duplicates(Span<const uint16_t> list) {
+static bool check_no_duplicates(Span<const uint16_t> list, int reason) {
   if (list.size() < 2) {
     return true;
   }
   for (size_t i = 0; i < list.size() - 1; ++i) {
     for (size_t j = i + 1; j < list.size(); ++j) {
       if (list[i] == list[j]) {
-        OPENSSL_PUT_ERROR(SSL, SSL_R_DUPLICATE_GROUP);
+        OPENSSL_PUT_ERROR(SSL, reason);
         return false;
       }
     }
@@ -1891,7 +1891,7 @@ static bool check_group_ids(Span<const uint16_t> group_ids) {
       return false;
     }
   }
-  return check_no_duplicates(group_ids);
+  return check_no_duplicates(group_ids, SSL_R_DUPLICATE_GROUP);
 }
 
 // validate_key_shares returns whether the `requested_key_shares` are free of
@@ -1899,7 +1899,7 @@ static bool check_group_ids(Span<const uint16_t> group_ids) {
 // `groups`.
 static bool validate_key_shares(Span<const uint16_t> requested_key_shares,
                                 Span<const uint16_t> groups) {
-  if (!check_no_duplicates(requested_key_shares)) {
+  if (!check_no_duplicates(requested_key_shares, SSL_R_DUPLICATE_GROUP)) {
     return false;
   }
   if (requested_key_shares.size() > groups.size()) {
@@ -1992,6 +1992,76 @@ int SSL_set1_group_ids_with_flags(SSL *ssl, const uint16_t *group_ids,
   return 0;
 }
 
+static bool check_tls13_cipher_flags(Span<const uint32_t> flags) {
+  if (flags.empty()) {
+    return true;
+  }
+  // The last element must not have the "equal preference with next" flag,
+  // because there is no next element.
+  if ((flags.back() & SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT) != 0) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CIPHER_FLAGS);
+    return false;
+  }
+  return true;
+}
+
+static bool check_tls13_cipher_ids(Span<const uint16_t> cipher_ids) {
+  for (uint16_t cipher_id : cipher_ids) {
+    const SSL_CIPHER *cipher = SSL_get_cipher_by_value(cipher_id);
+    if (cipher == nullptr ||
+        SSL_CIPHER_get_min_version(cipher) != TLS1_3_VERSION) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_UNKNOWN_CIPHER_TYPE);
+      return false;
+    }
+  }
+  return check_no_duplicates(cipher_ids, SSL_R_DUPLICATE_CIPHER);
+}
+
+static bool set_tls13_ciphers(const uint16_t *cipher_ids, const uint32_t *flags,
+                              size_t num_cipher_ids,
+                              SSLCipherPreferenceList *out) {
+  if (num_cipher_ids == 0) {
+    return ssl_create_default_tls13_cipher_list(out);
+  }
+  Span<const uint16_t> ciphers_span(cipher_ids, num_cipher_ids);
+  if (!check_tls13_cipher_ids(ciphers_span)) {
+    return false;
+  }
+  Array<bool> in_group_flags;
+  if (!in_group_flags.Init(num_cipher_ids)) {
+    return false;
+  }
+  if (flags == nullptr) {
+    return out->Init(ciphers_span, in_group_flags);
+  }
+  Span<const uint32_t> flags_span = Span(flags, num_cipher_ids);
+  if (!check_tls13_cipher_flags(flags_span)) {
+    return false;
+  }
+  for (size_t i = 0; i < flags_span.size(); ++i) {
+    in_group_flags[i] =
+        (flags_span[i] & SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT) != 0;
+  }
+  return out->Init(ciphers_span, in_group_flags);
+}
+
+int SSL_CTX_set1_tls13_ciphers(SSL_CTX *ctx, const uint16_t *cipher_ids,
+                               const uint32_t *flags, size_t num_cipher_ids) {
+  auto *ctx_impl = FromOpaque(ctx);
+  return set_tls13_ciphers(cipher_ids, flags, num_cipher_ids,
+                           &ctx_impl->tls13_cipher_list);
+}
+
+int SSL_set1_tls13_ciphers(SSL *ssl, const uint16_t *cipher_ids,
+                           const uint32_t *flags, size_t num_cipher_ids) {
+  auto *ssl_impl = FromOpaque(ssl);
+  if (!ssl_impl->config) {
+    return 0;
+  }
+  return set_tls13_ciphers(cipher_ids, flags, num_cipher_ids,
+                           &ssl_impl->config->tls13_cipher_list);
+}
+
 static bool ssl_nids_to_group_ids(Array<uint16_t> *out_group_ids,
                                   Span<const int> nids) {
   if (nids.empty()) {
@@ -2008,7 +2078,7 @@ static bool ssl_nids_to_group_ids(Array<uint16_t> *out_group_ids,
       return false;
     }
   }
-  if (!check_no_duplicates(group_ids)) {
+  if (!check_no_duplicates(group_ids, SSL_R_DUPLICATE_GROUP)) {
     return false;
   }
 
@@ -2072,7 +2142,7 @@ static bool ssl_str_to_group_ids(Array<uint16_t> *out_group_ids,
   } while (col);
 
   assert(i == count);
-  if (!check_no_duplicates(group_ids)) {
+  if (!check_no_duplicates(group_ids, SSL_R_DUPLICATE_GROUP)) {
     return false;
   }
   *out_group_ids = std::move(group_ids);

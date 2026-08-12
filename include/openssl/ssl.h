@@ -1736,9 +1736,10 @@ OPENSSL_EXPORT size_t SSL_get_all_standard_cipher_names(const char **out,
 // Once an equal-preference group is used, future directives must be
 // opcode-less. Inside an equal-preference group, spaces are not allowed.
 //
-// TLS 1.3 ciphers do not participate in this mechanism and instead have a
-// built-in preference order. Functions to set cipher lists do not affect TLS
-// 1.3, and functions to query the cipher list do not include TLS 1.3 ciphers.
+// TLS 1.3 ciphers do not participate in this mechanism and are instead
+// configured by the functions in the next section. Functions to set cipher
+// lists do not affect TLS 1.3, and functions to query the cipher list do not
+// include TLS 1.3 ciphers.
 
 // SSL_DEFAULT_CIPHER_LIST is the default cipher suite configuration. It is
 // substituted when a cipher string starts with 'DEFAULT'.
@@ -1782,6 +1783,39 @@ OPENSSL_EXPORT int SSL_CTX_cipher_in_group(const SSL_CTX *ctx, size_t i);
 // SSL_get_ciphers returns the cipher list for `ssl`, in order of preference.
 // TODO(crbug.com/550501994): This should return a const pointer.
 OPENSSL_EXPORT STACK_OF(SSL_CIPHER) *SSL_get_ciphers(const SSL *ssl);
+
+
+// TLS 1.3 Ciphers.
+
+// SSL_CIPHER_FLAG_* define flags used with `SSL_CTX_set1_tls13_ciphers` and
+// `SSL_set1_tls13_ciphers`.
+//
+// If configuring a server, SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT indicates
+// that the corresponding cipher suite has equal preference with the next member
+// of the list of ciphers being configured. Assigning equal preference to a
+// range of consecutively listed cipher suites allows a server to partially
+// respect the client's preferences.
+#define SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT 0x01
+
+// SSL_CTX_set1_tls13_ciphers sets the preferred TLS 1.3 cipher suites for `ctx`
+// to `cipher_ids`. If `flags` is non-null, the preference list is modified by
+// the corresponding `flags` for each element, which is a set of
+// `SSL_CIPHER_FLAG_*` values ORed together. Each element of `cipher_ids` should
+// be a unique one of the `SSL_CIPHER_*` constants corresponding to the protocol
+// ID of a TLS 1.3 cipher suite. If `cipher_ids` is empty, TLS 1.3 cipher suites
+// will instead be determined by a built-in preference order. `cipher_ids` and
+// `flags` (if non-null) should both have `num_cipher_ids` elements. This
+// function returns one on success and zero on failure.
+OPENSSL_EXPORT int SSL_CTX_set1_tls13_ciphers(SSL_CTX *ctx,
+                                              const uint16_t *cipher_ids,
+                                              const uint32_t *flags,
+                                              size_t num_cipher_ids);
+
+// SSL_set1_tls13_ciphers behaves like `SSL_CTX_set1_tls13_ciphers` except that
+// it configures the preferred TLS 1.3 ciphers on `ssl`.
+OPENSSL_EXPORT int SSL_set1_tls13_ciphers(SSL *ssl, const uint16_t *cipher_ids,
+                                          const uint32_t *flags,
+                                          size_t num_cipher_ids);
 
 
 // Connection information.
@@ -7121,6 +7155,8 @@ BSSL_NAMESPACE_END
 #define SSL_R_MISSING_KEY 335
 #define SSL_R_INVALID_RAW_PUBLIC_KEY 336
 #define SSL_R_UNUSABLE_ECH_CONFIG_LIST 337
+#define SSL_R_INVALID_CIPHER_FLAGS 338
+#define SSL_R_DUPLICATE_CIPHER 339
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

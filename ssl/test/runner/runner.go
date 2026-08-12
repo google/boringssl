@@ -361,15 +361,9 @@ func initRawPublicKeyCredentials() {
 	}
 }
 
-func flagInts(flagName string, vals []int) []string {
-	ret := make([]string, 0, 2*len(vals))
-	for _, val := range vals {
-		ret = append(ret, flagName, strconv.Itoa(val))
-	}
-	return ret
-}
+type toIntFlag interface{ ~int | ~uint16 | ~uint8 }
 
-func flagCurves(flagName string, vals []CurveID) []string {
+func flagInts[T toIntFlag](flagName string, vals []T) []string {
 	ret := make([]string, 0, 2*len(vals))
 	for _, val := range vals {
 		ret = append(ret, flagName, strconv.Itoa(int(val)))
@@ -377,13 +371,10 @@ func flagCurves(flagName string, vals []CurveID) []string {
 	return ret
 }
 
-func flagCertTypes(flagName string, vals []CertificateType) []string {
-	ret := make([]string, 0, 2*len(vals))
-	for _, val := range vals {
-		ret = append(ret, flagName, strconv.Itoa(int(val)))
-	}
-	return ret
-}
+var (
+	flagCurves    = flagInts[CurveID]
+	flagCertTypes = flagInts[CertificateType]
+)
 
 func base64FlagValue(in []byte) string {
 	return base64.StdEncoding.EncodeToString(in)

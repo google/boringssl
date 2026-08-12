@@ -16,9 +16,12 @@ package runner
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
+
+const cipherEqualPreferenceWithNextFlag = 0x01
 
 type testCipherSuite struct {
 	name string
@@ -574,6 +577,99 @@ func addCipherSuiteTests() {
 			},
 		})
 	}
+
+	addTLS13CipherConfigurationTests()
+}
+
+func addTLS13CipherConfigurationTests() {
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "TLS13-Server-StrictPreference",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384},
+		},
+		flags: flagInts("-tls13-ciphers", []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256}),
+		expectations: connectionExpectations{
+			cipher: TLS_AES_256_GCM_SHA384,
+		},
+	})
+
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "TLS13-Server-EqualPreference-ClientPrefersFirstInGroup",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256},
+		},
+		flags: slices.Concat(
+			flagInts("-tls13-ciphers", []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256}),
+			flagInts("-tls13-ciphers-flags", []int{cipherEqualPreferenceWithNextFlag, 0}),
+		),
+		expectations: connectionExpectations{
+			cipher: TLS_AES_256_GCM_SHA384,
+		},
+	})
+
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "TLS13-Server-EqualPreference-ClientPrefersSecondInGroup",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384},
+		},
+		flags: slices.Concat(
+			flagInts("-tls13-ciphers", []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256}),
+			flagInts("-tls13-ciphers-flags", []int{cipherEqualPreferenceWithNextFlag, 0}),
+		),
+		expectations: connectionExpectations{
+			cipher: TLS_AES_128_GCM_SHA256,
+		},
+	})
+
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "TLS13-Server-MultiGroup-HigherGroupSelected",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_CHACHA20_POLY1305_SHA256, TLS_AES_256_GCM_SHA384},
+		},
+		flags: slices.Concat(
+			flagInts("-tls13-ciphers", []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256, TLS_CHACHA20_POLY1305_SHA256}),
+			flagInts("-tls13-ciphers-flags", []int{0, cipherEqualPreferenceWithNextFlag, 0}),
+		),
+		expectations: connectionExpectations{
+			cipher: TLS_AES_256_GCM_SHA384,
+		},
+	})
+
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "TLS13-Server-MultiGroup-EqualPrefWithinGroupSelected",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_CHACHA20_POLY1305_SHA256, TLS_AES_128_GCM_SHA256},
+		},
+		flags: slices.Concat(
+			flagInts("-tls13-ciphers", []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256, TLS_CHACHA20_POLY1305_SHA256}),
+			flagInts("-tls13-ciphers-flags", []int{0, cipherEqualPreferenceWithNextFlag, 0}),
+		),
+		expectations: connectionExpectations{
+			cipher: TLS_CHACHA20_POLY1305_SHA256,
+		},
+	})
+
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "TLS13-Server-NoSharedCipher",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_AES_128_GCM_SHA256, TLS_CHACHA20_POLY1305_SHA256},
+		},
+		flags:         flagInts("-tls13-ciphers", []uint16{TLS_AES_256_GCM_SHA384}),
+		shouldFail:    true,
+		expectedError: ":NO_SHARED_CIPHER:",
+	})
 }
 
 func addRSAClientKeyExchangeTests() {

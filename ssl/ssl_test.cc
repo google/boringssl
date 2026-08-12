@@ -2257,6 +2257,81 @@ TEST(SSLTest, SetGroupIdsWithFlags_DefaultGroups) {
   EXPECT_EQ(SSL_get_group_id(client.get()), SSL_GROUP_X25519);
 }
 
+TEST(SSLTest, ConfigureTLS13Ciphers) {
+  const struct {
+    const char *description;
+    std::vector<uint16_t> ciphers;
+    std::vector<uint32_t> flags;
+    bool expected_success;
+  } kTests[] = {
+      {
+          "Empty ciphers / default.",
+          {},
+          {},
+          true,
+      },
+      {
+          "Single cipher.",
+          {SSL_CIPHER_AES_128_GCM_SHA256},
+          {0},
+          true,
+      },
+      {
+          "Multiple ciphers with equal preference.",
+          {SSL_CIPHER_AES_128_GCM_SHA256, SSL_CIPHER_CHACHA20_POLY1305_SHA256},
+          {SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT, 0},
+          true,
+      },
+      {
+          "Singleton followed by multiple ciphers with equal preference.",
+          {SSL_CIPHER_AES_256_GCM_SHA384, SSL_CIPHER_AES_128_GCM_SHA256,
+           SSL_CIPHER_CHACHA20_POLY1305_SHA256},
+          {0, SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT, 0},
+          true,
+      },
+      {
+          "Multiple ciphers with equal preference followed by singleton.",
+          {SSL_CIPHER_AES_128_GCM_SHA256, SSL_CIPHER_CHACHA20_POLY1305_SHA256,
+           SSL_CIPHER_AES_256_GCM_SHA384},
+          {SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT, 0, 0},
+          true,
+      },
+      {
+          "Config error (last cipher has equal preference flag).",
+          {SSL_CIPHER_AES_128_GCM_SHA256, SSL_CIPHER_CHACHA20_POLY1305_SHA256},
+          {0, SSL_CIPHER_FLAG_EQUAL_PREFERENCE_WITH_NEXT},
+          false,
+      },
+      {
+          "Duplicate cipher in list.",
+          {SSL_CIPHER_AES_128_GCM_SHA256, SSL_CIPHER_AES_128_GCM_SHA256},
+          {0, 0},
+          false,
+      },
+      {
+          "Non-TLS 1.3 cipher in list.",
+          {SSL_CIPHER_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+          {0},
+          false,
+      },
+  };
+
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(t.description);
+    ASSERT_EQ(t.ciphers.size(), t.flags.size()) << "Test setup error.";
+    bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
+    ASSERT_TRUE(ctx);
+    EXPECT_EQ(t.expected_success,
+              SSL_CTX_set1_tls13_ciphers(ctx.get(), t.ciphers.data(),
+                                         t.flags.data(), t.ciphers.size()));
+    bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
+    ASSERT_TRUE(ssl);
+    EXPECT_EQ(t.expected_success,
+              SSL_set1_tls13_ciphers(ssl.get(), t.ciphers.data(),
+                                     t.flags.data(), t.ciphers.size()));
+  }
+}
+
 struct ECHConfigParams {
   uint16_t version = TLSEXT_TYPE_encrypted_client_hello;
   uint16_t config_id = 1;

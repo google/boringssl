@@ -343,6 +343,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
                       &TestConfig::expect_peer_verify_prefs),
         IntVectorFlag("-curves", &TestConfig::curves),
         IntVectorFlag("-curves-flags", &TestConfig::curves_flags),
+        IntVectorFlag("-tls13-ciphers", &TestConfig::tls13_ciphers),
+        IntVectorFlag("-tls13-ciphers-flags", &TestConfig::tls13_ciphers_flags),
         OptionalIntVectorFlag("-key-shares", &TestConfig::key_shares),
         SetValueFlag("-no-key-shares", &TestConfig::key_shares,
                      std::vector<uint16_t>{}),
@@ -2610,6 +2612,21 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
       }
     } else {
       if (!SSL_set1_group_ids(ssl.get(), curves.data(), curves.size())) {
+        return nullptr;
+      }
+    }
+  }
+  if (!tls13_ciphers.empty()) {
+    if (!tls13_ciphers_flags.empty()) {
+      if (tls13_ciphers.size() != tls13_ciphers_flags.size() ||
+          !SSL_set1_tls13_ciphers(ssl.get(), tls13_ciphers.data(),
+                                  tls13_ciphers_flags.data(),
+                                  tls13_ciphers.size())) {
+        return nullptr;
+      }
+    } else {
+      if (!SSL_set1_tls13_ciphers(ssl.get(), tls13_ciphers.data(),
+                                  /*flags=*/nullptr, tls13_ciphers.size())) {
         return nullptr;
       }
     }
