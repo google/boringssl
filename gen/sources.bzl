@@ -764,6 +764,7 @@ crypto_test_sources = [
     "crypto/constant_time_test.cc",
     "crypto/cpu_arm_linux_test.cc",
     "crypto/crypto_test.cc",
+    "crypto/curve25519/curve25519_test.cc",
     "crypto/curve25519/ed25519_test.cc",
     "crypto/curve25519/spake25519_test.cc",
     "crypto/curve25519/x25519_test.cc",

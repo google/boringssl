@@ -146,6 +146,9 @@ enum spake2_state_t {
   spake2_state_key_generated,
 };
 
+void map_to_curve_curve25519_elligator2(uint8_t out_qx[32], uint8_t out_qy[32],
+                                        const uint8_t u[32]);
+
 BSSL_NAMESPACE_END
 
 struct spake2_ctx_st {
