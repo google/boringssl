@@ -22,7 +22,17 @@ bssl_enum! {
     /// Protocol version for TLS or DTLS
     #[derive(Clone, Copy, PartialEq, Eq)]
     #[non_exhaustive]
+    #[allow(deprecated)]
     pub enum ProtocolVersion: u16 {
+        /// **Deprecated**
+        #[deprecated = "Do not use this protocol version"]
+        Tls1 = bssl_sys::TLS1_VERSION as u16,
+        /// **Deprecated**
+        #[deprecated = "Do not use this protocol version"]
+        Dtls1 = bssl_sys::DTLS1_VERSION as u16,
+        /// **Deprecated**
+        #[deprecated = "Do not use this protocol version"]
+        Tls11 = bssl_sys::TLS1_1_VERSION as u16,
         /// TLS version 1.2
         Tls12 = bssl_sys::TLS1_2_VERSION as u16,
         /// TLS version 1.3
