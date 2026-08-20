@@ -121,7 +121,6 @@ fn dtls_sync_recv<R>(
             Ok(IoStatus::Retry(TlsRetryReason::WantRead | TlsRetryReason::WantWrite)) => {
                 handle_sync_dtls_timeout(conn)?;
             }
-            Ok(IoStatus::EndOfStream) => break Ok(0),
             Ok(status) => panic!("unexpected status {status:?}"),
             Err(e) => break Err(e),
         }
@@ -147,8 +146,7 @@ fn dtls_sync_shutdown<R>(conn: &mut TlsConnection<R, DtlsMode>) -> Result<(), Er
             break Ok(());
         };
         match established.sync_shutdown() {
-            // TODO: drop Syscall matching here, this is a bad error classification.
-            Ok(None | Some(TlsRetryReason::Syscall)) => break Ok(()),
+            Ok(None) => break Ok(()),
             Ok(Some(TlsRetryReason::WantRead | TlsRetryReason::WantWrite)) => {
                 handle_sync_dtls_timeout(conn)?;
             }
@@ -234,13 +232,11 @@ fn test_async_dtls() -> Result<(), Error> {
 
         let server_data = async {
             let mut buf = [0u8; TEST_DATA.len()];
-            let mut message = ReceiveBuffer::new(&mut buf);
-            let mut read_bytes = 0;
-            while read_bytes < TEST_DATA.len() {
+            loop {
+                let mut message = ReceiveBuffer::new(&mut buf);
                 match server_conn.as_pin_mut().async_recv(&mut message).await? {
-                    IoStatus::Ok(n) => read_bytes += n,
-                    IoStatus::EndOfStream => break,
-                    _ => {}
+                    IoStatus::Ok(n) if n == TEST_DATA.len() => break,
+                    _ => continue,
                 }
             }
             assert_eq!(&buf, TEST_DATA);

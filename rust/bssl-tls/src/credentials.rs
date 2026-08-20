@@ -418,7 +418,10 @@ impl TlsCredential {
                 ctx_len,
             )
         };
-        let cred = NonNull::new(cred).ok_or_else(|| Error::extract_lib_err())?;
+        let cred = NonNull::new(cred).ok_or_else(|| {
+            Error::extract_lib_err()
+                .unwrap_or_else(|| Error::Unknown(Box::new("unknown credential error")))
+        })?;
         Ok(TlsCredential(cred))
     }
 
@@ -528,7 +531,8 @@ impl Certificate {
             let header = Alloc(header);
             let data = Alloc(data);
             if name.0.is_null() || header.0.is_null() || data.0.is_null() || ret == 0 {
-                return Err(Error::extract_lib_err());
+                return Err(Error::extract_lib_err()
+                    .unwrap_or_else(|| Error::Unknown(Box::new("unknown pem error"))));
             }
             if len == 0 {
                 continue;

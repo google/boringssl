@@ -145,7 +145,10 @@ fn sync_ping_pong<
         IoStatus::Ok(19)
     ));
     assert_eq!(*message, *b"Oh yeah definitely!");
-    client_conn.established().unwrap().sync_shutdown()?;
+    client_conn
+        .established()
+        .expect("connection should still be established")
+        .sync_shutdown()?;
     thread.join().unwrap()?;
 
     Ok(())
@@ -461,8 +464,8 @@ fn test_async() -> Result<(), Error> {
                     .await
                     .unwrap()
                 {
+                    IoStatus::Ok(0) => break,
                     IoStatus::Ok(n) => read_bytes += n,
-                    IoStatus::EndOfStream => break,
                     _ => {}
                 }
             }
