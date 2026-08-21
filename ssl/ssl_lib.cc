@@ -426,6 +426,7 @@ SSL_CTX *SSL_CTX_new(const SSL_METHOD *method) {
   }
 
   if (!SSL_CTX_set_strict_cipher_list(ret.get(), SSL_DEFAULT_CIPHER_LIST) ||
+      !ssl_create_default_tls13_cipher_list(&ret->tls13_cipher_list) ||
       // Lock the SSL_CTX to the specified version, for compatibility with
       // legacy uses of SSL_METHOD.
       !SSL_CTX_set_max_proto_version(ret.get(), method->version) ||
@@ -513,6 +514,10 @@ SSL *SSL_new(SSL_CTX *ctx) {
       ctx_impl->retain_only_sha256_of_client_certs;
   ssl->config->permute_extensions = ctx_impl->permute_extensions;
   ssl->config->compliance_policy = ctx_impl->compliance_policy;
+
+  if (!ssl->config->tls13_cipher_list.CopyFrom(ctx_impl->tls13_cipher_list)) {
+    return nullptr;
+  }
 
   if (!ssl->config->supported_group_list.CopyFrom(
           ctx_impl->supported_group_list) ||
@@ -3532,6 +3537,15 @@ static const char kTLS12Ciphers[] =
     "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:"
     "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
+static const uint16_t kTLS13Ciphers[] = {
+    SSL_CIPHER_AES_128_GCM_SHA256,
+    SSL_CIPHER_AES_256_GCM_SHA384,
+};
+static const bool kTLS13CiphersInGroup[] = {
+    true,
+    false,
+};
+
 static int Configure(SSLContext *ctx) {
   ctx->compliance_policy = ssl_compliance_policy_fips_202205;
 
@@ -3548,6 +3562,8 @@ static int Configure(SSLContext *ctx) {
       // Encrypt-then-MAC extension is required for all CBC cipher suites and so
       // it's easier to drop them.
       SSL_CTX_set_strict_cipher_list(ctx, kTLS12Ciphers) &&
+      ctx->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                  Span(kTLS13CiphersInGroup)) &&
       SSL_CTX_set1_group_ids(ctx, kGroups, std::size(kGroups)) &&
       SSL_CTX_set_signing_algorithm_prefs(ctx, kSigAlgs, std::size(kSigAlgs)) &&
       SSL_CTX_set_verify_algorithm_prefs(ctx, kSigAlgs, std::size(kSigAlgs));
@@ -3560,6 +3576,8 @@ static int Configure(SSLImpl *ssl) {
   return SSL_set_min_proto_version(ssl, TLS1_2_VERSION) &&
          SSL_set_max_proto_version(ssl, TLS1_3_VERSION) &&
          SSL_set_strict_cipher_list(ssl, kTLS12Ciphers) &&
+         ssl->config->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                             Span(kTLS13CiphersInGroup)) &&
          SSL_set1_group_ids(ssl, kGroups, std::size(kGroups)) &&
          SSL_set_signing_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs)) &&
          SSL_set_verify_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs));
@@ -3585,6 +3603,13 @@ static const char kTLS12Ciphers[] =
     "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:"
     "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
+static const uint16_t kTLS13Ciphers[] = {
+    SSL_CIPHER_AES_256_GCM_SHA384,
+};
+static const bool kTLS13CiphersInGroup[] = {
+    false,
+};
+
 static int Configure(SSLContext *ctx) {
   ctx->compliance_policy = ssl_compliance_policy_wpa3_192_202304;
 
@@ -3592,6 +3617,8 @@ static int Configure(SSLContext *ctx) {
          SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) &&
          SSL_CTX_set_strict_cipher_list(ctx, kTLS12Ciphers) &&
          SSL_CTX_set1_group_ids(ctx, kGroups, std::size(kGroups)) &&
+         ctx->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                     Span(kTLS13CiphersInGroup)) &&
          SSL_CTX_set_signing_algorithm_prefs(ctx, kSigAlgs,
                                              std::size(kSigAlgs)) &&
          SSL_CTX_set_verify_algorithm_prefs(ctx, kSigAlgs, std::size(kSigAlgs));
@@ -3603,6 +3630,8 @@ static int Configure(SSLImpl *ssl) {
   return SSL_set_min_proto_version(ssl, TLS1_2_VERSION) &&
          SSL_set_max_proto_version(ssl, TLS1_3_VERSION) &&
          SSL_set_strict_cipher_list(ssl, kTLS12Ciphers) &&
+         ssl->config->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                             Span(kTLS13CiphersInGroup)) &&
          SSL_set1_group_ids(ssl, kGroups, std::size(kGroups)) &&
          SSL_set_signing_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs)) &&
          SSL_set_verify_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs));
@@ -3612,14 +3641,27 @@ static int Configure(SSLImpl *ssl) {
 
 namespace cnsa202407 {
 
+static const uint16_t kTLS13Ciphers[] = {
+    SSL_CIPHER_AES_256_GCM_SHA384,
+    SSL_CIPHER_AES_128_GCM_SHA256,
+    SSL_CIPHER_CHACHA20_POLY1305_SHA256,
+};
+static const bool kTLS13CiphersInGroup[] = {
+    false,
+    false,
+    false,
+};
+
 static int Configure(SSLContext *ctx) {
   ctx->compliance_policy = ssl_compliance_policy_cnsa_202407;
-  return 1;
+  return ctx->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                     Span(kTLS13CiphersInGroup));
 }
 
 static int Configure(SSLImpl *ssl) {
   ssl->config->compliance_policy = ssl_compliance_policy_cnsa_202407;
-  return 1;
+  return ssl->config->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                             Span(kTLS13CiphersInGroup));
 }
 
 }  // namespace cnsa202407
@@ -3644,12 +3686,21 @@ static const char kTLS12Ciphers[] =
     "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:"
     "TLS_RSA_WITH_AES_256_GCM_SHA384";
 
+static const uint16_t kTLS13Ciphers[] = {
+    SSL_CIPHER_AES_256_GCM_SHA384,
+};
+static const bool kTLS13CiphersInGroup[] = {
+    false,
+};
+
 static int Configure(SSLContext *ctx) {
   ctx->compliance_policy = ssl_compliance_policy_cnsa1_202603;
 
   return SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) &&
          SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) &&
          SSL_CTX_set_strict_cipher_list(ctx, kTLS12Ciphers) &&
+         ctx->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                     Span(kTLS13CiphersInGroup)) &&
          SSL_CTX_set1_group_ids(ctx, kGroups, std::size(kGroups)) &&
          SSL_CTX_set_options(ctx, kOptions) &&
          SSL_CTX_set_signing_algorithm_prefs(ctx, kSigAlgs,
@@ -3663,6 +3714,8 @@ static int Configure(SSLImpl *ssl) {
   return SSL_set_min_proto_version(ssl, TLS1_2_VERSION) &&
          SSL_set_max_proto_version(ssl, TLS1_3_VERSION) &&
          SSL_set_strict_cipher_list(ssl, kTLS12Ciphers) &&
+         ssl->config->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                             Span(kTLS13CiphersInGroup)) &&
          SSL_set1_group_ids(ssl, kGroups, std::size(kGroups)) &&
          SSL_set_options(ssl, kOptions) &&
          SSL_set_signing_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs)) &&
@@ -3683,11 +3736,20 @@ static const uint16_t kSigAlgs[] = {
     SSL_SIGN_RSA_PKCS1_SHA384,
 };
 
+static const uint16_t kTLS13Ciphers[] = {
+    SSL_CIPHER_AES_256_GCM_SHA384,
+};
+static const bool kTLS13CiphersInGroup[] = {
+    false,
+};
+
 static int Configure(SSLContext *ctx) {
   ctx->compliance_policy = ssl_compliance_policy_cnsa2_202603;
 
   return SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) &&
          SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) &&
+         ctx->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                     Span(kTLS13CiphersInGroup)) &&
          SSL_CTX_set1_group_ids(ctx, kGroups, std::size(kGroups)) &&
          SSL_CTX_set_signing_algorithm_prefs(ctx, kSigAlgs,
                                              std::size(kSigAlgs)) &&
@@ -3699,6 +3761,8 @@ static int Configure(SSLImpl *ssl) {
 
   return SSL_set_min_proto_version(ssl, TLS1_3_VERSION) &&
          SSL_set_max_proto_version(ssl, TLS1_3_VERSION) &&
+         ssl->config->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                             Span(kTLS13CiphersInGroup)) &&
          SSL_set1_group_ids(ssl, kGroups, std::size(kGroups)) &&
          SSL_set_signing_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs)) &&
          SSL_set_verify_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs));

@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include <iterator>
+#include <optional>
 
 #include <openssl/aead.h>
 #include <openssl/err.h>
@@ -605,9 +606,37 @@ static void ll_append_head(CIPHER_ORDER **head, CIPHER_ORDER *curr,
   *head = curr;
 }
 
+// Helper to iterate over a client cipher list and find a given cipher protocol
+// ID. Returns the index of the cipher, if found in `cipher_list`, or returns
+// std::nullopt if not found.
+static std::optional<size_t> FindProtocolID(CBS *cipher_list,
+                                            uint16_t cipher_id) {
+  assert(CBS_len(cipher_list) % 2 == 0);
+  if (CBS_len(cipher_list) == 0) {
+    return std::nullopt;
+  }
+  size_t cur_index = 0;
+  while (CBS_len(cipher_list) > 0) {
+    uint16_t cipher_suite;
+    if (!CBS_get_u16(cipher_list, &cipher_suite)) {
+      return std::nullopt;
+    }
+    if (cipher_suite == cipher_id) {
+      return cur_index;
+    }
+    ++cur_index;
+  }
+  return std::nullopt;
+}
+
 bool SSLCipherPreferenceList::Init(UniquePtr<STACK_OF(SSL_CIPHER)> ciphers,
                                    Array<bool> in_group_flags) {
   if (sk_SSL_CIPHER_num(ciphers.get()) != in_group_flags.size()) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+  // The last element has no next element to be in a group with.
+  if (!in_group_flags.empty() && in_group_flags.back()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
@@ -615,6 +644,41 @@ bool SSLCipherPreferenceList::Init(UniquePtr<STACK_OF(SSL_CIPHER)> ciphers,
   ciphers_ = std::move(ciphers);
   in_group_flags_ = std::move(in_group_flags);
   return true;
+}
+
+bool SSLCipherPreferenceList::Init(Span<const uint16_t> cipher_ids,
+                                   Span<const bool> in_group_flags) {
+  if (cipher_ids.size() != in_group_flags.size()) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+
+  UniquePtr<STACK_OF(SSL_CIPHER)> ciphers(sk_SSL_CIPHER_new_null());
+  if (!ciphers) {
+    return false;
+  }
+  for (uint16_t cipher_id : cipher_ids) {
+    const SSL_CIPHER *cipher = SSL_get_cipher_by_value(cipher_id);
+    if (cipher == nullptr) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_UNKNOWN_CIPHER_TYPE);
+      return false;
+    }
+    if (!sk_SSL_CIPHER_push(ciphers.get(), cipher)) {
+      return false;
+    }
+  }
+
+  Array<bool> flags;
+  if (!flags.CopyFrom(in_group_flags)) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+    return false;
+  }
+  return Init(std::move(ciphers), std::move(flags));
+}
+
+void SSLCipherPreferenceList::Reset() {
+  sk_SSL_CIPHER_zero(ciphers_.get());
+  in_group_flags_.Reset();
 }
 
 bool SSLCipherPreferenceList::CopyFrom(const SSLCipherPreferenceList &other) {
@@ -643,6 +707,76 @@ void SSLCipherPreferenceList::Remove(const SSL_CIPHER *cipher) {
   }
   sk_SSL_CIPHER_delete(ciphers_.get(), index);
   in_group_flags_.Shrink(size());
+}
+
+bool SSLCipherPreferenceList::Contains(uint16_t cipher_id) const {
+  for (const SSL_CIPHER *cipher : ciphers_.get()) {
+    if (cipher->protocol_id == cipher_id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const SSL_CIPHER *SSLCipherPreferenceList::ChooseCipher(
+    const CBS *client_cipher_list, bool prioritize_client_pref,
+    uint16_t version, uint32_t mask_k, uint32_t mask_a) const {
+  if (CBS_len(client_cipher_list) % 2 != 0) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_IN_RECEIVED_CIPHER_LIST);
+    return nullptr;
+  }
+
+  // Index of the best matching cipher suite found so far, indexed into
+  // `client_cipher_list`.
+  std::optional<size_t> best_index = std::nullopt;
+  const SSL_CIPHER *best_cipher = nullptr;
+
+  // Iterate over our list (the server preference list) and check for each
+  // cipher in the client's list.
+  for (size_t i = 0; i < size(); ++i) {
+    const SSL_CIPHER *const c = sk_SSL_CIPHER_value(ciphers_.get(), i);
+    bool in_group = in_group_flags_[i];
+    // If prioritizing the client preference list, treat all of the server's
+    // allowed ciphers as a single equipreference group so that the client's
+    // preferences dictate the choice.
+    if (prioritize_client_pref) {
+      in_group = (i < size() - 1);
+    }
+
+    if (version >= SSL_CIPHER_get_min_version(c) &&
+        version <= SSL_CIPHER_get_max_version(c) &&
+        (c->algorithm_mkey & mask_k) != 0 &&
+        (c->algorithm_auth & mask_a) != 0) {
+      CBS copy = *client_cipher_list;
+      std::optional<size_t> client_list_index =
+          FindProtocolID(&copy, c->protocol_id);
+      // Within a group, the client's preference order applies.
+      if (client_list_index.has_value() &&
+          (!best_index.has_value() || *best_index > *client_list_index)) {
+        best_index = *client_list_index;
+        best_cipher = c;
+      }
+    }
+
+    // Always evaluate a whole equipreference group.
+    if (in_group) {
+      continue;
+    }
+    // We are about to leave a (possibly singleton) group. If we have a match,
+    // return it because we will only see less-preferred ciphers if we keep
+    // going.
+    if (best_index.has_value()) {
+      assert(best_cipher != nullptr);
+      return best_cipher;
+    }
+  }
+
+  // The final cipher suite must end a group, so, if we found a match, we must
+  // have returned early above.
+  assert(!best_index.has_value());
+  assert(best_cipher == nullptr);
+  OPENSSL_PUT_ERROR(SSL, SSL_R_NO_SHARED_CIPHER);
+  return nullptr;
 }
 
 bool ssl_cipher_is_deprecated(const SSL_CIPHER *cipher) {
@@ -1142,6 +1276,47 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
   }
 
   return true;
+}
+
+bool ssl_create_default_tls13_cipher_list(
+    SSLCipherPreferenceList *out_cipher_list) {
+  // If we have AES hardware:
+  // For a client: AES-128 > AES-256 > ChaCha20.
+  // For a server: (AES-128 | AES-256 | ChaCha20), i.e. defer to client
+  // preference.
+  static const uint16_t kCiphersAESHardware[] = {
+      SSL_CIPHER_AES_128_GCM_SHA256,
+      SSL_CIPHER_AES_256_GCM_SHA384,
+      SSL_CIPHER_CHACHA20_POLY1305_SHA256,
+  };
+  static const bool kInGroupFlagsAESHardware[] = {
+      true,
+      true,
+      false,
+  };
+  // If we do not have AES hardware:
+  // For a client: ChaCha20 > AES-128 > AES-256.
+  // For a server: ChaCha20 > (AES-128 | AES-256).
+  static const uint16_t kCiphersNoAESHardware[] = {
+      SSL_CIPHER_CHACHA20_POLY1305_SHA256,
+      SSL_CIPHER_AES_128_GCM_SHA256,
+      SSL_CIPHER_AES_256_GCM_SHA384,
+  };
+  static const bool kInGroupFlagsNoAESHardware[] = {
+      false,
+      true,
+      false,
+  };
+
+  Span<const uint16_t> ciphers = EVP_has_aes_hardware()
+                                     ? Span(kCiphersAESHardware)
+                                     : Span(kCiphersNoAESHardware);
+  Span<const bool> in_group_flags = EVP_has_aes_hardware()
+                                        ? Span(kInGroupFlagsAESHardware)
+                                        : Span(kInGroupFlagsNoAESHardware);
+
+  out_cipher_list->Reset();
+  return out_cipher_list->Init(ciphers, in_group_flags);
 }
 
 uint32_t ssl_cipher_auth_mask_for_key(const EVP_PKEY *key, bool sign_ok) {

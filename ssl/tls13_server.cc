@@ -136,18 +136,6 @@ static int ssl_ext_supported_versions_add_serverhello(SSL_HANDSHAKE *hs,
   return 1;
 }
 
-static const SSL_CIPHER *choose_tls13_cipher(
-    const SSLImpl *ssl, const SSL_CLIENT_HELLO *client_hello) {
-  CBS cipher_suites;
-  CBS_init(&cipher_suites, client_hello->cipher_suites,
-           client_hello->cipher_suites_len);
-
-  const uint16_t version = ssl_protocol_version(ssl);
-
-  return ssl_choose_tls13_cipher(cipher_suites, EVP_has_aes_hardware(), version,
-                                 ssl->config->compliance_policy);
-}
-
 static bool add_new_session_tickets(SSL_HANDSHAKE *hs, bool *out_sent_tickets) {
   SSLImpl *const ssl = hs->ssl;
   if (  // If the client doesn't accept resumption with PSK_DHE_KE, don't send a
@@ -388,7 +376,12 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   }
 
   // Negotiate the cipher suite. This must happen before negotiating PSKs.
-  hs->new_cipher = choose_tls13_cipher(ssl, &client_hello);
+  CBS client_cipher_list;
+  CBS_init(&client_cipher_list, client_hello.cipher_suites,
+           client_hello.cipher_suites_len);
+  hs->new_cipher = ssl->config->tls13_cipher_list.ChooseCipher(
+      &client_cipher_list, /*prioritize_client_pref=*/false,
+      ssl_protocol_version(ssl), SSL_kGENERIC, SSL_aGENERIC);
   if (hs->new_cipher == nullptr) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_NO_SHARED_CIPHER);
     ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);

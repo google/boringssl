@@ -283,6 +283,22 @@ func addCipherSuiteTests() {
 	})
 
 	testCases = append(testCases, testCase{
+		name: "UnsupportedCipherSuite-TLS13",
+		config: Config{
+			MaxVersion:   VersionTLS13,
+			CipherSuites: []uint16{TLS_AES_128_GCM_SHA256},
+			Bugs: ProtocolBugs{
+				IgnorePeerCipherPreferences: true,
+			},
+		},
+		// This compliance policy causes the client to advertise only
+		// TLS_AES_256_GCM_SHA384.
+		flags:         []string{"-wpa-202304"},
+		shouldFail:    true,
+		expectedError: ":WRONG_CIPHER_RETURNED:",
+	})
+
+	testCases = append(testCases, testCase{
 		name: "ServerHelloBogusCipher",
 		config: Config{
 			MaxVersion: VersionTLS12,

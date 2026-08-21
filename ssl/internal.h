@@ -294,9 +294,15 @@ class SSLCipherPreferenceList {
   SSLCipherPreferenceList() = default;
   ~SSLCipherPreferenceList() = default;
 
-  // Initializes a list with the specified ciphers and flags.
+  // Initializes a list with the specified ciphers and flags. Calling Init on a
+  // previously initialized list discards the previous contents.
   bool Init(UniquePtr<STACK_OF(SSL_CIPHER)> ciphers,
             Array<bool> in_group_flags);
+  // Same as above, but takes a list of cipher protocol IDs.
+  bool Init(Span<const uint16_t> cipher_ids, Span<const bool> in_group_flags);
+
+  // Reset clears any contents previously set by `Init`.
+  void Reset();
 
   // Makes `this` a deep copy of another (already initialized) instance.
   bool CopyFrom(const SSLCipherPreferenceList &);
@@ -304,12 +310,32 @@ class SSLCipherPreferenceList {
   // Removes `cipher` from the preference list.
   void Remove(const SSL_CIPHER *cipher);
 
+  // Contains returns whether a cipher whose protocol ID is `cipher_id` appears
+  // in the list.
+  bool Contains(uint16_t cipher_id) const;
+
+  // ChooseCipher implements the logic for a server to select the most-preferred
+  // cipher satisfying the constraints that is listed in both `*this` and the
+  // client's preference list in `client_cipher_list`, which contains an ordered
+  // list of 2-byte cipher suite protocol IDs. The returned cipher must be
+  // supported for the SSL protocol `version`, and must match the key exchange
+  // algorithm mask `mask_k` and the server authentication mask `mask_a`. If
+  // `prioritize_client_pref` is true, then the client's preference list is
+  // prioritized over the list in `*this`. Otherwise, the server's preference
+  // list (`*this`) is prioritized. This function returns a pointer to the
+  // most-preferred shared cipher, or nullptr if no shared cipher was found.
+  const SSL_CIPHER *ChooseCipher(const CBS *client_cipher_list,
+                                 bool prioritize_client_pref, uint16_t version,
+                                 uint32_t mask_k, uint32_t mask_a) const;
+
   size_t size() const { return sk_SSL_CIPHER_num(ciphers_.get()); }
 
   const STACK_OF(SSL_CIPHER) *ciphers() const { return ciphers_.get(); }
-  STACK_OF(SSL_CIPHER) *ciphers() { return ciphers_.get(); }
-
   Span<const bool> in_group_flags() const { return in_group_flags_; }
+
+  // TODO(crbug.com/550501994): Remove the non-const overload. This may result
+  // in callers mutating the internal state in an inconsistent way.
+  STACK_OF(SSL_CIPHER) *ciphers() { return ciphers_.get(); }
 
  private:
   // SSL_CIPHERs are maintained in a stack so they are easily accessible in the
@@ -336,14 +362,23 @@ bool ssl_cipher_get_evp_aead(const EVP_AEAD **out_aead,
 const EVP_MD *ssl_get_handshake_digest(uint16_t version,
                                        const SSL_CIPHER *cipher);
 
-// ssl_create_cipher_list evaluates `rule_str`. It sets `*out_cipher_list` to a
-// newly-allocated `SSLCipherPreferenceList` containing the result. It returns
-// true on success and false on failure. If `strict` is true, nonsense will be
-// rejected. If false, nonsense will be silently ignored. An empty result is
-// considered an error regardless of `strict`. The resulting list will be
-// ordered based on having support for AES in hardware or not.
+// ssl_create_cipher_list evaluates `rule_str` to create the TLS 1.2 cipher
+// list. It sets `*out_cipher_list` to a newly-allocated
+// `SSLCipherPreferenceList` containing the result. It returns true on success
+// and false on failure. If `strict` is true, nonsense will be rejected. If
+// false, nonsense will be silently ignored. An empty result is considered an
+// error regardless of `strict`. The resulting list will be ordered based on
+// having support for AES in hardware or not.
 bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
                             const char *rule_str, bool strict);
+
+// ssl_create_default_tls13_cipher_list populates the default TLS 1.3 cipher
+// list, clearing any previous contents in `*out_cipher_list` and replacing them
+// with the result. It returns true on success and false on failure. The
+// resulting list will be ordered based on having support for AES in hardware or
+// not.
+bool ssl_create_default_tls13_cipher_list(
+    SSLCipherPreferenceList *out_cipher_list);
 
 // ssl_cipher_auth_mask_for_key returns the mask of cipher `algorithm_auth`
 // values suitable for use with `key` in TLS 1.2 and below. `sign_ok` indicates
@@ -365,19 +400,6 @@ bool ssl_cipher_requires_server_key_exchange(const SSL_CIPHER *cipher);
 // length of an encrypted 1-byte record, for use in record-splitting. Otherwise
 // it returns zero.
 size_t ssl_cipher_get_record_split_len(const SSL_CIPHER *cipher);
-
-// ssl_choose_tls13_cipher returns an `SSL_CIPHER` corresponding with the best
-// available from `cipher_suites` compatible with `version` and `policy`. It
-// returns NULL if there isn't a compatible cipher. `has_aes_hw` indicates if
-// the choice should be made as if support for AES in hardware is available.
-const SSL_CIPHER *ssl_choose_tls13_cipher(CBS cipher_suites, bool has_aes_hw,
-                                          uint16_t version,
-                                          enum ssl_compliance_policy_t policy);
-
-// ssl_tls13_cipher_meets_policy returns true if `cipher_id` is acceptable given
-// `policy`.
-bool ssl_tls13_cipher_meets_policy(uint16_t cipher_id,
-                                   enum ssl_compliance_policy_t policy);
 
 // ssl_cipher_is_deprecated returns true if `cipher` is deprecated.
 bool ssl_cipher_is_deprecated(const SSL_CIPHER *cipher);
@@ -3437,7 +3459,10 @@ struct SSL_CONFIG {
   X509_VERIFY_PARAM *param = nullptr;
 
   // crypto
-  UniquePtr<SSLCipherPreferenceList> cipher_list;
+  UniquePtr<SSLCipherPreferenceList> cipher_list;  // for TLS 1.2 ciphers.
+
+  // Inherited from `SSL_CTX`.
+  SSLCipherPreferenceList tls13_cipher_list;
 
   // This is used to hold the local certificate used (i.e. the server
   // certificate for a server or the client certificate for a client).
@@ -3973,7 +3998,8 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
   // quic_method is the method table corresponding to the QUIC hooks.
   const SSL_QUIC_METHOD *quic_method = nullptr;
 
-  UniquePtr<SSLCipherPreferenceList> cipher_list;
+  UniquePtr<SSLCipherPreferenceList> cipher_list;  // for TLS 1.2 ciphers.
+  SSLCipherPreferenceList tls13_cipher_list;
 
   X509_STORE *cert_store = nullptr;
   LHASH_OF(SSL_SESSION) *sessions = nullptr;

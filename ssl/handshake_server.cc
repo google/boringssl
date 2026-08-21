@@ -127,95 +127,6 @@ static bool negotiate_version(SSL_HANDSHAKE *hs, uint8_t *out_alert,
   return true;
 }
 
-static UniquePtr<STACK_OF(SSL_CIPHER)> ssl_parse_client_cipher_list(
-    const SSL_CLIENT_HELLO *client_hello) {
-  CBS cipher_suites;
-  CBS_init(&cipher_suites, client_hello->cipher_suites,
-           client_hello->cipher_suites_len);
-
-  UniquePtr<STACK_OF(SSL_CIPHER)> sk(sk_SSL_CIPHER_new_null());
-  if (!sk) {
-    return nullptr;
-  }
-
-  while (CBS_len(&cipher_suites) > 0) {
-    uint16_t cipher_suite;
-
-    if (!CBS_get_u16(&cipher_suites, &cipher_suite)) {
-      OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_IN_RECEIVED_CIPHER_LIST);
-      return nullptr;
-    }
-
-    const SSL_CIPHER *c = SSL_get_cipher_by_value(cipher_suite);
-    if (c != nullptr && !sk_SSL_CIPHER_push(sk.get(), c)) {
-      return nullptr;
-    }
-  }
-
-  return sk;
-}
-
-static const SSL_CIPHER *choose_cipher(SSL_HANDSHAKE *hs,
-                                       const STACK_OF(SSL_CIPHER) *client_pref,
-                                       uint32_t mask_k, uint32_t mask_a) {
-  SSLImpl *const ssl = hs->ssl;
-  const STACK_OF(SSL_CIPHER) *prio, *allow;
-  // in_group_flags will either be empty, or will contain an array of bytes
-  // which indicate equal-preference groups in the `prio` stack. See the
-  // comment about `in_group_flags` in the `SSLCipherPreferenceList`
-  // struct.
-  Span<const bool> in_group_flags;
-  // best_index contains the index of the best matching cipher suite found so
-  // far, indexed into `allow`. If `best_index` is `SIZE_MAX`, no matching
-  // cipher suite has been found yet.
-  size_t best_index = SIZE_MAX;
-
-  const SSLCipherPreferenceList *server_pref =
-      hs->config->cipher_list ? hs->config->cipher_list.get()
-                              : ssl->ctx->cipher_list.get();
-  if (ssl->options & SSL_OP_CIPHER_SERVER_PREFERENCE) {
-    prio = server_pref->ciphers();
-    in_group_flags = server_pref->in_group_flags();
-    allow = client_pref;
-  } else {
-    prio = client_pref;
-    in_group_flags = Span<const bool>();
-    allow = server_pref->ciphers();
-  }
-
-  for (size_t i = 0; i < sk_SSL_CIPHER_num(prio); i++) {
-    const SSL_CIPHER *c = sk_SSL_CIPHER_value(prio, i);
-    const bool in_group = !in_group_flags.empty() && in_group_flags[i];
-
-    size_t cipher_index;
-    if (  // Check if the cipher is supported for the current version.
-        SSL_CIPHER_get_min_version(c) <= ssl_protocol_version(ssl) &&  //
-        ssl_protocol_version(ssl) <= SSL_CIPHER_get_max_version(c) &&  //
-        // Check the cipher is supported for the server configuration.
-        (c->algorithm_mkey & mask_k) &&  //
-        (c->algorithm_auth & mask_a) &&  //
-        // Check the cipher is in the `allow` list.
-        sk_SSL_CIPHER_find(allow, &cipher_index, c)) {
-      // Within a group, `allow`'s preference order applies.
-      if (best_index == SIZE_MAX || best_index > cipher_index) {
-        best_index = cipher_index;
-      }
-    }
-
-    // We are about to leave a (possibly singleton) group, but we found a match
-    // in it, so that's our answer.
-    if (!in_group && best_index != SIZE_MAX) {
-      return sk_SSL_CIPHER_value(allow, best_index);
-    }
-  }
-
-  // The final cipher suite must end a group, so, if we found a match, we must
-  // have returned early above.
-  assert(best_index == SIZE_MAX);
-  OPENSSL_PUT_ERROR(SSL, SSL_R_NO_SHARED_CIPHER);
-  return nullptr;
-}
-
 struct TLS12ServerParams {
   bool ok() const { return cipher != nullptr; }
 
@@ -226,7 +137,7 @@ struct TLS12ServerParams {
 static TLS12ServerParams choose_params(SSL_HANDSHAKE *hs,
                                        const SSLCredential *cred,
                                        Span<const uint8_t> allowed_cert_types,
-                                       const STACK_OF(SSL_CIPHER) *client_pref,
+                                       const CBS *client_cipher_list,
                                        bool has_ecdhe_group) {
   // Determine the usable cipher suites.
   uint32_t mask_k = 0, mask_a = 0;
@@ -279,7 +190,14 @@ static TLS12ServerParams choose_params(SSL_HANDSHAKE *hs,
   }
 
   TLS12ServerParams params;
-  params.cipher = choose_cipher(hs, client_pref, mask_k, mask_a);
+  const SSLCipherPreferenceList *server_cipher_pref =
+      hs->config->cipher_list ? hs->config->cipher_list.get()
+                              : hs->ssl->ctx->cipher_list.get();
+  bool prioritize_client_pref =
+      (hs->ssl->options & SSL_OP_CIPHER_SERVER_PREFERENCE) == 0;
+  params.cipher = server_cipher_pref->ChooseCipher(
+      client_cipher_list, prioritize_client_pref, ssl_protocol_version(hs->ssl),
+      mask_k, mask_a);
   if (params.cipher == nullptr ||
       (cred != nullptr &&
        !ssl_credential_matches_requested_issuers(hs, cred))) {
@@ -750,11 +668,9 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   // TODO(davidben): In the course of picking these, we also pick the ECDHE
   // group and signature algorithm. It would be tidier if we saved that decision
   // and avoided redoing it later.
-  UniquePtr<STACK_OF(SSL_CIPHER)> client_pref =
-      ssl_parse_client_cipher_list(&client_hello);
-  if (client_pref == nullptr) {
-    return ssl_hs_error;
-  }
+  CBS client_cipher_list;
+  CBS_init(&client_cipher_list, client_hello.cipher_suites,
+           client_hello.cipher_suites_len);
   Array<SSLCredential *> creds;
   if (!ssl_get_full_credential_list(hs, &creds)) {
     return ssl_hs_error;
@@ -770,12 +686,12 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
   if (creds.empty()) {
     // The caller may have configured no credentials, but set a PSK callback.
     params = choose_params(hs, /*cred=*/nullptr, *allowed_cert_types,
-                           client_pref.get(), has_ecdhe_group);
+                           &client_cipher_list, has_ecdhe_group);
   } else {
     // Select the first credential which works.
     for (SSLCredential *cred : creds) {
       ERR_clear_error();
-      params = choose_params(hs, cred, *allowed_cert_types, client_pref.get(),
+      params = choose_params(hs, cred, *allowed_cert_types, &client_cipher_list,
                              has_ecdhe_group);
       if (params.ok()) {
         hs->credential = UpRef(cred);
