@@ -443,6 +443,8 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         BoolFlag("-install-ddos-callback", &TestConfig::install_ddos_callback),
         BoolFlag("-fail-ddos-callback", &TestConfig::fail_ddos_callback),
         BoolFlag("-fail-cert-callback", &TestConfig::fail_cert_callback),
+        IntFlag("-fail-cert-callback-alert",
+                &TestConfig::fail_cert_callback_alert),
         StringFlag("-cipher", &TestConfig::cipher),
         BoolFlag("-handshake-never-done", &TestConfig::handshake_never_done),
         IntFlag("-export-keying-material", &TestConfig::export_keying_material),
@@ -2361,7 +2363,7 @@ static ssl_verify_result_t VerifyRawPublicKeyCallback(SSL *ssl,
   return ssl_verify_ok;
 }
 
-static int CertCallback(SSL *ssl, void *arg) {
+static int CertCallback(SSL *ssl, void *arg, uint8_t *out_alert) {
   const TestConfig *config = GetTestConfig(ssl);
 
   // Check the peer certificate metadata is as expected.
@@ -2371,6 +2373,9 @@ static int CertCallback(SSL *ssl, void *arg) {
   }
 
   if (config->fail_cert_callback) {
+    if (config->fail_cert_callback_alert != 0) {
+      *out_alert = static_cast<uint8_t>(config->fail_cert_callback_alert);
+    }
     return 0;
   }
 
@@ -2414,7 +2419,7 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
     return nullptr;
   }
   if (!use_old_client_cert_callback) {
-    SSL_set_cert_cb(ssl.get(), CertCallback, nullptr);
+    SSL_set_cert_cb_ex(ssl.get(), CertCallback, nullptr);
   }
   int mode = SSL_VERIFY_NONE;
   if (require_any_client_certificate) {

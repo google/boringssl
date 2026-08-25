@@ -153,6 +153,7 @@ struct TestConfig {
   bool install_ddos_callback = false;
   bool fail_ddos_callback = false;
   bool fail_cert_callback = false;
+  int fail_cert_callback_alert = 0;
   std::string cipher;
   bool handshake_never_done = false;
   int export_keying_material = 0;

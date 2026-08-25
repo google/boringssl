@@ -6197,6 +6197,207 @@ TEST(SSLTest, ClientCABuffers) {
   EXPECT_TRUE(cert_cb_called);
 }
 
+TEST(SSLTest, CertCallbackExServerAlert) {
+  for (uint16_t version : {TLS1_2_VERSION, TLS1_3_VERSION}) {
+    SCOPED_TRACE(version);
+
+    // Test with a custom alert.
+    {
+      bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+      bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+      ASSERT_TRUE(client_ctx && server_ctx);
+      ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), version));
+      ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), version));
+
+      SSL_CTX_set_cert_cb_ex(
+          server_ctx.get(),
+          [](SSL *ssl, void *arg, uint8_t *out_alert) -> int {
+            *out_alert = SSL_AD_UNRECOGNIZED_NAME;
+            return 0;
+          },
+          nullptr);
+
+      bssl::UniquePtr<SSL> client, server;
+      ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                        server_ctx.get()));
+
+      int client_ret = SSL_do_handshake(client.get());
+      EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_WANT_READ);
+
+      int server_ret = SSL_do_handshake(server.get());
+      EXPECT_EQ(server_ret, -1);
+      EXPECT_EQ(SSL_get_error(server.get(), server_ret), SSL_ERROR_SSL);
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_CERT_CB_ERROR}}));
+
+      client_ret = SSL_do_handshake(client.get());
+      EXPECT_EQ(client_ret, -1);
+      EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_SSL);
+      EXPECT_TRUE(ErrorsAreAndClear(
+          {{ERR_LIB_SSL, SSL_R_TLSV1_ALERT_UNRECOGNIZED_NAME}}));
+    }
+
+    // Test that the default alert (internal error) is used if untouched.
+    {
+      bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+      bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+      ASSERT_TRUE(client_ctx && server_ctx);
+      ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), version));
+      ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), version));
+
+      SSL_CTX_set_cert_cb_ex(
+          server_ctx.get(),
+          [](SSL *ssl, void *arg, uint8_t *out_alert) -> int { return 0; },
+          nullptr);
+
+      bssl::UniquePtr<SSL> client, server;
+      ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                        server_ctx.get()));
+
+      int client_ret = SSL_do_handshake(client.get());
+      EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_WANT_READ);
+
+      int server_ret = SSL_do_handshake(server.get());
+      EXPECT_EQ(server_ret, -1);
+      EXPECT_EQ(SSL_get_error(server.get(), server_ret), SSL_ERROR_SSL);
+      EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_CERT_CB_ERROR}}));
+
+      client_ret = SSL_do_handshake(client.get());
+      EXPECT_EQ(client_ret, -1);
+      EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_SSL);
+      EXPECT_TRUE(
+          ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_TLSV1_ALERT_INTERNAL_ERROR}}));
+    }
+  }
+}
+
+TEST(SSLTest, CertCallbackExClientAlert) {
+  for (uint16_t version : {TLS1_2_VERSION, TLS1_3_VERSION}) {
+    SCOPED_TRACE(version);
+
+    bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+    bssl::UniquePtr<SSL_CTX> server_ctx(
+        CreateContextWithTestCertificate(TLS_method()));
+    ASSERT_TRUE(client_ctx && server_ctx);
+    ASSERT_TRUE(SSL_CTX_set_max_proto_version(client_ctx.get(), version));
+    ASSERT_TRUE(SSL_CTX_set_max_proto_version(server_ctx.get(), version));
+
+    SSL_CTX_set_custom_verify(server_ctx.get(),
+                              SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                              AcceptAnyCertificate);
+    SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                              AcceptAnyCertificate);
+
+    SSL_CTX_set_cert_cb_ex(
+        client_ctx.get(),
+        [](SSL *ssl, void *arg, uint8_t *out_alert) -> int {
+          *out_alert = SSL_AD_ACCESS_DENIED;
+          return 0;
+        },
+        nullptr);
+
+    bssl::UniquePtr<SSL> client, server;
+    ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                      server_ctx.get()));
+
+    // Step handshakes until the client cert callback fails.
+    int client_ret = SSL_do_handshake(client.get());
+    EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_WANT_READ);
+
+    int server_ret = SSL_do_handshake(server.get());
+    EXPECT_EQ(SSL_get_error(server.get(), server_ret), SSL_ERROR_WANT_READ);
+
+    client_ret = SSL_do_handshake(client.get());
+    EXPECT_EQ(client_ret, -1);
+    EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_SSL);
+    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_CERT_CB_ERROR}}));
+
+    server_ret = SSL_do_handshake(server.get());
+    EXPECT_EQ(server_ret, -1);
+    EXPECT_EQ(SSL_get_error(server.get(), server_ret), SSL_ERROR_SSL);
+    EXPECT_TRUE(
+        ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_TLSV1_ALERT_ACCESS_DENIED}}));
+  }
+}
+
+TEST(SSLTest, CertCallbackExPauseAndResume) {
+  bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+  bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(client_ctx && server_ctx);
+
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
+
+  bool cert_ready = false;
+  SSL_CTX_set_cert_cb_ex(
+      server_ctx.get(),
+      [](SSL *ssl, void *arg, uint8_t *out_alert) -> int {
+        bool *ready = reinterpret_cast<bool *>(arg);
+        if (!*ready) {
+          return -1;
+        }
+        bssl::UniquePtr<X509> cert = GetTestCertificate();
+        bssl::UniquePtr<EVP_PKEY> key = GetTestKey();
+        if (!SSL_use_certificate(ssl, cert.get()) ||
+            !SSL_use_PrivateKey(ssl, key.get())) {
+          return 0;
+        }
+        return 1;
+      },
+      &cert_ready);
+
+  bssl::UniquePtr<SSL> client, server;
+  ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                    server_ctx.get()));
+
+  int client_ret = SSL_do_handshake(client.get());
+  EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_WANT_READ);
+
+  int server_ret = SSL_do_handshake(server.get());
+  EXPECT_EQ(server_ret, -1);
+  EXPECT_EQ(SSL_get_error(server.get(), server_ret),
+            SSL_ERROR_WANT_X509_LOOKUP);
+
+  cert_ready = true;
+  ASSERT_TRUE(CompleteHandshakes(client.get(), server.get()));
+}
+
+TEST(SSLTest, CertCallbackExSSLOverride) {
+  bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+  bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(client_ctx && server_ctx);
+
+  // Set CTX-level callback to fail with default alert.
+  SSL_CTX_set_cert_cb(
+      server_ctx.get(), [](SSL *ssl, void *arg) -> int { return 0; }, nullptr);
+
+  bssl::UniquePtr<SSL> client, server;
+  ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                    server_ctx.get()));
+
+  // Simulate rejection of peer certificate *somehow*.
+  SSL_set_cert_cb_ex(
+      server.get(),
+      [](SSL *ssl, void *arg, uint8_t *out_alert) -> int {
+        *out_alert = SSL_AD_HANDSHAKE_FAILURE;
+        return 0;
+      },
+      nullptr);
+
+  int client_ret = SSL_do_handshake(client.get());
+  EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_WANT_READ);
+
+  int server_ret = SSL_do_handshake(server.get());
+  EXPECT_EQ(server_ret, -1);
+  EXPECT_EQ(SSL_get_error(server.get(), server_ret), SSL_ERROR_SSL);
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_CERT_CB_ERROR}}));
+
+  client_ret = SSL_do_handshake(client.get());
+  EXPECT_EQ(client_ret, -1);
+  EXPECT_EQ(SSL_get_error(client.get(), client_ret), SSL_ERROR_SSL);
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_SSL, SSL_R_SSLV3_ALERT_HANDSHAKE_FAILURE}}));
+}
+
 // Configuring the empty cipher list, though an error, should still modify the
 // configuration.
 TEST(SSLTest, EmptyCipherList) {

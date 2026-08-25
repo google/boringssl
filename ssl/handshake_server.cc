@@ -78,6 +78,7 @@ static bool negotiate_version(SSL_HANDSHAKE *hs, uint8_t *out_alert,
       return false;
     }
   } else {
+    // clang-format off
     // Convert the ClientHello version to an equivalent supported_versions
     // extension.
     static const uint8_t kTLSVersions[] = {
@@ -90,6 +91,7 @@ static bool negotiate_version(SSL_HANDSHAKE *hs, uint8_t *out_alert,
         0xfe, 0xfd,  // DTLS 1.2
         0xfe, 0xff,  // DTLS 1.0
     };
+    // clang-format on
 
     size_t versions_len = 0;
     if (SSL_is_dtls(ssl)) {
@@ -595,11 +597,13 @@ static enum ssl_hs_wait_t do_cert_callback(SSL_HANDSHAKE *hs) {
   SSLImpl *const ssl = hs->ssl;
 
   // Call `cert_cb` to update server certificates if required.
-  if (hs->config->cert->cert_cb != nullptr) {
-    int rv = hs->config->cert->cert_cb(ssl, hs->config->cert->cert_cb_arg);
+  if (hs->config->cert->cert_cb) {
+    uint8_t alert = SSL_AD_INTERNAL_ERROR;
+    int rv =
+        hs->config->cert->cert_cb(ssl, hs->config->cert->cert_cb_arg, &alert);
     if (rv == 0) {
       OPENSSL_PUT_ERROR(SSL, SSL_R_CERT_CB_ERROR);
-      ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
+      ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
       return ssl_hs_error;
     }
     if (rv < 0) {

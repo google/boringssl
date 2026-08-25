@@ -26,11 +26,8 @@
 #include <bitset>
 #include <cstdint>
 #include <initializer_list>
-#include <limits>
-#include <new>
 #include <optional>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -2589,6 +2586,29 @@ bool tls12_check_peer_sigalg(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
 // From RFC 4492, used in encoding the curve type in ECParameters
 #define NAMED_CURVE_TYPE 3
 
+struct CertCb {
+  using OldCallback = int (*)(SSL *ssl, void *arg);
+  using NewCallback = int (*)(SSL *ssl, void *arg, uint8_t *out_alert);
+
+  std::variant<std::monostate, OldCallback, NewCallback> cb;
+
+  explicit operator bool() const {
+    return !std::holds_alternative<std::monostate>(cb);
+  }
+
+  int operator()(SSL *ssl, void *arg, uint8_t *out_alert) const {
+    switch (cb.index()) {
+      default:
+      case 0:
+        return 0;
+      case 1:
+        return std::get<1>(cb)(ssl, arg);
+      case 2:
+        return std::get<2>(cb)(ssl, arg, out_alert);
+    }
+  }
+};
+
 struct CERT {
   static constexpr bool kAllowUniquePtr = true;
 
@@ -2636,7 +2656,7 @@ struct CERT {
   // certificates required. This allows advanced applications
   // to select certificates on the fly: for example based on
   // supported signature algorithms or curves.
-  int (*cert_cb)(SSL *ssl, void *arg) = nullptr;
+  CertCb cert_cb = {};
   void *cert_cb_arg = nullptr;
 
   // Optional X509_STORE for certificate validation. If NULL the parent SSL_CTX

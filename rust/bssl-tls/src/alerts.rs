@@ -27,8 +27,11 @@ bssl_enum! {
     /// TLS alert description
     ///
     /// These alert variants have [IANA entries].
+    /// The precise meaning of each alert is as of this release documented in [RFC 9846] §6.2.
+    /// It is reproduced here for your convenience.
     ///
     /// [IANA entries]: <https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-6>
+    /// [RFC 9846]: <https://datatracker.ietf.org/doc/html/rfc9846#section-6.2>
     pub enum AlertDescription : u8 {
         /// `close_notify`
         ///

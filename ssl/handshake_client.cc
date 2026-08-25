@@ -1283,11 +1283,13 @@ static enum ssl_hs_wait_t do_send_client_certificate(SSL_HANDSHAKE *hs) {
     // Do not send client certificates on ECH reject. We have not authenticated
     // the server for the name that can learn the certificate.
     SSL_certs_clear(ssl);
-  } else if (hs->config->cert->cert_cb != nullptr) {
+  } else if (hs->config->cert->cert_cb) {
+    uint8_t alert = SSL_AD_INTERNAL_ERROR;
     // Call cert_cb to update the certificate.
-    int rv = hs->config->cert->cert_cb(ssl, hs->config->cert->cert_cb_arg);
+    int rv =
+        hs->config->cert->cert_cb(ssl, hs->config->cert->cert_cb_arg, &alert);
     if (rv == 0) {
-      ssl_send_alert(ssl, SSL3_AL_FATAL, SSL_AD_INTERNAL_ERROR);
+      ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
       OPENSSL_PUT_ERROR(SSL, SSL_R_CERT_CB_ERROR);
       return ssl_hs_error;
     }

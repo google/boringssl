@@ -1091,6 +1091,18 @@ OPENSSL_EXPORT void SSL_CTX_set_cert_cb(SSL_CTX *ctx,
                                         int (*cb)(SSL *ssl, void *arg),
                                         void *arg);
 
+// SSL_CTX_set_cert_cb_ex sets a callback that is called to select a certificate
+// like `SSL_CTX_set_cert_cb` with an additional argument to allow the callback
+// to select the fatal alert to send.
+// If `cb` returns zero, it should set `*out_alert` to one of `SSL_AD_*` to
+// specify the alert. If unset, it defaults to `SSL_AD_INTERNAL_ERROR`.
+// `SSL_AD_HANDSHAKE_FAILURE` is an appropriate alert if the caller and peer do
+// not have parameters in common.
+OPENSSL_EXPORT void SSL_CTX_set_cert_cb_ex(SSL_CTX *ctx,
+                                           int (*cb)(SSL *ssl, void *arg,
+                                                     uint8_t *out_alert),
+                                           void *arg);
+
 // SSL_set_cert_cb sets a callback that is called to select a certificate. The
 // callback returns one on success, zero on internal error, and a negative
 // number on failure or to pause the handshake. If the handshake is paused,
@@ -1105,6 +1117,16 @@ OPENSSL_EXPORT void SSL_CTX_set_cert_cb(SSL_CTX *ctx,
 // from OpenSSL which handles resumption before selecting the certificate.
 OPENSSL_EXPORT void SSL_set_cert_cb(SSL *ssl, int (*cb)(SSL *ssl, void *arg),
                                     void *arg);
+
+// SSL_set_cert_cb_ex sets a callback that is called to select a certificate
+// like `SSL_CTX_set_cert_cb` with an additional argument to allow the callback
+// to select the fatal alert to send.
+// If `cb` returns zero, it should set `*out_alert` to one of `SSL_AD_*` to
+// specify the alert. If unset, it defaults to `SSL_AD_INTERNAL_ERROR`.
+// `SSL_AD_HANDSHAKE_FAILURE` is an appropriate alert if the caller and peer do
+// not have parameters in common.
+OPENSSL_EXPORT void SSL_set_cert_cb_ex(
+    SSL *ssl, int (*cb)(SSL *ssl, void *arg, uint8_t *out_alert), void *arg);
 
 // SSL_get0_certificate_types, for a client, sets `*out_types` to an array
 // containing the client certificate types requested by a server. It returns the
