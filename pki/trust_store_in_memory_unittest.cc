@@ -134,7 +134,7 @@ TEST_F(TrustStoreInMemoryTest, IsEmptyClear) {
   static const uint8_t kMtcCaId[] = {42};  // relative OID of 42
   // The ca_key doesn't need to be valid for this test.
   UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
-  std::map<uint16_t, std::vector<TrustedSubtree>> trusted_subtrees;
+  std::vector<LogTrustedSubtrees> trusted_subtrees;
   auto mtc_anchor = std::make_shared<MTCAnchor>(
       MakeSpan(kMtcCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki),
       trusted_subtrees);
@@ -152,28 +152,30 @@ TEST_F(TrustStoreInMemoryTest, MTCAnchors) {
 
   // AddMTCTrustAnchor should fail if the MTCAnchor is invalid.
   static const uint8_t kValidCaId[] = {42};  // relative OID of 42
+  static const uint8_t kValidCaId2[] = {43};  // relative OID of 43
   TrustedSubtree a;
   a.range = Subtree{0, 4};
   TrustedSubtree b;
   b.range = Subtree{0, 6};
   TrustedSubtree c;
   c.range = Subtree{8, 9};
-  std::map<uint16_t, std::vector<TrustedSubtree>> valid_subtrees;
-  valid_subtrees[1] = {a, b, c};
+  std::vector<LogTrustedSubtrees> valid_subtrees = {{1, {a, b, c}}};
   // The ca_key doesn't need to be valid for this test.
   UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
-  std::shared_ptr<MTCAnchor> valid_anchor = std::make_shared<MTCAnchor>(
-      kValidCaId, SignatureAlgorithm::kMldsa44, UpRef(ca_spki), valid_subtrees);
-  EXPECT_TRUE(valid_anchor->IsValid());
-  EXPECT_EQ(valid_anchor->ca_id(), kValidCaId);
-  EXPECT_TRUE(in_memory.AddMTCTrustAnchor(valid_anchor));
+  {
+    std::shared_ptr<MTCAnchor> valid_anchor =
+        std::make_shared<MTCAnchor>(kValidCaId, SignatureAlgorithm::kMldsa44,
+                                    UpRef(ca_spki), valid_subtrees);
+    EXPECT_TRUE(valid_anchor->IsValid());
+    EXPECT_EQ(valid_anchor->ca_id(), kValidCaId);
+    EXPECT_TRUE(in_memory.AddMTCTrustAnchor(valid_anchor));
+  }
 
   {
     // Attempting to add another MTCTrustAnchor with the same CA ID should fail
     TrustedSubtree d;
     d.range = Subtree{16, 17};
-    std::map<uint16_t, std::vector<TrustedSubtree>> subtrees;
-    subtrees[1] = {d};
+    std::vector<LogTrustedSubtrees> subtrees = {{1, {d}}};
     std::shared_ptr<MTCAnchor> anchor = std::make_shared<MTCAnchor>(
         kValidCaId, SignatureAlgorithm::kMldsa44, UpRef(ca_spki), subtrees);
     EXPECT_TRUE(anchor->IsValid());
@@ -192,10 +194,9 @@ TEST_F(TrustStoreInMemoryTest, MTCAnchors) {
   }
 
   {
-    std::map<uint16_t, std::vector<TrustedSubtree>> invalid_subtrees;
-    invalid_subtrees[1] = {b, a, c};
+    std::vector<LogTrustedSubtrees> invalid_subtrees = {{1, {b, a, c}}};
     std::shared_ptr<MTCAnchor> invalid_anchor =
-        std::make_shared<MTCAnchor>(kValidCaId, SignatureAlgorithm::kMldsa44,
+        std::make_shared<MTCAnchor>(kValidCaId2, SignatureAlgorithm::kMldsa44,
                                     UpRef(ca_spki), invalid_subtrees);
     EXPECT_FALSE(invalid_anchor->IsValid());
     EXPECT_FALSE(in_memory.AddMTCTrustAnchor(invalid_anchor));
@@ -204,13 +205,48 @@ TEST_F(TrustStoreInMemoryTest, MTCAnchors) {
   {
     TrustedSubtree subtree;
     subtree.range = Subtree{4, 9};
-    std::map<uint16_t, std::vector<TrustedSubtree>> invalid_subtrees;
-    invalid_subtrees[1] = {subtree};
+    std::vector<LogTrustedSubtrees> invalid_subtrees = {{1, {subtree}}};
     std::shared_ptr<MTCAnchor> invalid_anchor =
-        std::make_shared<MTCAnchor>(kValidCaId, SignatureAlgorithm::kMldsa44,
+        std::make_shared<MTCAnchor>(kValidCaId2, SignatureAlgorithm::kMldsa44,
                                     UpRef(ca_spki), invalid_subtrees);
     EXPECT_FALSE(invalid_anchor->IsValid());
     EXPECT_FALSE(in_memory.AddMTCTrustAnchor(invalid_anchor));
+  }
+
+  {
+    std::vector<LogTrustedSubtrees> invalid_log_order = {
+        {2, {a}},
+        {1, {b}},
+    };
+    std::shared_ptr<MTCAnchor> invalid_anchor =
+        std::make_shared<MTCAnchor>(kValidCaId2, SignatureAlgorithm::kMldsa44,
+                                    UpRef(ca_spki), invalid_log_order);
+    EXPECT_FALSE(invalid_anchor->IsValid());
+    EXPECT_FALSE(in_memory.AddMTCTrustAnchor(invalid_anchor));
+  }
+
+  {
+    std::vector<LogTrustedSubtrees> duplicate_log_number = {
+        {1, {a}},
+        {1, {b}},
+    };
+    std::shared_ptr<MTCAnchor> invalid_anchor =
+        std::make_shared<MTCAnchor>(kValidCaId2, SignatureAlgorithm::kMldsa44,
+                                    UpRef(ca_spki), duplicate_log_number);
+    EXPECT_FALSE(invalid_anchor->IsValid());
+    EXPECT_FALSE(in_memory.AddMTCTrustAnchor(invalid_anchor));
+  }
+
+  {
+    std::vector<LogTrustedSubtrees> valid_multiple_logs = {
+        {1, {a, c}},
+        {2, {b}},
+    };
+    std::shared_ptr<MTCAnchor> valid_anchor =
+        std::make_shared<MTCAnchor>(kValidCaId2, SignatureAlgorithm::kMldsa44,
+                                    UpRef(ca_spki), valid_multiple_logs);
+    EXPECT_TRUE(valid_anchor->IsValid());
+    EXPECT_TRUE(in_memory.AddMTCTrustAnchor(valid_anchor));
   }
 }
 
@@ -220,7 +256,7 @@ TEST_F(TrustStoreInMemoryTest, ContainsMTCAnchor) {
 
   static const uint8_t kValidCaId1[] = {42};  // relative OID of 42
   static const uint8_t kValidCaId2[] = {43};  // relative OID of 43
-  std::map<uint16_t, std::vector<TrustedSubtree>> subtrees;
+  std::vector<LogTrustedSubtrees> subtrees;
   // The ca_key doesn't need to be valid for this test.
   UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
 

@@ -2539,14 +2539,16 @@ class PathBuilderMTCPlants04Test : public PathBuilderSimpleChainTest {
     memcpy(subtree.hash.data(), subtree_hash.data(), subtree_hash.size());
     subtree.range.start = 0;
     subtree.range.end = 10;
-    std::map<uint16_t, std::vector<TrustedSubtree>> subtrees;
-    subtrees[1] = {std::move(subtree)};
+    std::vector<LogTrustedSubtrees> subtrees = {
+        {1, {std::move(subtree)}},
+    };
     TrustedSubtree subtree2;
     subtree2.range.start = 0;
     subtree2.range.end = 10;
     subtree2.hash.fill(1);
-    std::map<uint16_t, std::vector<TrustedSubtree>> subtrees2;
-    subtrees2[1] = {std::move(subtree2)};
+    std::vector<LogTrustedSubtrees> subtrees2 = {
+        {1, {std::move(subtree2)}},
+    };
     static constexpr uint8_t kCaId[] = {0x81, 0xfd, 0x59, 0x01};
     // With ml-dsa it is much more compact to encode the private key seed and
     // derive the public key from that.
@@ -2576,12 +2578,12 @@ class PathBuilderMTCPlants04Test : public PathBuilderSimpleChainTest {
 
     mtc_anchor_no_subtrees_ = std::make_shared<MTCAnchor>(
         MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(spki),
-        std::map<uint16_t, std::vector<TrustedSubtree>>());
+        std::vector<LogTrustedSubtrees>());
     ASSERT_EQ(mtc_anchor_no_subtrees_->spec_version(), MTCAnchor::kPlants04);
 
     mtc_anchor_no_subtrees_wrong_key_ = std::make_shared<MTCAnchor>(
         MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(spki2),
-        std::map<uint16_t, std::vector<TrustedSubtree>>());
+        std::vector<LogTrustedSubtrees>());
     ASSERT_EQ(mtc_anchor_no_subtrees_wrong_key_->spec_version(),
               MTCAnchor::kPlants04);
   }

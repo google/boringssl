@@ -56,6 +56,11 @@ struct OPENSSL_EXPORT TrustedSubtree {
   std::array<uint8_t, SHA256_DIGEST_LENGTH> hash;
 };
 
+struct OPENSSL_EXPORT LogTrustedSubtrees {
+  uint16_t log_number;
+  std::vector<TrustedSubtree> trusted_subtrees;
+};
+
 // Describes the level of trust in a certificate.
 struct OPENSSL_EXPORT CertificateTrust {
   static constexpr CertificateTrust ForTrustAnchor() {
@@ -154,6 +159,19 @@ class OPENSSL_EXPORT MTCAnchor {
   // `ca_id` containing the DER encoding of the relative OID of the CA's ID.
   // `ca_signature_algorithm` and `ca_key` configure the CA cosigner key.
   // `ca_key` should be a DER-encoded SubjectPublicKeyInfo.
+  // The `log_trusted_subtrees` must be sorted by log number, and each
+  // `trusted_subtrees` within must be sorted by their subtree ranges.
+  MTCAnchor(Span<const uint8_t> ca_id,
+            SignatureAlgorithm ca_signature_algorithm,
+            UniquePtr<CRYPTO_BUFFER> ca_key,
+            std::vector<LogTrustedSubtrees> log_trusted_subtrees);
+
+  // TODO(mattm): this constructor is deprecated, remove it once the
+  // chromium-side has been updated to use the new one.
+  // Create an MTCAnchor with spec version kPlants04 for a trusted CA with
+  // `ca_id` containing the DER encoding of the relative OID of the CA's ID.
+  // `ca_signature_algorithm` and `ca_key` configure the CA cosigner key.
+  // `ca_key` should be a DER-encoded SubjectPublicKeyInfo.
   // The `trusted_subtrees` must be sorted by their subtree ranges.
   MTCAnchor(Span<const uint8_t> ca_id,
             SignatureAlgorithm ca_signature_algorithm,
@@ -192,8 +210,7 @@ class OPENSSL_EXPORT MTCAnchor {
   SignatureAlgorithm ca_signature_algorithm_;
   UniquePtr<CRYPTO_BUFFER> ca_key_;
   std::shared_ptr<const ParsedCertificate> synthetic_cert_;
-  // Maps from the log_number to the trusted subtrees for that log.
-  std::map<uint16_t, std::vector<TrustedSubtree>> trusted_subtrees_;
+  std::vector<LogTrustedSubtrees> trusted_subtrees_;
 };
 
 // A TrustAnchor contains information about how a trust anchor is trusted and

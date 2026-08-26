@@ -272,7 +272,7 @@ TEST_F(TrustStoreCollectionMtcTest, MtcTwoStores) {
   constexpr uint8_t kCaId2[] = {0x81, 0xfd, 0x59, 0x02};
   constexpr uint8_t kCaId3[] = {0x81, 0xfd, 0x59, 0x03};
 
-  std::map<uint16_t, std::vector<TrustedSubtree>> trusted_subtrees;
+  std::vector<LogTrustedSubtrees> trusted_subtrees;
   // The ca_key doesn't need to be valid for this test.
   UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
   auto mtc_anchor1 = std::make_shared<MTCAnchor>(
