@@ -166,18 +166,6 @@ class OPENSSL_EXPORT MTCAnchor {
             UniquePtr<CRYPTO_BUFFER> ca_key,
             std::vector<LogTrustedSubtrees> log_trusted_subtrees);
 
-  // TODO(mattm): this constructor is deprecated, remove it once the
-  // chromium-side has been updated to use the new one.
-  // Create an MTCAnchor with spec version kPlants04 for a trusted CA with
-  // `ca_id` containing the DER encoding of the relative OID of the CA's ID.
-  // `ca_signature_algorithm` and `ca_key` configure the CA cosigner key.
-  // `ca_key` should be a DER-encoded SubjectPublicKeyInfo.
-  // The `trusted_subtrees` must be sorted by their subtree ranges.
-  MTCAnchor(Span<const uint8_t> ca_id,
-            SignatureAlgorithm ca_signature_algorithm,
-            UniquePtr<CRYPTO_BUFFER> ca_key,
-            std::map<uint16_t, std::vector<TrustedSubtree>> trusted_subtrees);
-
   // Returns whether this MTCAnchor represents a valid anchor. This function
   // exists because the c'tor inputs could be invalid.
   bool IsValid() const;

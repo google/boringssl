@@ -200,19 +200,6 @@ MTCAnchor::MTCAnchor(Span<const uint8_t> ca_id,
   CreateSyntheticCert(ca_id);
 }
 
-MTCAnchor::MTCAnchor(
-    Span<const uint8_t> ca_id, SignatureAlgorithm ca_signature_algorithm,
-    UniquePtr<CRYPTO_BUFFER> ca_key,
-    std::map<uint16_t, std::vector<TrustedSubtree>> trusted_subtrees)
-    : ca_id_(ca_id.begin(), ca_id.end()),
-      ca_signature_algorithm_(ca_signature_algorithm),
-      ca_key_(std::move(ca_key)) {
-  for (auto& [log_number, subtrees] : trusted_subtrees) {
-    trusted_subtrees_.push_back({log_number, std::move(subtrees)});
-  }
-  CreateSyntheticCert(ca_id);
-}
-
 bool MTCAnchor::IsValid() const {
   if (!synthetic_cert_) {
     return false;
