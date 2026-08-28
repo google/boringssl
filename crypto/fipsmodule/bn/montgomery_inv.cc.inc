@@ -89,10 +89,10 @@ static uint64_t bn_neg_inv_mod_u64(uint64_t n) {
   // negation happens before we go to double-word precision, instead of at the
   // end.
   //
-  // If r = -n^-1 (mod m), then r * (r*n + 2) is -n^(-1) (mod m^2). This is
+  // If r = -n^-1 (mod m), then r * (r*n + 2) is -n^-1 (mod m²). This is
   // because, for some k, r*n = k*m - 1. Then:
   //
-  //     r*n * (r*n + 2) = (k*m - 1) * (k*m + 1) = k^2*m^2 - 1 = -1 (mod m^2)
+  //     r*n * (r*n + 2) = (k*m - 1) * (k*m + 1) = k²*m² - 1 = -1 (mod m²)
   //
   // We start with the negative inverse mod some small power of 2 and square the
   // modulus up to 2^64. n = n^-1 (mod 8) for all odd n, so r = -n (mod 8). From
@@ -136,8 +136,8 @@ int bssl::bn_mont_ctx_set_RR_consttime(BN_MONT_CTX *mont, BN_CTX *ctx) {
   // Montgomery domain, 2R or 2^(lgBigR+1), and then use Montgomery
   // square-and-multiply to exponentiate.
   //
-  // The square steps take 2^n R to (2^n)*(2^n) R = 2^2n R. This is the same as
-  // doubling 2^n R, n times (doubling any x, n times, computes 2^n * x). When n
+  // The square steps take 2ⁿ R to (2ⁿ)*(2ⁿ) R = 2^2n R. This is the same as
+  // doubling 2ⁿ R, n times (doubling any x, n times, computes 2ⁿ * x). When n
   // is below some threshold, doubling is faster; when above, squaring is
   // faster. From benchmarking various 32-bit and 64-bit architectures, the word
   // count seems to work well as a threshold. (Doubling scales linearly and

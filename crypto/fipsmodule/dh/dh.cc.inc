@@ -156,7 +156,7 @@ int DH_generate_key(DH *dh) {
     }
     if (impl->q) {
       // Section 5.6.1.1.4 of SP 800-56A Rev3 generates a private key uniformly
-      // from [1, min(2^N-1, q-1)].
+      // from [1, min(2ᴺ-1, q-1)].
       //
       // Although SP 800-56A Rev3 now permits a private key length N,
       // `impl->priv_length` historically was ignored when q is available. We
@@ -175,7 +175,7 @@ int DH_generate_key(DH *dh) {
       // originally aligned with PKCS#3, which allows num_bits(p). Instead, we
       // clamp `impl->priv_length` before invoking the algorithm.
 
-      // Compute M = min(2^N, q).
+      // Compute M = min(2ᴺ, q).
       UniquePtr<BIGNUM> priv_key_limit(BN_new());
       if (priv_key_limit == nullptr) {
         OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
@@ -189,7 +189,7 @@ int DH_generate_key(DH *dh) {
           return 0;
         }
       } else {
-        // M = 2^N.
+        // M = 2ᴺ.
         if (!BN_set_bit(priv_key_limit.get(), impl->priv_length)) {
           OPENSSL_PUT_ERROR(DH, ERR_R_BN_LIB);
           return 0;

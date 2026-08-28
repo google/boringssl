@@ -79,7 +79,7 @@ int bssl::bn_jacobi(const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
     }
     if (i & 1) {
       // i is odd
-      // multiply 'ret' by  $(-1)^{(B^2-1)/8}$
+      // multiply 'ret' by  $(-1)^{(B²-1)/8}$
       ret = ret * tab[BN_lsw(B) & 7];
     }
 

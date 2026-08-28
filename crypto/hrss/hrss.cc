@@ -615,7 +615,7 @@ static void poly3_mul_aux(const struct poly3_span *out,
   const struct poly3_span a_high = {&a->s[low_len], &a->a[low_len]};
   const struct poly3_span b_high = {&b->s[low_len], &b->a[low_len]};
 
-  // Store a_1 + a_0 in the first half of `out` and b_1 + b_0 in the second
+  // Store a1 + a0 in the first half of `out` and b1 + b0 in the second
   // half.
   const struct poly3_span a_cross_sum = *out;
   const struct poly3_span b_cross_sum = {&out->s[high_len], &out->a[high_len]};
@@ -634,11 +634,11 @@ static void poly3_mul_aux(const struct poly3_span *out,
   const struct poly3_span out_high = {&out->s[2 * low_len],
                                       &out->a[2 * low_len]};
 
-  // Calculate (a_1 + a_0) × (b_1 + b_0) and write to scratch buffer.
+  // Calculate (a1 + a0) × (b1 + b0) and write to scratch buffer.
   poly3_mul_aux(scratch, &child_scratch, &a_cross_sum, &b_cross_sum, high_len);
-  // Calculate a_1 × b_1.
+  // Calculate a1 × b1.
   poly3_mul_aux(&out_high, &child_scratch, &a_high, &b_high, high_len);
-  // Calculate a_0 × b_0.
+  // Calculate a0 × b0.
   poly3_mul_aux(out, &child_scratch, a, b, low_len);
 
   // Subtract those last two products from the first.
@@ -1126,7 +1126,7 @@ static void poly_mul_vec_aux(vec_t *out, vec_t *scratch, const vec_t *a,
   const vec_t *a_high = &a[low_len];
   const vec_t *b_high = &b[low_len];
 
-  // Store a_1 + a_0 in the first half of `out` and b_1 + b_0 in the second
+  // Store a1 + a0 in the first half of `out` and b1 + b0 in the second
   // half.
   for (size_t i = 0; i < low_len; i++) {
     out[i] = vec_add(a_high[i], a[i]);
@@ -1138,11 +1138,11 @@ static void poly_mul_vec_aux(vec_t *out, vec_t *scratch, const vec_t *a,
   }
 
   vec_t *const child_scratch = &scratch[2 * high_len];
-  // Calculate (a_1 + a_0) × (b_1 + b_0) and write to scratch buffer.
+  // Calculate (a1 + a0) × (b1 + b0) and write to scratch buffer.
   poly_mul_vec_aux(scratch, child_scratch, out, &out[high_len], high_len);
-  // Calculate a_1 × b_1.
+  // Calculate a1 × b1.
   poly_mul_vec_aux(&out[low_len * 2], child_scratch, a_high, b_high, high_len);
-  // Calculate a_0 × b_0.
+  // Calculate a0 × b0.
   poly_mul_vec_aux(out, child_scratch, a, b, low_len);
 
   // Subtract those last two products from the first.
@@ -1749,13 +1749,13 @@ static void poly_lift(struct poly *out, const struct poly *a) {
   // The use of z̅ is that, when working mod (𝑥^701 - 1), vz[0] = <v,
   // z̅>, vz[1] = <v, 𝑥z̅>, …. (Where <a, b> is the inner product: the sum
   // of the point-wise products.) Although we calculated the inverse mod
-  // Φ(N), we can work mod (𝑥^N - 1) and reduce mod Φ(N) at the end.
-  // (That's because (𝑥^N - 1) is a multiple of Φ(N).)
+  // Φ(N), we can work mod (𝑥ᴺ - 1) and reduce mod Φ(N) at the end.
+  // (That's because (𝑥ᴺ - 1) is a multiple of Φ(N).)
   //
-  // When working mod (𝑥^N - 1), multiplication by 𝑥 is a right-rotation
+  // When working mod (𝑥ᴺ - 1), multiplication by 𝑥 is a right-rotation
   // of the list of coefficients.
   //
-  // Thus we can consider what the pattern of z̅, 𝑥z̅, 𝑥^2z̅, … looks like:
+  // Thus we can consider what the pattern of z̅, 𝑥z̅, 𝑥²z̅, … looks like:
   //
   // def reverse(xs):
   //   suffix = list(xs[1:])
@@ -1779,11 +1779,11 @@ static void poly_lift(struct poly *out, const struct poly *a) {
   // (For a formula for z̅, see lemma two of appendix B.)
   //
   // After the first three elements have been taken care of, all then have
-  // a repeating three-element cycle. The next value (𝑥^3z̅) involves
+  // a repeating three-element cycle. The next value (𝑥³z̅) involves
   // three rotations of the first pattern, thus the three-element cycle
   // lines up. However, the discontinuity in the first three elements
   // obviously moves to a different position. Consider the difference
-  // between 𝑥^3z̅ and z̅:
+  // between 𝑥³z̅ and z̅:
   //
   // [x-y for (x,y) in zip(zoverbar, x3zoverbar)][:15]
   //    [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

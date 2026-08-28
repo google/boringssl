@@ -74,7 +74,7 @@ int ec_scalar_from_bytes(const EC_GROUP *group, EC_SCALAR *out,
                          const uint8_t *in, size_t len);
 
 // ec_scalar_reduce sets `out` to `words`, reduced modulo the group order.
-// `words` must be less than order^2. `num` must be at most twice the width of
+// `words` must be less than order². `num` must be at most twice the width of
 // group order. This function treats `words` as secret.
 void ec_scalar_reduce(const EC_GROUP *group, EC_SCALAR *out,
                       const BN_ULONG *words, size_t num);
@@ -211,7 +211,7 @@ int ec_felem_equal(const EC_GROUP *group, const EC_FELEM *a, const EC_FELEM *b);
 void ec_felem_mul(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *a,
                   const EC_FELEM *b);
 
-// ec_felem_sqr sets `out` to `a`^2.
+// ec_felem_sqr sets `out` to `a`².
 void ec_felem_sqr(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *a);
 
 // ec_felem_to_montgomery sets `out` to `a` converted to Montgomery form.
@@ -223,7 +223,7 @@ void ec_felem_from_montgomery(const EC_GROUP *group, EC_FELEM *out,
                               const EC_FELEM *a);
 
 // ec_felem_reduce sets `out` to `words`, reduced modulo the field size, p.
-// `words` must be less than p^2. `num` must be at most twice the width of p.
+// `words` must be less than p². `num` must be at most twice the width of p.
 // This function treats `words` as secret.
 void ec_felem_reduce(const EC_GROUP *group, EC_FELEM *out,
                      const BN_ULONG *words, size_t num);

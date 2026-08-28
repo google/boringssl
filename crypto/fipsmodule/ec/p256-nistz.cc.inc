@@ -232,17 +232,17 @@ static void ecp_nistz256_mod_inverse_sqr_mont(BN_ULONG r[P256_LIMBS],
   // https://briansmith.org/ecc-inversion-addition-chains-01#p256_field_inversion
   BN_ULONG x2[P256_LIMBS], x3[P256_LIMBS], x6[P256_LIMBS], x12[P256_LIMBS],
       x15[P256_LIMBS], x30[P256_LIMBS], x32[P256_LIMBS];
-  ecp_nistz256_sqr_mont(x2, in);      // 2^2 - 2^1
-  ecp_nistz256_mul_mont(x2, x2, in);  // 2^2 - 2^0
+  ecp_nistz256_sqr_mont(x2, in);      // 2² - 2¹
+  ecp_nistz256_mul_mont(x2, x2, in);  // 2² - 2⁰
 
-  ecp_nistz256_sqr_mont(x3, x2);      // 2^3 - 2^1
-  ecp_nistz256_mul_mont(x3, x3, in);  // 2^3 - 2^0
+  ecp_nistz256_sqr_mont(x3, x2);      // 2³ - 2¹
+  ecp_nistz256_mul_mont(x3, x3, in);  // 2³ - 2⁰
 
   ecp_nistz256_sqr_mont(x6, x3);
   for (int i = 1; i < 3; i++) {
     ecp_nistz256_sqr_mont(x6, x6);
-  }                                   // 2^6 - 2^3
-  ecp_nistz256_mul_mont(x6, x6, x3);  // 2^6 - 2^0
+  }                                   // 2⁶ - 2³
+  ecp_nistz256_mul_mont(x6, x6, x3);  // 2⁶ - 2⁰
 
   ecp_nistz256_sqr_mont(x12, x6);
   for (int i = 1; i < 6; i++) {
@@ -690,8 +690,8 @@ static int ecp_nistz256_cmp_x_coordinate(const EC_GROUP *group,
   assert(group->order.N.width == P256_LIMBS);
   assert(group->field.N.width == P256_LIMBS);
 
-  // We wish to compare X/Z^2 with r. This is equivalent to comparing X with
-  // r*Z^2. Note that X and Z are represented in Montgomery form, while r is
+  // We wish to compare X/Z² with r. This is equivalent to comparing X with
+  // r⋅Z². Note that X and Z are represented in Montgomery form, while r is
   // not.
   BN_ULONG r_Z2[P256_LIMBS], Z2_mont[P256_LIMBS], X[P256_LIMBS];
   ecp_nistz256_mul_mont(Z2_mont, p->Z.words, p->Z.words);
@@ -708,7 +708,7 @@ static int ecp_nistz256_cmp_x_coordinate(const EC_GROUP *group,
   // compare against r+group_order.
   BN_ULONG carry = bn_add_words(r_Z2, r->words, group->order.N.d, P256_LIMBS);
   if (carry == 0 && bn_less_than_words(r_Z2, group->field.N.d, P256_LIMBS)) {
-    // r + group_order < p, so compare (r + group_order) * Z^2 against X.
+    // r + group_order < p, so compare (r + group_order) ⋅ Z² against X.
     ecp_nistz256_mul_mont(r_Z2, r_Z2, Z2_mont);
     if (OPENSSL_memcmp(r_Z2, X, sizeof(r_Z2)) == 0) {
       return 1;

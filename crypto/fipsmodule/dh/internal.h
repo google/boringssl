@@ -32,7 +32,7 @@ class DHImpl : public dh_st, public RefCounted<DHImpl> {
   UniquePtr<BIGNUM> p;
   UniquePtr<BIGNUM> g;
   UniquePtr<BIGNUM> q;
-  UniquePtr<BIGNUM> pub_key;   // g^x mod p
+  UniquePtr<BIGNUM> pub_key;   // gˣ mod p
   UniquePtr<BIGNUM> priv_key;  // x
 
   // priv_length contains the length, in bits, of the private value. If zero,

@@ -139,7 +139,7 @@ static const uint16_t kPrimes[] = {
 //       S+:=2^(m-(m-1)*t)*s;
 //     end for;
 //     A:=2^(k-2-M*t);
-//     B:=8*(Pi(RealField(32))^2-6)/3*2^(k-2)*S;
+//     B:=8*(Pi(RealField(32))²-6)/3*2^(k-2)*S;
 //     pkt:=2.00743*Log(2)*k*2^-k*(A+B);
 //     seclevel:=Floor(-Log(2,pkt));
 //     if seclevel ge securitybits then
@@ -214,7 +214,7 @@ static size_t num_trial_division_primes(const BIGNUM *n) {
 /*
 import math
 
-# We choose candidate RSA primes between sqrt(2)/2 * 2^N and 2^N and select
+# We choose candidate RSA primes between sqrt(2)/2 * 2ᴺ and 2ᴺ and select
 # witnesses by generating random N-bit numbers. Thus the probability of
 # selecting one in range is at least sqrt(2)/2.
 p = math.sqrt(2) / 2
@@ -706,7 +706,7 @@ int BN_enhanced_miller_rabin_primality_test(
     return 0;
   }
 
-  // Write w1 as m*2^a (Steps 1 and 2).
+  // Write w1 as m*2ᵃ (Steps 1 and 2).
   int a = 0;
   while (!BN_is_bit_set(w1, a)) {
     a++;

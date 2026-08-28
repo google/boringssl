@@ -62,7 +62,7 @@ constexpr uint32_t kPrime = 8380417;
 constexpr uint32_t kPrimeNegInverse = 4236238847;
 constexpr int kDroppedBits = 13;
 constexpr uint32_t kHalfPrime = (kPrime - 1) / 2;
-// 256^-1 * R^2 mod kPrime. This is not 256^-1 in Montgomery form, but 256^-1
+// 256^-1 ⋅ R² mod kPrime. This is not 256^-1 in Montgomery form, but 256^-1
 // doubly-converted to Montgomery form.
 constexpr uint32_t kInverseDegreeDoubleMontgomery = 41978;
 
@@ -458,7 +458,7 @@ inline void scalar_inverse_ntt_montgomery(scalar *s) {
   // Intermediate values of `s` are not fully reduced. `ITER` writes
   // to every element of `s` exactly once. Each write either adds two values
   // from the previous iteration, or is at most 2 * kPrime. After eight
-  // iterations, each element will be less than 2^8 * kPrime = 256 * kPrime.
+  // iterations, each element will be less than 2⁸ * kPrime = 256 * kPrime.
   // This fits in `uint32_t`, so we never overflow.
 #define ITER(step, offset)                                                  \
   {                                                                         \
@@ -578,12 +578,12 @@ inline void power2_round(uint32_t *r1, uint32_t *r0, uint32_t r) {
 
 // Scale back previously rounded value.
 inline void scale_power2_round(uint32_t *out, uint32_t r1) {
-  // Pre-condition: 0 <= r1 <= 2^10 - 1
+  // Pre-condition: 0 ≤ r1 ≤ 2^10 - 1
   assert(r1 < (1u << 10));
 
   *out = r1 << kDroppedBits;
 
-  // Post-condition: 0 <= out <= 2^23 - 2^13 = kPrime - 1
+  // Post-condition: 0 ≤ out ≤ 2^23 - 2^13 = kPrime - 1
   assert(*out < kPrime);
 }
 
@@ -606,7 +606,7 @@ inline uint32_t high_bits(uint32_t x) {
     // Below is the formula taken from the reference implementation.
     //
     // Here, Gamma2 == 2^18 - 2^8
-    // This returns ((ceil(x / 2^7) * (2^10 + 1) + 2^21) / 2^22) mod 2^4
+    // This returns ((ceil(x / 2^7) ⋅ (2^10 + 1) + 2^21) / 2^22) mod 2^4
     r1 = (r1 * 1025 + (1 << 21)) >> 22;
     r1 &= 15;
   } else if constexpr (prime_minus_one_over_gamma2<K>() == 88) {

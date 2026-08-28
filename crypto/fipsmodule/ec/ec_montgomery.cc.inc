@@ -41,7 +41,7 @@ static int ec_GFp_mont_point_get_affine_coordinates(const EC_GROUP *group,
     return 0;
   }
 
-  // Transform (X, Y, Z) into (x, y) := (X/Z^2, Y/Z^3). Note the check above
+  // Transform (X, Y, Z) into (x, y) := (X/Z², Y/Z³). Note the check above
   // ensures `point->Z` is non-zero, so the inverse always exists.
   EC_FELEM z1, z2;
   ec_GFp_mont_felem_inv0(group, &z2, &point->Z);
@@ -226,9 +226,9 @@ void bssl::ec_GFp_mont_dbl(const EC_GROUP *group, EC_JACOBIAN *r,
     // <https://github.com/mit-plv/fiat-crypto/blob/79f8b5f39ed609339f0233098dee1a3c4e6b3080/src/Curves/Weierstrass/Jacobian.v#L93>
     // <https://github.com/mit-plv/fiat-crypto/blob/79f8b5f39ed609339f0233098dee1a3c4e6b3080/src/Curves/Weierstrass/Jacobian.v#L201>
     EC_FELEM delta, gamma, beta, ftmp, ftmp2, tmptmp, alpha, fourbeta;
-    // delta = z^2
+    // delta = z²
     ec_felem_sqr(group, &delta, &a->Z);
-    // gamma = y^2
+    // gamma = y²
     ec_felem_sqr(group, &gamma, &a->Y);
     // beta = x*gamma
     ec_felem_mul(group, &beta, &a->X, &gamma);
@@ -241,20 +241,20 @@ void bssl::ec_GFp_mont_dbl(const EC_GROUP *group, EC_JACOBIAN *r,
     ec_felem_add(group, &ftmp2, &ftmp2, &tmptmp);
     ec_felem_mul(group, &alpha, &ftmp, &ftmp2);
 
-    // x' = alpha^2 - 8*beta
+    // x' = alpha² - 8*beta
     ec_felem_sqr(group, &r->X, &alpha);
     ec_felem_add(group, &fourbeta, &beta, &beta);
     ec_felem_add(group, &fourbeta, &fourbeta, &fourbeta);
     ec_felem_add(group, &tmptmp, &fourbeta, &fourbeta);
     ec_felem_sub(group, &r->X, &r->X, &tmptmp);
 
-    // z' = (y + z)^2 - gamma - delta
+    // z' = (y + z)² - gamma - delta
     ec_felem_add(group, &delta, &gamma, &delta);
     ec_felem_add(group, &ftmp, &a->Y, &a->Z);
     ec_felem_sqr(group, &r->Z, &ftmp);
     ec_felem_sub(group, &r->Z, &r->Z, &delta);
 
-    // y' = alpha*(4*beta - x') - 8*gamma^2
+    // y' = alpha*(4*beta - x') - 8*gamma²
     ec_felem_sub(group, &r->Y, &fourbeta, &r->X);
     ec_felem_add(group, &gamma, &gamma, &gamma);
     ec_felem_sqr(group, &gamma, &gamma);
@@ -274,7 +274,7 @@ void bssl::ec_GFp_mont_dbl(const EC_GROUP *group, EC_JACOBIAN *r,
     ec_felem_sqr(group, &yyyy, &yy);
     ec_felem_sqr(group, &zz, &a->Z);
 
-    // s = 2*((x_in + yy)^2 - xx - yyyy)
+    // s = 2*((x_in + yy)² - xx - yyyy)
     EC_FELEM s;
     ec_felem_add(group, &s, &a->X, &yy);
     ec_felem_sqr(group, &s, &s);
@@ -282,7 +282,7 @@ void bssl::ec_GFp_mont_dbl(const EC_GROUP *group, EC_JACOBIAN *r,
     ec_felem_sub(group, &s, &s, &yyyy);
     ec_felem_add(group, &s, &s, &s);
 
-    // m = 3*xx + a*zz^2
+    // m = 3*xx + a*zz²
     EC_FELEM m;
     ec_felem_sqr(group, &m, &zz);
     ec_felem_mul(group, &m, &group->a, &m);
@@ -290,12 +290,12 @@ void bssl::ec_GFp_mont_dbl(const EC_GROUP *group, EC_JACOBIAN *r,
     ec_felem_add(group, &m, &m, &xx);
     ec_felem_add(group, &m, &m, &xx);
 
-    // x_out = m^2 - 2*s
+    // x_out = m² - 2*s
     ec_felem_sqr(group, &r->X, &m);
     ec_felem_sub(group, &r->X, &r->X, &s);
     ec_felem_sub(group, &r->X, &r->X, &s);
 
-    // z_out = (y_in + z_in)^2 - yy - zz
+    // z_out = (y_in + z_in)² - yy - zz
     ec_felem_add(group, &r->Z, &a->Y, &a->Z);
     ec_felem_sqr(group, &r->Z, &r->Z);
     ec_felem_sub(group, &r->Z, &r->Z, &yy);
@@ -325,8 +325,8 @@ static int ec_GFp_mont_cmp_x_coordinate(const EC_GROUP *group,
     return 0;
   }
 
-  // We wish to compare X/Z^2 with r. This is equivalent to comparing X with
-  // r*Z^2. Note that X and Z are represented in Montgomery form, while r is
+  // We wish to compare X/Z² with r. This is equivalent to comparing X with
+  // r⋅Z². Note that X and Z are represented in Montgomery form, while r is
   // not.
   EC_FELEM r_Z2, Z2_mont, X;
   ec_felem_sqr(group, &Z2_mont, &p->Z);
@@ -347,7 +347,7 @@ static int ec_GFp_mont_cmp_x_coordinate(const EC_GROUP *group,
                                 group->field.N.width);
   if (carry == 0 &&
       bn_less_than_words(r_Z2.words, group->field.N.d, group->field.N.width)) {
-    // r + group_order < p, so compare (r + group_order) * Z^2 against X.
+    // r + group_order < p, so compare (r + group_order) ⋅ Z² against X.
     ec_felem_mul(group, &r_Z2, &r_Z2, &Z2_mont);
     if (ec_felem_equal(group, &r_Z2, &X)) {
       return 1;

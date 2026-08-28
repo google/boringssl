@@ -281,7 +281,7 @@ constexpr unsigned CritBinom(unsigned trials, double probability_s,
   return trials;
 }
 
-// ExpTaylor calculates e^x using the Taylor series: e^x = 1 + x + x²/2! +
+// ExpTaylor calculates eˣ using the Taylor series: eˣ = 1 + x + x²/2! +
 // x³/3! + ...
 constexpr double ExpTaylor(double x) {
   double sum = 1.0;

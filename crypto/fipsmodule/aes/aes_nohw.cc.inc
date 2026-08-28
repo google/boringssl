@@ -823,7 +823,7 @@ static void aes_nohw_inv_mix_columns(AES_NOHW_BATCH *batch) {
   // | 0d 09 0e 0b |   | 01 01 02 03 |   | 04 00 05 00 |
   // | 0b 0d 09 0e |   | 03 01 01 02 |   | 00 04 00 05 |
   //
-  // First, apply the [5 0 4 0] matrix. Multiplying by 4 in F_(2^8) is described
+  // First, apply the [5 0 4 0] matrix. Multiplying by 4 in F_(2⁸) is described
   // by the following bit equations:
   //
   //   b0 = a6

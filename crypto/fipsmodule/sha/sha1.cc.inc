@@ -97,7 +97,7 @@ bcm_infallible bssl::BCM_fips_186_2_prf(uint8_t *out, size_t out_len,
     BCM_sha1_init(&ctx);
     BCM_sha1_transform(&ctx, block);
 
-    // XKEY = (1 + XKEY + w_i) mod 2^b
+    // XKEY = (1 + XKEY + wᵢ) mod 2ᵇ
     uint32_t carry = 1;
     for (int i = 4; i >= 0; i--) {
       uint32_t tmp = CRYPTO_load_u32_be(block + i * 4);
@@ -105,7 +105,7 @@ bcm_infallible bssl::BCM_fips_186_2_prf(uint8_t *out, size_t out_len,
       CRYPTO_store_u32_be(block + i * 4, tmp);
     }
 
-    // Output w_i.
+    // Output wᵢ.
     if (out_len < SHA_DIGEST_LENGTH) {
       uint8_t buf[SHA_DIGEST_LENGTH];
       sha1_output_state(buf, &ctx);

@@ -159,7 +159,7 @@ void poly1305_first_block(poly1305_state_internal *st, const uint8_t *m) {
   pad0 = ((uint64_t)p->R23.d[3] << 32) | (uint64_t)p->R23.d[1];
   pad1 = ((uint64_t)p->R24.d[3] << 32) | (uint64_t)p->R24.d[1];
 
-  // compute powers r^2,r^4
+  // compute powers r², r⁴
   r20 = r0;
   r21 = r1;
   r22 = r2;
@@ -249,7 +249,7 @@ void poly1305_blocks(poly1305_state_internal *st, const uint8_t *m,
   H4 = st->H[4];
 
   while (bytes >= 64) {
-    // H *= [r^4,r^4]
+    // H *= [r⁴, r⁴]
     p = &st->P[0];
     T0 = _mm_mul_epu32(H0, p->R20.v);
     T1 = _mm_mul_epu32(H0, p->R21.v);
@@ -297,7 +297,7 @@ void poly1305_blocks(poly1305_state_internal *st, const uint8_t *m,
     T5 = _mm_mul_epu32(H4, p->R20.v);
     T4 = _mm_add_epi64(T4, T5);
 
-    // H += [Mx,My]*[r^2,r^2]
+    // H += [Mx,My]⋅[r², r²]
     T5 = _mm_unpacklo_epi64(_mm_loadl_epi64((const xmmi *)(m + 0)),
                             _mm_loadl_epi64((const xmmi *)(m + 16)));
     T6 = _mm_unpacklo_epi64(_mm_loadl_epi64((const xmmi *)(m + 8)),

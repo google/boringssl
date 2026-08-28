@@ -545,7 +545,7 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     goto err;
   }
 
-  // Prepare a^1 in the Montgomery domain.
+  // Prepare a¹ in the Montgomery domain.
   assert(!a->neg);
   declassify_assert(BN_ucmp(a, m) < 0);
   if (!BN_to_montgomery(&am, a, mont, ctx) || !bn_resize_words(&am, top)) {
@@ -672,7 +672,7 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
     // If the window size is greater than 1, then calculate
     // val[i=2..2^winsize-1]. Powers are computed as a*a^(i-1)
-    // (even powers could instead be computed as (a^(i/2))^2
+    // (even powers could instead be computed as (a^(i/2))²
     // to use the slight performance advantage of sqr over mul).
     if (window > 1) {
       if (!BN_mod_mul_montgomery(&tmp, &am, &am, mont, ctx)) {

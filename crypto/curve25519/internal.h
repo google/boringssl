@@ -51,9 +51,9 @@ void x25519_ge_scalarmult_base_adx(uint8_t h[4][32], const uint8_t a[32]);
 #endif
 
 #if defined(OPENSSL_64_BIT)
-// fe means field element. Here the field is \Z/(2^255-19). An element t,
-// entries t[0]...t[4], represents the integer t[0]+2^51 t[1]+2^102 t[2]+2^153
-// t[3]+2^204 t[4].
+// fe means field element. Here the field is ℤ/(2^255-19). An element t,
+// entries t[0]...t[4], represents the integer
+// t[0] + 2^51 t[1] + 2^102 t[2] + 2^153 t[3] + 2^204 t[4].
 // fe limbs are bounded by 1.125*2^51.
 // Multiplication and carrying produce fe from fe_loose.
 typedef struct fe {
@@ -66,9 +66,9 @@ typedef struct fe_loose {
   uint64_t v[5];
 } fe_loose;
 #else
-// fe means field element. Here the field is \Z/(2^255-19). An element t,
-// entries t[0]...t[9], represents the integer t[0]+2^26 t[1]+2^51 t[2]+2^77
-// t[3]+2^102 t[4]+...+2^230 t[9].
+// fe means field element. Here the field is ℤ/(2^255-19).
+// An element t, entries t[0]...t[9], represents the integer
+// t[0] + 2^26 t[1] + 2^51 t[2] + 2^77 t[3] + 2^102 t[4] + ... + 2^230 t[9].
 // fe limbs are bounded by 1.125*2^26,1.125*2^25,1.125*2^26,1.125*2^25,etc.
 // Multiplication and carrying produce fe from fe_loose.
 typedef struct fe {
@@ -85,7 +85,7 @@ typedef struct fe_loose {
 // ge means group element.
 //
 // Here the group is the set of pairs (x,y) of field elements (see fe.h)
-// satisfying -x^2 + y^2 = 1 + d x^2y^2
+// satisfying -x² + y² = 1 + d x²y²
 // where d = -121665/121666.
 //
 // Representations:

@@ -26,7 +26,7 @@
 
 using namespace bssl;
 
-// Compute the base 2^a representation of `message` (algorithm 4, page 16).
+// Compute the base 2ᵃ representation of `message` (algorithm 4, page 16).
 static void fors_base_b(const slh_dsa_config *config, uint32_t *indices,
                         const uint8_t *message) {
   const size_t bits_per_index = config->fors_height;

@@ -98,17 +98,17 @@ static void fiat_p256_inv_square(fiat_p256_felem out,
   // This implements the addition chain described in
   // https://briansmith.org/ecc-inversion-addition-chains-01#p256_field_inversion
   fiat_p256_felem x2, x3, x6, x12, x15, x30, x32;
-  fiat_p256_square(x2, in);   // 2^2 - 2^1
-  fiat_p256_mul(x2, x2, in);  // 2^2 - 2^0
+  fiat_p256_square(x2, in);   // 2² - 2¹
+  fiat_p256_mul(x2, x2, in);  // 2² - 2⁰
 
-  fiat_p256_square(x3, x2);   // 2^3 - 2^1
-  fiat_p256_mul(x3, x3, in);  // 2^3 - 2^0
+  fiat_p256_square(x3, x2);   // 2³ - 2¹
+  fiat_p256_mul(x3, x3, in);  // 2³ - 2⁰
 
   fiat_p256_square(x6, x3);
   for (int i = 1; i < 3; i++) {
     fiat_p256_square(x6, x6);
-  }                           // 2^6 - 2^3
-  fiat_p256_mul(x6, x6, x3);  // 2^6 - 2^0
+  }                           // 2⁶ - 2³
+  fiat_p256_mul(x6, x6, x3);  // 2⁶ - 2⁰
 
   fiat_p256_square(x12, x6);
   for (int i = 1; i < 6; i++) {
@@ -250,7 +250,7 @@ static crypto_word_t fiat_p256_get_bit(const EC_SCALAR *in, int i) {
 // OPENSSL EC_METHOD FUNCTIONS
 
 // Takes the Jacobian coordinates (X, Y, Z) of a point and returns (X', Y') =
-// (X/Z^2, Y/Z^3).
+// (X/Z², Y/Z³).
 static int ec_GFp_nistp256_point_get_affine_coordinates(
     const EC_GROUP *group, const EC_JACOBIAN *point, EC_FELEM *x_out,
     EC_FELEM *y_out) {
@@ -520,8 +520,8 @@ static int ec_GFp_nistp256_cmp_x_coordinate(const EC_GROUP *group,
     return 0;
   }
 
-  // We wish to compare X/Z^2 with r. This is equivalent to comparing X with
-  // r*Z^2. Note that X and Z are represented in Montgomery form, while r is
+  // We wish to compare X/Z² with r. This is equivalent to comparing X with
+  // r⋅Z². Note that X and Z are represented in Montgomery form, while r is
   // not.
   fiat_p256_felem Z2_mont;
   fiat_p256_from_generic(Z2_mont, &p->Z);

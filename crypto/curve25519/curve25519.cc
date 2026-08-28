@@ -415,7 +415,7 @@ static int fe_isnegative(const fe *f) {
 }
 
 static void fe_sq2_tt(fe *h, const fe *f) {
-  // h = f^2
+  // h = f²
   fe_sq_tt(h, f);
 
   // h = h + h
@@ -519,9 +519,9 @@ int bssl::x25519_ge_frombytes_vartime(ge_p3 *h, const uint8_t s[32]) {
   fe_1(&h->Z);
   fe_sq_tt(&w, &h->Y);
   fe_mul_ttt(&vxx, &w, &d);
-  fe_sub(&v, &w, &h->Z);  // u = y^2-1
+  fe_sub(&v, &w, &h->Z);  // u = y² - 1
   fe_carry(&u, &v);
-  fe_add(&v, &vxx, &h->Z);  // v = dy^2+1
+  fe_add(&v, &vxx, &h->Z);  // v = dy² + 1
 
   fe_mul_ttl(&w, &u, &v);        // w = u*v
   fe_pow22523(&h->X, &w);        // x = w^((q-5)/8)

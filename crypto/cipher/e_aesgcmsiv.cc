@@ -607,9 +607,9 @@ void gcm_siv_crypt(Span<const CRYPTO_IOVEC> iovecs,
 // similar to the one that GHASH uses. See
 // https://www.rfc-editor.org/rfc/rfc8452.html#section-3.
 
-// POLYVAL(H, X_1, ..., X_n) =
-// ByteReverse(GHASH(mulX_GHASH(ByteReverse(H)), ByteReverse(X_1), ...,
-// ByteReverse(X_n))).
+// POLYVAL(H, X₁, ..., Xₙ) =
+// ByteReverse(GHASH(mulX_GHASH(ByteReverse(H)), ByteReverse(X₁), ...,
+// ByteReverse(Xₙ))).
 //
 // See https://www.rfc-editor.org/rfc/rfc8452.html#appendix-A.
 

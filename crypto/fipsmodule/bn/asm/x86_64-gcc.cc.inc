@@ -105,13 +105,13 @@ using namespace bssl;
     (carry) = high;                                                        \
   } while (0)
 
-// r0:r1:carry = r0:r1 + a^2 + carry:0
+// r0:r1:carry = r0:r1 + a² + carry:0
 #define sqr_add(r0, r1, a, carry)                               \
   do {                                                          \
     BN_ULONG high, low;                                         \
-    /* lo:hi = a^2 */                                           \
+    /* lo:hi = a² */                                            \
     __asm__("mulq %2" : "=a"(low), "=d"(high) : "a"(a) : "cc"); \
-    /* carry:hi = lo:hi + carry:0 = a^2 + carry */              \
+    /* carry:hi = lo:hi + carry:0 = a² + carry */               \
     __asm__("addq %2,%0; adcq $0,%1"                            \
             : "+r"(carry), "+d"(high)                           \
             : "a"(low)                                          \
@@ -273,7 +273,7 @@ BN_ULONG bssl::bn_sub_words(BN_ULONG *rp, const BN_ULONG *ap,
 
 // mul_add_c(a,b,c0,c1,c2)  -- c+=a*b for three word number c=(c2,c1,c0)
 // mul_add_c2(a,b,c0,c1,c2) -- c+=2*a*b for three word number c=(c2,c1,c0)
-// sqr_add_c(a,i,c0,c1,c2)  -- c+=a[i]^2 for three word number c=(c2,c1,c0)
+// sqr_add_c(a,i,c0,c1,c2)  -- c+=a[i]² for three word number c=(c2,c1,c0)
 // sqr_add_c2(a,i,c0,c1,c2) -- c+=2*a[i]*a[j] for three word number c=(c2,c1,c0)
 
 // Keep in mind that carrying into high part of multiplication result can not

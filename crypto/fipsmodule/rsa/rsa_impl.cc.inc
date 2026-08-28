@@ -502,19 +502,19 @@ static int mod_montgomery(BIGNUM *r, const BIGNUM *I, const BIGNUM *p,
 
   if (  // Reduce mod p with Montgomery reduction. This computes I * R^-1 mod p.
       !BN_from_montgomery(r, I, mont_p, ctx) ||
-      // Multiply by R^2 and do another Montgomery reduction to compute
-      // I * R^-1 * R^2 * R^-1 = I mod p.
+      // Multiply by R² and do another Montgomery reduction to compute
+      // I * R^-1 * R² * R^-1 = I mod p.
       !BN_to_montgomery(r, r, mont_p, ctx)) {
     return 0;
   }
 
-  // By precomputing R^3 mod p (normally `BN_MONT_CTX` only uses R^2 mod p) and
+  // By precomputing R³ mod p (normally `BN_MONT_CTX` only uses R² mod p) and
   // adjusting the API for `BN_mod_exp_mont_consttime`, we could instead compute
   // I * R mod p here and save a reduction per prime. But this would require
   // changing the RSAZ code and may not be worth it. Note that the RSAZ code
   // uses a different radix, so it uses R' = 2^1044. There we'd actually want
-  // R^2 * R', and would further benefit from a precomputed R'^2. It currently
-  // converts `mont_p->RR` to R'^2.
+  // R² * R', and would further benefit from a precomputed R'². It currently
+  // converts `mont_p->RR` to R'².
   return 1;
 }
 
@@ -813,7 +813,7 @@ static int rsa_generate_key_impl(RSAImpl *rsa, int bits, const BIGNUM *e_value,
     // appendix FIPS 186-5 appendix C.3.3.
     //
     // Each call to `generate_prime` fails with probability p = 2^-21. The
-    // probability that either call fails is 1 - (1-p)^2, which is around 2^-20.
+    // probability that either call fails is 1 - (1-p)², which is around 2^-20.
     if (!generate_prime(rsa->p.get(), prime_bits, rsa->e.get(), nullptr,
                         pow2_prime_bits_100, ctx.get(), cb) ||
         !BN_GENCB_call(cb, 3, 0) ||

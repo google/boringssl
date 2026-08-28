@@ -162,7 +162,7 @@ static int ecdsa_sign_impl(const EC_GROUP *group, int *out_retry, uint8_t *sig,
   // Then, as above, only one parameter is in the Montgomery domain, so the
   // result is in the normal domain. Finally, note k is non-zero (or computing r
   // would fail), so the inverse must exist.
-  ec_scalar_inv0_montgomery(group, &tmp, k);     // tmp = k^-1 R^2
+  ec_scalar_inv0_montgomery(group, &tmp, k);     // tmp = k^-1 R²
   ec_scalar_from_montgomery(group, &tmp, &tmp);  // tmp = k^-1 R
   ec_scalar_mul_montgomery(group, &s, &s, &tmp);
   if (constant_time_declassify_int(ec_scalar_is_zero(group, &s))) {
