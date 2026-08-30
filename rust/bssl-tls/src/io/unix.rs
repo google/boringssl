@@ -211,8 +211,7 @@ impl<Io: AsRawFd + Send> DatagramSocket for UseFd<Io> {
             target_os = "freebsd",
             target_os = "netbsd",
             target_os = "openbsd",
-            target_os = "macos",
-            target_os = "ios",
+            target_vendor = "apple",
         ))]
         let flag = 0;
         loop {
