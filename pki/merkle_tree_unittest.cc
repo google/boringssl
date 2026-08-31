@@ -20,6 +20,9 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <openssl/digest.h>
+
+#include "../crypto/test/file_test.h"
 
 BSSL_NAMESPACE_BEGIN
 
@@ -380,6 +383,121 @@ TEST(MerkleTreeTest, VeryLargeProofs) {
         fullest_tree.end, subtree, proof, tree.SubtreeHash(subtree));
     EXPECT_EQ(computed_root_hash, root_hash);
   }
+}
+
+void InclusionProofFileTest(FileTest *t) {
+  uint64_t index, start, end;
+  ASSERT_TRUE(t->GetUint64(&index, "Index"));
+  ASSERT_TRUE(t->GetUint64(&start, "Start"));
+  ASSERT_TRUE(t->GetUint64(&end, "End"));
+  std::vector<uint8_t> entry_hash, subtree_hash, proof;
+  ASSERT_TRUE(t->GetBase64(&entry_hash, "EntryHash"));
+  ASSERT_TRUE(t->GetBase64(&subtree_hash, "SubtreeHash"));
+  ASSERT_TRUE(t->GetBase64(&proof, "Proof"));
+
+  const Subtree subtree{start, end};
+  TreeHashConstSpan entry_hash_span(entry_hash);
+  TreeHashConstSpan subtree_hash_span(subtree_hash);
+
+  auto computed_hash = EvaluateMerkleSubtreeInclusionProof(
+      proof, index, entry_hash_span, subtree);
+  EXPECT_TRUE(computed_hash.has_value());
+  EXPECT_EQ(*computed_hash, subtree_hash_span);
+
+  // Truncated inclusion proofs don't work.
+  const size_t original_proof_size = proof.size();
+  EXPECT_FALSE(EvaluateMerkleSubtreeInclusionProof(
+      Span(proof).subspan(original_proof_size - 1), index, entry_hash_span,
+      subtree));
+  EXPECT_FALSE(EvaluateMerkleSubtreeInclusionProof(
+      Span(proof).subspan(original_proof_size - EVP_MD_size(EVP_sha256())),
+      index, entry_hash_span, subtree));
+
+  // Extended inclusion proofs don't work.
+  proof.resize(original_proof_size + EVP_MD_size(EVP_sha256()));
+  EXPECT_FALSE(EvaluateMerkleSubtreeInclusionProof(
+      Span(proof).subspan(original_proof_size + 1), index, entry_hash_span,
+      subtree));
+  EXPECT_FALSE(EvaluateMerkleSubtreeInclusionProof(proof, index,
+                                                   entry_hash_span, subtree));
+
+  // Bitflipped inclusion proof should produce a wrong subtree hash.
+  proof.resize(original_proof_size);
+  proof[0] ^= 1;
+  computed_hash = EvaluateMerkleSubtreeInclusionProof(proof, index,
+                                                      entry_hash_span, subtree);
+  EXPECT_TRUE(computed_hash.has_value());
+  EXPECT_NE(*computed_hash, subtree_hash_span);
+}
+
+TEST(MerkleTreeTest, LargeInclusionProofs) {
+  FileTestGTest(
+      "crypto/x509/test/mtc/large_merkle_tree_inclusion_proof_tests.txt",
+      InclusionProofFileTest);
+}
+
+void ConsistencyProofFileTest(FileTest *t) {
+  uint64_t start, end, tree_size;
+  ASSERT_TRUE(t->GetUint64(&start, "Start"));
+  ASSERT_TRUE(t->GetUint64(&end, "End"));
+  ASSERT_TRUE(t->GetUint64(&tree_size, "TreeSize"));
+  std::vector<uint8_t> subtree_hash, tree_hash, proof;
+  ASSERT_TRUE(t->GetBase64(&subtree_hash, "SubtreeHash"));
+  ASSERT_TRUE(t->GetBase64(&tree_hash, "TreeHash"));
+  if (!t->HasAttribute("ProofEmpty")) {
+    ASSERT_TRUE(t->GetBase64(&proof, "Proof"));
+  }
+
+  const Subtree subtree{start, end};
+  // TODO(crbug.com/452986180): Temporary workaround to skip a test vector
+  // because empty subtrees are incorrectly considered invalid.
+  if (!subtree.IsValid()) {
+    return;
+  }
+
+  TreeHashConstSpan subtree_hash_span(subtree_hash);
+  TreeHashConstSpan tree_hash_span(tree_hash);
+
+  auto computed_root_hash = EvaluateMerkleSubtreeConsistencyProof(
+      tree_size, subtree, proof, subtree_hash_span);
+  EXPECT_TRUE(computed_root_hash.has_value());
+  EXPECT_EQ(*computed_root_hash, tree_hash_span);
+
+  // Truncated consistency proofs don't work.
+  const size_t original_proof_size = proof.size();
+  if (original_proof_size > 0) {
+    EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(
+        tree_size, subtree, Span(proof).subspan(original_proof_size - 1),
+        subtree_hash_span));
+    EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(
+        tree_size, subtree,
+        Span(proof).subspan(original_proof_size - EVP_MD_size(EVP_sha256())),
+        subtree_hash_span));
+  }
+
+  // Extended consistency proofs don't work.
+  proof.resize(original_proof_size + EVP_MD_size(EVP_sha256()));
+  EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(
+      tree_size, subtree, Span(proof).subspan(original_proof_size + 1),
+      subtree_hash_span));
+  EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(tree_size, subtree, proof,
+                                                     subtree_hash_span));
+
+  // Bitflipped input subtree hash should either fail to evaluate or produce a
+  // wrong tree hash.
+  proof.resize(original_proof_size);
+  subtree_hash[0] ^= 1;
+  computed_root_hash = EvaluateMerkleSubtreeConsistencyProof(
+      tree_size, subtree, proof, subtree_hash_span);
+  if (computed_root_hash) {
+    EXPECT_NE(*computed_root_hash, tree_hash_span);
+  }
+}
+
+TEST(MerkleTreeTest, LargeConsistencyProofs) {
+  FileTestGTest(
+      "crypto/x509/test/mtc/large_merkle_tree_consistency_proof_tests.txt",
+      ConsistencyProofFileTest);
 }
 
 }  // namespace

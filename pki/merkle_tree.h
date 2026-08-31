@@ -73,6 +73,7 @@ struct Subtree {
   // Returns whether [start, end) specifies a valid Subtree.
   constexpr bool IsValid() const {
     // A Subtree must be a valid, non-empty interval.
+    // TODO(crbug.com/452986180): Empty subtrees are now considered valid.
     if (start >= end) {
       return false;
     }

@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <openssl/base64.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
 
@@ -312,6 +313,35 @@ const std::string &FileTest::CurrentTestToString() const {
 bool FileTest::GetBytes(std::vector<uint8_t> *out, std::string_view key) {
   std::string value;
   return GetAttribute(&value, key) && ConvertToBytes(out, value);
+}
+
+bool FileTest::GetUint64(uint64_t *out, std::string_view key) {
+  std::string value;
+  if (!GetAttribute(&value, key)) {
+    return false;
+  }
+
+  char *endptr;
+  *out = strtoull(value.data(), &endptr, 10);
+  return !value.empty() && *endptr == '\0';
+}
+
+bool FileTest::GetBase64(std::vector<uint8_t> *out, std::string_view key) {
+  std::string value;
+  if (!GetAttribute(&value, key)) {
+    return false;
+  }
+  size_t max_decoded_length;
+  EVP_DecodedLength(&max_decoded_length, value.size());
+  out->resize(max_decoded_length);
+  size_t decoded_length;
+  if (!EVP_DecodeBase64(out->data(), &decoded_length, max_decoded_length,
+                        reinterpret_cast<const uint8_t *>(value.data()),
+                        value.size())) {
+    return false;
+  }
+  out->resize(decoded_length);
+  return true;
 }
 
 void FileTest::ClearTest() {

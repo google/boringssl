@@ -49,6 +49,7 @@
 
 #include "../internal.h"
 #include "../test/der_trailing_data.h"
+#include "../test/file_test.h"
 #include "../test/file_util.h"
 #include "../test/test_data.h"
 #include "../test/test_util.h"
@@ -11388,6 +11389,60 @@ TEST_F(X509MerkleTreeTest, EvaluateInclusionProofLarge) {
 TEST_F(X509MerkleTreeTest, EvaluateInclusionProofDifferentHash) {
   InitTestMerkleTree(EVP_sha384(), 256);
   ExhaustivelyEvaluateInclusionProofs();
+}
+
+void InclusionProofFileTest(FileTest *t) {
+  uint64_t index, start, end;
+  ASSERT_TRUE(t->GetUint64(&index, "Index"));
+  ASSERT_TRUE(t->GetUint64(&start, "Start"));
+  ASSERT_TRUE(t->GetUint64(&end, "End"));
+  std::vector<uint8_t> entry_hash, subtree_hash, proof;
+  ASSERT_TRUE(t->GetBase64(&entry_hash, "EntryHash"));
+  ASSERT_TRUE(t->GetBase64(&subtree_hash, "SubtreeHash"));
+  ASSERT_TRUE(t->GetBase64(&proof, "Proof"));
+
+  const EVP_MD *hash = EVP_sha256();
+  std::vector<uint8_t> evaluated_subtree_hash;
+  evaluated_subtree_hash.resize(EVP_MD_size(hash));
+  bool success = x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash, proof, index, entry_hash, start, end);
+  EXPECT_TRUE(success);
+  EXPECT_EQ(Bytes(evaluated_subtree_hash), Bytes(subtree_hash));
+
+  // Truncated inclusion proofs don't work.
+  const size_t original_proof_size = proof.size();
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash,
+      Span(proof).subspan(original_proof_size - 1), index, entry_hash, start,
+      end));
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash,
+      Span(proof).subspan(original_proof_size - EVP_MD_size(hash)), index,
+      entry_hash, start, end));
+
+  // Extended inclusion proofs don't work.
+  proof.resize(original_proof_size + EVP_MD_size(hash));
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash,
+      Span(proof).subspan(original_proof_size + 1), index, entry_hash, start,
+      end));
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash, proof, index, entry_hash, start,
+      end));
+
+  // Bitflipped inclusion proof should produce a wrong subtree hash.
+  proof.resize(original_proof_size);
+  proof[0] ^= 1;
+  success = x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash, proof, index, entry_hash, start, end);
+  EXPECT_TRUE(success);
+  EXPECT_NE(Bytes(evaluated_subtree_hash), Bytes(subtree_hash));
+}
+
+TEST(X509MerkleTreeFileTest, LargeInclusionProofs) {
+  FileTestGTest(
+      "crypto/x509/test/mtc/large_merkle_tree_inclusion_proof_tests.txt",
+      InclusionProofFileTest);
 }
 
 #endif  // !defined (BORINGSSL_SHARED_LIBRARY)

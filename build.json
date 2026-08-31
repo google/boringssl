@@ -955,6 +955,7 @@
             "crypto/x509/test/*.pem",
             "crypto/x509/test/*.pk8",
             "crypto/x509/test/mtc/*.pem",
+            "crypto/x509/test/mtc/*.txt",
             "third_party/wycheproof_testvectors/*.txt"
         ],
         "internal_hdrs": [
@@ -1005,6 +1006,7 @@
             "pki/verify_unittest.cc"
         ],
         "data": [
+            "crypto/x509/test/mtc/*.txt",
             "pki/testdata/cert_issuer_source_static_unittest/*.pem",
             "pki/testdata/certificate_policies_unittest/*.pem",
             "pki/testdata/crl_unittest/*.pem",

@@ -160,6 +160,18 @@ class FileTest {
   // success and returns false with an error to `stderr` on failure.
   bool GetBytes(std::vector<uint8_t> *out, std::string_view key);
 
+  // GetUint64 looks up the attribute with key `key` and decodes it as a
+  // nonnegative decimal integer that fits in `uint64_t`. On success, it writes
+  // the result to `*out` and returns true. Otherwise it returns false with an
+  // error to `stderr`.
+  bool GetUint64(uint64_t *out, std::string_view key);
+
+  // GetBase64 looks up the attribute with key `key` and decodes it from a
+  // Base64 string to a byte string. On success, it writes the result decoded
+  // from Base64 to `*out` and returns true. Otherwise it returns false with an
+  // error to `stderr`.
+  bool GetBase64(std::vector<uint8_t> *out, std::string_view key);
+
   // AtNewInstructionBlock returns true if the current test was immediately
   // preceded by an instruction block.
   bool IsAtNewInstructionBlock() const;
