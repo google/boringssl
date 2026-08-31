@@ -371,11 +371,6 @@ func flagInts[T toIntFlag](flagName string, vals []T) []string {
 	return ret
 }
 
-var (
-	flagCurves    = flagInts[CurveID]
-	flagCertTypes = flagInts[CertificateType]
-)
-
 func base64FlagValue(in []byte) string {
 	return base64.StdEncoding.EncodeToString(in)
 }

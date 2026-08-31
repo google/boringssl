@@ -178,7 +178,7 @@ func addServerCertTypeTests() {
 				expectedLocalError:           "remote error: error decoding message",
 			},
 		} {
-			shimFlags := flagCertTypes("-accepted-peer-cert-types", test.serverCertTypesAccepted)
+			shimFlags := flagInts("-accepted-peer-cert-types", test.serverCertTypesAccepted)
 			if test.expectedError == "" {
 				shimFlags = append(shimFlags, "-expect-peer-certificate-type", strconv.Itoa(int(test.serverCredential.Type.CertificateType())))
 				shimFlags = addRPKCustomVerifyToFlags(test.serverCredential, shimFlags)
@@ -202,7 +202,7 @@ func addServerCertTypeTests() {
 				resumeSession:      test.expectedError == "" && test.expectedLocalError == "",
 			})
 		}
-		shimFlags := flagCertTypes("-accepted-peer-cert-types", certTypesListRPKOnly)
+		shimFlags := flagInts("-accepted-peer-cert-types", certTypesListRPKOnly)
 		// The Certificate message contains an RPK with an empty SPKI. In TLS 1.2
 		// this is considered to indicate the lack of a certificate (so the client
 		// will reject), whereas this is illegal for the TLS 1.3 RPK Certificate
@@ -274,7 +274,7 @@ func addServerCertTypeTests() {
 		}
 		// Test that RPK server cert verification fails if we force it to fail.
 		shimFlags = append([]string{"-verify-fail"},
-			flagCertTypes("-accepted-peer-cert-types", certTypesListRPKOnly)...)
+			flagInts("-accepted-peer-cert-types", certTypesListRPKOnly)...)
 		testCases = append(testCases, testCase{
 			testType: clientTest,
 			name:     fmt.Sprintf("ServerCertificateType-Client-RPKVerifyFail-%s", ver.name),
@@ -742,7 +742,7 @@ func addClientCertTypeTests() {
 				},
 				flags: append(
 					[]string{"-on-initial-expect-selected-credential", strconv.Itoa(test.expectedCredentialIndex)},
-					flagCertTypes("-available-client-cert-types", test.configuredClientCertTypes)...),
+					flagInts("-available-client-cert-types", test.configuredClientCertTypes)...),
 				shimCredentials: test.clientCredentials,
 				expectations: connectionExpectations{
 					peerCertificate: expectedClientCredential,
@@ -901,7 +901,7 @@ func addClientCertTypeTests() {
 				{"VerifyPeer", "-verify-peer"},
 			} {
 				shimFlags :=
-					append(flagCertTypes("-accepted-peer-cert-types", test.clientCertTypesAccepted),
+					append(flagInts("-accepted-peer-cert-types", test.clientCertTypesAccepted),
 						verifyMode.flag)
 				if test.expectedError == "" {
 					shimFlags = append(shimFlags,
@@ -933,7 +933,7 @@ func addClientCertTypeTests() {
 		// configured to require a client cert will reject), whereas this is
 		// illegal for the TLS 1.3 RPK Certificate format.
 		shimFlags := append([]string{"-require-any-client-certificate"},
-			flagCertTypes("-accepted-peer-cert-types", certTypesListRPKOnly)...)
+			flagInts("-accepted-peer-cert-types", certTypesListRPKOnly)...)
 		expectedError := ":INVALID_RAW_PUBLIC_KEY:"
 		if ver.version <= VersionTLS12 {
 			expectedError = ":PEER_DID_NOT_RETURN_A_CERTIFICATE:"
@@ -955,7 +955,7 @@ func addClientCertTypeTests() {
 			expectedError: expectedError,
 		})
 		shimFlags = append([]string{"-verify-peer"},
-			flagCertTypes("-accepted-peer-cert-types", certTypesListRPKOnly)...)
+			flagInts("-accepted-peer-cert-types", certTypesListRPKOnly)...)
 		// If the client sends a Certificate message for an RPK that contains an
 		// empty certificate list, and the server isn't configured to require a
 		// client cert, it should proceed without a client cert.
@@ -999,7 +999,7 @@ func addClientCertTypeTests() {
 		}
 		// Test that RPK client cert verification fails if we force it to fail.
 		shimFlags = append([]string{"-require-any-client-certificate", "-verify-fail"},
-			flagCertTypes("-accepted-peer-cert-types", certTypesListRPKOnly)...)
+			flagInts("-accepted-peer-cert-types", certTypesListRPKOnly)...)
 		testCases = append(testCases, testCase{
 			testType: serverTest,
 			name:     fmt.Sprintf("ClientCertificateType-Server-RPKVerifyFail-%s", ver.name),

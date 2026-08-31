@@ -600,7 +600,7 @@ func addCertificateSelectionTests() {
 			config: Config{
 				ClientAuth: RequestClientCert,
 			},
-			flags:         flagCertTypes("-available-client-cert-types", []CertificateType{certTypeX509, certTypeRawPublicKey}),
+			flags:         flagInts("-available-client-cert-types", []CertificateType{certTypeX509, certTypeRawPublicKey}),
 			match:         &ecdsaP256Certificate,
 			mismatch:      &rpkEcdsaP256,
 			expectedError: ":UNKNOWN_CERTIFICATE_TYPE:",
@@ -617,7 +617,7 @@ func addCertificateSelectionTests() {
 					SendClientCertificateTypes: []CertificateType{certTypeRawPublicKey},
 				},
 			},
-			flags:         flagCertTypes("-available-client-cert-types", []CertificateType{certTypeX509, certTypeRawPublicKey}),
+			flags:         flagInts("-available-client-cert-types", []CertificateType{certTypeX509, certTypeRawPublicKey}),
 			match:         &rpkEcdsaP256,
 			mismatch:      &ecdsaP256Certificate,
 			expectedError: ":UNKNOWN_CERTIFICATE_TYPE:",
