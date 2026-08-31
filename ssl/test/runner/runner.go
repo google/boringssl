@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -45,7 +46,6 @@ import (
 	"time"
 
 	"boringssl.googlesource.com/boringssl.git/util/testresult"
-	"filippo.io/mldsa"
 	"golang.org/x/crypto/cryptobyte"
 	"golang.org/x/term"
 )
@@ -194,7 +194,7 @@ func initKeys() {
 	ed25519Key = k.(ed25519.PrivateKey)
 
 	for _, k := range []struct {
-		params *mldsa.Parameters
+		params mldsa.Parameters
 		key    **mldsa.PrivateKey
 	}{
 		{mldsa.MLDSA44(), &mldsa44Key},

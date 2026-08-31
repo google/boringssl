@@ -22,8 +22,6 @@ cloud.google.com/go/trace v1.16.0 h1:GmQovzFc5F0CNfl0VLgL64aoTtu7xsM0YajW2GlG9+E
 cloud.google.com/go/trace v1.16.0/go.mod h1:r+bdAn16dKLSV1G2D5v3e58IlQlizfxWrUfjx7kM7X0=
 filippo.io/edwards25519 v1.2.0 h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=
 filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q77mc=
-filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e h1:VsUbObBMxXlc23Eb9VeeJYE4jvTs87qa5RqSN2U5FJU=
-filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e/go.mod h1:32qQ5yj3R24Eu03iWFWchdC3OB653wPvoepWejkefbY=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 h1:3SdxXLkgAfiHRWcGTq6fneq9jgoJzneiY0yPQnjoT2E=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0/go.mod h1:1iIdl0k+ppn9wT0wzR9H7HkSvIui/4qgtnKW10cQtds=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.60.0 h1:HldzheTs05E3ybqSitI/wHaof6+XERRudgZLjYbs3eE=

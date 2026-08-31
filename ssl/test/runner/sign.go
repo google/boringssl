@@ -10,6 +10,7 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/md5"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/sha1"
 	_ "crypto/sha256"
@@ -19,8 +20,6 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-
-	"filippo.io/mldsa"
 )
 
 type signer interface {

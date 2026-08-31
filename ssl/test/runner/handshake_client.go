@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/subtle"
 	"crypto/x509"
@@ -23,7 +24,6 @@ import (
 
 	"boringssl.googlesource.com/boringssl.git/ssl/test/runner/hpke"
 	"boringssl.googlesource.com/boringssl.git/ssl/test/runner/spake2plus"
-	"filippo.io/mldsa"
 	"golang.org/x/crypto/cryptobyte"
 )
 
@@ -1932,7 +1932,7 @@ func (hs *clientHandshakeState) verifyCertificates(certMsg *certificateMsg) erro
 	certs := make([]*x509.Certificate, len(certMsg.certificates))
 	if certMsg.certificateType == certTypeX509 {
 		for i, certEntry := range certMsg.certificates {
-			cert, err := ParseX509Certificate(certEntry.data)
+			cert, err := x509.ParseCertificate(certEntry.data)
 			if err != nil {
 				c.sendAlert(alertBadCertificate)
 				return errors.New("tls: failed to parse certificate from server: " + err.Error())

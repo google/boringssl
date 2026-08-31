@@ -38,7 +38,7 @@ vars = {
   # infra/3pp/tools/cmake/linux-amd64
   'cmake_version': 'version:3@3.31.11.chromium.8',
   # infra/3pp/tools/go/linux-amd64
-  'go_version': 'version:3@1.26.5',
+  'go_version': 'version:3@1.27.0',
   # infra/3pp/tools/perl/windows-amd64
   'perl_version': 'version:3@5.42.0.1',
   # infra/3pp/tools/qemu_static/linux-amd64
