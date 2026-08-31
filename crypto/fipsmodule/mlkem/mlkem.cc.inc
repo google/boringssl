@@ -438,7 +438,31 @@ inline void scalar_inner_product(scalar *out, const vector<RANK> *lhs,
 
 inline void scalar_from_keccak_block_vartime(scalar *out, int *done,
                                              const uint8_t block[168]) {
-  for (size_t i = 0; i < 168 && *done < DEGREE; i += 3) {
+  // kStep is the number of loop iterations to do at once. May need to become
+  // platform dependent at some point. Must be a compile-time constant - if we
+  // ever need to runtime dispatch on it, it has to be made a template argument.
+  const size_t kStep = 2;
+
+  // Branchless sampling as long as there is enough space in the output buffer
+  // even if all sampled numbers are < `kPrime`.
+  size_t i = 0;
+  for (; i <= int{168 - 3 * kStep} && *done <= int{DEGREE - 2 * kStep};
+       i += 3 * kStep) {
+    uint16_t d[2 * kStep];
+    for (size_t k = 0; k < kStep; ++k) {
+      size_t di = 2 * k;
+      size_t bi = i + 3 * k;
+      d[di] = block[bi] + 256 * (block[bi + 1] % 16);
+      d[di + 1] = block[bi + 1] / 16 + 16 * block[bi + 2];
+    }
+    for (size_t k = 0; k < 2 * kStep; ++k) {
+      out->c[*done] = d[k];
+      *done += d[k] < kPrime;
+    }
+  }
+
+  // Branchful "tail".
+  for (; i < 168 && *done < DEGREE; i += 3) {
     uint16_t d1 = block[i] + 256 * (block[i + 1] % 16);
     uint16_t d2 = block[i + 1] / 16 + 16 * block[i + 2];
     if (d1 < kPrime) {
