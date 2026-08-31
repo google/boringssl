@@ -91,8 +91,8 @@ void kdf(uint8_t out[MLKEM_SHARED_SECRET_BYTES],
 
 // Constants that are common across all sizes.
 #define DEGREE 256
-const size_t kBarrettMultiplier = 5039;
-const unsigned kBarrettShift = 24;
+const size_t kBarrettMultiplier = 1290167;
+const unsigned kBarrettShift = 32;
 const uint16_t kPrime = 3329;
 const int kLog2Prime = 12;
 const uint16_t kHalfPrime = (/*kPrime=*/3329 - 1) / 2;
@@ -223,15 +223,18 @@ inline uint16_t reduce_once(uint16_t x) {
   return (mask & x) | (~mask & subtracted);
 }
 
-// constant time reduce x mod kPrime using Barrett reduction. x must be less
-// than kPrime + 2×kPrime².
-inline uint16_t reduce(uint32_t x) {
-  declassify_assert(x < kPrime + 2u * kPrime * kPrime);
+// reduce_partial returns a number equivalent to x mod kPrime. The output is
+// less than 2 * kPrime. `x` can be any `uint32_t`.
+inline uint32_t reduce_partial(uint32_t x) {
   uint64_t product = (uint64_t)x * kBarrettMultiplier;
   uint32_t quotient = (uint32_t)(product >> kBarrettShift);
   uint32_t remainder = x - quotient * kPrime;
-  return reduce_once(remainder);
+  return remainder;
 }
+
+// constant time reduce x mod kPrime using Barrett reduction. `x` can be any
+// `uint32_t`.
+inline uint16_t reduce(uint32_t x) { return reduce_once(reduce_partial(x)); }
 
 inline void scalar_zero(scalar *out) { OPENSSL_memset(out, 0, sizeof(*out)); }
 
@@ -248,20 +251,30 @@ inline void vector_zero(vector<RANK> *out) {
 // elements being consecutive entries in `s->c`.
 inline void scalar_ntt(scalar *s) {
   // Manually unrolled loop to maximize vectorization.
-#define ITER(step, offset)                                   \
-  {                                                          \
-    int k = 0;                                               \
-    for (int i = 0; i < step; i++) {                         \
-      const uint32_t step_root = kNTTRoots[i + step];        \
-      for (int j = k; j < k + offset; j++) {                 \
-        uint16_t odd = reduce(step_root * s->c[j + offset]); \
-        uint16_t even = s->c[j];                             \
-        s->c[j] = reduce_once(odd + even);                   \
-        s->c[j + offset] = reduce_once(even - odd + kPrime); \
-      }                                                      \
-      k += 2 * offset;                                       \
-    }                                                        \
+  //
+  // Intermediate values of `s` are not fully reduced. `ITER` writes to every
+  // element of `s` exactly once. Each write adds less than 2*kPrime to some
+  // value from the previous iteration. After seven iterations, each element
+  // will be less than 15*kPrime. This fits in `uint16_t`, so we never overflow.
+#define ITER(step, offset)                                                    \
+  {                                                                           \
+    int k = 0;                                                                \
+    for (int i = 0; i < step; i++) {                                          \
+      const uint32_t step_root = kNTTRoots[step + i];                         \
+      for (int j = k; j < k + offset; j++) {                                  \
+        uint32_t even = s->c[j];                                              \
+        /* `reduce_partial` works on values up to 2^32.                       \
+         * `step_root < kPrime` because it's static data. `s->c[...] < 2^16`  \
+         * because it's 16-bit. */                                            \
+        uint32_t odd =                                                        \
+            reduce_partial(uint32_t{step_root} * uint32_t{s->c[j + offset]}); \
+        s->c[j] = even + odd;                                                 \
+        s->c[j + offset] = even + 2 * kPrime - odd;                           \
+      }                                                                       \
+      k += 2 * offset;                                                        \
+    }                                                                         \
   }
+
   // for (int step = 1; step < DEGREE / 2; step <<= 1)
   ITER(1, 128)
   ITER(2, 64)
@@ -272,6 +285,11 @@ inline void scalar_ntt(scalar *s) {
   ITER(64, 2)
   static_assert(DEGREE == 256);
 #undef ITER
+
+  // Now `s` is correct but the elements are not fully reduced. Reduce them.
+  for (int i = 0; i < DEGREE; i++) {
+    s->c[i] = reduce(s->c[i]);
+  }
 }
 
 template <int RANK>
@@ -286,35 +304,52 @@ inline void vector_ntt(vector<RANK> *a) {
 // number theoretic transform, this leaves off the first step of the normal iFFT
 // to account for the fact that 3329 does not have a 512th root of unity, using
 // the precomputed 128 roots of unity stored in `kInverseNTTRoots`.
+//
+// FIPS 203, Algorithm 10 (`NTT^-1`).
 void scalar_inverse_ntt(scalar *s) {
   // Manually unrolled loop to maximize vectorization.
-#define ITER(step, offset)                                            \
-  {                                                                   \
-    int k = 0;                                                        \
-    for (int i = 0; i < step; i++) {                                  \
-      uint32_t step_root = kInverseNTTRoots[i + step];                \
-      for (int j = k; j < k + offset; j++) {                          \
-        uint16_t odd = s->c[j + offset];                              \
-        uint16_t even = s->c[j];                                      \
-        s->c[j] = reduce_once(odd + even);                            \
-        s->c[j + offset] = reduce(step_root * (even - odd + kPrime)); \
-      }                                                               \
-      k += 2 * offset;                                                \
-    }                                                                 \
+  //
+  // Intermediate values are not fully reduced. `ITER` writes to every element
+  // exactly once. Each write either adds two values from the previous
+  // iteration, or is at most 2 * kPrime. After seven iterations, each element
+  // will be less than 2^7 * kPrime = 128 * kPrime. This fits in `uint32_t`, so
+  // we never overflow.
+  uint32_t c[DEGREE];
+#define ITER(step, offset, src)                                              \
+  {                                                                          \
+    int k = 0;                                                               \
+    for (int i = 0; i < step; i++) {                                         \
+      const uint32_t step_root = kInverseNTTRoots[step + i];                 \
+      for (int j = k; j < k + offset; j++) {                                 \
+        uint32_t even = (src)[j];                                            \
+        uint32_t odd = (src)[j + offset];                                    \
+        c[j] = odd + even;                                                   \
+        /* `reduce_partial` works on values up to 2^32.                      \
+         * `step_root < kPrime` because it's static data. The other term is  \
+         * less than 2^32, and does not overflow because `odd` is at most    \
+         * 128 * kPrime per the above. */                                    \
+        c[j + offset] = reduce_partial(uint32_t{step_root} *                 \
+                                       uint32_t{128 * kPrime + even - odd}); \
+      }                                                                      \
+      k += 2 * offset;                                                       \
+    }                                                                        \
   }
+
   // for (int offset = 2; offset < DEGREE; offset <<= 1)
-  ITER(64, 2)
-  ITER(32, 4)
-  ITER(16, 8)
-  ITER(8, 16)
-  ITER(4, 32)
-  ITER(2, 64)
-  ITER(1, 128)
+  ITER(64, 2, s->c)
+  ITER(32, 4, c)
+  ITER(16, 8, c)
+  ITER(8, 16, c)
+  ITER(4, 32, c)
+  ITER(2, 64, c)
+  ITER(1, 128, c)
   static_assert(DEGREE == 256);
 #undef ITER
 
+  // The final multiplication by `kInverseDegree` also fully reduces the
+  // partially-reduced values above.
   for (int i = 0; i < DEGREE; i++) {
-    s->c[i] = reduce(s->c[i] * kInverseDegree);
+    s->c[i] = reduce(c[i] * kInverseDegree);
   }
 }
 
