@@ -1243,6 +1243,29 @@ inline void scalar_from_keccak_vartime_x2(scalar *out[2],
 }
 #endif
 
+#if defined(HAVE_KECCAK_X4)
+inline void scalar_from_keccak_vartime_x4(scalar *out[4],
+                                          BORINGSSL_keccak_st keccak_ctx[]) {
+  for (int i = 0; i < 4; i++) {
+    assert(keccak_ctx[i].squeeze_offset == 0);
+    assert(keccak_ctx[i].rate_bytes == 168);
+  }
+  static_assert(168 % 3 == 0, "block and coefficient boundaries do not align");
+
+  int done[4] = {0, 0, 0, 0};
+  while (done[0] < kDegree || done[1] < kDegree || done[2] < kDegree ||
+         done[3] < kDegree) {
+    uint8_t block[4][168];
+    uint8_t *blocks[] = {block[0], block[1], block[2], block[3]};
+    BORINGSSL_keccak_squeeze_x4(keccak_ctx, blocks, sizeof(block[0]));
+    scalar_from_keccak_block_vartime(out[0], &done[0], block[0]);
+    scalar_from_keccak_block_vartime(out[1], &done[1], block[1]);
+    scalar_from_keccak_block_vartime(out[2], &done[2], block[2]);
+    scalar_from_keccak_block_vartime(out[3], &done[3], block[3]);
+  }
+}
+#endif
+
 template <int ETA>
 inline bool coefficient_from_nibble(uint32_t nibble, uint32_t *result);
 
@@ -1321,6 +1344,29 @@ inline void scalar_uniform_x2(scalar *out[2],
     BORINGSSL_keccak_squeeze_x2(keccak_ctx, blocks, sizeof(block[0]));
     scalar_uniform_block<ETA>(out[0], &done[0], block[0]);
     scalar_uniform_block<ETA>(out[1], &done[1], block[1]);
+  }
+}
+#endif
+
+#if defined(HAVE_KECCAK_X4)
+template <int ETA>
+inline void scalar_uniform_x4(scalar *out[4],
+                              BORINGSSL_keccak_st keccak_ctx[]) {
+  for (int i = 0; i < 4; i++) {
+    assert(keccak_ctx[i].squeeze_offset == 0);
+    assert(keccak_ctx[i].rate_bytes == 136);
+  }
+
+  int done[4] = {0, 0, 0, 0};
+  while (done[0] < kDegree || done[1] < kDegree || done[2] < kDegree ||
+         done[3] < kDegree) {
+    uint8_t block[4][136];
+    uint8_t *blocks[] = {block[0], block[1], block[2], block[3]};
+    BORINGSSL_keccak_squeeze_x4(keccak_ctx, blocks, sizeof(block[0]));
+    scalar_uniform_block<ETA>(out[0], &done[0], block[0]);
+    scalar_uniform_block<ETA>(out[1], &done[1], block[1]);
+    scalar_uniform_block<ETA>(out[2], &done[2], block[2]);
+    scalar_uniform_block<ETA>(out[3], &done[3], block[3]);
   }
 }
 #endif
@@ -1421,12 +1467,41 @@ inline void matrix_expand_step_x2(matrix<K, L> *out,
 }
 #endif
 
+#if defined(HAVE_KECCAK_X4)
+template <int K, int L>
+inline void matrix_expand_step_x4(matrix<K, L> *out,
+                                  const uint8_t rho[kRhoBytes], int index) {
+  BORINGSSL_keccak_st keccak_ctx[4];
+  for (int k = 0; k < 4; k++) {
+    BORINGSSL_keccak_init(&keccak_ctx[k], boringssl_shake128);
+    BORINGSSL_keccak_absorb(&keccak_ctx[k], rho, kRhoBytes);
+    uint8_t index_buf[2];
+    index_buf[0] = static_cast<uint8_t>((index + k) % L);
+    index_buf[1] = static_cast<uint8_t>((index + k) / L);
+    BORINGSSL_keccak_absorb(&keccak_ctx[k], index_buf, 2);
+  }
+
+  scalar *outs[] = {&out->v[index / L][index % L],
+                    &out->v[(index + 1) / L][(index + 1) % L],
+                    &out->v[(index + 2) / L][(index + 2) % L],
+                    &out->v[(index + 3) / L][(index + 3) % L]};
+  scalar_from_keccak_vartime_x4(outs, keccak_ctx);
+}
+#endif
+
 template <int K, int L>
 inline void matrix_expand(matrix<K, L> *out, const uint8_t rho[kRhoBytes]) {
   static_assert(K <= 0x100, "K must fit in 8 bits");
   static_assert(L <= 0x100, "L must fit in 8 bits");
 
   int index = 0;
+#if defined(HAVE_KECCAK_X4)
+  if (BORINGSSL_have_keccak_x4()) {
+    for (; index + 4 <= K * L; index += 4) {
+      matrix_expand_step_x4<K, L>(out, rho, index);
+    }
+  }
+#endif
 #if defined(HAVE_KECCAK_X2)
   for (; index + 2 <= K * L; index += 2) {
     matrix_expand_step_x2(out, rho, index);
@@ -1475,6 +1550,27 @@ inline void vector_expand_short_step_x2(scalar *out0, scalar *out1,
 }
 #endif
 
+#if defined(HAVE_KECCAK_X4)
+template <int K>
+inline void vector_expand_short_step_x4(scalar *out0, scalar *out1,
+                                        scalar *out2, scalar *out3,
+                                        const uint8_t sigma[kSigmaBytes],
+                                        int index) {
+  BORINGSSL_keccak_st keccak_ctx[4];
+  for (int k = 0; k < 4; k++) {
+    BORINGSSL_keccak_init(&keccak_ctx[k], boringssl_shake256);
+    BORINGSSL_keccak_absorb(&keccak_ctx[k], sigma, kSigmaBytes);
+    uint8_t index_buf[2];
+    index_buf[0] = static_cast<uint8_t>(index + k);
+    index_buf[1] = 0;
+    BORINGSSL_keccak_absorb(&keccak_ctx[k], index_buf, 2);
+  }
+
+  scalar *outs[] = {out0, out1, out2, out3};
+  scalar_uniform_x4<eta<K>()>(outs, keccak_ctx);
+}
+#endif
+
 // FIPS 204, Algorithm 33 (`ExpandS`).
 template <int K, int L>
 inline void vector_expand_short(vector<L> *s1, vector<K> *s2,
@@ -1492,6 +1588,15 @@ inline void vector_expand_short(vector<L> *s1, vector<K> *s2,
   }
 
   int index = 0;
+#if defined(HAVE_KECCAK_X4)
+  if (BORINGSSL_have_keccak_x4()) {
+    for (; index + 4 <= K + L; index += 4) {
+      vector_expand_short_step_x4<K>(all_scalars[index], all_scalars[index + 1],
+                                     all_scalars[index + 2],
+                                     all_scalars[index + 3], sigma, index);
+    }
+  }
+#endif
 #if defined(HAVE_KECCAK_X2)
   for (; index + 2 <= K + L; index += 2) {
     vector_expand_short_step_x2<K>(all_scalars[index], all_scalars[index + 1],
