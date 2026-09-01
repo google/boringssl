@@ -55,8 +55,10 @@ size_t EVP_KEM_ciphertext_len(const EVP_KEM *kem) {
   return kem->ciphertext_len;
 }
 
-size_t EVP_KEM_secret_len(const EVP_KEM *kem) {
-  return kem->secret_len;
+size_t EVP_KEM_secret_len(const EVP_KEM *kem) { return kem->secret_len; }
+
+size_t EVP_KEM_entropy_len_for_testing(const EVP_KEM *kem) {
+  return kem->entropy_len;
 }
 
 int EVP_KEM_encap(const EVP_KEM *kem, uint8_t *out_ciphertext,
@@ -66,8 +68,25 @@ int EVP_KEM_encap(const EVP_KEM *kem, uint8_t *out_ciphertext,
   if (!check_kem_invocation(kem, &ciphertext_len, secret_len, pkey_impl)) {
     return 0;
   }
-  return kem->encap(out_ciphertext, ciphertext_len, out_secret, secret_len,
-                    pkey_impl);
+  return kem->encap(Span(out_ciphertext, ciphertext_len),
+                    Span(out_secret, secret_len), pkey_impl);
+}
+
+int EVP_KEM_encap_external_entropy_for_testing(
+    const EVP_KEM *kem, uint8_t *out_ciphertext, size_t ciphertext_len,
+    uint8_t *out_secret, size_t secret_len, const EVP_PKEY *peer_key,
+    const uint8_t *entropy, size_t entropy_len) {
+  auto *pkey_impl = FromOpaque(peer_key);
+  if (!check_kem_invocation(kem, &ciphertext_len, secret_len, pkey_impl)) {
+    return 0;
+  }
+  if (entropy_len != kem->entropy_len) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_ENTROPY_LENGTH);
+    return 0;
+  }
+  return kem->encap_external_entropy(Span(out_ciphertext, ciphertext_len),
+                                     Span(out_secret, secret_len), pkey_impl,
+                                     Span(entropy, entropy_len));
 }
 
 int EVP_KEM_decap(const EVP_KEM *kem, uint8_t *out_secret, size_t secret_len,
@@ -77,6 +96,6 @@ int EVP_KEM_decap(const EVP_KEM *kem, uint8_t *out_secret, size_t secret_len,
   if (!check_kem_invocation(kem, nullptr, secret_len, pkey_impl)) {
     return 0;
   }
-  return kem->decap(out_secret, secret_len, ciphertext, ciphertext_len,
-                    pkey_impl);
+  return kem->decap(Span(out_secret, secret_len),
+                    Span(ciphertext, ciphertext_len), pkey_impl);
 }

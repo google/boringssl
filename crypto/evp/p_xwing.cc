@@ -39,6 +39,9 @@ struct XWING_KEY {
 extern const EVP_PKEY_ASN1_METHOD xwing_asn1_meth;
 extern const EVP_PKEY_CTX_METHOD xwing_pkey_meth;
 
+// This is the length of `eseed` in draft-connolly-cfrg-xwing-kem-06.
+constexpr size_t kXwingEncapEntropyBytes = 64;
+
 static void xwing_free(EvpPkey *pkey) {
   Delete(reinterpret_cast<XWING_KEY *>(pkey->pkey));
 }
@@ -161,49 +164,73 @@ static int pkey_xwing_keygen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
   return 1;
 }
 
-static int xwing_kem_encap(uint8_t *out_ciphertext, size_t ciphertext_len,
-                           uint8_t *out_secret, size_t secret_len,
-                           const EVP_PKEY *peer_key) {
-  if (ciphertext_len != XWING_CIPHERTEXT_BYTES) {
+static int xwing_kem_encap(Span<uint8_t> out_ciphertext,
+                           Span<uint8_t> out_secret, const EVP_PKEY *peer_key) {
+  if (out_ciphertext.size() != XWING_CIPHERTEXT_BYTES) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
     return 0;
   }
-  if (secret_len != XWING_SHARED_SECRET_BYTES) {
+  if (out_secret.size() != XWING_SHARED_SECRET_BYTES) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
     return 0;
   }
   const XWING_KEY *peer_pubkey =
       reinterpret_cast<XWING_KEY *>(FromOpaque(peer_key)->pkey);
-  return XWING_encap(out_ciphertext, out_secret, peer_pubkey->pub);
+  return XWING_encap(out_ciphertext.data(), out_secret.data(),
+                     peer_pubkey->pub);
 }
 
-static int xwing_kem_decap(uint8_t *out_secret, size_t secret_len,
-                           const uint8_t *ciphertext, size_t ciphertext_len,
+static int xwing_kem_encap_external_entropy(Span<uint8_t> out_ciphertext,
+                                            Span<uint8_t> out_secret,
+                                            const EVP_PKEY *peer_key,
+                                            Span<const uint8_t> entropy) {
+  if (out_ciphertext.size() != XWING_CIPHERTEXT_BYTES) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
+    return 0;
+  }
+  if (out_secret.size() != XWING_SHARED_SECRET_BYTES) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
+    return 0;
+  }
+  if (entropy.size() != kXwingEncapEntropyBytes) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_ENTROPY_LENGTH);
+    return 0;
+  }
+  const XWING_KEY *peer_pubkey =
+      reinterpret_cast<XWING_KEY *>(FromOpaque(peer_key)->pkey);
+  return XWING_encap_external_entropy(out_ciphertext.data(), out_secret.data(),
+                                      peer_pubkey->pub, entropy.data());
+}
+
+static int xwing_kem_decap(Span<uint8_t> out_secret,
+                           Span<const uint8_t> ciphertext,
                            const EVP_PKEY *key) {
   const XWING_KEY *priv = reinterpret_cast<XWING_KEY *>(FromOpaque(key)->pkey);
   if (priv == nullptr || !priv->has_private) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
     return 0;
   }
-  if (secret_len != XWING_SHARED_SECRET_BYTES) {
+  if (out_secret.size() != XWING_SHARED_SECRET_BYTES) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
     return 0;
   }
   // XWING_decap does not accept wrong ciphertext lengths, so we must check for
   // the proper length here. For consistency, we don't add an error to the error
   // queue when a KEM decap fails due to incorrect ciphertext length.
-  if (ciphertext_len != XWING_CIPHERTEXT_BYTES) {
+  if (ciphertext.size() != XWING_CIPHERTEXT_BYTES) {
     return 0;
   }
-  return XWING_decap(out_secret, ciphertext, &priv->priv);
+  return XWING_decap(out_secret.data(), ciphertext.data(), &priv->priv);
 }
 
 static const EVP_KEM xwing_evp_kem = {
-    EVP_PKEY_XWING,             //
-    XWING_CIPHERTEXT_BYTES,     //
-    XWING_SHARED_SECRET_BYTES,  //
-    &xwing_kem_encap,           //
-    &xwing_kem_decap,           //
+    EVP_PKEY_XWING,                     //
+    XWING_CIPHERTEXT_BYTES,             //
+    XWING_SHARED_SECRET_BYTES,          //
+    kXwingEncapEntropyBytes,            //
+    &xwing_kem_encap,                   //
+    &xwing_kem_encap_external_entropy,  //
+    &xwing_kem_decap,                   //
 };
 
 const EVP_PKEY_CTX_METHOD xwing_pkey_meth = {

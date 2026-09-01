@@ -42,10 +42,13 @@
 #include <openssl/xwing.h>
 
 #include "../bytestring/internal.h"
+#include "../fipsmodule/bcm_interface.h"
 #include "../test/der_trailing_data.h"
 #include "../test/file_test.h"
 #include "../test/test_util.h"
 #include "../test/wycheproof_util.h"
+#include "internal.h"
+
 
 BSSL_NAMESPACE_BEGIN
 namespace {
@@ -847,8 +850,10 @@ bool TestDerive(FileTest *t, const KeyMap *key_map, EVP_PKEY *key,
 // that the output of encapsulation is successfully decapsulated to the same
 // shared secret value. If only performing decapsulation, this reads ciphertext
 // input from the test vectors file and checks the decapsulation result against
-// known output. If only performing encapsulation, this only checks that the
-// operation succeeds.
+// known output. If performing encapsulation without external entropy, this only
+// checks that the operation succeeds. If an "Entropy" attribute is present on a
+// test vector that performs encapsulation, it is carried out both with and
+// without passing external entropy.
 bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
              bool decapsulate) {
   std::string alg_name;
@@ -887,6 +892,11 @@ bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
   std::vector<uint8_t> ciphertext, secret, decapsulated_secret;
   size_t ciphertext_size, secret_size;
 
+  // Fields populated for test vectors providing entropy for deterministic
+  // encapsulate.
+  bool has_encap_entropy = false;
+  std::vector<uint8_t> entropy, expected_ciphertext, expected_secret;
+
   const auto resize_output_buffers =
       [&](std::optional<size_t> new_ciphertext_len,
           std::optional<size_t> new_secret_len,
@@ -904,23 +914,32 @@ bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
         }
       };
 
-  const auto reset_test_state = [&]() {
+  const auto reset_test_state = [&]() -> bool {
     ctx.reset(EVP_PKEY_CTX_new(pkey, nullptr));
     resize_output_buffers(0, 0);
 
     // Read values from the test vector file.
     if (decapsulate && !encapsulate) {
-      if (!t->GetBytes(&ciphertext, "Input")) {
-        ADD_FAILURE() << "Input not found.";
-      }
-      if (!t->HasAttribute("DecapsulateFail") &&
-          !t->GetBytes(&secret, "Output")) {
-        ADD_FAILURE() << "Output not found.";
+      if (!t->GetBytes(&ciphertext, "Input") ||
+          (!t->HasAttribute("DecapsulateFail") &&
+           !t->GetBytes(&secret, "Output"))) {
+        return false;
       }
     }
+    if (encapsulate && t->HasAttribute("Entropy")) {
+      has_encap_entropy = true;
+      if (!t->GetBytes(&entropy, "Entropy") ||
+          !t->GetBytes(&expected_ciphertext, "Ciphertext") ||
+          !t->GetBytes(&expected_secret, "Secret")) {
+        return false;
+      }
+    }
+    return true;
   };
 
-  reset_test_state();
+  if (!reset_test_state()) {
+    return false;
+  }
 
   // Perform encapsulation.
   if (encapsulate) {
@@ -1005,52 +1024,50 @@ bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
   }
 
   // Repeat everything the EVP_KEM way, which is simpler.
-  reset_test_state();
+  if (!reset_test_state()) {
+    return false;
+  }
 
   EXPECT_EQ(EVP_KEM_ciphertext_len(alg_info.kem), expected_ciphertext_len);
   EXPECT_EQ(EVP_KEM_secret_len(alg_info.kem), expected_secret_len);
 
-  if (encapsulate) {
+  const auto test_kem_encap = [&](const auto invoke_encap,
+                                  bool check_encap_output) {
     ciphertext.resize(ciphertext_size);
 
     // Passing the wrong sizes fails (even if larger than required).
     resize_output_buffers(expected_ciphertext_len - 1, expected_secret_len);
-    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
-                            secret.data(), secret.size(), pkey),
-              0);
+    EXPECT_EQ(invoke_encap(), 0);
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_EVP,
                             EVP_R_INVALID_CIPHERTEXT_LENGTH));
     ERR_clear_error();
     resize_output_buffers(expected_ciphertext_len + 1, expected_secret_len);
-    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
-                            secret.data(), secret.size(), pkey),
-              0);
+    EXPECT_EQ(invoke_encap(), 0);
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_EVP,
                             EVP_R_INVALID_CIPHERTEXT_LENGTH));
     ERR_clear_error();
     resize_output_buffers(expected_ciphertext_len, expected_secret_len - 1);
-    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
-                            secret.data(), secret.size(), pkey),
-              0);
+    EXPECT_EQ(invoke_encap(), 0);
     EXPECT_TRUE(
         ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_SECRET_LENGTH));
     ERR_clear_error();
     resize_output_buffers(expected_ciphertext_len, expected_secret_len + 1);
-    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
-                            secret.data(), secret.size(), pkey),
-              0);
+    EXPECT_EQ(invoke_encap(), 0);
     EXPECT_TRUE(
         ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_SECRET_LENGTH));
     ERR_clear_error();
 
     // Only the correct sizes are accepted.
     resize_output_buffers(expected_ciphertext_len, expected_secret_len);
-    EXPECT_EQ(EVP_KEM_encap(alg_info.kem, ciphertext.data(), ciphertext.size(),
-                            secret.data(), secret.size(), pkey),
-              1);
-  }
+    EXPECT_EQ(invoke_encap(), 1);
 
-  if (decapsulate) {
+    if (check_encap_output) {
+      EXPECT_EQ(Bytes(ciphertext), Bytes(expected_ciphertext));
+      EXPECT_EQ(Bytes(secret), Bytes(expected_secret));
+    }
+  };
+
+  const auto test_kem_decap = [&]() {
     // Passing the wrong sizes fails (even if larger than required).
     resize_output_buffers(std::nullopt, expected_secret_len - 1, true);
     EXPECT_EQ(EVP_KEM_decap(alg_info.kem, decapsulated_secret.data(),
@@ -1073,6 +1090,55 @@ bool TestKem(FileTest *t, EVP_PKEY *pkey, bool copy_ctx, bool encapsulate,
     check_decapsulate_result(EVP_KEM_decap(
         alg_info.kem, decapsulated_secret.data(), decapsulated_secret.size(),
         ciphertext.data(), ciphertext.size(), pkey));
+  };
+
+  if (encapsulate) {
+    test_kem_encap(
+        [&]() {
+          return EVP_KEM_encap(alg_info.kem, ciphertext.data(),
+                               ciphertext.size(), secret.data(), secret.size(),
+                               pkey);
+        },
+        /*check_encap_output=*/false);
+  }
+  if (decapsulate) {
+    test_kem_decap();
+  }
+
+  // Repeat the test using the provided external entropy.
+  if (has_encap_entropy) {
+    if (!reset_test_state()) {
+      return false;
+    }
+    resize_output_buffers(expected_ciphertext_len, expected_secret_len);
+
+    // Test that the entropy must be the right length.
+    const size_t original_entropy_len = entropy.size();
+    EXPECT_FALSE(EVP_KEM_encap_external_entropy_for_testing(
+        alg_info.kem, ciphertext.data(), ciphertext.size(), secret.data(),
+        secret.size(), pkey, entropy.data(), entropy.size() - 1));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_EVP,
+                            EVP_R_INVALID_ENTROPY_LENGTH));
+    ERR_clear_error();
+    entropy.resize(original_entropy_len + 1);
+    EXPECT_FALSE(EVP_KEM_encap_external_entropy_for_testing(
+        alg_info.kem, ciphertext.data(), ciphertext.size(), secret.data(),
+        secret.size(), pkey, entropy.data(), entropy.size()));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_EVP,
+                            EVP_R_INVALID_ENTROPY_LENGTH));
+    ERR_clear_error();
+    entropy.resize(original_entropy_len);
+
+    test_kem_encap(
+        [&]() {
+          return EVP_KEM_encap_external_entropy_for_testing(
+              alg_info.kem, ciphertext.data(), ciphertext.size(), secret.data(),
+              secret.size(), pkey, entropy.data(), entropy.size());
+        },
+        /*check_encap_output=*/true);
+    if (decapsulate) {
+      test_kem_decap();
+    }
   }
 
   return true;

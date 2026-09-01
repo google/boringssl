@@ -314,13 +314,17 @@ struct evp_kem_st {
   // Constant lengths of ciphertexts and secrets produced/consumed by this KEM.
   size_t ciphertext_len;
   size_t secret_len;
+  // Fixed length of external entropy for testing.
+  size_t entropy_len;
 
-  int (*encap)(uint8_t *out_ciphertext, size_t ciphertext_len,
-               uint8_t *out_secret, size_t secret_len,
-               const EVP_PKEY *peer_key);
-  int (*decap)(uint8_t *out_secret, size_t secret_len,
-               const uint8_t *ciphertext, size_t ciphertext_len,
-               const EVP_PKEY *key);
+  int (*encap)(bssl::Span<uint8_t> out_ciphertext,
+               bssl::Span<uint8_t> out_secret, const EVP_PKEY *peer_key);
+  int (*encap_external_entropy)(bssl::Span<uint8_t> out_ciphertext,
+                                bssl::Span<uint8_t> out_secret,
+                                const EVP_PKEY *peer_key,
+                                bssl::Span<const uint8_t> entropy);
+  int (*decap)(bssl::Span<uint8_t> out_secret,
+               bssl::Span<const uint8_t> ciphertext, const EVP_PKEY *key);
 } /* EVP_KEM */;
 
 BSSL_NAMESPACE_BEGIN
@@ -349,8 +353,8 @@ struct KemAdapter {
       OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    if (KEM.encap(out_ciphertext, KEM.ciphertext_len, out_secret,
-                  KEM.secret_len, ctx->pkey.get())) {
+    if (KEM.encap(Span(out_ciphertext, KEM.ciphertext_len),
+                  Span(out_secret, KEM.secret_len), ctx->pkey.get())) {
       *out_ciphertext_len = KEM.ciphertext_len;
       *out_secret_len = KEM.secret_len;
       return 1;
@@ -369,8 +373,8 @@ struct KemAdapter {
       OPENSSL_PUT_ERROR(EVP, EVP_R_BUFFER_TOO_SMALL);
       return 0;
     }
-    if (KEM.decap(out_secret, KEM.secret_len, ciphertext, ciphertext_len,
-                  ctx->pkey.get())) {
+    if (KEM.decap(Span(out_secret, KEM.secret_len),
+                  Span(ciphertext, ciphertext_len), ctx->pkey.get())) {
       *out_secret_len = KEM.secret_len;
       return 1;
     }

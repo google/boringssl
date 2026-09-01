@@ -56,6 +56,8 @@ constexpr uint8_t kMLKEM1024OID[] = {OBJ_ENC_ML_KEM_1024};
     static constexpr auto PublicOfPrivate = &BCM_mlkem##x##_public_of_private; \
     static constexpr auto PublicKeysEqual = &BCM_mlkem##x##_public_keys_equal; \
     static constexpr auto Encap = &MLKEM##x##_encap;                           \
+    static constexpr auto EncapExternalEntropy =                               \
+        &BCM_mlkem##x##_encap_external_entropy;                                \
     static constexpr auto Decap = &MLKEM##x##_decap;                           \
     static constexpr auto MarshalPublicKey = &MLKEM##x##_marshal_public_key;   \
     static constexpr auto ParsePublicKey = &MLKEM##x##_parse_public_key;       \
@@ -354,42 +356,65 @@ struct MLKEMImplementation {
     return 1;
   }
 
-  static int KemEncap(uint8_t *out_ciphertext, size_t ciphertext_len,
-                      uint8_t *out_secret, size_t secret_len,
+  static int KemEncap(Span<uint8_t> out_ciphertext, Span<uint8_t> out_secret,
                       const EVP_PKEY *peer_key) {
     const auto *peer_pubkey = GetKeyData(FromOpaque(peer_key))->GetPublicKey();
-    if (ciphertext_len != Traits::kCiphertextBytes) {
+    if (out_ciphertext.size() != Traits::kCiphertextBytes) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
       return 0;
     }
-    if (secret_len != MLKEM_SHARED_SECRET_BYTES) {
+    if (out_secret.size() != MLKEM_SHARED_SECRET_BYTES) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
       return 0;
     }
-    Traits::Encap(out_ciphertext, out_secret, peer_pubkey);
+    Traits::Encap(out_ciphertext.data(), out_secret.data(), peer_pubkey);
     return 1;
   }
 
-  static int KemDecap(uint8_t *out_secret, size_t secret_len,
-                      const uint8_t *ciphertext, size_t ciphertext_len,
+  static int KemEncapExternalEntropy(Span<uint8_t> out_ciphertext,
+                                     Span<uint8_t> out_secret,
+                                     const EVP_PKEY *peer_key,
+                                     Span<const uint8_t> entropy) {
+    const auto *peer_pubkey = GetKeyData(FromOpaque(peer_key))->GetPublicKey();
+    if (out_ciphertext.size() != Traits::kCiphertextBytes) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
+      return 0;
+    }
+    if (out_secret.size() != MLKEM_SHARED_SECRET_BYTES) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
+      return 0;
+    }
+    if (entropy.size() != BCM_MLKEM_ENCAP_ENTROPY) {
+      OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_ENTROPY_LENGTH);
+      return 0;
+    }
+    Traits::EncapExternalEntropy(out_ciphertext.data(), out_secret.data(),
+                                 peer_pubkey, entropy.data());
+    return 1;
+  }
+
+  static int KemDecap(Span<uint8_t> out_secret, Span<const uint8_t> ciphertext,
                       const EVP_PKEY *key) {
     const auto *priv = GetKeyData(FromOpaque(key))->AsPrivateKeyData();
     if (priv == nullptr) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
       return 0;
     }
-    if (secret_len != MLKEM_SHARED_SECRET_BYTES) {
+    if (out_secret.size() != MLKEM_SHARED_SECRET_BYTES) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
       return 0;
     }
-    return Traits::Decap(out_secret, ciphertext, ciphertext_len, &priv->priv);
+    return Traits::Decap(out_secret.data(), ciphertext.data(),
+                         ciphertext.size(), &priv->priv);
   }
 
   static constexpr EVP_KEM evp_kem = {
       /*pkey_id=*/Traits::kType,
       /*ciphertext_len=*/Traits::kCiphertextBytes,
       /*secret_len=*/MLKEM_SHARED_SECRET_BYTES,
+      /*entropy_len=*/BCM_MLKEM_ENCAP_ENTROPY,
       &KemEncap,
+      &KemEncapExternalEntropy,
       &KemDecap,
   };
 
