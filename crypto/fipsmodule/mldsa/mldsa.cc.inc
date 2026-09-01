@@ -1195,7 +1195,30 @@ inline int scalar_decode_signed<20, (1u << 19)>(scalar *out,
 // is used for matrix expansion and only operates on public inputs.
 inline void scalar_from_keccak_block_vartime(scalar *out, int *done,
                                              const uint8_t block[168]) {
-  for (size_t i = 0; i < 168 && *done < kDegree; i += 3) {
+  // kStep is the number of loop iterations to do at once. May need to become
+  // platform dependent at some point. Must be a compile-time constant - if we
+  // ever need to runtime dispatch on it, it has to be made a template argument.
+  const size_t kStep = 2;
+
+  // Branchless sampling as long as there is enough space in the output buffer
+  // even if all sampled numbers are < `kPrime`.
+  size_t i = 0;
+  for (; i <= int{168 - 3 * kStep} && *done <= int{kDegree - kStep};
+       i += 3 * kStep) {
+    uint32_t d[kStep];
+    for (size_t k = 0; k < kStep; ++k) {
+      size_t bi = i + 3 * k;
+      d[k] = (uint32_t)block[bi] | ((uint32_t)block[bi + 1] << 8) |
+             (((uint32_t)block[bi + 2] & 0x7f) << 16);
+    }
+    for (size_t k = 0; k < kStep; ++k) {
+      out->c[*done] = d[k];
+      *done += d[k] < kPrime;
+    }
+  }
+
+  // Branchful "tail".
+  for (; i < 168 && *done < kDegree; i += 3) {
     // FIPS 204, Algorithm 14 (`CoeffFromThreeBytes`).
     uint32_t value = (uint32_t)block[i] | ((uint32_t)block[i + 1] << 8) |
                      (((uint32_t)block[i + 2] & 0x7f) << 16);
