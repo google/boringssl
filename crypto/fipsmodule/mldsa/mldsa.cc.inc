@@ -1271,26 +1271,20 @@ inline bool coefficient_from_nibble(uint32_t nibble, uint32_t *result);
 
 template <>
 inline bool coefficient_from_nibble<4>(uint32_t nibble, uint32_t *result) {
-  if (constant_time_declassify_int(nibble < 9)) {
-    // Knowing bounds on `nibble` seems to tempt some versions of Clang to emit
-    // a branch, if we don't have a barrier in `mod_sub`.
-    *result = mod_sub(4, value_barrier_u32(nibble));
-    return true;
-  }
-  return false;
+  // Knowing bounds on `nibble` seems to tempt some versions of Clang to emit
+  // a branch, if we don't have a barrier in `mod_sub`.
+  *result = mod_sub(4, value_barrier_u32(nibble));
+  return constant_time_declassify_int(nibble < 9);
 }
 
 template <>
 inline bool coefficient_from_nibble<2>(uint32_t nibble, uint32_t *result) {
-  if (constant_time_declassify_int(nibble < 15)) {
-    // Knowing bounds on `nibble` seems to tempt some versions of Clang to emit
-    // a branch, if we don't have a barrier in `mod_sub`.
-    // Constant time "nibble % 5".
-    nibble = nibble - 5 * ((205 * nibble) >> 10);
-    *result = mod_sub(2, value_barrier_u32(nibble));
-    return true;
-  }
-  return false;
+  // Knowing bounds on `nibble` seems to tempt some versions of Clang to emit
+  // a branch, if we don't have a barrier in `mod_sub`.
+  // Constant time "nibble % 5".
+  uint32_t rem = nibble - 5 * ((205 * nibble) >> 10);
+  *result = mod_sub(2, value_barrier_u32(rem));
+  return constant_time_declassify_int(nibble < 15);
 }
 
 template <int ETA>
@@ -1304,12 +1298,9 @@ inline void scalar_uniform_block(scalar *out, int *done,
     // Individual bytes of the SHAKE-256 stream are (indistinguishable from)
     // independent of each other and the original seed, so leaking information
     // about the rejected bytes does not reveal the input or output.
-    uint32_t v;
-    if (coefficient_from_nibble<ETA>(t0, &v)) {
-      out->c[(*done)++] = v;
-    }
-    if (*done < kDegree && coefficient_from_nibble<ETA>(t1, &v)) {
-      out->c[(*done)++] = v;
+    *done += coefficient_from_nibble<ETA>(t0, &out->c[*done]);
+    if (*done < kDegree) {
+      *done += coefficient_from_nibble<ETA>(t1, &out->c[*done]);
     }
   }
 }
