@@ -69,7 +69,9 @@ OPENSSL_EXPORT int BIO_up_ref(BIO *bio);
 // Basic I/O.
 
 // BIO_read attempts to read `len` bytes into `data`. It returns the number of
-// bytes read, zero on EOF, or a negative number on error.
+// bytes read, zero on EOF, or a negative number on error. Callers that support
+// non-blocking I/O should call `BIO_should_read` on error to check if the error
+// is fatal or retryable.
 OPENSSL_EXPORT int BIO_read(BIO *bio, void *data, int len);
 
 // BIO_gets reads a line from `bio` and writes at most `size` bytes into `buf`.
@@ -84,12 +86,16 @@ OPENSSL_EXPORT int BIO_gets(BIO *bio, char *buf, int size);
 
 // BIO_write_ex writes `len` bytes from `data` to `bio`. On success, it returns
 // one and sets `*out_written` to the number of bytes written. Otherwise, it
-// returns zero. `out_written` may be NULL to ignore the value.
+// returns zero. `out_written` may be NULL to ignore the value. Callers that
+// support non-blocking I/O should call `BIO_should_write` on error to check if
+// the error is fatal or retryable.
 OPENSSL_EXPORT int BIO_write_ex(BIO *bio, const void *data, size_t len,
                                 size_t *out_written);
 
 // BIO_write writes `len` bytes from `data` to `bio`. It returns the number of
-// bytes written or a negative number on error.
+// bytes written or a negative number on error. Callers that support
+// non-blocking I/O should call `BIO_should_write` on error to check if the
+// error is fatal or retryable.
 OPENSSL_EXPORT int BIO_write(BIO *bio, const void *data, int len);
 
 // BIO_write_all writes `len` bytes from `data` to `bio`, looping as necessary.
@@ -100,8 +106,9 @@ OPENSSL_EXPORT int BIO_write_all(BIO *bio, const void *data, size_t len);
 // number of bytes written or a negative number on error.
 OPENSSL_EXPORT int BIO_puts(BIO *bio, const char *buf);
 
-// BIO_flush flushes any buffered output. It returns one on success and zero
-// otherwise.
+// BIO_flush flushes any buffered output. It returns one on success and <= 0 on
+// error. Callers that support non-blocking I/O should call `BIO_should_write`
+// on error to check if the error is fatal or retryable.
 OPENSSL_EXPORT int BIO_flush(BIO *bio);
 
 
