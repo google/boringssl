@@ -47,6 +47,13 @@ size_t TrailingOnes(uint64_t n) {
 
 }  // namespace
 
+// This value is equal to SHA256("").
+const TreeHash MerkleTree::kEmptySubtreeHash = {
+    0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4,
+    0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b,
+    0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55,
+};
+
 // Computes HASH(0x01 || left || right) and saves the result to `out`.
 void HashNode(TreeHashConstSpan left, TreeHashConstSpan right,
               TreeHashSpan out) {
@@ -68,11 +75,34 @@ void HashLeaf(Span<const uint8_t> entry, TreeHashSpan out) {
   SHA256_Final(out.data(), &ctx);
 }
 
+namespace {
+
+// Performs the procedure defined in section 4.4.3 of
+// draft-davidben-tls-merkle-tree-certs-08, Verifying a Subtree Consistency
+// Proof:
+//
+//   Given a Merkle Tree over `n` elements, a subtree defined by `[start, end)`,
+//   a consistency proof `proof`, a subtree hash `node_hash`, and a root hash
+//   `root_hash`
+//
+// The one difference between this function and the routine described in
+// draft-davidben-tls-merkle-tree-certs-08 is that instead of taking `root_hash`
+// as an input, this function returns the computed root hash and it is the
+// caller's responsibility to verify that the computed root hash matches the
+// expected root hash. This function returns std::nullopt if other steps of
+// proof verification failed.
+//
+// This function does not accept empty subtrees, which are otherwise valid. For
+// an empty subtree, the procedure to compute a root hash isn't coherent. If the
+// subtree is empty, a consistency proof can only be verified, not evaluated.
 std::optional<TreeHash> EvaluateMerkleSubtreeConsistencyProof(
     uint64_t n, const Subtree &subtree, Span<const uint8_t> proof,
     TreeHashConstSpan node_hash) {
   // For more detail on how subtree consistency proofs work, see appendix B
   // of draft-davidben-tls-merkle-tree-certs-08.
+
+  // This function does not accept empty subtrees, which are otherwise valid.
+  assert(subtree.start < subtree.end);
 
   // Check that inputs are valid. (Step 1)
   if (!subtree.IsValid() || n < subtree.end) {
@@ -223,10 +253,29 @@ std::optional<TreeHash> EvaluateMerkleSubtreeConsistencyProof(
   return computed_root_hash;
 }
 
+}  // namespace
+
+OPENSSL_EXPORT bool VerifyMerkleSubtreeConsistencyProof(
+    uint64_t n, const Subtree &subtree, Span<const uint8_t> proof,
+    TreeHashConstSpan node_hash, TreeHashConstSpan root_hash) {
+  // Special case for empty subtrees.
+  if (subtree.start == subtree.end) {
+    return proof.empty() && node_hash == MerkleTree::kEmptySubtreeHash;
+  }
+
+  // Computation for non-empty subtrees.
+  std::optional<TreeHash> computed_root_hash =
+      EvaluateMerkleSubtreeConsistencyProof(n, subtree, proof, node_hash);
+  return computed_root_hash.has_value() && *computed_root_hash == root_hash;
+}
+
 std::optional<TreeHash> EvaluateMerkleSubtreeInclusionProof(
     Span<const uint8_t> inclusion_proof, uint64_t index,
     TreeHashConstSpan entry_hash, const Subtree &subtree) {
-  if (!subtree.IsValid() || !subtree.Contains(index)) {
+  if (!subtree.IsValid() || !subtree.Contains(index) ||
+      // Empty subtrees, which are otherwise valid, must fail inclusion proof
+      // evaluation.
+      subtree.start == subtree.end) {
     return std::nullopt;
   }
   // Re-root `index` inside of `subtree`.
@@ -238,6 +287,10 @@ std::optional<TreeHash> EvaluateMerkleSubtreeInclusionProof(
 TreeHash MerkleTree::SubtreeHash(const Subtree &subtree) const {
   BSSL_CHECK(subtree.IsValid());
   BSSL_CHECK(subtree.end <= Size());
+
+  if (subtree.Size() == 0) {
+    return kEmptySubtreeHash;
+  }
 
   // Start at the largest complete subtree on the right edge.
   uint64_t start = subtree.start, last = subtree.end - 1;

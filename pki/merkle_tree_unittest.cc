@@ -92,8 +92,8 @@ std::vector<uint8_t> ConcatProof(const std::vector<TreeHash> &proof) {
 }
 
 TEST(MerkleTreeTest, SubtreeIsValid) {
-  // An empty subtree is invalid.
-  EXPECT_FALSE((Subtree{0, 0}.IsValid()));
+  // An empty subtree is valid.
+  EXPECT_TRUE((Subtree{0, 0}.IsValid()));
   // But if the end is before start, it's invalid.
   EXPECT_FALSE((Subtree{1, 0}.IsValid()));
   // A subtree of the maximum expressible size is valid.
@@ -137,12 +137,11 @@ TEST(MerkleTreeTest, VerifySubtreeInclusionProof) {
   auto node_hash = tree.SubtreeHash({index, index + 1});
   Subtree subtree{0, 16};
   auto proof = tree.SubtreeInclusionProof(index, subtree);
-  auto root_hash = EvaluateMerkleSubtreeConsistencyProof(
-      subtree.end, {index, index + 1}, proof, node_hash);
-  ASSERT_TRUE(root_hash.has_value());
-  EXPECT_EQ(root_hash, tree.SubtreeHash(subtree));
+  EXPECT_TRUE(VerifyMerkleSubtreeConsistencyProof(
+      subtree.end, {index, index + 1}, proof, node_hash,
+      tree.SubtreeHash(subtree)));
   // Check again with EvaluateMerkleSubtreeInclusionProof
-  root_hash =
+  auto root_hash =
       EvaluateMerkleSubtreeInclusionProof(proof, index, node_hash, subtree);
   ASSERT_TRUE(root_hash.has_value());
   EXPECT_EQ(root_hash, tree.SubtreeHash(subtree));
@@ -152,11 +151,9 @@ TEST(MerkleTreeTest, VerifySubtreeInclusionProof) {
   node_hash = tree.SubtreeHash({index, index + 1});
   subtree = {840, 847};
   proof = tree.SubtreeInclusionProof(index, subtree);
-  root_hash = EvaluateMerkleSubtreeConsistencyProof(
+  EXPECT_TRUE(VerifyMerkleSubtreeConsistencyProof(
       subtree.Size(), {index - subtree.start, index - subtree.start + 1}, proof,
-      node_hash);
-  ASSERT_TRUE(root_hash.has_value());
-  EXPECT_EQ(root_hash, tree.SubtreeHash(subtree));
+      node_hash, tree.SubtreeHash(subtree)));
   // Check again with EvaluateMerkleSubtreeInclusionProof
   root_hash =
       EvaluateMerkleSubtreeInclusionProof(proof, index, node_hash, subtree);
@@ -265,9 +262,8 @@ TEST(MerkleTreeTest, ValidProofsTest) {
   auto subtree_hash = tree.SubtreeHash(subtree);
 
   auto proof = SubtreeConsistencyProof(tree, subtree, full_tree);
-  auto computed_hash =
-      EvaluateMerkleSubtreeConsistencyProof(n, subtree, proof, subtree_hash);
-  EXPECT_EQ(computed_hash, tree_hash);
+  EXPECT_TRUE(VerifyMerkleSubtreeConsistencyProof(n, subtree, proof,
+                                                  subtree_hash, tree_hash));
 }
 
 TEST(MerkleTreeTest, ValidProofs) {
@@ -290,7 +286,7 @@ TEST(MerkleTreeTest, ValidProofs) {
     }
 
     // Exhaustively test subtree consistency proofs.
-    for (uint64_t n = 1; n < limit; n++) {
+    for (uint64_t n = 0; n < limit; n++) {
       Subtree full_tree{0, n};
       auto tree_hash = tree.SubtreeHash(full_tree);
       for (uint64_t end = 0; end <= n; end++) {
@@ -303,9 +299,8 @@ TEST(MerkleTreeTest, ValidProofs) {
                                           << start << ", end: " << end);
           auto subtree_hash = tree.SubtreeHash(subtree);
           auto proof = SubtreeConsistencyProof(tree, subtree, full_tree);
-          auto computed_hash = EvaluateMerkleSubtreeConsistencyProof(
-              n, subtree, proof, subtree_hash);
-          EXPECT_EQ(computed_hash, tree_hash);
+          EXPECT_TRUE(VerifyMerkleSubtreeConsistencyProof(
+              n, subtree, proof, subtree_hash, tree_hash));
         }
       }
     }
@@ -379,9 +374,9 @@ TEST(MerkleTreeTest, VeryLargeProofs) {
                                     << ", end: " << subtree.end);
 
     auto proof = SubtreeConsistencyProof(tree, subtree, fullest_tree);
-    auto computed_root_hash = EvaluateMerkleSubtreeConsistencyProof(
-        fullest_tree.end, subtree, proof, tree.SubtreeHash(subtree));
-    EXPECT_EQ(computed_root_hash, root_hash);
+    EXPECT_TRUE(VerifyMerkleSubtreeConsistencyProof(
+        fullest_tree.end, subtree, proof, tree.SubtreeHash(subtree),
+        root_hash));
   }
 }
 
@@ -449,49 +444,37 @@ void ConsistencyProofFileTest(FileTest *t) {
   }
 
   const Subtree subtree{start, end};
-  // TODO(crbug.com/452986180): Temporary workaround to skip a test vector
-  // because empty subtrees are incorrectly considered invalid.
-  if (!subtree.IsValid()) {
-    return;
-  }
-
   TreeHashConstSpan subtree_hash_span(subtree_hash);
   TreeHashConstSpan tree_hash_span(tree_hash);
 
-  auto computed_root_hash = EvaluateMerkleSubtreeConsistencyProof(
-      tree_size, subtree, proof, subtree_hash_span);
-  EXPECT_TRUE(computed_root_hash.has_value());
-  EXPECT_EQ(*computed_root_hash, tree_hash_span);
+  EXPECT_TRUE(VerifyMerkleSubtreeConsistencyProof(
+      tree_size, subtree, proof, subtree_hash_span, tree_hash_span));
 
   // Truncated consistency proofs don't work.
   const size_t original_proof_size = proof.size();
   if (original_proof_size > 0) {
-    EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(
+    EXPECT_FALSE(VerifyMerkleSubtreeConsistencyProof(
         tree_size, subtree, Span(proof).subspan(original_proof_size - 1),
-        subtree_hash_span));
-    EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(
+        subtree_hash_span, tree_hash_span));
+    EXPECT_FALSE(VerifyMerkleSubtreeConsistencyProof(
         tree_size, subtree,
         Span(proof).subspan(original_proof_size - EVP_MD_size(EVP_sha256())),
-        subtree_hash_span));
+        subtree_hash_span, tree_hash_span));
   }
 
   // Extended consistency proofs don't work.
   proof.resize(original_proof_size + EVP_MD_size(EVP_sha256()));
-  EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(
+  EXPECT_FALSE(VerifyMerkleSubtreeConsistencyProof(
       tree_size, subtree, Span(proof).subspan(original_proof_size + 1),
-      subtree_hash_span));
-  EXPECT_FALSE(EvaluateMerkleSubtreeConsistencyProof(tree_size, subtree, proof,
-                                                     subtree_hash_span));
+      subtree_hash_span, tree_hash_span));
+  EXPECT_FALSE(VerifyMerkleSubtreeConsistencyProof(
+      tree_size, subtree, proof, subtree_hash_span, tree_hash_span));
 
-  // Bitflipped input subtree hash should either fail to evaluate or produce a
-  // wrong tree hash.
+  // Bitflipped input subtree hash should either fail verification.
   proof.resize(original_proof_size);
   subtree_hash[0] ^= 1;
-  computed_root_hash = EvaluateMerkleSubtreeConsistencyProof(
-      tree_size, subtree, proof, subtree_hash_span);
-  if (computed_root_hash) {
-    EXPECT_NE(*computed_root_hash, tree_hash_span);
-  }
+  EXPECT_FALSE(VerifyMerkleSubtreeConsistencyProof(
+      tree_size, subtree, proof, subtree_hash_span, tree_hash_span));
 }
 
 TEST(MerkleTreeTest, LargeConsistencyProofs) {

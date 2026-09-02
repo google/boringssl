@@ -72,9 +72,7 @@ struct Subtree {
 
   // Returns whether [start, end) specifies a valid Subtree.
   constexpr bool IsValid() const {
-    // A Subtree must be a valid, non-empty interval.
-    // TODO(crbug.com/452986180): Empty subtrees are now considered valid.
-    if (start >= end) {
+    if (start > end) {
       return false;
     }
     uint64_t n = Size();
@@ -137,22 +135,17 @@ using TreeHashSpan = Span<uint8_t, SHA256_DIGEST_LENGTH>;
 using TreeHashConstSpan = Span<const uint8_t, SHA256_DIGEST_LENGTH>;
 
 // Performs the procedure defined in section 4.4.3 of
-// draft-davidben-tls-merkle-tree-certs-08, Verifying a Subtree Consistency
+// draft-ietf-plants-merkle-tree-certs, Verifying a Subtree Consistency
 // Proof:
 //
 //   Given a Merkle Tree over `n` elements, a subtree defined by `[start, end)`,
 //   a consistency proof `proof`, a subtree hash `node_hash`, and a root hash
 //   `root_hash`
 //
-// The one difference between this function and the routine described in
-// draft-davidben-tls-merkle-tree-certs-08 is that instead of taking `root_hash`
-// as an input, this function returns the computed root hash and it is the
-// caller's responsibility to verify that the computed root hash matches the
-// expected root hash. This function returns std::nullopt if other steps of
-// proof verification failed.
-OPENSSL_EXPORT std::optional<TreeHash> EvaluateMerkleSubtreeConsistencyProof(
+// Returns whether the consistency proof was accepted.
+OPENSSL_EXPORT bool VerifyMerkleSubtreeConsistencyProof(
     uint64_t n, const Subtree &subtree, Span<const uint8_t> proof,
-    TreeHashConstSpan node_hash);
+    TreeHashConstSpan node_hash, TreeHashConstSpan root_hash);
 
 // Performs the procedure defined in section 4.3.2 of
 // draft-davidben-tls-merkle-tree-certs-08, Evaluating a Subtree Inclusion
@@ -183,6 +176,9 @@ OPENSSL_EXPORT void HashNode(TreeHashConstSpan left, TreeHashConstSpan right,
 // full subtrees, but partial subtrees are computed dynamically.
 class OPENSSL_EXPORT MerkleTree {
  public:
+  // The subtree hash for any empty subtree.
+  static const TreeHash kEmptySubtreeHash;
+
   virtual ~MerkleTree() = default;
 
   // Returns the number of leaves in the Merkle Tree.
