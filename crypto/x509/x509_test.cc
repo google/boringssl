@@ -17,8 +17,6 @@
 #include <algorithm>
 #include <functional>
 #include <initializer_list>
-#include <iomanip>
-#include <ios>
 #include <iterator>
 #include <memory>
 #include <sstream>
@@ -10860,6 +10858,7 @@ class X509MerkleTreeTest : public ::testing::Test {
 
     // Generate test entries compatible with the "accumulated" tests described
     // in appendix C of draft-ietf-plants-merkle-tree-certs.
+    entries_.reserve(limit);
     for (uint64_t index = entries_.size(); index < limit; ++index) {
       Entry entry;
       uint64_t num = index;
@@ -11120,16 +11119,6 @@ class X509MerkleTreeTest : public ::testing::Test {
   std::vector<Level> levels_;
 };
 
-// Helper to format bytes as hex.
-std::string ToHexStr(const std::vector<uint8_t> &bytes) {
-  std::stringstream hex;
-  hex << std::hex << std::setfill('0');
-  for (uint8_t b : bytes) {
-    hex << std::setw(2) << static_cast<int>(b);
-  }
-  return hex.str();
-}
-
 // This executes the "accumulated" Subtree Hashes test from appendix C.1 of
 // draft-ietf-plants-merkle-tree-certs. (This is more a test of the
 // X509MerkleTreeTest harness, to ensure that it is able to correctly test
@@ -11147,7 +11136,7 @@ TEST_F(X509MerkleTreeTest, AccumulatedSubtreeHashes) {
       }
       std::stringstream ss;
       ss << "[" << std::to_string(start) << ", " << std::to_string(end) << ") "
-         << ToHexStr(GetSubtreeHash(start, end)) << "\n";
+         << EncodeHex(GetSubtreeHash(start, end)) << "\n";
       std::string str = ss.str();
       EVP_DigestUpdate(ctx.get(), str.data(), str.size());
     }
@@ -11186,7 +11175,7 @@ TEST_F(X509MerkleTreeTest, AccumulatedSubtreeInclusionProofs) {
            << std::to_string(end) << ")";
         for (const Hash &hash :
              GenerateSubtreeInclusionProof(index, start, end)) {
-          ss << " " << ToHexStr(hash);
+          ss << " " << EncodeHex(hash);
         }
         ss << "\n";
         std::string str = ss.str();
