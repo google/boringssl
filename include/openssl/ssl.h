@@ -205,9 +205,23 @@ OPENSSL_EXPORT int SSL_set_wfd(SSL *ssl, int fd);
 #endif  // !OPENSSL_NO_SOCK
 
 // SSL_do_handshake continues the current handshake. If there is none or the
-// handshake has completed or False Started, it returns one. Otherwise, it
-// returns <= 0. The caller should pass the value into `SSL_get_error` to
-// determine how to proceed.
+// handshake has completed, it returns one. Otherwise, it returns zero if the
+// handshake was interrupted by EOF and -1 on error. If the return value was not
+// one, the caller should pass the value into `SSL_get_error` to determine how
+// to proceed.
+//
+// Both a TLS-level EOF (the close_notify alert) and a transport-level EOF
+// result in a zero return. `SSL_get_error` can be used to distinguish the two.
+//
+// TODO(crbug.com/42290000): Replace the two EOF cases with -1 and some error in
+// the error queue. Unlike in `SSL_read`, these are both error conditions
+// because we were expecting a handshake.
+//
+// When some features are enabled (TLS 1.2 False Start and TLS 1.3 Early Data),
+// application data may be sent or received before the handshake is fully
+// complete. In those modes, `SSL_do_handshake` will return one early to signal
+// that `ssl` is usable. These features are opt-in. See the corresponding
+// features for details on how they impact API behavior.
 //
 // In DTLS, the caller must drive retransmissions and timeouts. After calling
 // this function, the caller must use `DTLSv1_get_timeout` to determine the
@@ -222,9 +236,6 @@ OPENSSL_EXPORT int SSL_set_wfd(SSL *ssl, int fd);
 // post-handshake messages. To handle these, the caller must always be prepared
 // to receive packets and process them with `SSL_read`, even when the
 // application protocol would otherwise not read from the connection.
-//
-// TODO(davidben): Ensure 0 is only returned on transport EOF.
-// https://crbug.com/466303.
 OPENSSL_EXPORT int SSL_do_handshake(SSL *ssl);
 
 // SSL_connect configures `ssl` as a client, if unconfigured, and calls
@@ -237,20 +248,29 @@ OPENSSL_EXPORT int SSL_accept(SSL *ssl);
 
 // SSL_read reads up to `num` bytes from `ssl` into `buf`. It implicitly runs
 // any pending handshakes, including renegotiations when enabled. On success, it
-// returns the number of bytes read. Otherwise, it returns <= 0. The caller
-// should pass the value into `SSL_get_error` to determine how to proceed.
+// returns the number of bytes read. Otherwise, it returns zero on EOF and -1 on
+// error. In the latter two cases, the caller should pass the value into
+// `SSL_get_error` to determine how to proceed.
+//
+// Both a TLS-level EOF (the close_notify alert) and a transport-level EOF
+// result in a zero return. `SSL_get_error` can be used to distinguish the two.
+// Transport-level EOFs are unauthenticated and may be injected by a network
+// attacker. However, some ecosystems, such as HTTPS, do not reliably send
+// close_notify in practice.
+//
+// WARNING: If `num` is zero, the success and EOF cases are ambiguous. Callers
+// attempting to seek to the next record, without consuming data, should instead
+// call `SSL_peek` with a one-byte buffer.
 //
 // In DTLS 1.3, the caller must also drive timeouts from retransmitting the
 // final flight of the handshake, as well as post-handshake messages. After
 // calling this function, the caller must use `DTLSv1_get_timeout` to determine
 // the current timeout, if any. If it expires before the application next calls
 // into `ssl`, call `DTLSv1_handle_timeout`.
-//
-// TODO(davidben): Ensure 0 is only returned on transport EOF.
-// https://crbug.com/466303.
 OPENSSL_EXPORT int SSL_read(SSL *ssl, void *buf, int num);
 
-// SSL_peek behaves like `SSL_read` but does not consume any bytes returned.
+// SSL_peek behaves like `SSL_read` but does not consume any bytes returned. A
+// subsequent call to `SSL_read` or `SSL_peek` will return the same data.
 OPENSSL_EXPORT int SSL_peek(SSL *ssl, void *buf, int num);
 
 // SSL_pending returns the number of buffered, decrypted bytes available for
@@ -280,8 +300,15 @@ OPENSSL_EXPORT int SSL_has_pending(const SSL *ssl);
 
 // SSL_write writes up to `num` bytes from `buf` into `ssl`. It implicitly runs
 // any pending handshakes, including renegotiations when enabled. On success, it
-// returns the number of bytes written. Otherwise, it returns <= 0. The caller
-// should pass the value into `SSL_get_error` to determine how to proceed.
+// returns the number of bytes written. Otherwise, it returns -1. In the latter
+// case, the caller should pass the value into `SSL_get_error` to determine how
+// to proceed.
+//
+// A zero return is only possible if `num` is zero. If `num` is zero, this
+// function will flush any pending control messages, such as NewSessionTicket or
+// KeyUpdate, otherwise do nothing, and return zero on success. If `num` is
+// greater than zero, it will either successfully write a greater than zero
+// number of bytes, or -1 to indicate failure.
 //
 // In TLS, a non-blocking `SSL_write` differs from non-blocking `write` in that
 // a failed `SSL_write` still commits to the data passed in. When retrying, the
@@ -301,9 +328,6 @@ OPENSSL_EXPORT int SSL_has_pending(const SSL *ssl);
 // different buffer freely. A single call to `SSL_write` only ever writes a
 // single record in a single packet, so `num` must be at most
 // `SSL3_RT_MAX_PLAIN_LENGTH`.
-//
-// TODO(davidben): Ensure 0 is only returned on transport EOF.
-// https://crbug.com/466303.
 OPENSSL_EXPORT int SSL_write(SSL *ssl, const void *buf, int num);
 
 // SSL_KEY_UPDATE_REQUESTED indicates that the peer should reply to a KeyUpdate
