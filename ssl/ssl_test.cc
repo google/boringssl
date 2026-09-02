@@ -6613,6 +6613,22 @@ TEST_P(SSLVersionTest, SSLPending) {
   EXPECT_EQ(1, SSL_has_pending(client_.get()));
 }
 
+// Test that `SSL_write(0)` does not write a zero-length record.
+TEST_P(SSLVersionTest, WriteZeroLength) {
+  // Disable session tickets. In TLS 1.3, the NewSessionTicket is deferred to
+  // the first write and flushed on an `SSL_write` call. This confuses the test.
+  SSL_CTX_set_options(client_ctx_.get(), SSL_OP_NO_TICKET);
+  SSL_CTX_set_options(server_ctx_.get(), SSL_OP_NO_TICKET);
+
+  ASSERT_TRUE(Connect());
+  uint64_t old_bytes_written = BIO_number_written(SSL_get_wbio(client_.get()));
+  ASSERT_EQ(0, SSL_write(client_.get(), nullptr, 0));
+  uint64_t new_bytes_written = BIO_number_written(SSL_get_wbio(client_.get()));
+
+  // No new bytes should be written. We shouldn't write a zero-length record.
+  EXPECT_EQ(old_bytes_written, new_bytes_written);
+}
+
 // Test that post-handshake tickets consumed by `SSL_shutdown` are ignored.
 TEST(SSLTest, ShutdownIgnoresTickets) {
   bssl::UniquePtr<SSL_CTX> ctx(CreateContextWithTestCertificate(TLS_method()));
