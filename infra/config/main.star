@@ -856,12 +856,11 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
-cq_builders(
+both_builders(
     "linux_lto",
     LINUX_HOST,
-    cq_enabled = False,
-    #category = "linux|x86-64|gcc",
-    #short_name = "lto",
+    category = "linux|x86-64|gcc",
+    short_name = "lto",
     properties = {
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
