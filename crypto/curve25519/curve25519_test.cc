@@ -15,13 +15,10 @@
 #include <limits.h>
 #include <stdint.h>
 
-#include <gtest/gtest.h>
+#include <algorithm>
+#include <vector>
 
-#include <openssl/bn.h>
-#include <openssl/curve25519.h>
-#include <openssl/digest.h>
-#include <openssl/mem.h>
-#include <openssl/rand.h>
+#include <gtest/gtest.h>
 
 #include "../test/test_util.h"
 #include "internal.h"

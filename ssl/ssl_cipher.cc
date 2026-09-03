@@ -23,6 +23,7 @@
 #include <optional>
 
 #include <openssl/aead.h>
+#include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/md5.h>
 #include <openssl/mem.h>

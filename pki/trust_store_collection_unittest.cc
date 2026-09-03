@@ -23,6 +23,7 @@
 #include <openssl/pool.h>
 
 #include "test_helpers.h"
+#include "trust_store.h"
 #include "trust_store_in_memory.h"
 
 BSSL_NAMESPACE_BEGIN

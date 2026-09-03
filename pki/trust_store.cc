@@ -14,20 +14,24 @@
 
 #include "trust_store.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include <openssl/base.h>
 #include <openssl/bytestring.h>
 #include <openssl/mem.h>
 #include <openssl/pool.h>
+#include <openssl/span.h>
 
 #include "merkle_tree.h"
 #include "parse_certificate.h"
 #include "parsed_certificate.h"
+#include "signature_algorithm.h"
 #include "string_util.h"
 
 BSSL_NAMESPACE_BEGIN
