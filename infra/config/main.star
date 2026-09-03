@@ -856,6 +856,20 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
+cq_builders(
+    "linux_lto",
+    LINUX_HOST,
+    cq_enabled = False,
+    #category = "linux|x86-64|gcc|lto",
+    #short_name = "lto",
+    properties = {
+        "cmake_args": {
+            "CMAKE_BUILD_TYPE": "Release",
+            "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+        },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
+    },
+)
 both_builders(
     "linux_prefixed_compile",
     LINUX_HOST,
@@ -993,6 +1007,21 @@ both_builders(
         "clang": True,
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
+        },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
+    },
+)
+cq_builders(
+    "linux_clang_lto",
+    LINUX_HOST,
+    cq_enabled = False,
+    #category = "linux|x86-64|clang|lto",
+    #short_name = "lto",
+    properties = {
+        "clang": True,
+        "cmake_args": {
+            "CMAKE_BUILD_TYPE": "Release",
+            "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
         },
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
