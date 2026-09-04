@@ -218,6 +218,18 @@ hooks = [
     ],
   },
   {
+    'name': 'clang_provide_ranlib',
+    'pattern': '.',
+    'condition': 'host_os == "linux"',
+    # Provide the `llvm-ranlib` binary.
+    # It is missing in Chromium's LLVM build, but in upstream LLVM it's just a
+    # symlink to `llvm-ar` anyway, which then decides to behave like `ar s`.
+    'action': [ 'ln', '-snf',
+                'llvm-ar',
+                'boringssl/util/bot/llvm-build/bin/llvm-ranlib'
+    ],
+  },
+  {
     'name': 'rust',
     'pattern': '.',
     'condition': 'checkout_rust',
