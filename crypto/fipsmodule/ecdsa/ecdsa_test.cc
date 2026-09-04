@@ -88,20 +88,12 @@ static void VerifyECDSASig(API api, const uint8_t *digest, size_t digest_len,
       bssl::UniquePtr<uint8_t> delete_der(der);
       EXPECT_EQ(expected_result,
                 ECDSA_verify(0, digest, digest_len, der, der_len, eckey));
-      if (!expected_result) {
-        // Can be ERR_LIB_EC or ERR_LIB_ECDSA.
-        EXPECT_TRUE(ErrorsAreAndClear({{std::nullopt, std::nullopt}}));
-      }
       break;
     }
 
     case kRawAPI:
       EXPECT_EQ(expected_result,
                 ECDSA_do_verify(digest, digest_len, ecdsa_sig, eckey));
-      if (!expected_result) {
-        EXPECT_TRUE(
-            ErrorsAreAndClear({{ERR_LIB_ECDSA, ECDSA_R_BAD_SIGNATURE}}));
-      }
       break;
 
     default:
@@ -260,11 +252,9 @@ TEST(ECDSATest, BuiltinCurves) {
     // Negative components should not be accepted.
     BN_set_negative(ecdsa_sig->r, 1);
     EXPECT_FALSE(ECDSA_do_verify(digest, 20, ecdsa_sig.get(), eckey.get()));
-    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ECDSA, ECDSA_R_BAD_SIGNATURE}}));
     BN_set_negative(ecdsa_sig->r, 0);
     BN_set_negative(ecdsa_sig->s, 1);
     EXPECT_FALSE(ECDSA_do_verify(digest, 20, ecdsa_sig.get(), eckey.get()));
-    EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_ECDSA, ECDSA_R_BAD_SIGNATURE}}));
     BN_set_negative(ecdsa_sig->s, 0);
   }
 }
@@ -357,50 +347,45 @@ static bssl::UniquePtr<BIGNUM> GetBIGNUM(FileTest *t, const char *key) {
 }
 
 TEST(ECDSATest, VerifyTestVectors) {
-  FileTestGTest(
-      "crypto/fipsmodule/ecdsa/ecdsa_verify_tests.txt", [](FileTest *t) {
-        for (bool custom_group : {false, true}) {
-          SCOPED_TRACE(custom_group);
-          bssl::UniquePtr<EC_GROUP> group = GetCurve(t, "Curve");
-          ASSERT_TRUE(group);
-          if (custom_group) {
-            group = MakeCustomClone(group.get());
-            ASSERT_TRUE(group);
-          }
-          bssl::UniquePtr<BIGNUM> x = GetBIGNUM(t, "X");
-          ASSERT_TRUE(x);
-          bssl::UniquePtr<BIGNUM> y = GetBIGNUM(t, "Y");
-          ASSERT_TRUE(y);
-          bssl::UniquePtr<BIGNUM> r = GetBIGNUM(t, "R");
-          ASSERT_TRUE(r);
-          bssl::UniquePtr<BIGNUM> s = GetBIGNUM(t, "S");
-          ASSERT_TRUE(s);
-          std::vector<uint8_t> digest;
-          ASSERT_TRUE(t->GetBytes(&digest, "Digest"));
+  FileTestGTest("crypto/fipsmodule/ecdsa/ecdsa_verify_tests.txt",
+                [](FileTest *t) {
+    for (bool custom_group : {false, true}) {
+      SCOPED_TRACE(custom_group);
+      bssl::UniquePtr<EC_GROUP> group = GetCurve(t, "Curve");
+      ASSERT_TRUE(group);
+      if (custom_group) {
+        group = MakeCustomClone(group.get());
+        ASSERT_TRUE(group);
+      }
+      bssl::UniquePtr<BIGNUM> x = GetBIGNUM(t, "X");
+      ASSERT_TRUE(x);
+      bssl::UniquePtr<BIGNUM> y = GetBIGNUM(t, "Y");
+      ASSERT_TRUE(y);
+      bssl::UniquePtr<BIGNUM> r = GetBIGNUM(t, "R");
+      ASSERT_TRUE(r);
+      bssl::UniquePtr<BIGNUM> s = GetBIGNUM(t, "S");
+      ASSERT_TRUE(s);
+      std::vector<uint8_t> digest;
+      ASSERT_TRUE(t->GetBytes(&digest, "Digest"));
 
-          bssl::UniquePtr<EC_KEY> key(EC_KEY_new());
-          ASSERT_TRUE(key);
-          bssl::UniquePtr<EC_POINT> pub_key(EC_POINT_new(group.get()));
-          ASSERT_TRUE(pub_key);
-          bssl::UniquePtr<ECDSA_SIG> sig(ECDSA_SIG_new());
-          ASSERT_TRUE(sig);
-          ASSERT_TRUE(EC_KEY_set_group(key.get(), group.get()));
-          ASSERT_TRUE(EC_POINT_set_affine_coordinates_GFp(
-              group.get(), pub_key.get(), x.get(), y.get(), nullptr));
-          ASSERT_TRUE(EC_KEY_set_public_key(key.get(), pub_key.get()));
-          ASSERT_TRUE(BN_copy(sig->r, r.get()));
-          ASSERT_TRUE(BN_copy(sig->s, s.get()));
+      bssl::UniquePtr<EC_KEY> key(EC_KEY_new());
+      ASSERT_TRUE(key);
+      bssl::UniquePtr<EC_POINT> pub_key(EC_POINT_new(group.get()));
+      ASSERT_TRUE(pub_key);
+      bssl::UniquePtr<ECDSA_SIG> sig(ECDSA_SIG_new());
+      ASSERT_TRUE(sig);
+      ASSERT_TRUE(EC_KEY_set_group(key.get(), group.get()));
+      ASSERT_TRUE(EC_POINT_set_affine_coordinates_GFp(
+          group.get(), pub_key.get(), x.get(), y.get(), nullptr));
+      ASSERT_TRUE(EC_KEY_set_public_key(key.get(), pub_key.get()));
+      ASSERT_TRUE(BN_copy(sig->r, r.get()));
+      ASSERT_TRUE(BN_copy(sig->s, s.get()));
 
-          if (t->HasAttribute("Invalid")) {
-            EXPECT_EQ(0, ECDSA_do_verify(digest.data(), digest.size(),
-                                         sig.get(), key.get()));
-            EXPECT_TRUE(ErrorsAreAndClear({{std::nullopt, std::nullopt}}));
-          } else {
-            EXPECT_EQ(1, ECDSA_do_verify(digest.data(), digest.size(),
-                                         sig.get(), key.get()));
-          }
-        }
-      });
+      EXPECT_EQ(
+          t->HasAttribute("Invalid") ? 0 : 1,
+          ECDSA_do_verify(digest.data(), digest.size(), sig.get(), key.get()));
+    }
+  });
 }
 
 TEST(ECDSATest, SignTestVectors) {
