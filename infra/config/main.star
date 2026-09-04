@@ -1021,6 +1021,9 @@ cq_builders(
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
             "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+            # We use Chromium's copy of clang, which requires -fuse-ld=lld if
+            # building with -flto.
+            "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
         },
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
