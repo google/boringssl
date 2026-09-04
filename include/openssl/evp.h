@@ -56,8 +56,9 @@ OPENSSL_EXPORT void EVP_PKEY_free(EVP_PKEY *pkey);
 // concurrently.
 OPENSSL_EXPORT int EVP_PKEY_up_ref(EVP_PKEY *pkey);
 
-// EVP_PKEY_dup_ref increments the reference count of `pkey` and returns `pkey`.
-// The caller must call `EVP_PKEY_free` on the result to release the reference.
+// EVP_PKEY_dup_ref increments the reference count of `pkey`, if non-null, and
+// returns `pkey`. The caller must call `EVP_PKEY_free` on the result to
+// release the reference.
 //
 // WARNING: Although the result is non-const for use with `EVP_PKEY_free`, it is
 // still shared with other parts of the application that share the same object.
