@@ -1401,12 +1401,11 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
-cq_builders(
+both_builders(
     "mac_arm64_lto",
     MAC_ARM64_HOST,
-    cq_enabled = False,
-    #category = "mac|arm64|clang",
-    #short_name = "lto",
+    category = "mac|arm64|clang",
+    short_name = "lto",
     properties = {
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
