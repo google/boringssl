@@ -692,9 +692,9 @@ int EC_wpa3_sae_hunt_and_peck_p256(const EC_GROUP *group, EC_POINT *out,
       return 0;
     }
 
-    // Try to import `pwd_value` as a compressed point. `y_bit` reuses one of
-    // the bits of the x-coordinate.
-    uint8_t y_bit = pwd_value[kFieldBytes - 1] & 1;
+    // Try to import `pwd_value` as a compressed point.
+    // The parity of y is determined by the least significant bit of `pwd_seed`.
+    uint8_t y_bit = pwd_seed[pwd_seed_len - 1] & 1;
     EC_FELEM x, y2, y;
     crypto_word_t iter_ok =
         ec_felem_from_bytes_or_placeholder(group, &x, pwd_value, kFieldBytes);
