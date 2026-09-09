@@ -962,3 +962,6 @@ X_Wing		972
 alg_mtcProof_draft		976
 rdna_trustAnchorID_draft		977
 pe_mtcCertificationAuthority_draft		978
+SLH_DSA_SHA2_128s		979
+SLH_DSA_SHAKE_256f		980
+SLH_DSA_SHA2_128s_WITH_SHA256		981

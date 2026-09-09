@@ -16,7 +16,7 @@
 
 
 BSSL_NAMESPACE_BEGIN
-#define NUM_NID 979
+#define NUM_NID 982
 
 static const uint8_t kObjectData[] = {
     /* NID_rsadsi */
@@ -7179,6 +7179,36 @@ static const uint8_t kObjectData[] = {
     0x4b,
     0x2f,
     0x02,
+    /* NID_SLH_DSA_SHA2_128s */
+    0x60,
+    0x86,
+    0x48,
+    0x01,
+    0x65,
+    0x03,
+    0x04,
+    0x03,
+    0x14,
+    /* NID_SLH_DSA_SHAKE_256f */
+    0x60,
+    0x86,
+    0x48,
+    0x01,
+    0x65,
+    0x03,
+    0x04,
+    0x03,
+    0x1f,
+    /* NID_SLH_DSA_SHA2_128s_WITH_SHA256 */
+    0x60,
+    0x86,
+    0x48,
+    0x01,
+    0x65,
+    0x03,
+    0x04,
+    0x03,
+    0x23,
 };
 
 static const ASN1_OBJECT kObjects[NUM_NID] = {
@@ -8844,6 +8874,12 @@ static const ASN1_OBJECT kObjects[NUM_NID] = {
      NID_rdna_trustAnchorID_draft, 10, &kObjectData[6251], 0},
     {"pe-mtcCertificationAuthority-draft", "pe-mtcCertificationAuthority-draft",
      NID_pe_mtcCertificationAuthority_draft, 10, &kObjectData[6261], 0},
+    {"id-slh-dsa-sha2-128s", "SLH-DSA-SHA2-128s", NID_SLH_DSA_SHA2_128s, 9,
+     &kObjectData[6271], 0},
+    {"id-slh-dsa-shake-256f", "SLH-DSA-SHAKE-256f", NID_SLH_DSA_SHAKE_256f, 9,
+     &kObjectData[6280], 0},
+    {"id-hash-slh-dsa-sha2-128s-with-sha256", "SLH-DSA-SHA2-128s-WITH-SHA256",
+     NID_SLH_DSA_SHA2_128s_WITH_SHA256, 9, &kObjectData[6289], 0},
 };
 
 static const uint16_t kNIDsInShortNameOrder[] = {
@@ -9318,6 +9354,7 @@ static const uint16_t kNIDsInShortNameOrder[] = {
     331 /* id-cmc-transactionId */,
     787 /* id-ct-asciiTextWithCRLF */,
     408 /* id-ecPublicKey */,
+    981 /* id-hash-slh-dsa-sha2-128s-with-sha256 */,
     508 /* id-hex-multipart-message */,
     507 /* id-hex-partial-message */,
     260 /* id-it */,
@@ -9389,6 +9426,8 @@ static const uint16_t kNIDsInShortNameOrder[] = {
     322 /* id-regInfo-certReq */,
     321 /* id-regInfo-utf8Pairs */,
     512 /* id-set */,
+    979 /* id-slh-dsa-sha2-128s */,
+    980 /* id-slh-dsa-shake-256f */,
     191 /* id-smime-aa */,
     215 /* id-smime-aa-contentHint */,
     218 /* id-smime-aa-contentIdentifier */,
@@ -9916,6 +9955,9 @@ static const uint16_t kNIDsInLongNameOrder[] = {
     2 /* RSA Data Security, Inc. PKCS */,
     188 /* S/MIME */,
     167 /* S/MIME Capabilities */,
+    979 /* SLH-DSA-SHA2-128s */,
+    981 /* SLH-DSA-SHA2-128s-WITH-SHA256 */,
+    980 /* SLH-DSA-SHAKE-256f */,
     387 /* SNMPv2 */,
     512 /* Secure Electronic Transactions */,
     386 /* Security */,
@@ -11493,6 +11535,9 @@ static const uint16_t kNIDsInOIDOrder[] = {
     967 /* 2.16.840.1.101.3.4.3.17 (OBJ_ML_DSA_44) */,
     968 /* 2.16.840.1.101.3.4.3.18 (OBJ_ML_DSA_65) */,
     969 /* 2.16.840.1.101.3.4.3.19 (OBJ_ML_DSA_87) */,
+    979 /* 2.16.840.1.101.3.4.3.20 (OBJ_SLH_DSA_SHA2_128s) */,
+    980 /* 2.16.840.1.101.3.4.3.31 (OBJ_SLH_DSA_SHAKE_256f) */,
+    981 /* 2.16.840.1.101.3.4.3.35 (OBJ_SLH_DSA_SHA2_128s_WITH_SHA256) */,
     970 /* 2.16.840.1.101.3.4.4.2 (OBJ_ML_KEM_768) */,
     966 /* 2.16.840.1.101.3.4.4.3 (OBJ_ML_KEM_1024) */,
     71 /* 2.16.840.1.113730.1.1 (OBJ_netscape_cert_type) */,

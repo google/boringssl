@@ -5531,6 +5531,28 @@ extern "C" {
 #define OBJ_ENC_pe_mtcCertificationAuthority_draft \
   0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xda, 0x4b, 0x2f, 0x02
 
+#define SN_SLH_DSA_SHA2_128s "id-slh-dsa-sha2-128s"
+#define LN_SLH_DSA_SHA2_128s "SLH-DSA-SHA2-128s"
+#define NID_SLH_DSA_SHA2_128s 979
+#define OBJ_SLH_DSA_SHA2_128s 2L, 16L, 840L, 1L, 101L, 3L, 4L, 3L, 20L
+#define OBJ_ENC_SLH_DSA_SHA2_128s \
+  0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x14
+
+#define SN_SLH_DSA_SHAKE_256f "id-slh-dsa-shake-256f"
+#define LN_SLH_DSA_SHAKE_256f "SLH-DSA-SHAKE-256f"
+#define NID_SLH_DSA_SHAKE_256f 980
+#define OBJ_SLH_DSA_SHAKE_256f 2L, 16L, 840L, 1L, 101L, 3L, 4L, 3L, 31L
+#define OBJ_ENC_SLH_DSA_SHAKE_256f \
+  0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x1f
+
+#define SN_SLH_DSA_SHA2_128s_WITH_SHA256 "id-hash-slh-dsa-sha2-128s-with-sha256"
+#define LN_SLH_DSA_SHA2_128s_WITH_SHA256 "SLH-DSA-SHA2-128s-WITH-SHA256"
+#define NID_SLH_DSA_SHA2_128s_WITH_SHA256 981
+#define OBJ_SLH_DSA_SHA2_128s_WITH_SHA256 \
+  2L, 16L, 840L, 1L, 101L, 3L, 4L, 3L, 35L
+#define OBJ_ENC_SLH_DSA_SHA2_128s_WITH_SHA256 \
+  0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x23
+
 
 #if defined(__cplusplus)
 } /* extern C */

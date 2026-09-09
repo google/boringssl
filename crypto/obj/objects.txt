@@ -913,6 +913,9 @@ sigAlgs 2		: dsa_with_SHA256
 sigAlgs 17		: id-ml-dsa-44		: ML-DSA-44
 sigAlgs 18		: id-ml-dsa-65		: ML-DSA-65
 sigAlgs 19		: id-ml-dsa-87		: ML-DSA-87
+sigAlgs 20		: id-slh-dsa-sha2-128s	: SLH-DSA-SHA2-128s
+sigAlgs 31		: id-slh-dsa-shake-256f	: SLH-DSA-SHAKE-256f
+sigAlgs 35		: id-hash-slh-dsa-sha2-128s-with-sha256	: SLH-DSA-SHA2-128s-WITH-SHA256
 
 !Alias nistKems nistAlgorithms 4
 nistKems 2 : id-alg-ml-kem-768  : ML-KEM-768
