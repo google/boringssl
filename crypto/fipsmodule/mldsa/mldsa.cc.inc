@@ -1203,7 +1203,7 @@ inline void scalar_from_keccak_block_vartime(scalar *out, int *done,
   // Branchless sampling as long as there is enough space in the output buffer
   // even if all sampled numbers are < `kPrime`.
   size_t i = 0;
-  for (; i <= int{168 - 3 * kStep} && *done <= int{kDegree - kStep};
+  for (; i <= size_t{168 - 3 * kStep} && *done <= int{kDegree - kStep};
        i += 3 * kStep) {
     uint32_t d[kStep];
     for (size_t k = 0; k < kStep; ++k) {
