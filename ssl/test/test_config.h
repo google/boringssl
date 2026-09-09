@@ -244,6 +244,7 @@ struct TestConfig {
   std::string quic_early_data_context;
   int early_write_after_message = 0;
   bool fips_202205 = false;
+  bool fips_202609 = false;
   bool wpa_202304 = false;
   bool cnsa_202407 = false;
   bool cnsa1_202603 = false;

@@ -562,6 +562,7 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         IntFlag("-early-write-after-message",
                 &TestConfig::early_write_after_message),
         BoolFlag("-fips-202205", &TestConfig::fips_202205),
+        BoolFlag("-fips-202609", &TestConfig::fips_202609),
         BoolFlag("-wpa-202304", &TestConfig::wpa_202304),
         BoolFlag("-cnsa-202407", &TestConfig::cnsa_202407),
         BoolFlag("-cnsa1-202603", &TestConfig::cnsa1_202603),
@@ -2719,6 +2720,7 @@ bssl::UniquePtr<SSL> TestConfig::NewSSL(
     ssl_compliance_policy_t policy;
   } compliance_options[] = {
       {&fips_202205, ssl_compliance_policy_fips_202205},
+      {&fips_202609, ssl_compliance_policy_fips_202609},
       {&wpa_202304, ssl_compliance_policy_wpa3_192_202304},
       {&cnsa_202407, ssl_compliance_policy_cnsa_202407},
       {&cnsa1_202603, ssl_compliance_policy_cnsa1_202603},

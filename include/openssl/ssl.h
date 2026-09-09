@@ -6453,6 +6453,22 @@ enum ssl_compliance_policy_t BORINGSSL_ENUM_INT {
   // guarantee it. Careful reading of SP 800-52r2 is recommended.
   ssl_compliance_policy_fips_202205,
 
+  // ssl_compliance_policy_fips_202609 configures a TLS connection to use:
+  //   * TLS 1.2 or 1.3
+  //   * For TLS 1.2, only ECDHE_[RSA|ECDSA]_WITH_AES_*_GCM_SHA*.
+  //   * For TLS 1.3, only AES-GCM
+  //   * X25519MLKEM768 or ML-KEM-1024, or P-256 or P-384 for key agreement,
+  //     selecting X25519MLKEM768 or ML-KEM-1024 based on client preference.
+  //   * For server signatures, only PKCS#1/PSS with SHA256/384/512, or ECDSA
+  //     with P-256 or P-384 and SHA256/SHA384.
+  //
+  // Note: this policy can be configured even if BoringSSL has not been built in
+  // FIPS mode. Call `FIPS_mode` to check that.
+  //
+  // Note: this setting aids with compliance with NIST requirements but does not
+  // guarantee it. Careful reading of SP 800-52r2 is recommended.
+  ssl_compliance_policy_fips_202609,
+
   // ssl_compliance_policy_wpa3_192_202304 configures a TLS connection to use:
   //   * TLS 1.2 or 1.3.
   //   * For TLS 1.2, only TLS_ECDHE_[ECDSA|RSA]_WITH_AES_256_GCM_SHA384.

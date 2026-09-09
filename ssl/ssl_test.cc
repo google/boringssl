@@ -11435,6 +11435,7 @@ TEST(SSLTest, SetGetCompliancePolicy) {
   EXPECT_EQ(SSL_get_compliance_policy(ssl.get()), ssl_compliance_policy_none);
 
   for (const auto policy : {ssl_compliance_policy_fips_202205,      //
+                            ssl_compliance_policy_fips_202609,      //
                             ssl_compliance_policy_wpa3_192_202304,  //
                             ssl_compliance_policy_cnsa_202407,      //
                             ssl_compliance_policy_cnsa1_202603,     //

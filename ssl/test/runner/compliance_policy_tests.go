@@ -77,6 +77,7 @@ func addCompliancePolicyTests() {
 				cipherSuiteOk bool
 			}{
 				{"-fips-202205", isFIPSCipherSuite},
+				{"-fips-202609", isFIPSCipherSuite},
 				{"-wpa-202304", isWPACipherSuite},
 				{"-cnsa1-202603", isCNSA1CipherSuite},
 				{"-cnsa2-202603", isCNSA2CipherSuite},
@@ -125,29 +126,37 @@ func addCompliancePolicyTests() {
 
 		// Check that a TLS 1.3 client won't accept ChaCha20 even if the server
 		// picks it without it being in the client's cipher list.
-		testCases = append(testCases, testCase{
-			testType: clientTest,
-			protocol: protocol,
-			name:     "Compliance-fips202205-" + protocol.String() + "-Client-ReallyWontAcceptChaCha",
-			config: Config{
-				MinVersion: VersionTLS12,
-				MaxVersion: maxVersion,
-				Bugs: ProtocolBugs{
-					SendCipherSuite: TLS_CHACHA20_POLY1305_SHA256,
+		for _, policy := range []string{"-fips-202205", "-fips-202609"} {
+			testCases = append(testCases, testCase{
+				testType: clientTest,
+				protocol: protocol,
+				name:     "Compliance" + policy + "-" + protocol.String() + "-Client-ReallyWontAcceptChaCha",
+				config: Config{
+					MinVersion: VersionTLS12,
+					MaxVersion: maxVersion,
+					Bugs: ProtocolBugs{
+						SendCipherSuite: TLS_CHACHA20_POLY1305_SHA256,
+					},
 				},
-			},
-			flags: []string{
-				"-fips-202205",
-			},
-			shouldFail:    true,
-			expectedError: ":WRONG_CIPHER_RETURNED:",
-		})
+				flags: []string{
+					policy,
+				},
+				shouldFail:    true,
+				expectedError: ":WRONG_CIPHER_RETURNED:",
+			})
+		}
 
 		for _, curve := range testCurves {
 			var isFIPSCurve bool
 			switch curve.id {
 			case CurveP256, CurveP384:
 				isFIPSCurve = true
+			}
+
+			var isFIPSPQCurve bool
+			switch curve.id {
+			case CurveX25519MLKEM768, CurveMLKEM1024:
+				isFIPSPQCurve = true
 			}
 
 			var isWPACurve bool
@@ -173,6 +182,7 @@ func addCompliancePolicyTests() {
 				curveOk bool
 			}{
 				{"-fips-202205", isFIPSCurve},
+				{"-fips-202609", isFIPSCurve || isFIPSPQCurve},
 				{"-wpa-202304", isWPACurve},
 				{"-cnsa1-202603", isCNSA1Curve},
 				{"-cnsa2-202603", isCNSA2Curve},
@@ -234,6 +244,46 @@ func addCompliancePolicyTests() {
 			},
 		})
 
+		// For FIPS 202609 as a server, X25519MLKEM768 and MLKEM1024 form an
+		// equipreference group which takes precedence over classical curves.
+		// The server will select between the two based on the client's preference,
+		// even if the client prefers a classical curve overall.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     "Compliance-fips-202609-" + protocol.String() + "-Equipreference-PrefersX25519MLKEM768",
+			config: Config{
+				MinVersion:       VersionTLS13,
+				MaxVersion:       VersionTLS13,
+				CurvePreferences: []CurveID{CurveP256, CurveP384, CurveX25519MLKEM768, CurveMLKEM1024},
+				DefaultCurves:    []CurveID{CurveP256, CurveP384},
+			},
+			flags: []string{
+				"-fips-202609",
+			},
+			expectations: connectionExpectations{
+				curveID: CurveX25519MLKEM768,
+			},
+		})
+
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     "Compliance-fips-202609-" + protocol.String() + "-Equipreference-PrefersMLKEM1024",
+			config: Config{
+				MinVersion:       VersionTLS13,
+				MaxVersion:       VersionTLS13,
+				CurvePreferences: []CurveID{CurveP256, CurveP384, CurveMLKEM1024, CurveX25519MLKEM768},
+				DefaultCurves:    []CurveID{CurveP256, CurveP384},
+			},
+			flags: []string{
+				"-fips-202609",
+			},
+			expectations: connectionExpectations{
+				curveID: CurveMLKEM1024,
+			},
+		})
+
 		for _, sigalg := range testSignatureAlgorithms {
 			// The TLS 1.0 and TLS 1.1 default signature algorithm does not
 			// apply to these tests.
@@ -285,6 +335,7 @@ func addCompliancePolicyTests() {
 				sigAlgOk bool
 			}{
 				{"-fips-202205", isFIPSSigAlg},
+				{"-fips-202609", isFIPSSigAlg},
 				{"-wpa-202304", isWPASigAlg},
 				{"-cnsa1-202603", isCNSASigAlg},
 				{"-cnsa2-202603", isCNSASigAlg},
@@ -362,6 +413,37 @@ func addCompliancePolicyTests() {
 				"-cnsa-202407",
 			},
 			expectations: connectionExpectations{cipher: TLS_AES_128_GCM_SHA256},
+		})
+
+		// AES-128-GCM and AES-256-GCM form an equipreference group in FIPS 202609.
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     "Compliance-fips-202609-" + protocol.String() + "-CipherEquipreference-AES-128",
+			config: Config{
+				MinVersion:   VersionTLS13,
+				MaxVersion:   VersionTLS13,
+				CipherSuites: []uint16{TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384},
+			},
+			flags: []string{
+				"-fips-202609",
+			},
+			expectations: connectionExpectations{cipher: TLS_AES_128_GCM_SHA256},
+		})
+
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			protocol: protocol,
+			name:     "Compliance-fips-202609-" + protocol.String() + "-CipherEquipreference-AES-256",
+			config: Config{
+				MinVersion:   VersionTLS13,
+				MaxVersion:   VersionTLS13,
+				CipherSuites: []uint16{TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256},
+			},
+			flags: []string{
+				"-fips-202609",
+			},
+			expectations: connectionExpectations{cipher: TLS_AES_256_GCM_SHA384},
 		})
 	}
 }

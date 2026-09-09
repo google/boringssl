@@ -3655,6 +3655,97 @@ static int Configure(SSLImpl *ssl) {
 
 }  // namespace fips202205
 
+namespace fips202609 {
+
+// (References are to SP 800-52r2):
+
+static const uint16_t kGroups[] = {
+    SSL_GROUP_X25519_MLKEM768,
+    SSL_GROUP_MLKEM1024,
+    SSL_GROUP_SECP256R1,
+    SSL_GROUP_SECP384R1,
+};
+static const uint32_t kGroupsFlags[] = {
+    SSL_GROUP_FLAG_EQUAL_PREFERENCE_WITH_NEXT,
+    0,
+    0,
+    0,
+};
+
+// Prefer post-quantum groups equally if the client supports them.
+static const uint32_t kOptions = SSL_OP_CIPHER_SERVER_PREFERENCE;
+
+static const uint16_t kSigAlgs[] = {
+    SSL_SIGN_RSA_PKCS1_SHA256,
+    SSL_SIGN_RSA_PKCS1_SHA384,
+    SSL_SIGN_RSA_PKCS1_SHA512,
+    // Table 4.1:
+    // "The curve should be P-256 or P-384"
+    SSL_SIGN_ECDSA_SECP256R1_SHA256,
+    SSL_SIGN_ECDSA_SECP384R1_SHA384,
+    SSL_SIGN_RSA_PSS_RSAE_SHA256,
+    SSL_SIGN_RSA_PSS_RSAE_SHA384,
+    SSL_SIGN_RSA_PSS_RSAE_SHA512,
+};
+
+static const char kTLS12Ciphers[] =
+    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:"
+    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:"
+    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:"
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+
+static const uint16_t kTLS13Ciphers[] = {
+    SSL_CIPHER_AES_128_GCM_SHA256,
+    SSL_CIPHER_AES_256_GCM_SHA384,
+};
+static const bool kTLS13CiphersInGroup[] = {
+    true,
+    false,
+};
+
+static int Configure(SSLContext *ctx) {
+  ctx->compliance_policy = ssl_compliance_policy_fips_202609;
+
+  return
+      // Section 3.1:
+      // "Servers that support government-only applications shall be
+      // configured to use TLS 1.2 and should be configured to use TLS 1.3
+      // as well. These servers should not be configured to use TLS 1.1 and
+      // shall not use TLS 1.0, SSL 3.0, or SSL 2.0.
+      SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) &&
+      SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) &&
+      // Sections 3.3.1.1.1 and 3.3.1.1.2 are ambiguous about whether
+      // HMAC-SHA-1 cipher suites are permitted with TLS 1.2. However, later the
+      // Encrypt-then-MAC extension is required for all CBC cipher suites and so
+      // it's easier to drop them.
+      SSL_CTX_set_strict_cipher_list(ctx, kTLS12Ciphers) &&
+      ctx->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                  Span(kTLS13CiphersInGroup)) &&
+      SSL_CTX_set1_group_ids_with_flags(ctx, kGroups, kGroupsFlags,
+                                        std::size(kGroups)) &&
+      SSL_CTX_set_options(ctx, kOptions) &&
+      SSL_CTX_set_signing_algorithm_prefs(ctx, kSigAlgs, std::size(kSigAlgs)) &&
+      SSL_CTX_set_verify_algorithm_prefs(ctx, kSigAlgs, std::size(kSigAlgs));
+}
+
+static int Configure(SSLImpl *ssl) {
+  ssl->config->compliance_policy = ssl_compliance_policy_fips_202609;
+
+  // See `Configure(SSL_CTX)`, above, for reasoning.
+  return SSL_set_min_proto_version(ssl, TLS1_2_VERSION) &&
+         SSL_set_max_proto_version(ssl, TLS1_3_VERSION) &&
+         SSL_set_strict_cipher_list(ssl, kTLS12Ciphers) &&
+         ssl->config->tls13_cipher_list.Init(Span(kTLS13Ciphers),
+                                             Span(kTLS13CiphersInGroup)) &&
+         SSL_set1_group_ids_with_flags(ssl, kGroups, kGroupsFlags,
+                                       std::size(kGroups)) &&
+         SSL_set_options(ssl, kOptions) &&
+         SSL_set_signing_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs)) &&
+         SSL_set_verify_algorithm_prefs(ssl, kSigAlgs, std::size(kSigAlgs));
+}
+
+}  // namespace fips202609
+
 namespace wpa202304 {
 
 // See WPA version 3.1, section 3.5.
@@ -3846,6 +3937,8 @@ int SSL_CTX_set_compliance_policy(SSL_CTX *ctx,
   switch (policy) {
     case ssl_compliance_policy_fips_202205:
       return fips202205::Configure(ctx_impl);
+    case ssl_compliance_policy_fips_202609:
+      return fips202609::Configure(ctx_impl);
     case ssl_compliance_policy_wpa3_192_202304:
       return wpa202304::Configure(ctx_impl);
     case ssl_compliance_policy_cnsa_202407:
@@ -3868,6 +3961,8 @@ int SSL_set_compliance_policy(SSL *ssl, enum ssl_compliance_policy_t policy) {
   switch (policy) {
     case ssl_compliance_policy_fips_202205:
       return fips202205::Configure(ssl_impl);
+    case ssl_compliance_policy_fips_202609:
+      return fips202609::Configure(ssl_impl);
     case ssl_compliance_policy_wpa3_192_202304:
       return wpa202304::Configure(ssl_impl);
     case ssl_compliance_policy_cnsa_202407:
