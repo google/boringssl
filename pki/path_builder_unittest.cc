@@ -2664,10 +2664,16 @@ TEST_F(PathBuilderMTCPlants04Test, Verification) {
   result = RunPathBuilder(signatureless_leaf, &trust_store_no_subtrees, nullptr,
                           &mtc_cosigner_not_called_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kMtcLandmarkNotRecognized));
   result =
       RunPathBuilder(signatureless_leaf, &trust_store_no_subtrees_wrong_key,
                      nullptr, &mtc_cosigner_not_called_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kMtcLandmarkNotRecognized));
 
   // Standalone cert should be valid when verified against the anchor
   // configured with subtrees (regardless of what key the anchor is configured
@@ -2688,15 +2694,24 @@ TEST_F(PathBuilderMTCPlants04Test, Verification) {
   result = RunPathBuilder(standalone_leaf, &trust_store_no_subtrees_wrong_key,
                           nullptr, &no_cosigners_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
 
   // Both certs should fail when verified against the anchor with wrong subtree
   // hash.
   result = RunPathBuilder(signatureless_leaf, &trust_store_wrong_subtreehash,
                           nullptr, &mtc_cosigner_not_called_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
   result = RunPathBuilder(standalone_leaf, &trust_store_wrong_subtreehash,
                           nullptr, &mtc_cosigner_not_called_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
 
   // Cert with multiple cosigners (including valid CA cosigner) should validate
   // successfully, ignoring the unknown cosigners.
@@ -2712,6 +2727,9 @@ TEST_F(PathBuilderMTCPlants04Test, Verification) {
                           &trust_store_no_subtrees_wrong_key, nullptr,
                           &no_cosigners_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
 
   // Cert with a cosigner but no CA cosigner should fail:
   std::shared_ptr<const ParsedCertificate> standalone_leaf_no_ca_signer;
@@ -2721,6 +2739,9 @@ TEST_F(PathBuilderMTCPlants04Test, Verification) {
       RunPathBuilder(standalone_leaf_no_ca_signer, &trust_store_no_subtrees,
                      nullptr, &no_cosigners_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
 
   // Cert with a duplicate CA cosigner should fail:
   std::shared_ptr<const ParsedCertificate> standalone_leaf_duplicate_ca_signer;
@@ -2731,6 +2752,9 @@ TEST_F(PathBuilderMTCPlants04Test, Verification) {
       RunPathBuilder(standalone_leaf_duplicate_ca_signer,
                      &trust_store_no_subtrees, nullptr, &no_cosigners_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
 
   // Cert with a cosigners in non-sorted order should fail:
   std::shared_ptr<const ParsedCertificate> standalone_leaf_cosigner_wrong_order;
@@ -2741,6 +2765,9 @@ TEST_F(PathBuilderMTCPlants04Test, Verification) {
       RunPathBuilder(standalone_leaf_cosigner_wrong_order,
                      &trust_store_no_subtrees, nullptr, &no_cosigners_delegate);
   EXPECT_FALSE(result.HasValidPath());
+  ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+  EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+      cert_errors::kVerifySignedDataFailed));
 }
 
 TEST_F(PathBuilderMTCPlants04Test, CosignatureVerification) {
@@ -2815,6 +2842,9 @@ TEST_F(PathBuilderMTCPlants04Test, CosignatureVerification) {
                             &trust_store_no_subtrees_wrong_key, nullptr,
                             &cosigners_delegate);
     EXPECT_FALSE(result.HasValidPath());
+    ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+    EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+        cert_errors::kVerifySignedDataFailed));
   }
 
   {
@@ -2891,6 +2921,9 @@ TEST_F(PathBuilderMTCPlants04Test, CosignatureVerification) {
         RunPathBuilder(standalone_leaf_3_cosigners, &trust_store_no_subtrees,
                        nullptr, &rejecting_delegate);
     EXPECT_FALSE(result.HasValidPath());
+    ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
+    EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
+        cert_errors::kMtcUnacceptableCosignatureVerificationResult));
   }
 }
 
@@ -2969,6 +3002,7 @@ TEST_F(PathBuilderMTCPlants04Test, PathLength) {
     EXPECT_EQ(leaf, path.certs[0]);
     EXPECT_EQ(ica, path.certs[1]);
     EXPECT_EQ(mtc_anchor_->AsCert(), path.certs[2]);
+    EXPECT_TRUE(path.errors.ContainsError(cert_errors::kMaxPathLengthViolated));
   }
 }
 

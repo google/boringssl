@@ -103,6 +103,9 @@ DEFINE_CERT_ERROR_ID(kNoIssuersFound, "No matching issuer found");
 DEFINE_CERT_ERROR_ID(kDeadlineExceeded, "Deadline exceeded");
 DEFINE_CERT_ERROR_ID(kIterationLimitExceeded, "Iteration limit exceeded");
 DEFINE_CERT_ERROR_ID(kDepthLimitExceeded, "Depth limit exceeded");
+DEFINE_CERT_ERROR_ID(kMtcLandmarkNotRecognized, "Landmark not recognized");
+DEFINE_CERT_ERROR_ID(kMtcUnacceptableCosignatureVerificationResult,
+                     "Unacceptable cosignature verification result");
 
 }  // namespace cert_errors
 BSSL_NAMESPACE_END

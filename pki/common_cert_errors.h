@@ -179,6 +179,18 @@ OPENSSL_EXPORT extern const CertErrorId kIterationLimitExceeded;
 // Depth limit was reached during path building.
 OPENSSL_EXPORT extern const CertErrorId kDepthLimitExceeded;
 
+// The certificate is a landmark relative MTC (no signatures) but the subtree
+// was not present in `mtc_anchor`'s configured trusted subtrees.
+// (Note that this error does not include the case where the subtree is present
+// in the trusted subtrees but has the incorrect hash.)
+OPENSSL_EXPORT extern const CertErrorId kMtcLandmarkNotRecognized;
+
+// The certificate is an MTC which was verified as a standalone and had a valid
+// CA signature, but `delegate->IsCosignatureVerificationResultAcceptable`
+// returned false.
+OPENSSL_EXPORT extern const CertErrorId
+    kMtcUnacceptableCosignatureVerificationResult;
+
 }  // namespace cert_errors
 BSSL_NAMESPACE_END
 

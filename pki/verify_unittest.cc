@@ -497,6 +497,8 @@ TEST_F(VerifyMTCTest, SubtreeRangesMatch) {
     VerifyError error;
     ASSERT_TRUE(PrepareOptsForVerify(leaf_b_, trust_store_a.get(), &opts));
     EXPECT_FALSE(CertificateVerify(opts, &error)) << error.DiagnosticString();
+    EXPECT_EQ(error.Code(),
+              VerifyError::StatusCode::CERTIFICATE_INVALID_SIGNATURE);
   }
 
   std::unique_ptr<VerifyTrustStore> trust_store_b = EmptyTrustStore();
@@ -513,6 +515,8 @@ TEST_F(VerifyMTCTest, SubtreeRangesMatch) {
     ASSERT_TRUE(
         PrepareOptsForVerify(generic_cert_, trust_store_b.get(), &opts));
     EXPECT_FALSE(CertificateVerify(opts, &error)) << error.DiagnosticString();
+    EXPECT_EQ(error.Code(),
+              VerifyError::StatusCode::CERTIFICATE_INVALID_SIGNATURE);
   }
 }
 
