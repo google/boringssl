@@ -685,7 +685,7 @@ int EC_wpa3_sae_hunt_and_peck_p256(const EC_GROUP *group, EC_POINT *out,
       return 0;
     }
 
-    // Copmute `pwd_value`. This uses something custom instead of HKDF-Expand.
+    // Compute `pwd_value`. This uses something custom instead of HKDF-Expand.
     uint8_t pwd_value[kFieldBytes];
     if (!kdf_hash_length(md, Span(pwd_value), Span(pwd_seed, pwd_seed_len),
                          StringAsBytes(kPWDValueLabel), p_bytes)) {
@@ -701,7 +701,7 @@ int EC_wpa3_sae_hunt_and_peck_p256(const EC_GROUP *group, EC_POINT *out,
     ec_y_sqr_from_x(group, &y2, &x);
     iter_ok &= ec_felem_sqrt_secret(group, &y, &y2, y_bit);
 
-    // Copy the result if appropriate.
+    // Save the first valid point.
     crypto_word_t save = iter_ok & ~ok;
     constant_time_conditional_memcpy(affine.X.words, x.words,
                                      sizeof(BN_ULONG) * kFieldWords, save);
