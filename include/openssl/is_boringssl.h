@@ -14,5 +14,3 @@
 
 // This header is provided in order to catch include path errors in consuming
 // BoringSSL.
-
-#include "base.h"
