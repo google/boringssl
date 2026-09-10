@@ -670,10 +670,11 @@ void ERR_add_error_dataf(const char *format, ...) {
   va_list ap;
 
   va_start(ap, format);
-  if (OPENSSL_vasprintf_internal(&buf, format, ap, /*system_malloc=*/1) == -1) {
+  int len = OPENSSL_vasprintf_internal(&buf, format, ap, /*system_malloc=*/1);
+  va_end(ap);
+  if (len == -1) {
     return;
   }
-  va_end(ap);
 
   err_set_error_data(buf);
 }
