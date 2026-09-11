@@ -14,10 +14,7 @@
 
 //! TLS Connection lifecycle controls
 
-use alloc::{
-    boxed::Box,
-    string::ToString, //
-};
+use alloc::boxed::Box;
 use core::{
     ffi::c_int,
     future::poll_fn,
@@ -51,10 +48,8 @@ use crate::{
     errors::{
         Error,
         IoError,
-        TlsErrorReason,
         TlsRetryReason, //
-    },
-    io::IoStatus, //
+    }, //
 };
 
 /// # Connection shutdown
@@ -233,54 +228,34 @@ impl<R, M> EstablishedTlsConnection<'_, R, M>
 where
     M: HasTlsConnectionMethod + HasShutdown,
 {
-    /// Perform synchronising shutdown.
+    /// Perform shutdown on the write end.
     ///
-    /// If the method returns `Ok(None)`, the shutdown will not progress until I/O makes progress.
-    ///
-    /// # Shutdown protocol
-    /// A live connection can be actively shut down by calling this method at most two times.
-    /// The first call will send `close_notify` down the transport.
-    /// On `Ok` the first call is considered successful with the following return value.
-    /// - [`ShutdownStatus::CloseNotifyReceived`] signifies that a `close_notify` is received from the peer, too.
-    /// - [`ShutdownStatus::CloseNotifyPosted`] signifies that a `close_notify` from our end is sent but that from the peer
-    ///   has not arrived.
-    ///
-    /// In case of no reception of peer `close_notify`, it is necessary to call this method again.
-    /// There are two possible outcomes.
-    /// - [`ShutdownStatus::RemainingApplicationData`] signifies that there are pending application data.
-    ///   Process it until the stream ends.
-    /// - [`ShutdownStatus::CloseNotifyReceived`] signifies that a `close_notify` is received from the peer, too.
-    ///   The connection is then in terminal state.
-    /// To process the remaining application data, normal reading should continue until the end of
-    /// stream, at which [`Self::sync_shutdown`] can be called again to set the connection to the terminal state.
-    pub fn sync_shutdown(&mut self) -> Result<Option<ShutdownStatus>, Error> {
+    /// If the method returns `Ok(Some(reason))`, the shutdown will not progress until I/O makes
+    /// progress.
+    pub fn sync_shutdown(&mut self) -> Result<Option<TlsRetryReason>, Error> {
+        // SSL_shutdown has two stages, sending close_notify and waiting for close_notify.
+        // We now believe that only the sending call, aka the first call, is useful.
+        // This method only sends close_notify, so it skips calling SSL_shutdown if close_notify has
+        // already been sent.
+        let rc = unsafe {
+            // Safety: we have exclusive access to the connection state.
+            bssl_sys::SSL_get_shutdown(self.ptr())
+        };
+        if rc & bssl_sys::SSL_SENT_SHUTDOWN != 0 {
+            return Ok(None);
+        }
         let rc = unsafe {
             // Safety: we have exclusive access to the connection state.
             bssl_sys::SSL_shutdown(self.ptr())
         };
-        match rc {
-            0 => Ok(Some(ShutdownStatus::CloseNotifyPosted)),
-            1 => Ok(Some(ShutdownStatus::CloseNotifyReceived)),
-            _ => match self.categorise_error_for_io(rc) {
-                Ok(IoStatus::Ok(_)) => unreachable!(),
-                Ok(IoStatus::Empty | IoStatus::EndOfStream) => {
-                    Ok(Some(ShutdownStatus::EndOfStream))
-                }
-                Ok(IoStatus::Retry(TlsRetryReason::WantRead | TlsRetryReason::WantWrite)) => {
-                    Ok(None)
-                }
-                Ok(IoStatus::Retry(TlsRetryReason::Syscall)) => {
-                    Ok(Some(ShutdownStatus::EndOfStream))
-                }
-                Ok(IoStatus::Retry(reason)) => panic!("unexpected retry reason {reason:?}"),
-                Err(Error::TlsReason(TlsErrorReason::ApplicationDataOnShutdown)) => {
-                    Ok(Some(ShutdownStatus::RemainingApplicationData))
-                }
-                Err(Error::Library(0, _, _)) => Ok(Some(ShutdownStatus::CloseNotifyReceived)),
-                Ok(IoStatus::Err) => Err(Error::Unknown(Box::new("transport error".to_string()))),
-                Err(e) => Err(e),
-            },
+        if matches!(rc, 0 | 1) {
+            return Ok(None);
         }
+        let ret = check_tls_error!(self.ptr(), rc);
+        if let Some(err) = self.take_io_err() {
+            return Err(Error::Io(IoError::Transport(err)));
+        }
+        Ok(ret)
     }
 }
 
@@ -325,18 +300,6 @@ where
             }
         })
     }
-}
-
-/// Shutdown progress
-pub enum ShutdownStatus {
-    /// `close_notify` has been sent.
-    CloseNotifyPosted,
-    /// Peer `close_notify` has been received. The connection is now in terminal state.
-    CloseNotifyReceived,
-    /// There are remaining application data. Consume them first before calling `shutdown` again.
-    RemainingApplicationData,
-    /// The read half of the connection reaches the end of the stream.
-    EndOfStream,
 }
 
 bssl_macros::bssl_enum! {

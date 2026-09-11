@@ -86,7 +86,6 @@ fn dumb_dtls_server_client() -> Result<
 
 use std::time::Duration;
 
-use crate::connection::lifecycle::ShutdownStatus;
 use crate::errors::TlsRetryReason;
 
 fn handle_sync_dtls_timeout<R>(conn: &mut TlsConnection<R, DtlsMode>) -> Result<(), Error> {
@@ -148,18 +147,12 @@ fn dtls_sync_shutdown<R>(conn: &mut TlsConnection<R, DtlsMode>) -> Result<(), Er
             break Ok(());
         };
         match established.sync_shutdown() {
-            Ok(Some(ShutdownStatus::CloseNotifyReceived | ShutdownStatus::EndOfStream)) => {
-                break Ok(());
-            }
-            Ok(Some(ShutdownStatus::CloseNotifyPosted)) => break Ok(()),
-            Ok(Some(ShutdownStatus::RemainingApplicationData)) => {
-                let mut discard = [MaybeUninit::uninit(); 128];
-                let mut discard_buf = ReceiveBuffer::new_uninit(&mut discard);
-                let _ = conn.sync_recv(&mut discard_buf);
-            }
-            Ok(None) => {
+            // TODO: drop Syscall matching here, this is a bad error classification.
+            Ok(None | Some(TlsRetryReason::Syscall)) => break Ok(()),
+            Ok(Some(TlsRetryReason::WantRead | TlsRetryReason::WantWrite)) => {
                 handle_sync_dtls_timeout(conn)?;
             }
+            Ok(Some(reason)) => panic!("unexpected retry reason {reason:?}"),
             Err(e) => break Err(e),
         }
     }
@@ -179,8 +172,13 @@ fn sync_ping_pong_datagram(
         assert_eq!(*message, *b"BoringSSL is awesome!");
         dtls_sync_send(&mut server_conn, b"Oh yeah definitely!")?;
         dtls_sync_shutdown(&mut server_conn)?;
-        // Second shutdown poll.
-        let _ = dtls_sync_shutdown(&mut server_conn);
+        // A `UnixDatagram` pair fails the peer's `send` with `ECONNREFUSED` as soon as this socket
+        // is closed.
+        // We will wait for the peer's `close_notify` here.
+        // We don't care about the status of the connection after shutdown, however.
+        let mut eof = [MaybeUninit::uninit(); 1];
+        let mut eof = ReceiveBuffer::new_uninit(&mut eof);
+        let _ = dtls_sync_recv(&mut server_conn, &mut eof);
         Ok::<_, Error>(())
     });
 

@@ -39,8 +39,7 @@ use bssl_tls::{
     ReceiveBuffer,
     connection::{
         Client,
-        Server,
-        lifecycle::ShutdownStatus, //
+        Server, //
     },
     errors::Error as TlsError,
     io::{
@@ -339,20 +338,8 @@ impl<Role, S: Unpin> Write for TlsStream<Role, S> {
         cx: &mut Context<'_>,
     ) -> Poll<Result<(), io::Error>> {
         match self.conn.inner.as_pin_mut().async_poll_shutdown(cx) {
-            Ok(Some(ShutdownStatus::CloseNotifyReceived)) => Poll::Ready(Ok(())),
-            Ok(Some(ShutdownStatus::RemainingApplicationData)) => {
-                Poll::Ready(Err(io::Error::other(
-                    "caller needs to drain application data before polling on shutdown again",
-                )))
-            }
-            Ok(Some(ShutdownStatus::EndOfStream)) => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "unexpected eof while waiting for peek close_notify",
-            ))),
-            Ok(Some(ShutdownStatus::CloseNotifyPosted)) => {
-                unreachable!()
-            }
-            Ok(None) => Poll::Pending,
+            Ok(true) => Poll::Ready(Ok(())),
+            Ok(false) => Poll::Pending,
             Err(e) => Poll::Ready(Err(io::Error::other(e))),
         }
     }

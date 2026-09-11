@@ -29,7 +29,6 @@ use crate::{
     ReceiveBuffer,
     connection::{
         TlsConnection,
-        lifecycle::ShutdownStatus,
         methods::HasTlsConnectionMethod, //
     },
     context::{
@@ -415,37 +414,33 @@ where
     /// Poll from the connection once for shutting down the connection.
     ///
     /// When the transport is not ready or the shutdown has pending resolution,
-    /// this function will register a waker and return [`None`].
+    /// this function will register a waker and return `false`.
+    /// Otherwise `true` signifies a successful notification of closing write end.
     pub fn async_poll_shutdown(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Result<Option<ShutdownStatus>, Error> {
+    ) -> Result<bool, Error> {
         self.set_waker(cx.waker());
         let Some(mut conn) = self.established() else {
             return Err(Error::Io(IoError::EndOfStream));
         };
-        loop {
-            match conn.sync_shutdown()? {
-                Some(ShutdownStatus::CloseNotifyPosted) => {}
-                status => return Ok(status),
-            }
+        match conn.sync_shutdown()? {
+            // TODO: drop the `Syscall` matching, it is bad and it will go away.
+            None | Some(TlsRetryReason::Syscall) => Ok(true),
+            Some(TlsRetryReason::WantRead | TlsRetryReason::WantWrite) => Ok(false),
+            Some(reason) => panic!("unexpected retry reason {reason:?}"),
         }
     }
 
     /// Asynchronously shut down the connection.
+    ///
+    /// The returned future completes when the notification of a closing write end is sent.
     pub fn async_shutdown<'a>(
         mut self: Pin<&'a mut Self>,
     ) -> impl 'a + Send + Future<Output = Result<(), Error>> {
         poll_fn(move |cx| match self.as_mut().async_poll_shutdown(cx) {
-            Ok(Some(ShutdownStatus::CloseNotifyReceived)) => Poll::Ready(Ok(())),
-            Ok(Some(ShutdownStatus::EndOfStream)) => {
-                Poll::Ready(Err(Error::Io(IoError::EndOfStream)))
-            }
-            Ok(Some(ShutdownStatus::RemainingApplicationData)) => Poll::Ready(Err(
-                Error::TlsReason(crate::errors::TlsErrorReason::ApplicationDataOnShutdown),
-            )),
-            Ok(Some(ShutdownStatus::CloseNotifyPosted)) => unreachable!(),
-            Ok(None) => Poll::Pending,
+            Ok(true) => Poll::Ready(Ok(())),
+            Ok(false) => Poll::Pending,
             Err(e) => Poll::Ready(Err(e)),
         })
     }

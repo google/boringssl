@@ -126,8 +126,12 @@ fn sync_ping_pong<
         assert_eq!(*message, *b"BoringSSL is awesome!");
         server_conn.sync_write(b"Oh yeah definitely!")?;
         server_conn.established().unwrap().sync_shutdown()?;
-        // Second shutdown poll.
-        server_conn.established().unwrap().sync_shutdown()?;
+        // Consume the peer's `close_notify` before this end of the transport is dropped.
+        // Otherwise, the connection may block or reset from unconsumed data.
+        let mut eof = [MaybeUninit::uninit(); 1];
+        let mut eof = ReceiveBuffer::new_uninit(&mut eof);
+        // We do not care if the connection was torn down or not.
+        let _ = server_conn.sync_read(&mut eof);
         Ok::<_, Error>(())
     });
 

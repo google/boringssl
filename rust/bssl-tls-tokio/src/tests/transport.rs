@@ -20,7 +20,6 @@ use bssl_tls::{
     },
     errors::Error, //
 };
-use futures::future::FutureExt;
 use tokio::io::{
     AsyncReadExt,
     AsyncWriteExt, //
@@ -54,7 +53,6 @@ async fn tokio_io() -> Result<(), Error> {
 
     let (server_tx, server_rx) = tokio::net::unix::pipe::pipe().unwrap();
     let (client_tx, client_rx) = tokio::net::unix::pipe::pipe().unwrap();
-    let (send_signal, recv_signal) = tokio::sync::oneshot::channel();
     let server_rx = TokioIo(server_rx);
     let server_tx = TokioIo(server_tx);
     let client_rx = TokioIo(client_rx);
@@ -72,22 +70,15 @@ async fn tokio_io() -> Result<(), Error> {
         assert_eq!(message, *b"BoringSSL is awesome!");
         server_conn.write_all(b"Oh yeah definitely!").await.unwrap();
 
-        // The original test used sync_shutdown on established()
-        // We use wrapper's shutdown instead.
-
-        let res = server_conn.shutdown().now_or_never();
-        assert!(res.is_none(), "{res:?}");
-
-        // Make the client progress
-        send_signal.send(()).unwrap();
-
         server_conn.shutdown().await.unwrap();
+
+        let mut eof = [0; 1];
+        let _ = server_conn.read(&mut eof).await;
     });
     client_conn
         .write_all(b"BoringSSL is awesome!")
         .await
         .unwrap();
-    recv_signal.await.unwrap();
     let mut message = [0; 19];
     client_conn.read_exact(&mut message).await.unwrap();
     assert_eq!(message, *b"Oh yeah definitely!");
