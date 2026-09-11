@@ -21,7 +21,7 @@ use std::{
 
 use super::AbstractSocketResult;
 
-/// A datagram socket protocol
+/// A datagram socket protocol as backing transport of TLS connection.
 pub trait DatagramSocket: Send {
     /// Send a complete datagram through the socket.
     ///
