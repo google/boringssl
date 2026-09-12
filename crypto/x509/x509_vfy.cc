@@ -1222,7 +1222,7 @@ static int internal_verify(X509_STORE_CTX *ctx) {
     // Skip signature check for self signed certificates unless
     // explicitly asked for. It doesn't add any security and just wastes
     // time.
-    if (xs != xi || (ctx->param->flags & X509_V_FLAG_CHECK_SS_SIGNATURE)) {
+    if (xs != xi) {
       EVP_PKEY *pkey = X509_get0_pubkey(xi);
       int err = pkey == nullptr ? X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
                                 : verify_signature(ctx, xs, xi, pkey);

@@ -5714,44 +5714,21 @@ TEST(X509Test, SignatureVerification) {
             Verify(leaf.valid.get(), {root.valid.get()},
                    {intermediate.bad_sig_type.get()}, {}));
 
-  // By default, the redundant root signature is not checked.
+  // The redundant root signature is not checked. It carries no securiy value.
   EXPECT_EQ(X509_V_OK, Verify(leaf.valid.get(), {root.bad_sig.get()},
                               {intermediate.valid.get()}, {}));
   EXPECT_EQ(X509_V_OK, Verify(leaf.valid.get(), {root.bad_sig_type.get()},
                               {intermediate.valid.get()}, {}));
 
-  // The caller can request checking it, although it's pointless.
-  EXPECT_EQ(
-      X509_V_ERR_CERT_SIGNATURE_FAILURE,
-      Verify(leaf.valid.get(), {root.bad_sig.get()}, {intermediate.valid.get()},
-             {}, X509_V_FLAG_CHECK_SS_SIGNATURE));
-  EXPECT_EQ(
-      X509_V_ERR_CERT_SIGNATURE_FAILURE,
-      Verify(leaf.valid.get(), {root.bad_sig_type.get()},
-             {intermediate.valid.get()}, {}, X509_V_FLAG_CHECK_SS_SIGNATURE));
-
-  // The above also applies when accepting a trusted, self-signed root as the
-  // target certificate.
+  // Likewise when accepting a trusted, self-signed root as the target
+  // certificate.
   EXPECT_EQ(X509_V_OK,
             Verify(root.bad_sig.get(), {root.bad_sig.get()}, {}, {}));
   EXPECT_EQ(X509_V_OK,
             Verify(root.bad_sig_type.get(), {root.bad_sig_type.get()}, {}, {}));
-  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
-            Verify(root.bad_sig.get(), {root.bad_sig.get()}, {}, {},
-                   X509_V_FLAG_CHECK_SS_SIGNATURE));
-  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
-            Verify(root.bad_sig_type.get(), {root.bad_sig_type.get()}, {}, {},
-                   X509_V_FLAG_CHECK_SS_SIGNATURE));
 
-  // If an intermediate is a trust anchor, the redundant signature is always
-  // ignored, even with `X509_V_FLAG_CHECK_SS_SIGNATURE`. (We cannot check the
-  // signature without the key.)
-  EXPECT_EQ(X509_V_OK,
-            Verify(leaf.valid.get(), {intermediate.bad_sig.get()}, {}, {},
-                   X509_V_FLAG_CHECK_SS_SIGNATURE | X509_V_FLAG_PARTIAL_CHAIN));
-  EXPECT_EQ(X509_V_OK,
-            Verify(leaf.valid.get(), {intermediate.bad_sig_type.get()}, {}, {},
-                   X509_V_FLAG_CHECK_SS_SIGNATURE | X509_V_FLAG_PARTIAL_CHAIN));
+  // If an intermediate is a trust anchor, the redundant signature is likewise
+  // ignored. (We cannot check the signature without the key anyway.)
   EXPECT_EQ(X509_V_OK, Verify(leaf.valid.get(), {intermediate.bad_sig.get()},
                               {}, {}, X509_V_FLAG_PARTIAL_CHAIN));
   EXPECT_EQ(X509_V_OK,
