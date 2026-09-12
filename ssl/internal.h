@@ -1465,14 +1465,6 @@ enum class SSLCredentialType {
   kRawPublicKey,
 };
 
-struct SSLTrustAnchorRange {
-  Array<uint8_t> base;
-  uint64_t min = 0;
-  uint64_t max = 0;
-
-  bool Contains(Span<const uint8_t> id) const;
-};
-
 class SSLCredential : public ssl_credential_st,
                       public RefCounted<SSLCredential> {
  public:
@@ -1599,9 +1591,9 @@ class SSLCredential : public ssl_credential_st,
   // chain in `chain`.
   Array<uint8_t> trust_anchor_id;
 
-  // trust_anchor_group_inclusions describes trust anchor groups that also match
+  // trust_anchor_group_patterns describes trust anchor groups that also match
   // this credential.
-  Vector<SSLTrustAnchorRange> trust_anchor_group_inclusions;
+  Vector<Array<uint8_t>> trust_anchor_group_patterns;
 
   CRYPTO_EX_DATA ex_data;
 
@@ -1616,6 +1608,11 @@ class SSLCredential : public ssl_credential_st,
   friend RefCounted;
   ~SSLCredential();
 };
+
+// ssl_trust_anchor_pattern_matches_id returns whether `pattern`, a trust anchor
+// ID pattern, matches `id`, a trust anchor ID.
+bool ssl_trust_anchor_pattern_matches_id(Span<const uint8_t> pattern,
+                                         Span<const uint8_t> id);
 
 // ssl_get_full_credential_list computes `hs`'s full credential list, including
 // the legacy credential. On success, it writes it to `*out` and returns true.

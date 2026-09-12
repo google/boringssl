@@ -2413,23 +2413,20 @@ func (c *Config) verifySignatureAlgorithms() []signatureAlgorithm {
 	return supportedSignatureAlgorithms
 }
 
-type TrustAnchorRange struct {
-	Base     []byte
-	Min, Max uint64
-}
-
 const (
-	certPropTrustAnchorID              uint16 = 0
-	certPropTrustAnchorGroupInclusions uint16 = 1
+	certPropTrustAnchorID          uint16 = 0
+	certPropTrustAnchorGroups      uint16 = 1
+	certPropTrustAnchorNegotiation uint16 = 2
 )
 
 type CertificatePropertyList struct {
-	TrustAnchorID              []byte
-	TrustAnchorGroupInclusions []TrustAnchorRange
+	TrustAnchorID          []byte
+	TrustAnchorGroups      [][]byte
+	TrustAnchorNegotiation bool
 }
 
 func (c *CertificatePropertyList) Empty() bool {
-	return len(c.TrustAnchorID) == 0 && len(c.TrustAnchorGroupInclusions) == 0
+	return len(c.TrustAnchorID) == 0 && len(c.TrustAnchorGroups) == 0
 }
 
 func (c *CertificatePropertyList) Marshal() []byte {
@@ -2441,17 +2438,19 @@ func (c *CertificatePropertyList) Marshal() []byte {
 			// no additional length prefix.
 			addUint16LengthPrefixedBytes(props, c.TrustAnchorID)
 		}
-		if len(c.TrustAnchorGroupInclusions) != 0 {
-			props.AddUint16(certPropTrustAnchorGroupInclusions)
+		if len(c.TrustAnchorGroups) != 0 {
+			props.AddUint16(certPropTrustAnchorGroups)
 			props.AddUint16LengthPrefixed(func(prop *cryptobyte.Builder) {
 				prop.AddUint16LengthPrefixed(func(ranges *cryptobyte.Builder) {
-					for _, r := range c.TrustAnchorGroupInclusions {
-						addUint8LengthPrefixedBytes(ranges, r.Base)
-						ranges.AddUint64(r.Min)
-						ranges.AddUint64(r.Max)
+					for _, p := range c.TrustAnchorGroups {
+						addUint8LengthPrefixedBytes(ranges, p)
 					}
 				})
 			})
+		}
+		if c.TrustAnchorNegotiation {
+			props.AddUint16(certPropTrustAnchorNegotiation)
+			props.AddUint16(0) // Zero-length property
 		}
 	})
 	return bb.BytesOrPanic()
