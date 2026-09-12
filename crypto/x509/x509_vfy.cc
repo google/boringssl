@@ -179,10 +179,10 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     return 0;
   }
 
-  // Maintain invariants: `num` is always the size of `ctx->chain` and `x` is
+  // Maintain invariants: `num` is always the size of `ctx->chain` and `last` is
   // always the last element.
   int num = (int)sk_X509_num(ctx->chain);
-  X509 *x = sk_X509_last(ctx->chain);
+  X509 *last = sk_X509_last(ctx->chain);
   // `param->depth` does not include the leaf certificate or the trust anchor,
   // so the maximum size is 2 more.
   int max_chain = param->depth >= INT_MAX - 2 ? INT_MAX : param->depth + 2;
@@ -195,7 +195,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     }
 
     int is_self_signed;
-    if (!cert_self_signed(x, &is_self_signed)) {
+    if (!cert_self_signed(last, &is_self_signed)) {
       ctx->error = X509_V_ERR_INVALID_EXTENSION;
       return 0;
     }
@@ -205,7 +205,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       break;
     }
     // See if we can find issuer in trusted store first.
-    if (UniquePtr<X509> trusted = get_trusted_issuer(ctx, x);
+    if (UniquePtr<X509> trusted = get_trusted_issuer(ctx, last);
         trusted != nullptr) {
       // Free the certificate. It will be picked up again later.
       break;
@@ -213,7 +213,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
 
     // If we were passed a cert chain, use it first
     if (sktmp != nullptr) {
-      X509 *issuer = find_issuer(ctx, sktmp, x);
+      X509 *issuer = find_issuer(ctx, sktmp, last);
       if (issuer != nullptr) {
         if (!PushToStack(ctx->chain, UpRef(issuer))) {
           ctx->error = X509_V_ERR_OUT_OF_MEM;
@@ -221,7 +221,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
         }
         (void)sk_X509_delete_ptr(sktmp, issuer);
         ctx->last_untrusted++;
-        x = issuer;
+        last = issuer;
         num++;
         // reparse the full chain for the next one
         continue;
@@ -233,12 +233,12 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   // At this point, chain should contain a list of untrusted certificates.
   // We now need to add at least one trusted one, if possible, otherwise we
   // complain.
+  assert(num == static_cast<int>(sk_X509_num(ctx->chain)));
+  assert(last == sk_X509_last(ctx->chain));
 
   // Examine last certificate in chain and see if it is self signed.
-  x = sk_X509_value(ctx->chain, num - 1);
-
   int is_self_signed;
-  if (!cert_self_signed(x, &is_self_signed)) {
+  if (!cert_self_signed(last, &is_self_signed)) {
     ctx->error = X509_V_ERR_INVALID_EXTENSION;
     return 0;
   }
@@ -251,10 +251,10 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       // We have a single self signed certificate: see if we can
       // find it in the store. We must have an exact match to avoid
       // possible impersonation.
-      UniquePtr<X509> issuer = get_trusted_issuer(ctx, x);
-      if (issuer == nullptr || X509_cmp(x, issuer.get()) != 0) {
+      UniquePtr<X509> issuer = get_trusted_issuer(ctx, last);
+      if (issuer == nullptr || X509_cmp(last, issuer.get()) != 0) {
         ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
-        ctx->current_cert = x;
+        ctx->current_cert = last;
         ctx->error_depth = num - 1;
         bad_chain = 1;
         if (!call_verify_cb(0, ctx)) {
@@ -263,9 +263,9 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       } else {
         // We have a match: replace certificate with store
         // version so we get any trust settings.
-        X509_free(x);
-        x = issuer.release();
-        (void)sk_X509_set(ctx->chain, num - 1, x);
+        X509_free(last);
+        last = issuer.release();
+        (void)sk_X509_set(ctx->chain, num - 1, last);
         ctx->last_untrusted = 0;
       }
     } else {
@@ -273,7 +273,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       chain_ss.reset(sk_X509_pop(ctx->chain));
       ctx->last_untrusted--;
       num--;
-      x = sk_X509_value(ctx->chain, num - 1);
+      last = sk_X509_value(ctx->chain, num - 1);
     }
   }
   // We now lookup certs from the certificate store
@@ -284,7 +284,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       // later.
       break;
     }
-    if (!cert_self_signed(x, &is_self_signed)) {
+    if (!cert_self_signed(last, &is_self_signed)) {
       ctx->error = X509_V_ERR_INVALID_EXTENSION;
       return 0;
     }
@@ -292,11 +292,11 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     if (is_self_signed) {
       break;
     }
-    UniquePtr<X509> issuer = get_trusted_issuer(ctx, x);
+    UniquePtr<X509> issuer = get_trusted_issuer(ctx, last);
     if (issuer == nullptr) {
       break;
     }
-    x = issuer.get();
+    last = issuer.get();
     if (!PushToStack(ctx->chain, std::move(issuer))) {
       ctx->error = X509_V_ERR_OUT_OF_MEM;
       return 0;
@@ -317,13 +317,13 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   // and set bad_chain == 1
   if (trust != X509_TRUST_TRUSTED && !bad_chain) {
     if (chain_ss == nullptr ||
-        !x509_check_issued_with_callback(ctx, x, chain_ss.get())) {
+        !x509_check_issued_with_callback(ctx, last, chain_ss.get())) {
       if (ctx->last_untrusted >= num) {
         ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY;
       } else {
         ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT;
       }
-      ctx->current_cert = x;
+      ctx->current_cert = last;
     } else {
       if (!PushToStack(ctx->chain, std::move(chain_ss))) {
         ctx->error = X509_V_ERR_OUT_OF_MEM;
