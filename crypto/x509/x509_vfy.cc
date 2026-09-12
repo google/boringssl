@@ -134,246 +134,243 @@ static X509 *lookup_cert_match(X509_STORE_CTX *ctx, X509 *x) {
 }
 
 int X509_verify_cert(X509_STORE_CTX *ctx) {
-  X509 *chain_ss = nullptr;
-  int bad_chain = 0;
-  X509_VERIFY_PARAM *param = ctx->param;
-  int i, ok = 0;
-  int trust;
+  int ok = 0;
+  Cleanup set_ctx_error = [&] {
+    // Safety net, error returns must set ctx->error
+    if (!ok && ctx->error == X509_V_OK) {
+      ctx->error = X509_V_ERR_UNSPECIFIED;
+    }
+  };
+
+  const X509_VERIFY_PARAM *param = ctx->param;
+  if (ctx->cert == nullptr) {
+    OPENSSL_PUT_ERROR(X509, X509_R_NO_CERT_SET_FOR_US_TO_VERIFY);
+    ctx->error = X509_V_ERR_INVALID_CALL;
+    return 0;
+  }
+
+  if (ctx->chain != nullptr) {
+    // This X509_STORE_CTX has already been used to verify a cert. We
+    // cannot do another one.
+    OPENSSL_PUT_ERROR(X509, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+    ctx->error = X509_V_ERR_INVALID_CALL;
+    return 0;
+  }
+
+  if (param->flags &
+      (X509_V_FLAG_EXTENDED_CRL_SUPPORT | X509_V_FLAG_USE_DELTAS)) {
+    // We do not support indirect or delta CRLs. The flags still exist for
+    // compatibility with bindings libraries, but to ensure we do not
+    // inadvertently skip a CRL check that the caller expects, fail closed.
+    OPENSSL_PUT_ERROR(X509, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+    ctx->error = X509_V_ERR_INVALID_CALL;
+    return 0;
+  }
+
+  // first we make sure the chain we are going to build is present and that
+  // the first entry is in place
+  ctx->chain = sk_X509_new_null();
+  if (ctx->chain == nullptr || !sk_X509_push(ctx->chain, ctx->cert)) {
+    ctx->error = X509_V_ERR_OUT_OF_MEM;
+    return 0;
+  }
+  X509_up_ref(ctx->cert);
+  ctx->last_untrusted = 1;
+
+  // We use a temporary STACK so we can chop and hack at it. `sktmp` is not a
+  // `UniquePtr<STACK_OF(X509)>` because that would do a deep free and this is a
+  // shallow free.
   STACK_OF(X509) *sktmp = nullptr;
+  Cleanup free_sktmp = [&] { sk_X509_free(sktmp); };
+  if (ctx->untrusted != nullptr &&
+      (sktmp = sk_X509_dup(ctx->untrusted)) == nullptr) {
+    ctx->error = X509_V_ERR_OUT_OF_MEM;
+    return 0;
+  }
 
-  {
-    if (ctx->cert == nullptr) {
-      OPENSSL_PUT_ERROR(X509, X509_R_NO_CERT_SET_FOR_US_TO_VERIFY);
-      ctx->error = X509_V_ERR_INVALID_CALL;
-      return 0;
-    }
+  int num = (int)sk_X509_num(ctx->chain);
+  X509 *x = sk_X509_value(ctx->chain, num - 1);
+  // `param->depth` does not include the leaf certificate or the trust anchor,
+  // so the maximum size is 2 more.
+  int max_chain = param->depth >= INT_MAX - 2 ? INT_MAX : param->depth + 2;
 
-    if (ctx->chain != nullptr) {
-      // This X509_STORE_CTX has already been used to verify a cert. We
-      // cannot do another one.
-      OPENSSL_PUT_ERROR(X509, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
-      ctx->error = X509_V_ERR_INVALID_CALL;
-      return 0;
-    }
-
-    if (ctx->param->flags &
-        (X509_V_FLAG_EXTENDED_CRL_SUPPORT | X509_V_FLAG_USE_DELTAS)) {
-      // We do not support indirect or delta CRLs. The flags still exist for
-      // compatibility with bindings libraries, but to ensure we do not
-      // inadvertently skip a CRL check that the caller expects, fail closed.
-      OPENSSL_PUT_ERROR(X509, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
-      ctx->error = X509_V_ERR_INVALID_CALL;
-      return 0;
-    }
-
-    // first we make sure the chain we are going to build is present and that
-    // the first entry is in place
-    ctx->chain = sk_X509_new_null();
-    if (ctx->chain == nullptr || !sk_X509_push(ctx->chain, ctx->cert)) {
-      ctx->error = X509_V_ERR_OUT_OF_MEM;
-      goto end;
-    }
-    X509_up_ref(ctx->cert);
-    ctx->last_untrusted = 1;
-
-    // We use a temporary STACK so we can chop and hack at it.
-    if (ctx->untrusted != nullptr &&
-        (sktmp = sk_X509_dup(ctx->untrusted)) == nullptr) {
-      ctx->error = X509_V_ERR_OUT_OF_MEM;
-      goto end;
-    }
-
-    int num = (int)sk_X509_num(ctx->chain);
-    X509 *x = sk_X509_value(ctx->chain, num - 1);
-    // `param->depth` does not include the leaf certificate or the trust anchor,
-    // so the maximum size is 2 more.
-    int max_chain = param->depth >= INT_MAX - 2 ? INT_MAX : param->depth + 2;
-
-    for (;;) {
-      if (num >= max_chain) {
-        // FIXME: If this happens, we should take note of it and, if
-        // appropriate, use the X509_V_ERR_CERT_CHAIN_TOO_LONG error code later.
-        break;
-      }
-
-      int is_self_signed;
-      if (!cert_self_signed(x, &is_self_signed)) {
-        ctx->error = X509_V_ERR_INVALID_EXTENSION;
-        goto end;
-      }
-
-      // If we are self signed, we break
-      if (is_self_signed) {
-        break;
-      }
-      // See if we can find issuer in trusted store first
-      X509 *issuer = get_trusted_issuer(ctx, x);
-      if (issuer != nullptr) {
-        // Free the certificate. It will be picked up again later.
-        X509_free(issuer);
-        break;
-      }
-
-      // If we were passed a cert chain, use it first
-      if (sktmp != nullptr) {
-        issuer = find_issuer(ctx, sktmp, x);
-        if (issuer != nullptr) {
-          if (!sk_X509_push(ctx->chain, issuer)) {
-            ctx->error = X509_V_ERR_OUT_OF_MEM;
-            goto end;
-          }
-          X509_up_ref(issuer);
-          (void)sk_X509_delete_ptr(sktmp, issuer);
-          ctx->last_untrusted++;
-          x = issuer;
-          num++;
-          // reparse the full chain for the next one
-          continue;
-        }
-      }
+  for (;;) {
+    if (num >= max_chain) {
+      // FIXME: If this happens, we should take note of it and, if
+      // appropriate, use the X509_V_ERR_CERT_CHAIN_TOO_LONG error code later.
       break;
     }
-
-    // At this point, chain should contain a list of untrusted certificates.
-    // We now need to add at least one trusted one, if possible, otherwise we
-    // complain.
-
-    // Examine last certificate in chain and see if it is self signed.
-    i = (int)sk_X509_num(ctx->chain);
-    x = sk_X509_value(ctx->chain, i - 1);
 
     int is_self_signed;
     if (!cert_self_signed(x, &is_self_signed)) {
       ctx->error = X509_V_ERR_INVALID_EXTENSION;
-      goto end;
+      return 0;
     }
 
+    // If we are self signed, we break
     if (is_self_signed) {
-      // we have a self signed certificate
-      if (sk_X509_num(ctx->chain) == 1) {
-        // We have a single self signed certificate: see if we can
-        // find it in the store. We must have an exact match to avoid
-        // possible impersonation.
-        X509 *issuer = get_trusted_issuer(ctx, x);
-        if (issuer == nullptr || X509_cmp(x, issuer) != 0) {
-          X509_free(issuer);
-          ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
-          ctx->current_cert = x;
-          ctx->error_depth = i - 1;
-          bad_chain = 1;
-          if (!call_verify_cb(0, ctx)) {
-            goto end;
-          }
-        } else {
-          // We have a match: replace certificate with store
-          // version so we get any trust settings.
-          X509_free(x);
-          x = issuer;
-          (void)sk_X509_set(ctx->chain, i - 1, x);
-          ctx->last_untrusted = 0;
+      break;
+    }
+    // See if we can find issuer in trusted store first
+    X509 *issuer = get_trusted_issuer(ctx, x);
+    if (issuer != nullptr) {
+      // Free the certificate. It will be picked up again later.
+      X509_free(issuer);
+      break;
+    }
+
+    // If we were passed a cert chain, use it first
+    if (sktmp != nullptr) {
+      issuer = find_issuer(ctx, sktmp, x);
+      if (issuer != nullptr) {
+        if (!sk_X509_push(ctx->chain, issuer)) {
+          ctx->error = X509_V_ERR_OUT_OF_MEM;
+          return 0;
         }
-      } else {
-        // extract and save self signed certificate for later use
-        chain_ss = sk_X509_pop(ctx->chain);
-        ctx->last_untrusted--;
-        num--;
-        x = sk_X509_value(ctx->chain, num - 1);
+        X509_up_ref(issuer);
+        (void)sk_X509_delete_ptr(sktmp, issuer);
+        ctx->last_untrusted++;
+        x = issuer;
+        num++;
+        // reparse the full chain for the next one
+        continue;
       }
     }
-    // We now lookup certs from the certificate store
-    for (;;) {
-      if (num >= max_chain) {
-        // FIXME: If this happens, we should take note of it and, if
-        // appropriate, use the X509_V_ERR_CERT_CHAIN_TOO_LONG error code
-        // later.
-        break;
-      }
-      if (!cert_self_signed(x, &is_self_signed)) {
-        ctx->error = X509_V_ERR_INVALID_EXTENSION;
-        goto end;
-      }
-      // If we are self signed, we break
-      if (is_self_signed) {
-        break;
-      }
+    break;
+  }
+
+  // At this point, chain should contain a list of untrusted certificates.
+  // We now need to add at least one trusted one, if possible, otherwise we
+  // complain.
+
+  // Examine last certificate in chain and see if it is self signed.
+  int i = (int)sk_X509_num(ctx->chain);
+  x = sk_X509_value(ctx->chain, i - 1);
+
+  int is_self_signed;
+  if (!cert_self_signed(x, &is_self_signed)) {
+    ctx->error = X509_V_ERR_INVALID_EXTENSION;
+    return 0;
+  }
+
+  int bad_chain = 0;
+  UniquePtr<X509> chain_ss;
+  if (is_self_signed) {
+    // we have a self signed certificate
+    if (sk_X509_num(ctx->chain) == 1) {
+      // We have a single self signed certificate: see if we can
+      // find it in the store. We must have an exact match to avoid
+      // possible impersonation.
       X509 *issuer = get_trusted_issuer(ctx, x);
-      if (issuer == nullptr) {
-        break;
-      }
-      x = issuer;
-      if (!sk_X509_push(ctx->chain, x)) {
+      if (issuer == nullptr || X509_cmp(x, issuer) != 0) {
         X509_free(issuer);
+        ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
+        ctx->current_cert = x;
+        ctx->error_depth = i - 1;
+        bad_chain = 1;
+        if (!call_verify_cb(0, ctx)) {
+          return 0;
+        }
+      } else {
+        // We have a match: replace certificate with store
+        // version so we get any trust settings.
+        X509_free(x);
+        x = issuer;
+        (void)sk_X509_set(ctx->chain, i - 1, x);
+        ctx->last_untrusted = 0;
+      }
+    } else {
+      // extract and save self signed certificate for later use
+      chain_ss.reset(sk_X509_pop(ctx->chain));
+      ctx->last_untrusted--;
+      num--;
+      x = sk_X509_value(ctx->chain, num - 1);
+    }
+  }
+  // We now lookup certs from the certificate store
+  for (;;) {
+    if (num >= max_chain) {
+      // FIXME: If this happens, we should take note of it and, if
+      // appropriate, use the X509_V_ERR_CERT_CHAIN_TOO_LONG error code
+      // later.
+      break;
+    }
+    if (!cert_self_signed(x, &is_self_signed)) {
+      ctx->error = X509_V_ERR_INVALID_EXTENSION;
+      return 0;
+    }
+    // If we are self signed, we break
+    if (is_self_signed) {
+      break;
+    }
+    X509 *issuer = get_trusted_issuer(ctx, x);
+    if (issuer == nullptr) {
+      break;
+    }
+    x = issuer;
+    if (!sk_X509_push(ctx->chain, x)) {
+      X509_free(issuer);
+      ctx->error = X509_V_ERR_OUT_OF_MEM;
+      return 0;
+    }
+    num++;
+  }
+
+  // we now have our chain, lets check it...
+  int trust = check_trust(ctx);
+
+  // If explicitly rejected error
+  if (trust == X509_TRUST_REJECTED) {
+    return 0;
+  }
+
+  // If not explicitly trusted then indicate error unless it's a single
+  // self signed certificate in which case we've indicated an error already
+  // and set bad_chain == 1
+  if (trust != X509_TRUST_TRUSTED && !bad_chain) {
+    if (chain_ss == nullptr ||
+        !x509_check_issued_with_callback(ctx, x, chain_ss.get())) {
+      if (ctx->last_untrusted >= num) {
+        ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY;
+      } else {
+        ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT;
+      }
+      ctx->current_cert = x;
+    } else {
+      if (!PushToStack(ctx->chain, std::move(chain_ss))) {
         ctx->error = X509_V_ERR_OUT_OF_MEM;
-        goto end;
+        return 0;
       }
       num++;
+      ctx->last_untrusted = num;
+      ctx->current_cert =
+          sk_X509_value(ctx->chain, sk_X509_num(ctx->chain) - 1);
+      ctx->error = X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN;
     }
 
-    // we now have our chain, lets check it...
-    trust = check_trust(ctx);
-
-    // If explicitly rejected error
-    if (trust == X509_TRUST_REJECTED) {
-      goto end;
+    ctx->error_depth = num - 1;
+    bad_chain = 1;
+    if (!call_verify_cb(0, ctx)) {
+      return 0;
     }
-
-    // If not explicitly trusted then indicate error unless it's a single
-    // self signed certificate in which case we've indicated an error already
-    // and set bad_chain == 1
-    if (trust != X509_TRUST_TRUSTED && !bad_chain) {
-      if (chain_ss == nullptr ||
-          !x509_check_issued_with_callback(ctx, x, chain_ss)) {
-        if (ctx->last_untrusted >= num) {
-          ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY;
-        } else {
-          ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT;
-        }
-        ctx->current_cert = x;
-      } else {
-        if (!sk_X509_push(ctx->chain, chain_ss)) {
-          ctx->error = X509_V_ERR_OUT_OF_MEM;
-          goto end;
-        }
-        num++;
-        ctx->last_untrusted = num;
-        ctx->current_cert = chain_ss;
-        ctx->error = X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN;
-        chain_ss = nullptr;
-      }
-
-      ctx->error_depth = num - 1;
-      bad_chain = 1;
-      if (!call_verify_cb(0, ctx)) {
-        goto end;
-      }
-    }
-
-    // We have the chain complete: now we need to check its purpose
-    if (!check_chain_extensions(ctx) ||  //
-        !check_id(ctx) ||
-        // We check revocation status after copying parameters because they may
-        // be needed for CRL signature verification.
-        !check_revocation(ctx) ||  //
-        !internal_verify(ctx) ||   //
-        !check_name_constraints(ctx) ||
-        // TODO(davidben): Does `check_policy` still need to be conditioned on
-        // |!bad_chain|? DoS concerns have been resolved.
-        (!bad_chain && !check_policy(ctx))) {
-      goto end;
-    }
-
-    ok = 1;
   }
 
-end:
-  sk_X509_free(sktmp);
-  X509_free(chain_ss);
-
-  // Safety net, error returns must set ctx->error
-  if (!ok && ctx->error == X509_V_OK) {
-    ctx->error = X509_V_ERR_UNSPECIFIED;
+  // We have the chain complete: now we need to check its purpose
+  if (!check_chain_extensions(ctx) ||  //
+      !check_id(ctx) ||
+      // We check revocation status after copying parameters because they may
+      // be needed for CRL signature verification.
+      !check_revocation(ctx) ||  //
+      !internal_verify(ctx) ||   //
+      !check_name_constraints(ctx) ||
+      // TODO(davidben): Does `check_policy` still need to be conditioned on
+      // |!bad_chain|? DoS concerns have been resolved.
+      (!bad_chain && !check_policy(ctx))) {
+    return 0;
   }
-  return ok;
+
+  ok = 1;
+  return 1;
 }
 
 // Given a STACK_OF(X509) find the issuer of cert (if any)
