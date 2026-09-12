@@ -64,7 +64,6 @@ EVP_PKEY *EVP_PKEY_dup_ref(const EVP_PKEY *pkey) {
     return nullptr;
   }
   auto pkey_ref = const_cast<EVP_PKEY *>(pkey);
-  // We know that this call always returns one.
   EVP_PKEY_up_ref(pkey_ref);
   return pkey_ref;
 }

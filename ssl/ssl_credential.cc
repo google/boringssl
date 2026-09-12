@@ -484,9 +484,10 @@ void SSL_CREDENTIAL_up_ref(SSL_CREDENTIAL *cred) {
 }
 
 SSL_CREDENTIAL *SSL_CREDENTIAL_dup_ref(const SSL_CREDENTIAL *cred) {
-  // Safety: we do not mutate the internal state of `cred` other than the
-  // ref-count atomic variable.
-  auto *cred_impl = FromOpaque(const_cast<SSL_CREDENTIAL *>(cred));
+  if (cred == nullptr) {
+    return nullptr;
+  }
+  auto *cred_impl = FromOpaque(cred);
   cred_impl->UpRefInternal();
   return const_cast<SSL_CREDENTIAL *>(cred);
 }
