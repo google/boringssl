@@ -170,18 +170,18 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
   UniquePtr<CRYPTO_BUFFER> buf;
   CRYPTO_EX_DATA ex_data;
   // These contain copies of various extension values
-  long ex_pathlen = -1;
-  uint32_t ex_flags = 0;
-  uint32_t ex_kusage = 0;
-  uint32_t ex_xkusage = 0;
-  UniquePtr<ASN1_OCTET_STRING> skid;
-  UniquePtr<AUTHORITY_KEYID> akid;
-  UniquePtr<STACK_OF(DIST_POINT)> crldp;
-  UniquePtr<STACK_OF(GENERAL_NAME)> altname;
-  UniquePtr<NAME_CONSTRAINTS> nc;
-  unsigned char cert_hash[SHA256_DIGEST_LENGTH] = {};
+  mutable long ex_pathlen = -1;
+  mutable uint32_t ex_flags = 0;
+  mutable uint32_t ex_kusage = 0;
+  mutable uint32_t ex_xkusage = 0;
+  mutable UniquePtr<ASN1_OCTET_STRING> skid;
+  mutable UniquePtr<AUTHORITY_KEYID> akid;
+  mutable UniquePtr<STACK_OF(DIST_POINT)> crldp;
+  mutable UniquePtr<STACK_OF(GENERAL_NAME)> altname;
+  mutable UniquePtr<NAME_CONSTRAINTS> nc;
+  mutable unsigned char cert_hash[SHA256_DIGEST_LENGTH] = {};
   bssl::X509_CERT_AUX *aux = nullptr;
-  Mutex lock;
+  mutable Mutex lock;
 
  private:
   friend RefCounted;
@@ -522,7 +522,7 @@ OPENSSL_EXPORT int x509v3_looks_like_dns_name(const unsigned char *in,
 // x509v3_cache_extensions fills in a number of fields relating to X.509
 // extensions in `x`. It returns one on success and zero if some extensions were
 // invalid.
-OPENSSL_EXPORT int x509v3_cache_extensions(X509 *x);
+OPENSSL_EXPORT int x509v3_cache_extensions(const X509 *x);
 
 // x509v3_a2i_ipadd decodes `ipasc` as an IPv4 or IPv6 address. IPv6 addresses
 // use colon-separated syntax while IPv4 addresses use dotted decimal syntax. If

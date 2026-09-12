@@ -107,8 +107,8 @@ int X509_cmp(const X509 *a, const X509 *b) {
   // comparison and may cause misbehaving sorts by transitivity. For now, we
   // retain the old OpenSSL behavior, which was to ignore the error. See
   // https://crbug.com/boringssl/355.
-  x509v3_cache_extensions((X509Impl *)a_impl);
-  x509v3_cache_extensions((X509Impl *)b_impl);
+  x509v3_cache_extensions(a_impl);
+  x509v3_cache_extensions(b_impl);
 
   return OPENSSL_memcmp(a_impl->cert_hash, b_impl->cert_hash,
                         SHA256_DIGEST_LENGTH);
