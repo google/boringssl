@@ -179,6 +179,8 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     return 0;
   }
 
+  // Maintain invariants: `num` is always the size of `ctx->chain` and `x` is
+  // always the last element.
   int num = (int)sk_X509_num(ctx->chain);
   X509 *x = sk_X509_value(ctx->chain, num - 1);
   // `param->depth` does not include the leaf certificate or the trust anchor,
@@ -233,8 +235,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   // complain.
 
   // Examine last certificate in chain and see if it is self signed.
-  int i = (int)sk_X509_num(ctx->chain);
-  x = sk_X509_value(ctx->chain, i - 1);
+  x = sk_X509_value(ctx->chain, num - 1);
 
   int is_self_signed;
   if (!cert_self_signed(x, &is_self_signed)) {
@@ -254,7 +255,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       if (issuer == nullptr || X509_cmp(x, issuer.get()) != 0) {
         ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
         ctx->current_cert = x;
-        ctx->error_depth = i - 1;
+        ctx->error_depth = num - 1;
         bad_chain = 1;
         if (!call_verify_cb(0, ctx)) {
           return 0;
@@ -264,7 +265,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
         // version so we get any trust settings.
         X509_free(x);
         x = issuer.release();
-        (void)sk_X509_set(ctx->chain, i - 1, x);
+        (void)sk_X509_set(ctx->chain, num - 1, x);
         ctx->last_untrusted = 0;
       }
     } else {
