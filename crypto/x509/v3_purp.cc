@@ -87,7 +87,7 @@ static const X509_PURPOSE xstandard[] = {
      "timestampsign"},
 };
 
-int X509_check_purpose(X509 *x, int id, int ca) {
+int X509_check_purpose(const X509 *x, int id, int ca) {
   // This differs from OpenSSL, which uses -1 to indicate a fatal error and 0 to
   // indicate an invalid certificate. BoringSSL uses 0 for both.
   if (!x509v3_cache_extensions(x)) {

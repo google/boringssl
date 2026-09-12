@@ -27,14 +27,14 @@ typedef struct x509_trust_st X509_TRUST;
 
 struct x509_trust_st {
   int trust;
-  int (*check_trust)(const X509_TRUST *, X509 *);
+  int (*check_trust)(const X509_TRUST *, const X509 *);
   int nid;
 } /* X509_TRUST */;
 
-static int trust_1oidany(const X509_TRUST *trust, X509 *x);
-static int trust_compat(const X509_TRUST *trust, X509 *x);
+static int trust_1oidany(const X509_TRUST *trust, const X509 *x);
+static int trust_compat(const X509_TRUST *trust, const X509 *x);
 
-static int obj_trust(int id, X509 *x);
+static int obj_trust(int id, const X509 *x);
 
 static const X509_TRUST trstandard[] = {
     {X509_TRUST_COMPAT, trust_compat, 0},
@@ -53,7 +53,7 @@ static const X509_TRUST *X509_TRUST_get0(int id) {
   return nullptr;
 }
 
-int X509_check_trust(X509 *x, int id, int flags) {
+int X509_check_trust(const X509 *x, int id, int flags) {
   if (id == -1) {
     return X509_TRUST_TRUSTED;
   }
@@ -79,7 +79,7 @@ int bssl::X509_is_valid_trust_id(int trust) {
   return X509_TRUST_get0(trust) != nullptr;
 }
 
-static int trust_1oidany(const X509_TRUST *trust, X509 *x) {
+static int trust_1oidany(const X509_TRUST *trust, const X509 *x) {
   auto *impl = FromOpaque(x);
   if (impl->aux && (impl->aux->trust || impl->aux->reject)) {
     return obj_trust(trust->nid, impl);
@@ -89,7 +89,7 @@ static int trust_1oidany(const X509_TRUST *trust, X509 *x) {
   return trust_compat(trust, impl);
 }
 
-static int trust_compat(const X509_TRUST *trust, X509 *x) {
+static int trust_compat(const X509_TRUST *trust, const X509 *x) {
   auto *impl = FromOpaque(x);
   if (!x509v3_cache_extensions(x)) {
     return X509_TRUST_UNTRUSTED;
@@ -101,7 +101,7 @@ static int trust_compat(const X509_TRUST *trust, X509 *x) {
   }
 }
 
-static int obj_trust(int id, X509 *x) {
+static int obj_trust(int id, const X509 *x) {
   auto *impl = FromOpaque(x);
   X509_CERT_AUX *ax = impl->aux;
   if (!ax) {

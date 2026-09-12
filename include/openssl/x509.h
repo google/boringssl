@@ -4672,7 +4672,7 @@ OPENSSL_EXPORT int X509_STORE_CTX_get1_issuer(X509 **out_issuer,
 // some extensions in `x509` and may return zero on syntax error. Historically,
 // callers primarily used this function to trigger this parsing, but this is no
 // longer necessary. Functions acting on `X509` will internally parse as needed.
-OPENSSL_EXPORT int X509_check_purpose(X509 *x509, int purpose, int ca);
+OPENSSL_EXPORT int X509_check_purpose(const X509 *x509, int purpose, int ca);
 
 #define X509_TRUST_TRUSTED 1
 #define X509_TRUST_REJECTED 2
@@ -4684,7 +4684,7 @@ OPENSSL_EXPORT int X509_check_purpose(X509 *x509, int purpose, int ca);
 // was distrusted, and `X509_TRUST_UNTRUSTED` otherwise. `id` should be one of
 // the `X509_TRUST_*` constants, or zero to indicate the default behavior.
 // `flags` should be zero and is ignored.
-OPENSSL_EXPORT int X509_check_trust(X509 *x509, int id, int flags);
+OPENSSL_EXPORT int X509_check_trust(const X509 *x509, int id, int flags);
 
 // X509_STORE_CTX_get1_certs returns a newly-allocated stack containing all
 // trusted certificates in `ctx`'s `X509_STORE` whose subject matches `name`, or
