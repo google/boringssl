@@ -678,8 +678,6 @@ static int check_revocation_for_cert(X509_STORE_CTX *ctx, int depth) {
     return call_verify_cb(0, ctx);
   }
 
-  ctx->current_crl = crl.get();
-  Cleanup clear_current_crl = [&] { ctx->current_crl = nullptr; };
   if (!check_crl(ctx, crl.get()) ||  //
       !cert_crl(ctx, crl.get(), x)) {
     return 0;
@@ -694,9 +692,6 @@ static int check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify) {
     return 1;
   }
 
-  if (notify) {
-    ctx->current_crl = crl;
-  }
   int64_t ptime;
   if (ctx->param->flags & X509_V_FLAG_USE_CHECK_TIME) {
     ptime = ctx->param->check_time;
@@ -746,10 +741,6 @@ static int check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify) {
         return 0;
       }
     }
-  }
-
-  if (notify) {
-    ctx->current_crl = nullptr;
   }
 
   return 1;
@@ -1267,10 +1258,6 @@ STACK_OF(X509) *X509_STORE_CTX_get1_chain(const X509_STORE_CTX *ctx) {
     return nullptr;
   }
   return X509_chain_up_ref(ctx->chain);
-}
-
-X509_CRL *X509_STORE_CTX_get0_current_crl(const X509_STORE_CTX *ctx) {
-  return ctx->current_crl;
 }
 
 X509_STORE_CTX *X509_STORE_CTX_get0_parent_ctx(const X509_STORE_CTX *ctx) {

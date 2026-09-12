@@ -406,7 +406,6 @@ struct x509_store_ctx_st {
   int error_depth;
   int error;
   X509 *current_cert;
-  X509_CRL *current_crl;  // current CRL
 
   X509 *current_crl_issuer;  // issuer of current CRL
   int current_crl_score;     // score of current CRL

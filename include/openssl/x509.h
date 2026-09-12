@@ -3071,11 +3071,6 @@ OPENSSL_EXPORT int X509_STORE_CTX_get_error_depth(const X509_STORE_CTX *ctx);
 // error returned by `X509_STORE_CTX_get_error`.
 OPENSSL_EXPORT X509 *X509_STORE_CTX_get_current_cert(const X509_STORE_CTX *ctx);
 
-// X509_STORE_CTX_get0_current_crl returns the CRL which caused the error
-// returned by `X509_STORE_CTX_get_error`.
-OPENSSL_EXPORT X509_CRL *X509_STORE_CTX_get0_current_crl(
-    const X509_STORE_CTX *ctx);
-
 // X509_STORE_CTX_get0_store returns the `X509_STORE` that `ctx` uses.
 OPENSSL_EXPORT X509_STORE *X509_STORE_CTX_get0_store(const X509_STORE_CTX *ctx);
 
