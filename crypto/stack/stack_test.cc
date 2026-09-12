@@ -77,6 +77,14 @@ static void ExpectStackEquals(const STACK_OF(TEST_INT) *sk,
     }
   }
 
+  if (vec.empty()) {
+    EXPECT_EQ(sk_TEST_INT_last(sk), nullptr);
+  } else {
+    const TEST_INT *obj = sk_TEST_INT_last(sk);
+    ASSERT_TRUE(obj);
+    EXPECT_EQ(vec.back(), *obj);
+  }
+
   // Reading out-of-bounds fails.
   EXPECT_FALSE(sk_TEST_INT_value(sk, vec.size()));
   EXPECT_FALSE(sk_TEST_INT_value(sk, vec.size() + 1));

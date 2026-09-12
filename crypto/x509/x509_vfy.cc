@@ -182,7 +182,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   // Maintain invariants: `num` is always the size of `ctx->chain` and `x` is
   // always the last element.
   int num = (int)sk_X509_num(ctx->chain);
-  X509 *x = sk_X509_value(ctx->chain, num - 1);
+  X509 *x = sk_X509_last(ctx->chain);
   // `param->depth` does not include the leaf certificate or the trust anchor,
   // so the maximum size is 2 more.
   int max_chain = param->depth >= INT_MAX - 2 ? INT_MAX : param->depth + 2;
@@ -331,8 +331,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       }
       num++;
       ctx->last_untrusted = num;
-      ctx->current_cert =
-          sk_X509_value(ctx->chain, sk_X509_num(ctx->chain) - 1);
+      ctx->current_cert = sk_X509_last(ctx->chain);
       ctx->error = X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN;
     }
 

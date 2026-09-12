@@ -128,6 +128,10 @@ void sk_SAMPLE_zero(STACK_OF(SAMPLE) *sk);
 // returns NULL.
 SAMPLE *sk_SAMPLE_value(const STACK_OF(SAMPLE) *sk, size_t i);
 
+// sk_SAMPLE_last returns the last pointer in `sk`, or NULL if `sk` is empty. If
+// `sk` is NULL, it is treated as an empty list and the function returns NULL.
+SAMPLE *sk_SAMPLE_last(const STACK_OF(SAMPLE) *sk);
+
 // sk_SAMPLE_set sets the `i`th pointer in `sk` to `p` and returns `p`. If `i`
 // is out of range, it returns NULL.
 SAMPLE *sk_SAMPLE_set(STACK_OF(SAMPLE) *sk, size_t i, SAMPLE *p);
@@ -281,6 +285,7 @@ OPENSSL_EXPORT OPENSSL_STACK *OPENSSL_sk_new_null(void);
 OPENSSL_EXPORT size_t OPENSSL_sk_num(const OPENSSL_STACK *sk);
 OPENSSL_EXPORT void OPENSSL_sk_zero(OPENSSL_STACK *sk);
 OPENSSL_EXPORT void *OPENSSL_sk_value(const OPENSSL_STACK *sk, size_t i);
+OPENSSL_EXPORT void *OPENSSL_sk_last(const OPENSSL_STACK *sk);
 OPENSSL_EXPORT void *OPENSSL_sk_set(OPENSSL_STACK *sk, size_t i, void *p);
 OPENSSL_EXPORT void OPENSSL_sk_free(OPENSSL_STACK *sk);
 OPENSSL_EXPORT void OPENSSL_sk_pop_free_ex(
@@ -447,6 +452,10 @@ BSSL_NAMESPACE_END
   OPENSSL_INLINE ptrtype sk_##name##_value(const STACK_OF(name) *sk,           \
                                            size_t i) {                         \
     return (ptrtype)OPENSSL_sk_value((const OPENSSL_STACK *)sk, i);            \
+  }                                                                            \
+                                                                               \
+  OPENSSL_INLINE ptrtype sk_##name##_last(const STACK_OF(name) *sk) {          \
+    return (ptrtype)OPENSSL_sk_last((const OPENSSL_STACK *)sk);                \
   }                                                                            \
                                                                                \
   OPENSSL_INLINE ptrtype sk_##name##_set(STACK_OF(name) *sk, size_t i,         \
