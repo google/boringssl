@@ -1269,14 +1269,9 @@ static int internal_verify(X509_STORE_CTX *ctx) {
     // time.
     if (xs != xi || (ctx->param->flags & X509_V_FLAG_CHECK_SS_SIGNATURE)) {
       EVP_PKEY *pkey = X509_get0_pubkey(xi);
-      if (pkey == nullptr) {
-        ctx->error = X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY;
-        ctx->current_cert = xi;
-        if (!call_verify_cb(0, ctx)) {
-          return 0;
-        }
-      } else if (int err = verify_signature(ctx, xs, xi, pkey);
-                 err != X509_V_OK) {
+      int err = pkey == nullptr ? X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
+                                : verify_signature(ctx, xs, xi, pkey);
+      if (err != X509_V_OK) {
         ctx->error = err;
         ctx->current_cert = xs;
         if (!call_verify_cb(0, ctx)) {
