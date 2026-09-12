@@ -59,6 +59,14 @@ static ExDataClass g_ex_data_class(/*with_app_data=*/true);
 // CRL issuer matches CRL AKID
 #define CRL_SCORE_AKID 0x004
 
+namespace {
+struct CRLInfo {
+  UniquePtr<X509_CRL> crl;
+  X509 *issuer = nullptr;
+  int score = 0;
+};
+}  // namespace
+
 static int null_callback(int ok, X509_STORE_CTX *e);
 static X509 *find_issuer(X509_STORE_CTX *ctx, const STACK_OF(X509) *sk,
                          const X509 *x);
@@ -73,11 +81,11 @@ static int check_policy(X509_STORE_CTX *ctx);
 static UniquePtr<X509> get_trusted_issuer(X509_STORE_CTX *ctx, const X509 *x);
 static int get_crl_score(X509_STORE_CTX *ctx, X509 **out_issuer, X509_CRL *crl,
                          X509 *x);
-static int get_crl(X509_STORE_CTX *ctx, UniquePtr<X509_CRL> *out_crl, X509 *x);
+static int get_crl(X509_STORE_CTX *ctx, CRLInfo *out_crl_info, X509 *x);
 static int crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl, X509 **out_issuer,
                           int *out_crl_score);
 static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score);
-static int check_crl(X509_STORE_CTX *ctx, X509_CRL *crl);
+static int check_crl(X509_STORE_CTX *ctx, const CRLInfo &crl_info);
 static int cert_crl(X509_STORE_CTX *ctx, X509_CRL *crl, X509 *x);
 
 static int check_chain_signatures_and_time(X509_STORE_CTX *ctx);
@@ -662,24 +670,15 @@ static int check_revocation_for_cert(X509_STORE_CTX *ctx, int depth) {
   X509 *x = sk_X509_value(ctx->chain, depth);
   ctx->error_depth = depth;
   ctx->current_cert = x;
-  ctx->current_crl_issuer = nullptr;
-  ctx->current_crl_score = 0;
 
-  // Try to retrieve the relevant CRL. Note that `get_crl` sets
-  // `current_crl_issuer` and `current_crl_score`, which `check_crl` then reads.
-  //
-  // TODO(davidben): The awkward internal calling convention is a historical
-  // artifact of when these functions were user-overridable callbacks, even
-  // though there was no way to set them correctly. These callbacks have since
-  // been removed, so we can pass input and output parameters more directly.
-  UniquePtr<X509_CRL> crl;
-  if (!get_crl(ctx, &crl, x)) {
+  CRLInfo crl_info;
+  if (!get_crl(ctx, &crl_info, x)) {
     ctx->error = X509_V_ERR_UNABLE_TO_GET_CRL;
     return call_verify_cb(0, ctx);
   }
 
-  if (!check_crl(ctx, crl.get()) ||  //
-      !cert_crl(ctx, crl.get(), x)) {
+  if (!check_crl(ctx, crl_info) ||  //
+      !cert_crl(ctx, crl_info.crl.get(), x)) {
     return 0;
   }
 
@@ -746,23 +745,19 @@ static int check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify) {
   return 1;
 }
 
-static int get_crl_sk(X509_STORE_CTX *ctx, UniquePtr<X509_CRL> *out_crl,
-                      X509 **out_issuer, int *out_score,
+static int get_crl_sk(X509_STORE_CTX *ctx, CRLInfo *best,
                       STACK_OF(X509_CRL) *crls) {
-  int crl_score, best_score = *out_score;
   X509 *x = ctx->current_cert;
-  X509_CRL *best_crl = nullptr;
-  X509 *crl_issuer = nullptr, *best_crl_issuer = nullptr;
-
   for (X509_CRL *crl : crls) {
-    crl_score = get_crl_score(ctx, &crl_issuer, crl, x);
-    if (crl_score < best_score || crl_score == 0) {
+    X509 *crl_issuer = nullptr;
+    int crl_score = get_crl_score(ctx, &crl_issuer, crl, x);
+    if (crl_score < best->score || crl_score == 0) {
       continue;
     }
     // If current CRL is equivalent use it if it is newer
-    if (crl_score == best_score && best_crl != nullptr) {
+    if (crl_score == best->score && best->crl != nullptr) {
       int day, sec;
-      if (ASN1_TIME_diff(&day, &sec, X509_CRL_get0_lastUpdate(best_crl),
+      if (ASN1_TIME_diff(&day, &sec, X509_CRL_get0_lastUpdate(best->crl.get()),
                          X509_CRL_get0_lastUpdate(crl)) == 0) {
         continue;
       }
@@ -772,22 +767,12 @@ static int get_crl_sk(X509_STORE_CTX *ctx, UniquePtr<X509_CRL> *out_crl,
         continue;
       }
     }
-    best_crl = crl;
-    best_crl_issuer = crl_issuer;
-    best_score = crl_score;
+    best->crl = UpRef(crl);
+    best->issuer = crl_issuer;
+    best->score = crl_score;
   }
 
-  if (best_crl) {
-    *out_crl = UpRef(best_crl);
-    *out_issuer = best_crl_issuer;
-    *out_score = best_score;
-  }
-
-  if (best_score >= CRL_SCORE_VALID) {
-    return 1;
-  }
-
-  return 0;
+  return best->score >= CRL_SCORE_VALID;
 }
 
 // For a given CRL return how suitable it is for the supplied certificate
@@ -944,25 +929,21 @@ static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score) {
 }
 
 // Retrieve CRL corresponding to current certificate.
-static int get_crl(X509_STORE_CTX *ctx, UniquePtr<X509_CRL> *out_crl, X509 *x) {
-  X509 *issuer = nullptr;
-  int crl_score = 0;
-  UniquePtr<X509_CRL> crl;
-  if (!get_crl_sk(ctx, &crl, &issuer, &crl_score, ctx->crls)) {
+static int get_crl(X509_STORE_CTX *ctx, CRLInfo *out_crl_info, X509 *x) {
+  CRLInfo best;
+  if (!get_crl_sk(ctx, &best, ctx->crls)) {
     // If we haven't yet found a CRL with sufficiently high score, lookup CRLs
     // from the store.
     UniquePtr<STACK_OF(X509_CRL)> skcrl(
         X509_STORE_CTX_get1_crls(ctx, X509_get_issuer_name(x)));
     if (skcrl) {
-      get_crl_sk(ctx, &crl, &issuer, &crl_score, skcrl.get());
+      get_crl_sk(ctx, &best, skcrl.get());
     }
   }
 
   // If we got any kind of CRL use it and return success
-  if (crl) {
-    ctx->current_crl_issuer = issuer;
-    ctx->current_crl_score = crl_score;
-    *out_crl = std::move(crl);
+  if (best.crl) {
+    *out_crl_info = std::move(best);
     return 1;
   }
 
@@ -970,14 +951,15 @@ static int get_crl(X509_STORE_CTX *ctx, UniquePtr<X509_CRL> *out_crl, X509 *x) {
 }
 
 // Check CRL validity
-static int check_crl(X509_STORE_CTX *ctx, X509_CRL *crl) {
-  X509Impl *issuer = nullptr;
+static int check_crl(X509_STORE_CTX *ctx, const CRLInfo &crl_info) {
+  X509_CRL *crl = crl_info.crl.get();
   int cnum = ctx->error_depth;
   int chnum = (int)sk_X509_num(ctx->chain) - 1;
   // If we have an alternative CRL issuer cert use that. Otherwise, it is the
   // issuer of the current certificate.
-  if (ctx->current_crl_issuer) {
-    issuer = FromOpaque(ctx->current_crl_issuer);
+  X509Impl *issuer = nullptr;
+  if (crl_info.issuer) {
+    issuer = FromOpaque(crl_info.issuer);
   } else if (cnum < chnum) {
     issuer = FromOpaque(sk_X509_value(ctx->chain, cnum + 1));
   } else {
@@ -1001,14 +983,14 @@ static int check_crl(X509_STORE_CTX *ctx, X509_CRL *crl) {
       }
     }
 
-    if (!(ctx->current_crl_score & CRL_SCORE_SCOPE)) {
+    if (!(crl_info.score & CRL_SCORE_SCOPE)) {
       ctx->error = X509_V_ERR_DIFFERENT_CRL_SCOPE;
       if (!call_verify_cb(0, ctx)) {
         return 0;
       }
     }
 
-    if (!(ctx->current_crl_score & CRL_SCORE_TIME)) {
+    if (!(crl_info.score & CRL_SCORE_TIME)) {
       if (!check_crl_time(ctx, crl, 1)) {
         return 0;
       }
