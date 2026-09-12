@@ -107,6 +107,14 @@ static int call_verify_cb(int ok, X509_STORE_CTX *ctx) {
   return ok;
 }
 
+// TODO(crbug.com/42290549): Switch remaining `call_verify_cb` calls to this
+// function.
+static int call_verify_cb_at_depth(int ok, X509_STORE_CTX *ctx, int depth) {
+  ctx->current_cert = sk_X509_value(ctx->chain, depth);
+  ctx->error_depth = depth;
+  return call_verify_cb(ok, ctx);
+}
+
 // Given a certificate try and find an exact match in the store
 static UniquePtr<X509> lookup_cert_match(X509_STORE_CTX *ctx, const X509 *x) {
   // Lookup all certs with matching subject name
@@ -253,10 +261,8 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       UniquePtr<X509> issuer = get_trusted_issuer(ctx, last);
       if (issuer == nullptr || X509_cmp(last, issuer.get()) != 0) {
         ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
-        ctx->current_cert = last;
-        ctx->error_depth = num - 1;
         bad_chain = 1;
-        if (!call_verify_cb(0, ctx)) {
+        if (!call_verify_cb_at_depth(0, ctx, num - 1)) {
           return 0;
         }
       } else {
@@ -322,7 +328,6 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       } else {
         ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT;
       }
-      ctx->current_cert = last;
     } else {
       if (!PushToStack(ctx->chain, std::move(chain_ss))) {
         ctx->error = X509_V_ERR_OUT_OF_MEM;
@@ -330,13 +335,11 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       }
       num++;
       ctx->last_untrusted = num;
-      ctx->current_cert = sk_X509_last(ctx->chain);
       ctx->error = X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN;
     }
 
-    ctx->error_depth = num - 1;
     bad_chain = 1;
-    if (!call_verify_cb(0, ctx)) {
+    if (!call_verify_cb_at_depth(0, ctx, num - 1)) {
       return 0;
     }
   }
@@ -414,9 +417,7 @@ static int check_chain_extensions(X509_STORE_CTX *ctx) {
     if (!(ctx->param->flags & X509_V_FLAG_IGNORE_CRITICAL) &&
         (x->ex_flags & EXFLAG_CRITICAL)) {
       ctx->error = X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION;
-      ctx->error_depth = i;
-      ctx->current_cert = x;
-      if (!call_verify_cb(0, ctx)) {
+      if (!call_verify_cb_at_depth(0, ctx, i)) {
         return 0;
       }
     }
@@ -424,18 +425,14 @@ static int check_chain_extensions(X509_STORE_CTX *ctx) {
     int must_be_ca = i > 0;
     if (must_be_ca && !X509_check_ca(x)) {
       ctx->error = X509_V_ERR_INVALID_CA;
-      ctx->error_depth = i;
-      ctx->current_cert = x;
-      if (!call_verify_cb(0, ctx)) {
+      if (!call_verify_cb_at_depth(0, ctx, i)) {
         return 0;
       }
     }
     if (ctx->param->purpose > 0 &&
         X509_check_purpose(x, purpose, must_be_ca) != 1) {
       ctx->error = X509_V_ERR_INVALID_PURPOSE;
-      ctx->error_depth = i;
-      ctx->current_cert = x;
-      if (!call_verify_cb(0, ctx)) {
+      if (!call_verify_cb_at_depth(0, ctx, i)) {
         return 0;
       }
     }
@@ -450,9 +447,7 @@ static int check_chain_extensions(X509_STORE_CTX *ctx) {
     // considered - they are just not counted as part of the path length!
     if (i > 1 && x->ex_pathlen != -1 && plen > x->ex_pathlen + 1) {
       ctx->error = X509_V_ERR_PATH_LENGTH_EXCEEDED;
-      ctx->error_depth = i;
-      ctx->current_cert = x;
-      if (!call_verify_cb(0, ctx)) {
+      if (!call_verify_cb_at_depth(0, ctx, i)) {
         return 0;
       }
     }
@@ -521,9 +516,7 @@ static int check_name_constraints(X509_STORE_CTX *ctx) {
             return 0;
           default:
             ctx->error = rv;
-            ctx->error_depth = i;
-            ctx->current_cert = x;
-            if (!call_verify_cb(0, ctx)) {
+            if (!call_verify_cb_at_depth(0, ctx, i)) {
               return 0;
             }
             break;
@@ -553,9 +546,7 @@ static int check_name_constraints(X509_STORE_CTX *ctx) {
         return 0;
       default:
         ctx->error = rv;
-        ctx->error_depth = 0;
-        ctx->current_cert = leaf;
-        if (!call_verify_cb(0, ctx)) {
+        if (!call_verify_cb_at_depth(0, ctx, /*depth=*/0)) {
           return 0;
         }
         break;
@@ -567,9 +558,7 @@ static int check_name_constraints(X509_STORE_CTX *ctx) {
 
 static int check_id_error(X509_STORE_CTX *ctx, int errcode) {
   ctx->error = errcode;
-  ctx->current_cert = ctx->cert;
-  ctx->error_depth = 0;
-  return call_verify_cb(0, ctx);
+  return call_verify_cb_at_depth(0, ctx, /*depth=*/0);
 }
 
 static int check_hosts(X509 *x, X509_VERIFY_PARAM *param) {
@@ -624,10 +613,8 @@ static int check_trust(X509_STORE_CTX *ctx) {
     // If explicitly rejected notify callback and reject if not
     // overridden.
     if (trust == X509_TRUST_REJECTED) {
-      ctx->error_depth = (int)i;
-      ctx->current_cert = x;
       ctx->error = X509_V_ERR_CERT_REJECTED;
-      if (!call_verify_cb(0, ctx)) {
+      if (!call_verify_cb_at_depth(0, ctx, static_cast<int>(i))) {
         return X509_TRUST_REJECTED;
       }
     }
@@ -1104,22 +1091,21 @@ static int cert_crl(X509_STORE_CTX *ctx, X509_CRL *crl, X509 *x) {
 }
 
 static int check_policy(X509_STORE_CTX *ctx) {
-  X509 *current_cert = nullptr;
+  int error_depth;
   int ret = X509_policy_check(ctx->chain, ctx->param->policies,
-                              ctx->param->flags, &current_cert);
+                              ctx->param->flags, &error_depth);
   if (ret != X509_V_OK) {
-    ctx->current_cert = current_cert;
     ctx->error = ret;
     if (ret == X509_V_ERR_OUT_OF_MEM) {
       return 0;
     }
-    return call_verify_cb(0, ctx);
+    return call_verify_cb_at_depth(0, ctx, error_depth);
   }
 
   return 1;
 }
 
-static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
+static int check_cert_time(X509_STORE_CTX *ctx, X509 *x, int depth) {
   if (ctx->param->flags & X509_V_FLAG_NO_CHECK_TIME) {
     return 1;
   }
@@ -1136,16 +1122,14 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
               : X509_cmp_time_posix(X509_get_notBefore(x), ptime);
   if (i == 0) {
     ctx->error = X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD;
-    ctx->current_cert = x;
-    if (!call_verify_cb(0, ctx)) {
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
       return 0;
     }
   }
 
   if (i > 0) {
     ctx->error = X509_V_ERR_CERT_NOT_YET_VALID;
-    ctx->current_cert = x;
-    if (!call_verify_cb(0, ctx)) {
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
       return 0;
     }
   }
@@ -1155,16 +1139,14 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
           : X509_cmp_time_posix(X509_get_notAfter(x), ptime);
   if (i == 0) {
     ctx->error = X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD;
-    ctx->current_cert = x;
-    if (!call_verify_cb(0, ctx)) {
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
       return 0;
     }
   }
 
   if (i < 0) {
     ctx->error = X509_V_ERR_CERT_HAS_EXPIRED;
-    ctx->current_cert = x;
-    if (!call_verify_cb(0, ctx)) {
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
       return 0;
     }
   }
@@ -1192,27 +1174,23 @@ static int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
 static int check_chain_signatures_and_time(X509_STORE_CTX *ctx) {
   size_t num = sk_X509_num(ctx->chain);
   for (size_t i = num - 1; i < num; i--) {
-    // TODO(crbug.com/42290549): Move this into `call_verify_cb`.
-    ctx->error_depth = static_cast<int>(i);
     X509 *x509 = sk_X509_value(ctx->chain, i);
     if (i < num - 1) {
       X509 *issuer = sk_X509_value(ctx->chain, i + 1);
       if (int err = verify_signature(ctx, x509, issuer); err != X509_V_OK) {
         ctx->error = err;
-        ctx->current_cert = x509;
-        if (!call_verify_cb(0, ctx)) {
+        if (!call_verify_cb_at_depth(0, ctx, static_cast<int>(i))) {
           return 0;
         }
       }
     }
 
-    if (!check_cert_time(ctx, x509)) {
+    if (!check_cert_time(ctx, x509, static_cast<int>(i))) {
       return 0;
     }
 
     // The last error (if any) is still in the error value
-    ctx->current_cert = x509;
-    if (!call_verify_cb(1, ctx)) {
+    if (!call_verify_cb_at_depth(1, ctx, static_cast<int>(i))) {
       return 0;
     }
   }

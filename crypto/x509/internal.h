@@ -481,12 +481,11 @@ int x509_sign_to_bit_string(EVP_MD_CTX *ctx, ASN1_BIT_STRING *out,
 // the user-initial-policy-set. If `user_policies` is NULL or empty, it is
 // interpreted as anyPolicy. `flags` is a set of `X509_V_FLAG_*` values to
 // apply. It returns `X509_V_OK` on success and `X509_V_ERR_*` on error. It
-// additionally sets `*out_current_cert` to the certificate where the error
-// occurred. If the function succeeded, or the error applies to the entire
-// chain, it sets `*out_current_cert` to NULL.
+// additionally sets `*out_error_depth` to the index of certificate where the
+// error occurred.
 int X509_policy_check(const STACK_OF(X509) *certs,
                       const STACK_OF(ASN1_OBJECT) *user_policies,
-                      unsigned long flags, X509 **out_current_cert);
+                      unsigned long flags, int *out_error_depth);
 
 // x509_check_issued_with_callback calls `X509_check_issued`, but allows the
 // verify callback to override the result. It returns one on success and zero on
