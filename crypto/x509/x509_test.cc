@@ -1420,6 +1420,42 @@ static int Verify(
   return X509_V_OK;
 }
 
+struct SuppressErrors {
+  std::vector<int> errors;
+};
+
+int SuppressErrorsExDataIndex() {
+  static int ret = [] {
+    return X509_STORE_CTX_get_ex_new_index(
+        0, nullptr, nullptr, nullptr,
+        [](void *parent, void *ptr, CRYPTO_EX_DATA *ad, int index, long argl,
+           void *argp) { delete static_cast<SuppressErrors *>(ptr); });
+  }();
+  return ret;
+}
+
+// SuppressErrorsWithVerifyCallback configures a verify callback on `ctx` that
+// suppresses all errors in `errs`. Each value in `errs` should be one of the
+// `X509_V_ERR_*` constants. This feature should never be used in production. It
+// is fragile and unpredictable. We implement it here only to capture test some
+// existing downstream patterns. New code should not follow these patterns, as
+// they may be removed in the future.
+void SuppressErrorsWithVerifyCallback(X509_STORE_CTX *ctx,
+                                      std::vector<int> errs) {
+  X509_STORE_CTX_set_ex_data(ctx, SuppressErrorsExDataIndex(),
+                             new SuppressErrors{std::move(errs)});
+  X509_STORE_CTX_set_verify_cb(ctx, [](int ok, X509_STORE_CTX *ctx2) -> int {
+    auto *suppress = static_cast<const SuppressErrors *>(
+        X509_STORE_CTX_get_ex_data(ctx2, SuppressErrorsExDataIndex()));
+    int err = X509_STORE_CTX_get_error(ctx2);
+    if (std::find(suppress->errors.begin(), suppress->errors.end(), err) !=
+        suppress->errors.end()) {
+      return 1;
+    }
+    return ok;
+  });
+}
+
 TEST(X509Test, TestVerify) {
   //  cross_signing_root
   //         |
@@ -4393,6 +4429,114 @@ TEST(X509Test, InvalidExtensions) {
         X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
         Verify(leaf.get(), {invalid_root.get()}, {intermediate.get()}, {}));
   }
+}
+
+// CA certificates are required to have the keyCertSign bit.
+TEST(X509Test, KeyUsageCertSign) {
+  UniquePtr<EVP_PKEY> root_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(root_key);
+  UniquePtr<EVP_PKEY> ca_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(ca_key);
+  UniquePtr<EVP_PKEY> cert_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(cert_key);
+
+  UniquePtr<X509> root =
+      MakeTestCert("Root", "Root", root_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(root);
+  ASSERT_TRUE(X509_sign(root.get(), root_key.get(), EVP_sha256()));
+
+  UniquePtr<X509> ca = MakeTestCert("Root", "CA", ca_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(AddKeyUsage(ca.get(), {KeyUsage::kKeyCertSign}));
+  ASSERT_TRUE(X509_sign(ca.get(), root_key.get(), EVP_sha256()));
+
+  UniquePtr<X509> ca_wrong =
+      MakeTestCert("Root", "CA", ca_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca_wrong);
+  ASSERT_TRUE(AddKeyUsage(ca_wrong.get(), {KeyUsage::kDigitalSignature}));
+  ASSERT_TRUE(X509_sign(ca_wrong.get(), root_key.get(), EVP_sha256()));
+
+  UniquePtr<X509> cert =
+      MakeTestCert("CA", "Subject", cert_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(X509_sign(cert.get(), ca_key.get(), EVP_sha256()));
+
+  EXPECT_EQ(X509_V_OK, Verify(cert.get(), {root.get()}, {ca.get()}, {}));
+
+  // This is currently implemented as part of finding issuers, so this currently
+  // manifests as `X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY` instead of
+  // `X509_V_ERR_KEYUSAGE_NO_CERTSIGN`.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+            Verify(cert.get(), {root.get()}, {ca_wrong.get()}, {}));
+
+  // It is possible, but difficult, for the callback to suppress this check. It
+  // is actually impossible in OpenSSL, but some of our callers currently rely
+  // on `X509_V_FLAG_CB_ISSUER_CHECK`. Until we rewrite those callers, add tests
+  // for this behavior.
+  EXPECT_EQ(X509_V_OK,
+            Verify(cert.get(), {root.get()}, {ca_wrong.get()}, {},
+                   X509_V_FLAG_CB_ISSUER_CHECK, [](X509_STORE_CTX *ctx) {
+                     SuppressErrorsWithVerifyCallback(
+                         ctx, {X509_V_ERR_KEYUSAGE_NO_CERTSIGN,
+                               X509_V_ERR_INVALID_CA});
+                   }));
+}
+
+// Our path builder currently requires AKID and SKID to match. This is more
+// strict than needed. A more general path-building would treat AKID/SKID match
+// as a hint (exercised by X509Test.DuplicateName), but not a hard requirement.
+// But `X509_verify_cert` currently matches strictly.
+TEST(X509Test, AKIDAndSKIDMatch) {
+  UniquePtr<EVP_PKEY> root_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(root_key);
+  UniquePtr<EVP_PKEY> ca_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(ca_key);
+  UniquePtr<EVP_PKEY> cert_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(cert_key);
+
+  static const uint8_t kRightKeyID[] = {1, 2, 3};
+  static const uint8_t kWrongKeyID[] = {4, 5, 6};
+
+  UniquePtr<X509> root =
+      MakeTestCert("Root", "Root", root_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(root);
+  ASSERT_TRUE(X509_sign(root.get(), root_key.get(), EVP_sha256()));
+
+  UniquePtr<X509> ca = MakeTestCert("Root", "CA", ca_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(AddSubjectKeyIdentifier(ca.get(), kRightKeyID));
+  ASSERT_TRUE(X509_sign(ca.get(), root_key.get(), EVP_sha256()));
+
+  UniquePtr<X509> ca_wrong =
+      MakeTestCert("Root", "CA", ca_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca_wrong);
+  ASSERT_TRUE(AddSubjectKeyIdentifier(ca_wrong.get(), kWrongKeyID));
+  ASSERT_TRUE(X509_sign(ca_wrong.get(), root_key.get(), EVP_sha256()));
+
+  UniquePtr<X509> cert =
+      MakeTestCert("CA", "Subject", cert_key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(AddAuthorityKeyIdentifier(cert.get(), kRightKeyID));
+  ASSERT_TRUE(X509_sign(cert.get(), ca_key.get(), EVP_sha256()));
+
+  EXPECT_EQ(X509_V_OK, Verify(cert.get(), {root.get()}, {ca.get()}, {}));
+
+  // This is currently implemented as part of finding issuers, so this currently
+  // manifests as `X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY` instead of
+  // `X509_V_ERR_AKID_SKID_MISMATCH`.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+            Verify(cert.get(), {root.get()}, {ca_wrong.get()}, {}));
+
+  // It is possible, but difficult, for the callback to suppress this check. It
+  // is actually impossible in OpenSSL, but some of our callers currently rely
+  // on `X509_V_FLAG_CB_ISSUER_CHECK`. Until we rewrite those callers, add tests
+  // for this behavior.
+  EXPECT_EQ(X509_V_OK,
+            Verify(cert.get(), {root.get()}, {ca_wrong.get()}, {},
+                   X509_V_FLAG_CB_ISSUER_CHECK, [](X509_STORE_CTX *ctx) {
+                     SuppressErrorsWithVerifyCallback(
+                         ctx, {X509_V_ERR_AKID_SKID_MISMATCH});
+                   }));
 }
 
 // kExplicitDefaultVersionPEM is an X.509v1 certificate with the version number
