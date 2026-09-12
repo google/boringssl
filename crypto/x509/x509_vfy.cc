@@ -61,7 +61,8 @@ static ExDataClass g_ex_data_class(/*with_app_data=*/true);
 #define CRL_SCORE_AKID 0x004
 
 static int null_callback(int ok, X509_STORE_CTX *e);
-static X509 *find_issuer(X509_STORE_CTX *ctx, STACK_OF(X509) *sk, X509 *x);
+static X509 *find_issuer(X509_STORE_CTX *ctx, const STACK_OF(X509) *sk,
+                         const X509 *x);
 static int check_chain_extensions(X509_STORE_CTX *ctx);
 static int check_name_constraints(X509_STORE_CTX *ctx);
 static int check_id(X509_STORE_CTX *ctx);
@@ -70,7 +71,7 @@ static int check_revocation(X509_STORE_CTX *ctx);
 static int check_cert(X509_STORE_CTX *ctx);
 static int check_policy(X509_STORE_CTX *ctx);
 
-static X509 *get_trusted_issuer(X509_STORE_CTX *ctx, X509 *x);
+static UniquePtr<X509> get_trusted_issuer(X509_STORE_CTX *ctx, const X509 *x);
 static int get_crl_score(X509_STORE_CTX *ctx, X509 **pissuer, X509_CRL *crl,
                          X509 *x);
 static int get_crl(X509_STORE_CTX *ctx, X509_CRL **pcrl, X509 *x);
@@ -108,29 +109,20 @@ static int call_verify_cb(int ok, X509_STORE_CTX *ctx) {
 }
 
 // Given a certificate try and find an exact match in the store
-static X509 *lookup_cert_match(X509_STORE_CTX *ctx, X509 *x) {
-  STACK_OF(X509) *certs;
-  X509 *xtmp = nullptr;
-  size_t i;
+static UniquePtr<X509> lookup_cert_match(X509_STORE_CTX *ctx, const X509 *x) {
   // Lookup all certs with matching subject name
-  certs = X509_STORE_CTX_get1_certs(ctx, X509_get_subject_name(x));
+  UniquePtr<STACK_OF(X509)> certs(
+      X509_STORE_CTX_get1_certs(ctx, X509_get_subject_name(x)));
   if (certs == nullptr) {
     return nullptr;
   }
   // Look for exact match
-  for (i = 0; i < sk_X509_num(certs); i++) {
-    xtmp = sk_X509_value(certs, i);
-    if (!X509_cmp(xtmp, x)) {
-      break;
+  for (X509 *found : certs.get()) {
+    if (X509_cmp(found, x) == 0) {
+      return UpRef(found);
     }
   }
-  if (i < sk_X509_num(certs)) {
-    X509_up_ref(xtmp);
-  } else {
-    xtmp = nullptr;
-  }
-  sk_X509_pop_free(certs, X509_free);
-  return xtmp;
+  return nullptr;
 }
 
 int X509_verify_cert(X509_STORE_CTX *ctx) {
@@ -170,11 +162,10 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   // first we make sure the chain we are going to build is present and that
   // the first entry is in place
   ctx->chain = sk_X509_new_null();
-  if (ctx->chain == nullptr || !sk_X509_push(ctx->chain, ctx->cert)) {
+  if (ctx->chain == nullptr || !PushToStack(ctx->chain, UpRef(ctx->cert))) {
     ctx->error = X509_V_ERR_OUT_OF_MEM;
     return 0;
   }
-  X509_up_ref(ctx->cert);
   ctx->last_untrusted = 1;
 
   // We use a temporary STACK so we can chop and hack at it. `sktmp` is not a
@@ -211,23 +202,21 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     if (is_self_signed) {
       break;
     }
-    // See if we can find issuer in trusted store first
-    X509 *issuer = get_trusted_issuer(ctx, x);
-    if (issuer != nullptr) {
+    // See if we can find issuer in trusted store first.
+    if (UniquePtr<X509> trusted = get_trusted_issuer(ctx, x);
+        trusted != nullptr) {
       // Free the certificate. It will be picked up again later.
-      X509_free(issuer);
       break;
     }
 
     // If we were passed a cert chain, use it first
     if (sktmp != nullptr) {
-      issuer = find_issuer(ctx, sktmp, x);
+      X509 *issuer = find_issuer(ctx, sktmp, x);
       if (issuer != nullptr) {
-        if (!sk_X509_push(ctx->chain, issuer)) {
+        if (!PushToStack(ctx->chain, UpRef(issuer))) {
           ctx->error = X509_V_ERR_OUT_OF_MEM;
           return 0;
         }
-        X509_up_ref(issuer);
         (void)sk_X509_delete_ptr(sktmp, issuer);
         ctx->last_untrusted++;
         x = issuer;
@@ -261,9 +250,8 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       // We have a single self signed certificate: see if we can
       // find it in the store. We must have an exact match to avoid
       // possible impersonation.
-      X509 *issuer = get_trusted_issuer(ctx, x);
-      if (issuer == nullptr || X509_cmp(x, issuer) != 0) {
-        X509_free(issuer);
+      UniquePtr<X509> issuer = get_trusted_issuer(ctx, x);
+      if (issuer == nullptr || X509_cmp(x, issuer.get()) != 0) {
         ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
         ctx->current_cert = x;
         ctx->error_depth = i - 1;
@@ -275,7 +263,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
         // We have a match: replace certificate with store
         // version so we get any trust settings.
         X509_free(x);
-        x = issuer;
+        x = issuer.release();
         (void)sk_X509_set(ctx->chain, i - 1, x);
         ctx->last_untrusted = 0;
       }
@@ -303,13 +291,12 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     if (is_self_signed) {
       break;
     }
-    X509 *issuer = get_trusted_issuer(ctx, x);
+    UniquePtr<X509> issuer = get_trusted_issuer(ctx, x);
     if (issuer == nullptr) {
       break;
     }
-    x = issuer;
-    if (!sk_X509_push(ctx->chain, x)) {
-      X509_free(issuer);
+    x = issuer.get();
+    if (!PushToStack(ctx->chain, std::move(issuer))) {
       ctx->error = X509_V_ERR_OUT_OF_MEM;
       return 0;
     }
@@ -374,12 +361,9 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
 }
 
 // Given a STACK_OF(X509) find the issuer of cert (if any)
-
-static X509 *find_issuer(X509_STORE_CTX *ctx, STACK_OF(X509) *sk, X509 *x) {
-  size_t i;
-  X509 *issuer;
-  for (i = 0; i < sk_X509_num(sk); i++) {
-    issuer = sk_X509_value(sk, i);
+static X509 *find_issuer(X509_STORE_CTX *ctx, const STACK_OF(X509) *sk,
+                         const X509 *x) {
+  for (X509 *issuer : sk) {
     if (x509_check_issued_with_callback(ctx, x, issuer)) {
       return issuer;
     }
@@ -388,7 +372,6 @@ static X509 *find_issuer(X509_STORE_CTX *ctx, STACK_OF(X509) *sk, X509 *x) {
 }
 
 // Given a possible certificate and issuer check them
-
 int bssl::x509_check_issued_with_callback(X509_STORE_CTX *ctx, const X509 *x,
                                           const X509 *issuer) {
   int ret;
@@ -406,26 +389,22 @@ int bssl::x509_check_issued_with_callback(X509_STORE_CTX *ctx, const X509 *x,
   return call_verify_cb(0, ctx);
 }
 
-static X509 *get_trusted_issuer(X509_STORE_CTX *ctx, X509 *x) {
-  X509 *issuer;
+static UniquePtr<X509> get_trusted_issuer(X509_STORE_CTX *ctx, const X509 *x) {
   if (ctx->trusted_stack != nullptr) {
     // Ignore the store and use the configured stack instead.
-    issuer = find_issuer(ctx, ctx->trusted_stack, x);
-    if (issuer != nullptr) {
-      X509_up_ref(issuer);
-    }
-    return issuer;
+    return UpRef(find_issuer(ctx, ctx->trusted_stack, x));
   }
 
+  X509 *issuer = nullptr;
   if (!X509_STORE_CTX_get1_issuer(&issuer, ctx, x)) {
     return nullptr;
   }
-  return issuer;
+  // `X509_STORE_CTX_get1_issuer` passes ownership of `issuer`.
+  return UniquePtr<X509>(issuer);
 }
 
 // Check a certificate chains extensions for consistency with the supplied
 // purpose
-
 static int check_chain_extensions(X509_STORE_CTX *ctx) {
   int plen = 0;
   int purpose = ctx->param->purpose;
@@ -635,10 +614,9 @@ static int check_id(X509_STORE_CTX *ctx) {
 }
 
 static int check_trust(X509_STORE_CTX *ctx) {
-  X509 *x = nullptr;
   // Check all trusted certificates in chain
   for (size_t i = ctx->last_untrusted; i < sk_X509_num(ctx->chain); i++) {
-    x = sk_X509_value(ctx->chain, i);
+    X509 *x = sk_X509_value(ctx->chain, i);
     int trust = X509_check_trust(x, ctx->param->trust, 0);
     // If explicitly trusted return trusted
     if (trust == X509_TRUST_TRUSTED) {
@@ -658,14 +636,13 @@ static int check_trust(X509_STORE_CTX *ctx) {
   // If we accept partial chains and have at least one trusted certificate
   // return success.
   if (ctx->param->flags & X509_V_FLAG_PARTIAL_CHAIN) {
-    X509 *mx;
     if (ctx->last_untrusted < (int)sk_X509_num(ctx->chain)) {
       return X509_TRUST_TRUSTED;
     }
-    x = sk_X509_value(ctx->chain, 0);
-    mx = lookup_cert_match(ctx, x);
+    X509 *x = sk_X509_value(ctx->chain, 0);
+    UniquePtr<X509> mx = lookup_cert_match(ctx, x);
     if (mx) {
-      (void)sk_X509_set(ctx->chain, 0, mx);
+      (void)sk_X509_set(ctx->chain, 0, mx.release());
       X509_free(x);
       ctx->last_untrusted = 0;
       return X509_TRUST_TRUSTED;
