@@ -80,7 +80,7 @@ static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score);
 static int check_crl(X509_STORE_CTX *ctx, X509_CRL *crl);
 static int cert_crl(X509_STORE_CTX *ctx, X509_CRL *crl, X509 *x);
 
-static int internal_verify(X509_STORE_CTX *ctx);
+static int check_chain_signatures_and_time(X509_STORE_CTX *ctx);
 
 static int null_callback(int ok, X509_STORE_CTX *e) { return ok; }
 
@@ -346,8 +346,8 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       !check_id(ctx) ||
       // We check revocation status after copying parameters because they may
       // be needed for CRL signature verification.
-      !check_revocation(ctx) ||  //
-      !internal_verify(ctx) ||   //
+      !check_revocation(ctx) ||                 //
+      !check_chain_signatures_and_time(ctx) ||  //
       !check_name_constraints(ctx) ||
       // TODO(davidben): Does `check_policy` still need to be conditioned on
       // |!bad_chain|? DoS concerns have been resolved.
@@ -1173,7 +1173,12 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
 }
 
 static int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
-                            const X509 *issuer, EVP_PKEY *pkey) {
+                            const X509 *issuer) {
+  EVP_PKEY *pkey = X509_get0_pubkey(issuer);
+  if (pkey == nullptr) {
+    return X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY;
+  }
+
   int ret;
   if ((ctx->param->flags & X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07) &&
       x509_is_merkle_tree_ca(issuer)) {
@@ -1184,72 +1189,31 @@ static int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
   return ret ? X509_V_OK : X509_V_ERR_CERT_SIGNATURE_FAILURE;
 }
 
-static int internal_verify(X509_STORE_CTX *ctx) {
-  // TODO(davidben): This logic is incredibly confusing. Rewrite this:
-  //
-  // First, don't allow the verify callback to suppress
-  // X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY, which will simplify the
-  // signature check. Then replace jumping into the middle of the loop. It's
-  // trying to ensure that all certificates see `check_cert_time`, then checking
-  // the root's self signature when requested, but not breaking partial chains
-  // in the process.
-  int n = (int)sk_X509_num(ctx->chain);
-  ctx->error_depth = n - 1;
-  n--;
-  X509 *xi = sk_X509_value(ctx->chain, n);
-  X509 *xs;
-  if (x509_check_issued_with_callback(ctx, xi, xi)) {
-    xs = xi;
-  } else {
-    if (ctx->param->flags & X509_V_FLAG_PARTIAL_CHAIN) {
-      xs = xi;
-      goto check_cert;
-    }
-    if (n <= 0) {
-      ctx->error = X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE;
-      ctx->current_cert = xi;
-      return call_verify_cb(0, ctx);
-    }
-    n--;
-    ctx->error_depth = n;
-    xs = sk_X509_value(ctx->chain, n);
-  }
-
-  //      ctx->error=0;  not needed
-  while (n >= 0) {
-    ctx->error_depth = n;
-
-    // Skip signature check for self signed certificates unless
-    // explicitly asked for. It doesn't add any security and just wastes
-    // time.
-    if (xs != xi) {
-      EVP_PKEY *pkey = X509_get0_pubkey(xi);
-      int err = pkey == nullptr ? X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
-                                : verify_signature(ctx, xs, xi, pkey);
-      if (err != X509_V_OK) {
+static int check_chain_signatures_and_time(X509_STORE_CTX *ctx) {
+  size_t num = sk_X509_num(ctx->chain);
+  for (size_t i = num - 1; i < num; i--) {
+    // TODO(crbug.com/42290549): Move this into `call_verify_cb`.
+    ctx->error_depth = static_cast<int>(i);
+    X509 *x509 = sk_X509_value(ctx->chain, i);
+    if (i < num - 1) {
+      X509 *issuer = sk_X509_value(ctx->chain, i + 1);
+      if (int err = verify_signature(ctx, x509, issuer); err != X509_V_OK) {
         ctx->error = err;
-        ctx->current_cert = xs;
+        ctx->current_cert = x509;
         if (!call_verify_cb(0, ctx)) {
           return 0;
         }
       }
     }
 
-  check_cert:
-    if (!check_cert_time(ctx, xs)) {
+    if (!check_cert_time(ctx, x509)) {
       return 0;
     }
 
     // The last error (if any) is still in the error value
-    ctx->current_cert = xs;
+    ctx->current_cert = x509;
     if (!call_verify_cb(1, ctx)) {
       return 0;
-    }
-
-    n--;
-    if (n >= 0) {
-      xi = xs;
-      xs = sk_X509_value(ctx->chain, n);
     }
   }
 
