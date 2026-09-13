@@ -127,7 +127,17 @@ static int call_verify_cb_at_depth(int ok, X509_STORE_CTX *ctx, int depth) {
 
 // Given a certificate try and find an exact match in the store
 static UniquePtr<X509> lookup_cert_match(X509_STORE_CTX *ctx, const X509 *x) {
-  // Lookup all certs with matching subject name
+  if (ctx->trusted_stack != nullptr) {
+    // Ignore the store and use the configured stack instead.
+    for (X509 *found : ctx->trusted_stack) {
+      if (X509_cmp(found, x) == 0) {
+        return UpRef(found);
+      }
+    }
+    return nullptr;
+  }
+
+  // Lookup all certs with matching subject name.
   UniquePtr<STACK_OF(X509)> certs(
       X509_STORE_CTX_get1_certs(ctx, X509_get_subject_name(x)));
   if (certs == nullptr) {

@@ -9407,6 +9407,57 @@ TEST_P(X509VerifyTest, Trust) {
       X509_V_ERR_CERT_REJECTED,
       Verify(leaf.normal.get(), {intermediate.distrusted_any.get()}, {}, {}));
 
+  // If `X509_V_FLAG_PARTIAL_CHAIN` is set, everything in the store is a trust
+  // anchor, self-signed or not, but explicit distrust still applies.
+  EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {intermediate.normal.get()},
+                              {}, {}, X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.normal.get(), {intermediate.trusted_any.get()}, {}, {},
+                   X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CERT_REJECTED,
+            Verify(leaf.normal.get(), {intermediate.distrusted_any.get()}, {},
+                   {}, X509_V_FLAG_PARTIAL_CHAIN));
+
+  // If a target certificate is in the trust store, we evaluate trust similarly.
+  // In this case, the trust store version is compared by byte equality.
+  // Auxiliary info on the target certificate object is ignored because that is
+  // assumed to come from somewhere untrusted.
+  EXPECT_EQ(X509_V_OK, Verify(root.normal.get(), {root.normal.get()}, {}, {}));
+  EXPECT_EQ(X509_V_OK,
+            Verify(root.normal.get(), {root.trusted_any.get()}, {}, {}));
+  EXPECT_EQ(X509_V_ERR_CERT_REJECTED,
+            Verify(root.normal.get(), {root.distrusted_any.get()}, {}, {}));
+
+  // Non-self-signed target certificates are not matched against the root store
+  // at all by default.
+  // TODO(crbug.com/548461146):  This is probably a bug because, in the
+  // non-partial-chain version, they are.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+            Verify(leaf.normal.get(), {leaf.normal.get()}, {}, {}));
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+            Verify(leaf.normal.get(), {leaf.trusted_any.get()}, {}, {}));
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+            Verify(leaf.normal.get(), {leaf.distrusted_any.get()}, {}, {}));
+
+  // If `X509_V_FLAG_PARTIAL_CHAIN`, its looser interpretation of trust anchors
+  // also applies when the target certificate is in the store.
+  EXPECT_EQ(X509_V_OK, Verify(root.normal.get(), {root.normal.get()}, {}, {},
+                              X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_OK, Verify(root.normal.get(), {root.trusted_any.get()}, {},
+                              {}, X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CERT_REJECTED,
+            Verify(root.normal.get(), {root.distrusted_any.get()}, {}, {},
+                   X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {leaf.normal.get()}, {}, {},
+                              X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {leaf.trusted_any.get()}, {},
+                              {}, X509_V_FLAG_PARTIAL_CHAIN));
+  // This even causes distrusted non-self-signed roots to be interpreted as
+  // trust anchors.
+  // TODO(crbug.com/548461146): This is probably a bug.
+  EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {leaf.distrusted_any.get()},
+                              {}, {}, X509_V_FLAG_PARTIAL_CHAIN));
+
   // If a certificate has trust settings, but only for a different OID, the
   // self-signed rule still takes effect.
   EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {root.trusted_server.get()},
