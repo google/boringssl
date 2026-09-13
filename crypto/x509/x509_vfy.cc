@@ -331,10 +331,8 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       !check_revocation(ctx) ||                 //
       !check_blocklist(ctx) ||                  //
       !check_chain_signatures_and_time(ctx) ||  //
-      !check_name_constraints(ctx) ||
-      // TODO(davidben): Does `check_policy` still need to be conditioned on
-      // `trust`? DoS concerns have been resolved.
-      (trust == X509_TRUST_TRUSTED && !check_policy(ctx))) {
+      !check_name_constraints(ctx) ||           //
+      !check_policy(ctx)) {
     return 0;
   }
 
