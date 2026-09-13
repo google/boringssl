@@ -398,8 +398,6 @@ struct x509_store_ctx_st {
   // Callbacks for various operations
   X509_STORE_CTX_verify_cb verify_cb;  // error callback
 
-  // The following is built up
-  int last_untrusted;     // index of last untrusted cert
   STACK_OF(X509) *chain;  // chain of X509s - built up and trusted
 
   // When something goes wrong, this is why

@@ -9364,6 +9364,14 @@ TEST_P(X509VerifyTest, Purpose) {
       EXPECT_EQ(X509_V_ERR_INVALID_PURPOSE,
                 Verify(leaf.get(), {root.get()}, {intermediate.get()}, {}, 0,
                        configure_callback));
+
+      // If the intermediate is in the `X509_STORE` but is not a trust anchor,
+      // the check also applies. (By default, `X509_check_trust` expects a
+      // self-signed certificate as a trust anchor, so path-building will
+      // continue past `intermediate`.)
+      EXPECT_EQ(X509_V_ERR_INVALID_PURPOSE,
+                Verify(leaf.get(), {root.get(), intermediate.get()}, {}, {}, 0,
+                       configure_callback));
     }
   }
 }
@@ -9571,23 +9579,57 @@ TEST_P(X509VerifyTest, CriticalExtension) {
   ASSERT_TRUE(root);
   ASSERT_TRUE(X509_sign(root.get(), key.get(), EVP_sha256()));
 
-  // Issue a certificate with a critical Netscape certificate type extension. We
-  // do not recognize this extension, so this certificate should be rejected.
+  UniquePtr<X509> intermediate =
+      MakeTestCert("Root", "Intermediate", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(intermediate);
+  ASSERT_TRUE(X509_sign(intermediate.get(), key.get(), EVP_sha256()));
+
   UniquePtr<X509> leaf =
-      MakeTestCert("Root", "Leaf", key.get(), /*is_ca=*/false);
+      MakeTestCert("Intermediate", "Leaf", key.get(), /*is_ca=*/false);
   ASSERT_TRUE(leaf);
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  // Issue certificates with a critical Netscape certificate type extension. We
+  // do not recognize this extension, so these certificates should be rejected.
   UniquePtr<ASN1_BIT_STRING> cert_type(ASN1_BIT_STRING_new());
   ASSERT_TRUE(cert_type);
   ASSERT_TRUE(ASN1_BIT_STRING_set_bit(cert_type.get(), /*n=*/0, /*value=*/1));
-  ASSERT_TRUE(X509_add1_ext_i2d(leaf.get(), NID_netscape_cert_type,
+
+  UniquePtr<X509> intermediate_crit =
+      MakeTestCert("Root", "Intermediate", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(intermediate_crit);
+  ASSERT_TRUE(X509_add1_ext_i2d(intermediate_crit.get(), NID_netscape_cert_type,
+                                cert_type.get(), /*crit=*/1, /*flags=*/0));
+  ASSERT_TRUE(X509_sign(intermediate_crit.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509> leaf_crit =
+      MakeTestCert("Intermediate", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf_crit);
+  ASSERT_TRUE(X509_add1_ext_i2d(leaf_crit.get(), NID_netscape_cert_type,
                                 cert_type.get(),
                                 /*crit=*/1, /*flags=*/0));
-  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+  ASSERT_TRUE(X509_sign(leaf_crit.get(), key.get(), EVP_sha256()));
 
   EXPECT_EQ(X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION,
-            Verify(leaf.get(), {root.get()}, {}, {}));
-  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {root.get()}, {}, {},
-                              X509_V_FLAG_IGNORE_CRITICAL));
+            Verify(leaf_crit.get(), {root.get()}, {intermediate.get()}, {}));
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf_crit.get(), {root.get()}, {intermediate.get()}, {},
+                   X509_V_FLAG_IGNORE_CRITICAL));
+
+  EXPECT_EQ(X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION,
+            Verify(leaf.get(), {root.get()}, {intermediate_crit.get()}, {}));
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.get(), {root.get()}, {intermediate_crit.get()}, {},
+                   X509_V_FLAG_IGNORE_CRITICAL));
+
+  // If the intermediate is in the `X509_STORE` but is not a trust anchor, the
+  // check also applies. (By default, `X509_check_trust` expects a self-signed
+  // certificate as a trust anchor, so path-building will continue past
+  // `intermediate`.)
+  EXPECT_EQ(X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION,
+            Verify(leaf.get(), {root.get(), intermediate_crit.get()}, {}, {}));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {root.get(), intermediate_crit.get()},
+                              {}, {}, X509_V_FLAG_IGNORE_CRITICAL));
 }
 
 enum NameHash { kOldHash, kNewHash };
@@ -11612,7 +11654,24 @@ TEST_P(X509VerifyTest, PathLenConstraint) {
     for (const auto &intermediate : intermediates) {
       intermediate_ptrs.push_back(intermediate.get());
     }
-    return Verify(leaf.get(), {root.get()}, intermediate_ptrs, {}, /*flags=*/0);
+    int ret =
+        Verify(leaf.get(), {root.get()}, intermediate_ptrs, {}, /*flags=*/0);
+
+    // Path length constraints should work the same if some or all of the
+    // intermediates are delivered via the store. (By default,
+    // `X509_check_trust` expects a self-signed certificate as a trust anchor,
+    // so path building will continue past all intermediates.)
+    for (size_t i = 0; i < intermediate_ptrs.size(); i++) {
+      SCOPED_TRACE(i);
+      std::vector<X509 *> untrusted(intermediate_ptrs.begin(),
+                                    intermediate_ptrs.begin() + i);
+      std::vector<X509 *> trusted(intermediate_ptrs.begin() + i,
+                                  intermediate_ptrs.end());
+      trusted.push_back(root.get());
+      EXPECT_EQ(ret, Verify(leaf.get(), trusted, untrusted, {}, /*flags=*/0));
+    }
+
+    return ret;
   };
 
   // An unconstrained chain.
