@@ -525,9 +525,9 @@ w1AH9efZBw==
 -----END CERTIFICATE-----
 )";
 
-// kMlDsa65Cert is the example ML-DSA-65 certificate from
+// kMLDSA65Cert is the example ML-DSA-65 certificate from
 // https://tools.ietf.org/html/rfc9881#name-example-certificates
-static const char kMlDsa65Cert[] = R"(
+static const char kMLDSA65Cert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIVjTCCCIqgAwIBAgIUFZ/+byL9XMQsUk32/V4o0N44804wCwYJYIZIAWUDBAMS
 MCIxDTALBgNVBAoTBElFVEYxETAPBgNVBAMTCExBTVBTIFdHMB4XDTIwMDIwMzA0
@@ -648,9 +648,9 @@ IA==
 -----END CERTIFICATE-----
 )";
 
-// kMlDsa65CertNull is an invalid self-signed ML-DSA-65 certificate with an
+// kMLDSA65CertNull is an invalid self-signed ML-DSA-65 certificate with an
 // explicit NULL in the signature algorithm.
-static const char kMlDsa65CertNull[] = R"(
+static const char kMLDSA65CertNull[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIVSjCCCEWgAwIBAgIBATANBglghkgBZQMEAxIFADAfMR0wGwYDVQQDDBRtYWxm
 b3JtZWQgTUwtRFNBIGtleTAgFw03MDAxMDEwMDAwMDBaGA85OTk5MTIzMTIzNTk1
@@ -2802,8 +2802,8 @@ TEST(X509Test, TestX25519) {
             Bytes(public_value, public_value_size));
 }
 
-TEST(X509Test, TestMlDsa65) {
-  UniquePtr<X509> cert(CertFromPEM(kMlDsa65Cert));
+TEST(X509Test, TestMLDSA65) {
+  UniquePtr<X509> cert(CertFromPEM(kMLDSA65Cert));
   ASSERT_TRUE(cert);
 
   UniquePtr<EVP_PKEY> pkey(X509_get_pubkey(cert.get()));
@@ -2812,8 +2812,8 @@ TEST(X509Test, TestMlDsa65) {
   ASSERT_TRUE(X509_verify(cert.get(), pkey.get()));
 }
 
-TEST(X509Test, TestMlDsa65BadParameters) {
-  UniquePtr<X509> cert(CertFromPEM(kMlDsa65CertNull));
+TEST(X509Test, TestMLDSA65BadParameters) {
+  UniquePtr<X509> cert(CertFromPEM(kMLDSA65CertNull));
   ASSERT_TRUE(cert);
 
   UniquePtr<EVP_PKEY> pkey(X509_get_pubkey(cert.get()));
@@ -3367,7 +3367,7 @@ TEST(X509Test, Ed25519Sign) {
   ASSERT_TRUE(SignatureRoundTrips(md_ctx.get(), pub.get()));
 }
 
-TEST(X509Test, MlDsa44Sign) {
+TEST(X509Test, MLDSA44Sign) {
   std::vector<uint8_t> pub_bytes(MLDSA44_PUBLIC_KEY_BYTES);
   std::vector<uint8_t> seed_bytes(MLDSA_SEED_BYTES);
   auto priv_key = std::make_unique<MLDSA44_private_key>();
@@ -3387,7 +3387,7 @@ TEST(X509Test, MlDsa44Sign) {
   ASSERT_TRUE(SignatureRoundTrips(md_ctx.get(), pub.get()));
 }
 
-TEST(X509Test, MlDsa65Sign) {
+TEST(X509Test, MLDSA65Sign) {
   std::vector<uint8_t> pub_bytes(MLDSA65_PUBLIC_KEY_BYTES);
   std::vector<uint8_t> seed_bytes(MLDSA_SEED_BYTES);
   auto priv_key = std::make_unique<MLDSA65_private_key>();
@@ -3407,7 +3407,7 @@ TEST(X509Test, MlDsa65Sign) {
   ASSERT_TRUE(SignatureRoundTrips(md_ctx.get(), pub.get()));
 }
 
-TEST(X509Test, MlDsa87Sign) {
+TEST(X509Test, MLDSA87Sign) {
   std::vector<uint8_t> pub_bytes(MLDSA87_PUBLIC_KEY_BYTES);
   std::vector<uint8_t> seed_bytes(MLDSA_SEED_BYTES);
   auto priv_key = std::make_unique<MLDSA87_private_key>();
