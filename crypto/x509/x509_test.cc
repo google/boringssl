@@ -1604,17 +1604,15 @@ TEST_P(X509VerifyTest, Basic) {
     override_depth = true;
     depth = d;
     // A chain with a leaf, two intermediates, and a root is depth two.
-    EXPECT_EQ(
-        depth >= 2 ? X509_V_OK : X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
-        Verify(leaf.get(), {cross_signing_root.get()},
-               {intermediate.get(), root_cross_signed.get()},
-               /*crls=*/{}, /*flags=*/0, configure_callback));
+    EXPECT_EQ(depth >= 2 ? X509_V_OK : X509_V_ERR_CERT_CHAIN_TOO_LONG,
+              Verify(leaf.get(), {cross_signing_root.get()},
+                     {intermediate.get(), root_cross_signed.get()},
+                     /*crls=*/{}, /*flags=*/0, configure_callback));
 
     // A chain with a leaf, a root, and no intermediates is depth zero.
-    EXPECT_EQ(
-        depth >= 0 ? X509_V_OK : X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
-        Verify(root_cross_signed.get(), {cross_signing_root.get()}, {},
-               /*crls=*/{}, /*flags=*/0, configure_callback));
+    EXPECT_EQ(depth >= 0 ? X509_V_OK : X509_V_ERR_CERT_CHAIN_TOO_LONG,
+              Verify(root_cross_signed.get(), {cross_signing_root.get()}, {},
+                     /*crls=*/{}, /*flags=*/0, configure_callback));
 
     // An explicitly trusted self-signed certificate is unaffected by depth
     // checks.

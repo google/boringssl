@@ -300,10 +300,9 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
     // `X509_TRUST_REJECTED` should have returned early.
     assert(trust == X509_TRUST_UNTRUSTED || X509_TRUST_TRUSTED);
     if (trust == X509_TRUST_UNTRUSTED) {
-      // TODO(davidben): If the chain was too long, use
-      // `X509_V_ERR_CERT_CHAIN_TOO_LONG`. OpenSSL had an old comment about
-      // this, and newer OpenSSL now return this error.
-      if (have_store_cert) {
+      if (static_cast<int>(sk_X509_num(ctx->chain)) >= max_chain) {
+        ctx->error = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+      } else if (have_store_cert) {
         ctx->error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT;
       } else {
         int is_self_signed;
