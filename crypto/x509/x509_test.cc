@@ -1494,12 +1494,21 @@ TEST(X509Test, TestVerify) {
     }
   };
 
-  // No trust anchors configured.
+  // Cannot find a path to a trust anchor.
   EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
             Verify(leaf.get(), /*roots=*/{}, /*intermediates=*/{},
                    /*crls=*/{}, /*flags=*/0, configure_callback));
   EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
             Verify(leaf.get(), /*roots=*/{}, {intermediate.get()}, /*crls=*/{},
+                   /*flags=*/0, configure_callback));
+
+  // Sometimes this case gives different error codes.
+  EXPECT_EQ(X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT,
+            Verify(root.get(), /*roots=*/{}, /*intermediates=*/{},
+                   /*crls=*/{}, /*flags=*/0, configure_callback));
+  EXPECT_EQ(X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN,
+            Verify(leaf.get(), /*roots=*/{}, {intermediate.get(), root.get()},
+                   /*crls=*/{},
                    /*flags=*/0, configure_callback));
 
   // Each chain works individually.
