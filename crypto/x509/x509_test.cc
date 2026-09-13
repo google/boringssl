@@ -1389,6 +1389,23 @@ class X509VerifyTest : public testing::TestWithParam<bool> {
              const std::vector<X509_CRL *> &crls, unsigned long flags = 0,
              std::function<void(X509_STORE_CTX *)> configure_callback = nullptr,
              int64_t time_posix = kReferenceTime) {
+    VerifyResult result =
+        VerifyAndReturnChain(leaf, roots, intermediates, crls, flags,
+                             configure_callback, time_posix);
+    return result.err;
+  }
+
+  struct VerifyResult {
+    int err;
+    UniquePtr<STACK_OF(X509)> chain;
+  };
+
+  VerifyResult VerifyAndReturnChain(
+      X509 *leaf, const std::vector<X509 *> &roots,
+      const std::vector<X509 *> &intermediates,
+      const std::vector<X509_CRL *> &crls, unsigned long flags = 0,
+      std::function<void(X509_STORE_CTX *)> configure_callback = nullptr,
+      int64_t time_posix = kReferenceTime) {
     UniquePtr<STACK_OF(X509)> roots_stack(CertsToStack(roots));
     UniquePtr<STACK_OF(X509)> intermediates_stack(CertsToStack(intermediates));
     UniquePtr<STACK_OF(X509_CRL)> crls_stack(CRLsToStack(crls));
@@ -1396,32 +1413,32 @@ class X509VerifyTest : public testing::TestWithParam<bool> {
     if (!roots_stack ||          //
         !intermediates_stack ||  //
         !crls_stack) {
-      return X509_V_ERR_UNSPECIFIED;
+      return VerifyResult{X509_V_ERR_UNSPECIFIED, nullptr};
     }
 
     UniquePtr<X509_STORE_CTX> ctx(X509_STORE_CTX_new());
     UniquePtr<X509_STORE> store(X509_STORE_new());
     if (!ctx ||  //
         !store) {
-      return X509_V_ERR_UNSPECIFIED;
+      return VerifyResult{X509_V_ERR_UNSPECIFIED, nullptr};
     }
 
     if (use_store()) {
       for (X509 *root : roots) {
         if (!X509_STORE_add_cert(store.get(), root)) {
-          return X509_V_ERR_UNSPECIFIED;
+          return VerifyResult{X509_V_ERR_UNSPECIFIED, nullptr};
         }
       }
       for (X509_CRL *crl : crls) {
         if (!X509_STORE_add_crl(store.get(), crl)) {
-          return X509_V_ERR_UNSPECIFIED;
+          return VerifyResult{X509_V_ERR_UNSPECIFIED, nullptr};
         }
       }
     }
 
     if (!X509_STORE_CTX_init(ctx.get(), store.get(), leaf,
                              intermediates_stack.get())) {
-      return X509_V_ERR_UNSPECIFIED;
+      return VerifyResult{X509_V_ERR_UNSPECIFIED, nullptr};
     }
 
     if (!use_store()) {
@@ -1440,10 +1457,13 @@ class X509VerifyTest : public testing::TestWithParam<bool> {
 
     ERR_clear_error();
     if (X509_verify_cert(ctx.get()) != 1) {
-      return X509_STORE_CTX_get_error(ctx.get());
+      return VerifyResult{X509_STORE_CTX_get_error(ctx.get()), nullptr};
     }
 
-    return X509_V_OK;
+    VerifyResult ret;
+    ret.err = X509_V_OK;
+    ret.chain.reset(X509_chain_up_ref(X509_STORE_CTX_get0_chain(ctx.get())));
+    return ret;
   }
 };
 
@@ -9433,16 +9453,11 @@ TEST_P(X509VerifyTest, Trust) {
             Verify(root.normal.get(), {root.trusted_any.get()}, {}, {}));
   EXPECT_EQ(X509_V_ERR_CERT_REJECTED,
             Verify(root.normal.get(), {root.distrusted_any.get()}, {}, {}));
-
-  // Non-self-signed target certificates are not matched against the root store
-  // at all by default.
-  // TODO(crbug.com/548461146):  This is probably a bug because, in the
-  // non-partial-chain version, they are.
   EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
             Verify(leaf.normal.get(), {leaf.normal.get()}, {}, {}));
-  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.normal.get(), {leaf.trusted_any.get()}, {}, {}));
-  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+  EXPECT_EQ(X509_V_ERR_CERT_REJECTED,
             Verify(leaf.normal.get(), {leaf.distrusted_any.get()}, {}, {}));
 
   // If `X509_V_FLAG_PARTIAL_CHAIN`, its looser interpretation of trust anchors
@@ -9458,11 +9473,9 @@ TEST_P(X509VerifyTest, Trust) {
                               X509_V_FLAG_PARTIAL_CHAIN));
   EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {leaf.trusted_any.get()}, {},
                               {}, X509_V_FLAG_PARTIAL_CHAIN));
-  // This even causes distrusted non-self-signed roots to be interpreted as
-  // trust anchors.
-  // TODO(crbug.com/548461146): This is probably a bug.
-  EXPECT_EQ(X509_V_OK, Verify(leaf.normal.get(), {leaf.distrusted_any.get()},
-                              {}, {}, X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CERT_REJECTED,
+            Verify(leaf.normal.get(), {leaf.distrusted_any.get()}, {}, {},
+                   X509_V_FLAG_PARTIAL_CHAIN));
 
   // If a certificate has trust settings, but only for a different OID, the
   // self-signed rule still takes effect.
@@ -9528,6 +9541,25 @@ TEST_P(X509VerifyTest, Trust) {
   EXPECT_EQ(X509_V_OK, Verify(leaf.distrusted_server.get(), {root.normal.get()},
                               {intermediate.normal.get()}, {},
                               /*flags=*/0, set_server_trust));
+
+  // If `intermediate` is treated as a trust anchor, path-building should stop
+  // at `intermediate` and not continue on to `root`.
+  VerifyResult result = VerifyAndReturnChain(
+      leaf.normal.get(),
+      {intermediate.trusted_any.get(), root.trusted_any.get()}, {}, {});
+  EXPECT_EQ(X509_V_OK, result.err);
+  EXPECT_EQ(sk_X509_num(result.chain.get()), 2u);
+  EXPECT_EQ(sk_X509_value(result.chain.get(), 0), leaf.normal.get());
+  EXPECT_EQ(sk_X509_value(result.chain.get(), 1),
+            intermediate.trusted_any.get());
+
+  result = VerifyAndReturnChain(leaf.normal.get(),
+                                {intermediate.normal.get(), root.normal.get()},
+                                {}, {}, X509_V_FLAG_PARTIAL_CHAIN);
+  EXPECT_EQ(X509_V_OK, result.err);
+  EXPECT_EQ(sk_X509_num(result.chain.get()), 2u);
+  EXPECT_EQ(sk_X509_value(result.chain.get(), 0), leaf.normal.get());
+  EXPECT_EQ(sk_X509_value(result.chain.get(), 1), intermediate.normal.get());
 }
 
 // Test some APIs that rust-openssl uses to look up purposes by name.

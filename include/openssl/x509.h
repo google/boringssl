@@ -2818,8 +2818,9 @@ OPENSSL_EXPORT void X509_STORE_free(X509_STORE *store);
 // returns one on success and zero on error. This function internally increments
 // `x509`'s reference count, so the caller retains ownership of `x509`.
 //
-// Certificates configured by this function are still subject to the checks
-// described in `X509_VERIFY_PARAM_set_trust`.
+// Certificates configured by this function are potential trust anchors, but
+// whether they are trust anchors for any given verification depends on the
+// checks described in `X509_VERIFY_PARAM_set_trust`.
 //
 // Although `store` is not const, this function's use of `store` is thread-safe.
 // However, if this function is called concurrently with `X509_verify_cert`, it
@@ -4684,6 +4685,10 @@ OPENSSL_EXPORT int X509_check_purpose(const X509 *x509, int purpose, int ca);
 // was distrusted, and `X509_TRUST_UNTRUSTED` otherwise. `id` should be one of
 // the `X509_TRUST_*` constants, or zero to indicate the default behavior.
 // `flags` should be zero and is ignored.
+//
+// WARNING: This function assumes `x509` is a trusted certificate, installed in
+// an `X509_STORE`. If passed an arbitrary certificate from an untrusted source,
+// it may return `X509_TRUST_TRUSTED`.
 OPENSSL_EXPORT int X509_check_trust(const X509 *x509, int id, int flags);
 
 // X509_STORE_CTX_get1_certs returns a newly-allocated stack containing all
