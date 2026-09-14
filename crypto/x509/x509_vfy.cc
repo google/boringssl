@@ -158,11 +158,8 @@ UniquePtr<X509> get_trusted_issuer(X509_STORE_CTX *ctx, const X509 *x) {
 int check_chain_extensions(X509_STORE_CTX *ctx) {
   int plen = 0;
   int purpose = ctx->param->purpose;
-
-  // Check all but the trust anchor.
-  // TODO(crbug.com/525688038): Also check the trust anchor.
   int num = static_cast<int>(sk_X509_num(ctx->chain));
-  for (int i = 0; i < num - 1; i++) {
+  for (int i = 0; i < num; i++) {
     X509Impl *x = FromOpaque(sk_X509_value(ctx->chain, i));
     if (!(ctx->param->flags & X509_V_FLAG_IGNORE_CRITICAL) &&
         (x->ex_flags & EXFLAG_CRITICAL)) {

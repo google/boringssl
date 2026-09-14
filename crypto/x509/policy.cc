@@ -575,6 +575,9 @@ int X509_policy_check(const STACK_OF(X509) *certs,
   *out_error_depth = 0;
 
   // Skip policy checking if the chain is just the trust anchor.
+  //
+  // TODO(crbug.com/525688038): Apply trust anchor constraints. See RFC 5937 and
+  // ApplyTrustAnchorConstraints from verify_certificate_chain.cc.
   const size_t num_certs = sk_X509_num(certs);
   if (num_certs <= 1) {
     return X509_V_OK;
