@@ -36,7 +36,6 @@
 #include <openssl/span.h>
 #include <openssl/xwing.h>
 
-#include "../fipsmodule/bcm_interface.h"
 #include "../fipsmodule/ec/internal.h"
 #include "../fipsmodule/keccak/internal.h"
 #include "../internal.h"
@@ -56,8 +55,8 @@ struct evp_hpke_kem_st {
   // evp_pkey_alg_func and evp_kem_func, if non-null, provide the EVP_PKEY_CTX
   // and EVP_KEM functionality backing this EVP_HPKE_KEM. If these are non-null,
   // then `init_key`, `generate_key`, `derive_key`, `encap_with_seed`, and
-  // `decap` are null and `enc_len` is zero (until fully migrated), and the
-  // `evp_*` function pointers are non-null.
+  // `decap` are null and 'seed_len` and `enc_len` are zero (until fully
+  // migrated), and the `evp_*` function pointers are non-null.
   // TODO(crbug.com/535883377): Unify EVP_HPKE_KEM and EVP_KEM for all supported
   // HPKE KEMs.
   const EVP_PKEY_ALG *(*evp_pkey_alg_func)();
@@ -735,7 +734,7 @@ const EVP_HPKE_KEM *EVP_hpke_xwing() {
       /*evp_kem_func=*/&EVP_kem_xwing,
       /*public_key_len=*/XWING_PUBLIC_KEY_LEN,
       /*private_key_len=*/XWING_PRIVATE_KEY_LEN,
-      /*seed_len=*/XWING_SEED_LEN,
+      /*seed_len=*/0,
       /*enc_len=*/0,
       /*init_key=*/nullptr,
       /*generate_key=*/nullptr,
@@ -770,7 +769,7 @@ const EVP_HPKE_KEM *EVP_hpke_mlkem768() {
       /*evp_kem_func=*/&EVP_kem_ml_kem_768,
       /*public_key_len=*/MLKEM768_PUBLIC_KEY_BYTES,
       /*private_key_len=*/MLKEM_SEED_BYTES,
-      /*seed_len=*/BCM_MLKEM_ENCAP_ENTROPY,
+      /*seed_len=*/0,
       /*enc_len=*/0,
       /*init_key=*/nullptr,
       /*generate_key=*/nullptr,
@@ -805,7 +804,7 @@ const EVP_HPKE_KEM *EVP_hpke_mlkem1024() {
       /*evp_kem_func=*/&EVP_kem_ml_kem_1024,
       /*public_key_len=*/MLKEM1024_PUBLIC_KEY_BYTES,
       /*private_key_len=*/MLKEM_SEED_BYTES,
-      /*seed_len=*/BCM_MLKEM_ENCAP_ENTROPY,
+      /*seed_len=*/0,
       /*enc_len=*/0,
       /*init_key=*/nullptr,
       /*generate_key=*/nullptr,
@@ -1321,6 +1320,12 @@ int EVP_HPKE_CTX_setup_auth_sender(
     const EVP_HPKE_KEY *key, const EVP_HPKE_KDF *kdf, const EVP_HPKE_AEAD *aead,
     const uint8_t *peer_public_key, size_t peer_public_key_len,
     const uint8_t *info, size_t info_len) {
+  if (key->kem->auth_encap_with_seed == nullptr) {
+    // Not all HPKE KEMs support AuthEncap.
+    OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
+    return 0;
+  }
+  assert(!uses_evp(key->kem));
   uint8_t seed[MAX_SEED_LEN];
   RAND_bytes(seed, key->kem->seed_len);
   return EVP_HPKE_CTX_setup_auth_sender_with_seed_for_testing(
