@@ -609,16 +609,17 @@ static int check_trust(X509_STORE_CTX *ctx) {
 }
 
 static int check_revocation(X509_STORE_CTX *ctx) {
-  if (!(ctx->param->flags & X509_V_FLAG_CRL_CHECK)) {
+  if (!(ctx->param->flags & X509_V_FLAG_CRL_CHECK) ||
+      sk_X509_num(ctx->chain) <= 1) {
     return 1;
   }
-  int last;
-  if (ctx->param->flags & X509_V_FLAG_CRL_CHECK_ALL) {
-    last = (int)sk_X509_num(ctx->chain) - 1;
-  } else {
-    last = 0;
-  }
-  for (int i = 0; i <= last; i++) {
+  // Check either only the leaf, or everything but the trust anchor. The trust
+  // anchor is not formally part of RFC 5280 certification path and, without an
+  // issuer, we could not usefully process a CRL anyway.
+  const int num_to_check = (ctx->param->flags & X509_V_FLAG_CRL_CHECK_ALL)
+                               ? static_cast<int>(sk_X509_num(ctx->chain)) - 1
+                               : 1;
+  for (int i = 0; i < num_to_check; i++) {
     if (!check_revocation_for_cert(ctx, i)) {
       return 0;
     }
@@ -836,10 +837,9 @@ static int get_crl_score(X509_STORE_CTX *ctx, X509 **out_issuer,
 
 static int crl_akid_check(X509_STORE_CTX *ctx, const X509_CRL *crl,
                           X509 **out_issuer, int *out_crl_score, int depth) {
-  const X509_NAME *cnm = X509_CRL_get_issuer(crl);
-  if ((size_t)depth != sk_X509_num(ctx->chain) - 1) {
-    depth++;
-  }
+  const X509_NAME *crl_name = X509_CRL_get_issuer(crl);
+  depth++;
+  assert(depth < static_cast<int>(sk_X509_num(ctx->chain)));
 
   X509 *crl_issuer = sk_X509_value(ctx->chain, depth);
   if (X509_check_akid(crl_issuer, crl->akid) == X509_V_OK) {
@@ -850,7 +850,7 @@ static int crl_akid_check(X509_STORE_CTX *ctx, const X509_CRL *crl,
 
   for (depth++; depth < (int)sk_X509_num(ctx->chain); depth++) {
     crl_issuer = sk_X509_value(ctx->chain, depth);
-    if (X509_NAME_cmp(X509_get_subject_name(crl_issuer), cnm)) {
+    if (X509_NAME_cmp(X509_get_subject_name(crl_issuer), crl_name)) {
       continue;
     }
     if (X509_check_akid(crl_issuer, crl->akid) == X509_V_OK) {

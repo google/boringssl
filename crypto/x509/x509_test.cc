@@ -10765,9 +10765,8 @@ TEST_P(X509VerifyTest, CRLCheckAll) {
                    {ca_crl_empty.get(), root_crl_revoke_ca.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
 
-  // Revocation is checked for the trust anchor.
-  // TODO(crbug.com/561609863): Remove this. See below.
-  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+  // Revocation is not checked for the trust anchor, as this is not meaningful.
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {root.get()}, {ca.get()},
                    {ca_crl_empty.get(), root_crl_revoke_root.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
@@ -10784,39 +10783,38 @@ TEST_P(X509VerifyTest, CRLCheckAll) {
             Verify(leaf.get(), {ca.get()}, {}, {ca_crl_revoke_leaf.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
 
-  // TODO(crbug.com/561609863): But `X509_V_FLAG_CRL_CHECK_ALL` in this scenario
-  // is broken. It tries to find a CRL for the trust anchor, but this is not
-  // coherent or possible. It ends up getting confused and thinking the CRL's
-  // issuer is "Root" but its key is `ca_key`, resulting in the signature
-  // verification failing.
+  // `X509_V_FLAG_CRL_CHECK_ALL` likewise does not check for the trust anchor.
+  // It would not be possible because the trust anchor has no issuer. (If we
+  // tried to use the certificate that represents the trust anchor, we don't
+  // have the signing key. See crbug.com/561609863.)
   EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
             Verify(leaf.get(), {ca.get()}, {}, {},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
                        X509_V_FLAG_PARTIAL_CHAIN));
-  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {ca.get()}, {}, {ca_crl_empty.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
                        X509_V_FLAG_PARTIAL_CHAIN));
-  EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {ca.get()}, {},
-                   {ca_crl_empty.get(), root_crl_empty.get()},
+                   {ca_crl_empty.get(), root_crl_revoke_ca.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
                        X509_V_FLAG_PARTIAL_CHAIN));
 
-  // TODO(crbug.com/561609863): If the "path" is a single leaf certificate that
-  // was already trusted in the root store, both `X509_V_FLAG_CRL_CHECK` and
-  // `X509_V_FLAG_CRL_CHECK_ALL` exhibit this bug.
-  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+  // If the "path" is a single leaf certificate that was already trusted in the
+  // root store, the same applies. `X509_V_FLAG_CRL_CHECK` and
+  // `X509_V_FLAG_CRL_CHECK_ALL` have no revocation to check.
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {leaf.get()}, {}, {},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
-  EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {leaf.get()}, {}, {ca_crl_empty.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
-  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {leaf.get()}, {}, {},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
                        X509_V_FLAG_PARTIAL_CHAIN));
-  EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+  EXPECT_EQ(X509_V_OK,
             Verify(leaf.get(), {leaf.get()}, {}, {ca_crl_empty.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
                        X509_V_FLAG_PARTIAL_CHAIN));
