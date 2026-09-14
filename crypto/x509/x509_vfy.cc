@@ -762,6 +762,7 @@ static int get_crl_sk(X509_STORE_CTX *ctx, CRLInfo *best,
     if (crl_score < best->score || crl_score == 0) {
       continue;
     }
+    assert(crl_issuer != nullptr);
     // If current CRL is equivalent use it if it is newer
     if (crl_score == best->score && best->crl != nullptr) {
       int day, sec;
@@ -784,8 +785,8 @@ static int get_crl_sk(X509_STORE_CTX *ctx, CRLInfo *best,
 }
 
 // For a given CRL return how suitable it is for the supplied certificate
-// 'x'. The return value is a mask of several criteria. If the issuer is not
-// the certificate issuer this is returned in *pissuer.
+// 'x'. The return value is a mask of several criteria, or zero if the CRL is
+// unusable. The certificate issuer is returned in `*out_issuer`.
 static int get_crl_score(X509_STORE_CTX *ctx, X509 **out_issuer,
                          const X509_CRL *crl, const X509 *x, int depth) {
   if (crl->idp) {
@@ -961,62 +962,43 @@ static int get_crl(X509_STORE_CTX *ctx, CRLInfo *out_crl_info, const X509 *x,
 // Check CRL validity
 static int check_crl(X509_STORE_CTX *ctx, const CRLInfo &crl_info, int depth) {
   X509_CRL *crl = crl_info.crl.get();
-  int root_depth = (int)sk_X509_num(ctx->chain) - 1;
-  // If we have an alternative CRL issuer cert use that. Otherwise, it is the
-  // issuer of the current certificate.
-  X509Impl *issuer = nullptr;
-  if (crl_info.issuer) {
-    issuer = FromOpaque(crl_info.issuer);
-  } else if (depth < root_depth) {
-    issuer = FromOpaque(sk_X509_value(ctx->chain, depth + 1));
-  } else {
-    issuer = FromOpaque(sk_X509_value(ctx->chain, root_depth));
-    // If not self signed, can't check signature
-    if (!x509_check_issued_with_callback(ctx, issuer, issuer)) {
-      ctx->error = X509_V_ERR_UNABLE_TO_GET_CRL_ISSUER;
-      if (!call_verify_cb_at_depth(0, ctx, depth)) {
-        return 0;
-      }
+  X509Impl *issuer = FromOpaque(crl_info.issuer);
+
+  // Check for cRLSign bit if keyUsage present
+  if ((issuer->ex_flags & EXFLAG_KUSAGE) &&
+      !(issuer->ex_kusage & X509v3_KU_CRL_SIGN)) {
+    ctx->error = X509_V_ERR_KEYUSAGE_NO_CRL_SIGN;
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
+      return 0;
     }
   }
 
-  if (issuer) {
-    // Check for cRLSign bit if keyUsage present
-    if ((issuer->ex_flags & EXFLAG_KUSAGE) &&
-        !(issuer->ex_kusage & X509v3_KU_CRL_SIGN)) {
-      ctx->error = X509_V_ERR_KEYUSAGE_NO_CRL_SIGN;
+  if (!(crl_info.score & CRL_SCORE_SCOPE)) {
+    ctx->error = X509_V_ERR_DIFFERENT_CRL_SCOPE;
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
+      return 0;
+    }
+  }
+
+  if (!(crl_info.score & CRL_SCORE_TIME)) {
+    if (!check_crl_time(ctx, crl, /*notify=*/true, depth)) {
+      return 0;
+    }
+  }
+
+  // Attempt to get issuer certificate public key
+  EVP_PKEY *ikey = X509_get0_pubkey(issuer);
+  if (!ikey) {
+    ctx->error = X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY;
+    if (!call_verify_cb_at_depth(0, ctx, depth)) {
+      return 0;
+    }
+  } else {
+    // Verify CRL signature
+    if (X509_CRL_verify(crl, ikey) <= 0) {
+      ctx->error = X509_V_ERR_CRL_SIGNATURE_FAILURE;
       if (!call_verify_cb_at_depth(0, ctx, depth)) {
         return 0;
-      }
-    }
-
-    if (!(crl_info.score & CRL_SCORE_SCOPE)) {
-      ctx->error = X509_V_ERR_DIFFERENT_CRL_SCOPE;
-      if (!call_verify_cb_at_depth(0, ctx, depth)) {
-        return 0;
-      }
-    }
-
-    if (!(crl_info.score & CRL_SCORE_TIME)) {
-      if (!check_crl_time(ctx, crl, /*notify=*/true, depth)) {
-        return 0;
-      }
-    }
-
-    // Attempt to get issuer certificate public key
-    EVP_PKEY *ikey = X509_get0_pubkey(issuer);
-    if (!ikey) {
-      ctx->error = X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY;
-      if (!call_verify_cb_at_depth(0, ctx, depth)) {
-        return 0;
-      }
-    } else {
-      // Verify CRL signature
-      if (X509_CRL_verify(crl, ikey) <= 0) {
-        ctx->error = X509_V_ERR_CRL_SIGNATURE_FAILURE;
-        if (!call_verify_cb_at_depth(0, ctx, depth)) {
-          return 0;
-        }
       }
     }
   }
