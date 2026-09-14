@@ -383,7 +383,6 @@ static long bio_ctrl(BIO *bio, int cmd, long num, void *ptr) {
 
 static const BIO_METHOD methods_biop = {
     BIO_TYPE_BIO,
-    "BIO pair",
     /*bwrite=*/nullptr,
     bio_write_ex,
     bio_read,

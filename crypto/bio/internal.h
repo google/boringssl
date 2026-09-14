@@ -41,7 +41,6 @@ DECLARE_OPAQUE_STRUCT(bio_st, Bio)
 
 struct bio_method_st {
   int type;
-  const char *name;
   int (*bwrite)(BIO *, const char *, int);
   int (*bwrite_ex)(BIO *, const char *, size_t, size_t *);
   int (*bread)(BIO *, char *, int);

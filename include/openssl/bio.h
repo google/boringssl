@@ -664,9 +664,17 @@ OPENSSL_EXPORT int BIO_shutdown_wr(BIO *bio);
 OPENSSL_EXPORT int BIO_get_new_index(void);
 
 // BIO_meth_new returns a newly-allocated `BIO_METHOD` or NULL on allocation
-// error. The `type` specifies the type that will be returned by
-// `BIO_method_type`. If this is unnecessary, this value may be zero. The `name`
-// parameter is vestigial and may be NULL.
+// error. `type` and `name` optionally identify the `BIO_METHOD`. Most callers
+// will not need to inspect the type of their own `BIO`s and can pass zero and
+// NULL, respectively, to skip this mechanism.
+//
+// `type` specifies the type that will be returned by `BIO_method_type` and
+// matched by `BIO_find_type`. If used, it should be a combination of an index,
+// allocated by `BIO_get_new_index`, and optionally the `BIO_TYPE_DESCRIPTOR`,
+// `BIO_TYPE_FILTER`, and `BIO_TYPE_SOURCE_SINK` flags. If `BIO_TYPE_DESCRIPTOR`
+// is set, the `BIO_METHOD` must implement `BIO_C_GET_FD`.
+//
+// `name` is unused. BoringSSL does not currently implement `BIO_method_name`.
 //
 // Use the `BIO_meth_set_*` functions below to initialize the `BIO_METHOD`. The
 // function implementations may use `BIO_set_data` and `BIO_get_data` to add

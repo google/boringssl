@@ -234,7 +234,6 @@ static int file_gets(BIO *bp, char *buf, int size) {
 
 static const BIO_METHOD methods_filep = {
     BIO_TYPE_FILE,
-    "FILE pointer",
     /*bwrite=*/nullptr,
     file_write_ex,
     file_read,

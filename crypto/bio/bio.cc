@@ -627,7 +627,6 @@ BIO_METHOD *BIO_meth_new(int type, const char *name) {
     return nullptr;
   }
   method->type = type;
-  method->name = name;
   return method;
 }
 

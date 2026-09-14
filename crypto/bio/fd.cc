@@ -170,7 +170,6 @@ static int fd_gets(BIO *bp, char *buf, int size) {
 
 static const BIO_METHOD methods_fdp = {
     BIO_TYPE_FD,
-    "file descriptor",
     /*bwrite=*/nullptr,
     fd_write_ex,
     fd_read,
