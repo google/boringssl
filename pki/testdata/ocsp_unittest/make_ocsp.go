@@ -387,7 +387,7 @@ func marshalBasicOCSPResponse(b *cryptobyte.Builder, resp *ocspResponse) {
 		})
 	} else {
 		tbsBuilder.AddASN1(cbasn1.SEQUENCE, func(respData *cryptobyte.Builder) {
-			if resp.version != nil && *resp.version != 1 {
+			if resp.version != nil {
 				respData.AddASN1(cbasn1.Tag(0).ContextSpecific().Constructed(), func(b *cryptobyte.Builder) {
 					b.AddASN1Int64(int64(*resp.version))
 				})
@@ -632,8 +632,8 @@ func main() {
 		"has_version",
 		"Includes a default version V1",
 		ca, cert,
-		// TODO(davidben): This test actually does not include it.
-		create(ocspResponse{version: new(1)}),
+		// v1 is encoded with value zero.
+		create(ocspResponse{version: new(0)}),
 	)
 
 	store(
