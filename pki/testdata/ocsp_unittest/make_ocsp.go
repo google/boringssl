@@ -271,6 +271,9 @@ type singleResponse struct {
 	nextUpdate *time.Time
 	revokeTime *time.Time
 	extensions []pkix.Extension
+	// trailingDataInStatus causes the CertStatus to include extra data
+	// in its contents.
+	trailingDataInStatus bool
 }
 
 func marshalSingleResponse(b *cryptobyte.Builder, resp singleResponse) {
@@ -296,7 +299,11 @@ func marshalSingleResponse(b *cryptobyte.Builder, resp singleResponse) {
 
 		switch resp.status {
 		case statusGood:
-			respB.AddASN1(cbasn1.Tag(0).ContextSpecific(), func(b *cryptobyte.Builder) {})
+			respB.AddASN1(cbasn1.Tag(0).ContextSpecific(), func(b *cryptobyte.Builder) {
+				if resp.trailingDataInStatus {
+					b.AddBytes([]byte("invalid"))
+				}
+			})
 		case statusRevoked:
 			revTime := revokeDate
 			if resp.revokeTime != nil {
@@ -309,9 +316,16 @@ func marshalSingleResponse(b *cryptobyte.Builder, resp singleResponse) {
 						child.AddASN1Enum(int64(*resp.reason))
 					})
 				}
+				if resp.trailingDataInStatus {
+					revInfo.AddBytes([]byte("invalid"))
+				}
 			})
 		case statusUnknown:
-			respB.AddASN1(cbasn1.Tag(2).ContextSpecific(), func(b *cryptobyte.Builder) {})
+			respB.AddASN1(cbasn1.Tag(2).ContextSpecific(), func(b *cryptobyte.Builder) {
+				if resp.trailingDataInStatus {
+					b.AddBytes([]byte("invalid"))
+				}
+			})
 		}
 
 		thisUpdate := resp.thisUpdate
@@ -940,6 +954,37 @@ representable in OCSP.`,
 		create(ocspResponse{
 			responses: []singleResponse{
 				{cert: certInvalidSerial, status: statusGood},
+			},
+		}),
+	)
+
+	store(
+		"good_response_invalid_status",
+		"Is a good response but the status is encoded wrong",
+		ca, cert,
+		create(ocspResponse{
+			responses: []singleResponse{
+				{cert: cert, status: statusGood, trailingDataInStatus: true},
+			},
+		}),
+	)
+	store(
+		"revoke_response_invalid_status",
+		"Is a revoked response but the status is encoded wrong",
+		ca, cert,
+		create(ocspResponse{
+			responses: []singleResponse{
+				{cert: cert, status: statusRevoked, trailingDataInStatus: true},
+			},
+		}),
+	)
+	store(
+		"unknown_response_invalid_status",
+		"Is an unknown response but the status is encoded wrong",
+		ca, cert,
+		create(ocspResponse{
+			responses: []singleResponse{
+				{cert: cert, status: statusUnknown, trailingDataInStatus: true},
 			},
 		}),
 	)

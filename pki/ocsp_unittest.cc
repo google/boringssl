@@ -129,6 +129,14 @@ const TestParams kTestParams[] = {
      OCSPVerifyResult::PARSE_RESPONSE_DATA_ERROR},
     {"multiple_response_good_revoked.pem", OCSPRevocationStatus::REVOKED,
      OCSPVerifyResult::PROVIDED},
+    // An unparseable SingleResponse is currently ignored, so the result will be
+    // NO_MATCHING_RESPONSE.
+    {"good_response_invalid_status.pem", OCSPRevocationStatus::UNKNOWN,
+     OCSPVerifyResult::NO_MATCHING_RESPONSE},
+    {"revoke_response_invalid_status.pem", OCSPRevocationStatus::UNKNOWN,
+     OCSPVerifyResult::NO_MATCHING_RESPONSE},
+    {"unknown_response_invalid_status.pem", OCSPRevocationStatus::UNKNOWN,
+     OCSPVerifyResult::NO_MATCHING_RESPONSE},
 };
 
 // Parameterised test name generator for tests depending on RenderTextBackend.

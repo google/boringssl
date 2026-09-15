@@ -152,6 +152,9 @@ bool ParseCertStatus(der::Input raw_tlv, OCSPCertStatus *out) {
   out->has_reason = false;
   if (status_tag == (CBS_ASN1_CONTEXT_SPECIFIC | 0)) {
     out->status = OCSPRevocationStatus::GOOD;
+    if (!status.empty()) {
+      return false;
+    }
   } else if (status_tag ==
              (CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 1)) {
     out->status = OCSPRevocationStatus::REVOKED;
@@ -160,6 +163,9 @@ bool ParseCertStatus(der::Input raw_tlv, OCSPCertStatus *out) {
     }
   } else if (status_tag == (CBS_ASN1_CONTEXT_SPECIFIC | 2)) {
     out->status = OCSPRevocationStatus::UNKNOWN;
+    if (!status.empty()) {
+      return false;
+    }
   } else {
     return false;
   }
