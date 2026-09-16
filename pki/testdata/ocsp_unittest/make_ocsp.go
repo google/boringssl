@@ -431,7 +431,7 @@ func marshalBasicOCSPResponse(b *cryptobyte.Builder, resp *ocspResponse) {
 		basicResp.AddBytes(tbsBytes)
 		basicResp.AddASN1(cbasn1.SEQUENCE, func(b *cryptobyte.Builder) {
 			b.AddASN1ObjectIdentifier(sigAlgOID)
-			// TODO(davidben): This should have an ASN.1 NULL.
+			b.AddASN1NULL()
 		})
 
 		signature := resp.signature
