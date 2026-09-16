@@ -9801,8 +9801,8 @@ TEST(X509Test, DuplicateName) {
   ASSERT_TRUE(crl1);
   ASSERT_TRUE(AddAuthorityKeyIdentifier(crl1.get(), key_id1));
   ASSERT_TRUE(X509_CRL_sign(crl1.get(), key1.get(), EVP_sha256()));
-  // TODO(davidben): Some state in CRLs does not get correctly set up unless it
-  // is parsed from data. `X509_CRL_sign` should reset it internally.
+  // TODO(crbug.com/443261873): Some state in CRLs does not get correctly set up
+  // unless it is parsed from data. `X509_CRL_sign` should reset it internally.
   crl1 = ReencodeCRL(crl1.get());
   ASSERT_TRUE(crl1);
 
@@ -9822,8 +9822,8 @@ TEST(X509Test, DuplicateName) {
   ASSERT_TRUE(crl2);
   ASSERT_TRUE(AddAuthorityKeyIdentifier(crl2.get(), key_id2));
   ASSERT_TRUE(X509_CRL_sign(crl2.get(), key2.get(), EVP_sha256()));
-  // TODO(davidben): Some state in CRLs does not get correctly set up unless it
-  // is parsed from data. `X509_CRL_sign` should reset it internally.
+  // TODO(crbug.com/443261873): Some state in CRLs does not get correctly set up
+  // unless it is parsed from data. `X509_CRL_sign` should reset it internally.
   crl2 = ReencodeCRL(crl2.get());
   ASSERT_TRUE(crl2);
 
