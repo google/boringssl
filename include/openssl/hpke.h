@@ -83,6 +83,10 @@ OPENSSL_EXPORT size_t EVP_HPKE_KEM_private_key_len(const EVP_HPKE_KEM *kem);
 // secret, for `kem`. This value will be at most `EVP_HPKE_MAX_ENC_LENGTH`.
 OPENSSL_EXPORT size_t EVP_HPKE_KEM_enc_len(const EVP_HPKE_KEM *kem);
 
+// EVP_HPKE_KEM_shared_secret_len returns the length of the shared secret
+// produced by `kem`.
+OPENSSL_EXPORT size_t EVP_HPKE_KEM_shared_secret_len(const EVP_HPKE_KEM *kem);
+
 // The following constants are KDF identifiers.
 #define EVP_HPKE_HKDF_SHA256 0x0001
 #define EVP_HPKE_HKDF_SHA384 0x0002
@@ -270,6 +274,25 @@ OPENSSL_EXPORT int EVP_HPKE_CTX_setup_recipient(
     EVP_HPKE_CTX *ctx, const EVP_HPKE_KEY *key, const EVP_HPKE_KDF *kdf,
     const EVP_HPKE_AEAD *aead, const uint8_t *enc, size_t enc_len,
     const uint8_t *info, size_t info_len);
+
+// EVP_HPKE_CTX_setup_recipient_with_shared_secret behaves like
+// `EVP_HPKE_CTX_setup_recipient`, but takes the shared secret explicitly.
+//
+// WARNING: `shared_secret` must be the result of decapsulating the sender's
+// `enc` value with the recipient's private key. Using the wrong shared secret
+// will result in an `EVP_HPKE_CTX` that cannot decrypt the sender's messages.
+// Additionally, an attacker with knowledge of `shared_secret` will be able to
+// decrypt and forge encrypted messages.
+//
+// It returns one on success and zero on error.
+//
+// On success, callers may call `EVP_HPKE_CTX_open` to decrypt messages from the
+// sender. Callers must then call `EVP_HPKE_CTX_cleanup` when done. On failure,
+// calling `EVP_HPKE_CTX_cleanup` is safe, but not required.
+OPENSSL_EXPORT int EVP_HPKE_CTX_setup_recipient_with_shared_secret(
+    EVP_HPKE_CTX *ctx, const EVP_HPKE_KEM *kem, const EVP_HPKE_KDF *kdf,
+    const EVP_HPKE_AEAD *aead, const uint8_t *shared_secret,
+    size_t shared_secret_len, const uint8_t *info, size_t info_len);
 
 // EVP_HPKE_CTX_setup_auth_sender implements the SetupAuthS HPKE operation. It
 // behaves like `EVP_HPKE_CTX_setup_sender` but authenticates the resulting

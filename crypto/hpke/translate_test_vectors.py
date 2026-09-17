@@ -79,7 +79,18 @@ def read_test_vectors_and_generate_code(json_file_in_path, test_file_out_path):
         test["kdf_id"] not in SUPPORTED_HPKE_KDFS):
       continue
 
-    keys = ["mode", "kem_id", "kdf_id", "aead_id", "info", "skRm", "pkRm", "enc", "ikmR"]
+    keys = [
+        "mode",
+        "kem_id",
+        "kdf_id",
+        "aead_id",
+        "info",
+        "skRm",
+        "pkRm",
+        "enc",
+        "ikmR",
+        "shared_secret",
+    ]
 
     if test["mode"] == HPKE_MODE_AUTH:
       keys.append("pkSm")

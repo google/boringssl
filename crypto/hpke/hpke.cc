@@ -858,6 +858,18 @@ size_t EVP_HPKE_KEM_enc_len(const EVP_HPKE_KEM *kem) {
 
 // TODO(crbug.com/535883377): Implement in terms of EVP_KEM for all supported
 // HPKE KEMs.
+size_t EVP_HPKE_KEM_shared_secret_len(const EVP_HPKE_KEM *kem) {
+  if (uses_evp(kem)) {
+    return EVP_KEM_secret_len(kem->evp_kem_func());
+  }
+  // All other KEMs have the same shared secret length. We assume we'll finish
+  // https://crbug.com/503758094 and move all KEMs to EVP before adding one that
+  // breaks this.
+  return SHA256_DIGEST_LENGTH;
+}
+
+// TODO(crbug.com/535883377): Implement in terms of EVP_KEM for all supported
+// HPKE KEMs.
 void EVP_HPKE_KEY_zero(EVP_HPKE_KEY *key) {
   OPENSSL_memset(key, 0, sizeof(EVP_HPKE_KEY));
 }
@@ -1274,44 +1286,58 @@ int EVP_HPKE_CTX_setup_sender_with_seed_for_testing(
   return 1;
 }
 
+int EVP_HPKE_CTX_setup_recipient_with_shared_secret(
+    EVP_HPKE_CTX *ctx, const EVP_HPKE_KEM *kem, const EVP_HPKE_KDF *kdf,
+    const EVP_HPKE_AEAD *aead, const uint8_t *shared_secret,
+    size_t shared_secret_len, const uint8_t *info, size_t info_len) {
+  EVP_HPKE_CTX_zero(ctx);
+
+  if (shared_secret_len != EVP_HPKE_KEM_shared_secret_len(kem)) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
+    return 0;
+  }
+
+  ctx->is_sender = 0;
+  ctx->kem = kem;
+  ctx->kdf = kdf;
+  ctx->aead = aead;
+  if (!hpke_key_schedule(ctx, HPKE_MODE_BASE, shared_secret, shared_secret_len,
+                         info, info_len)) {
+    EVP_HPKE_CTX_cleanup(ctx);
+    return 0;
+  }
+  return 1;
+}
+
 int EVP_HPKE_CTX_setup_recipient(EVP_HPKE_CTX *ctx, const EVP_HPKE_KEY *key,
                                  const EVP_HPKE_KDF *kdf,
                                  const EVP_HPKE_AEAD *aead, const uint8_t *enc,
                                  size_t enc_len, const uint8_t *info,
                                  size_t info_len) {
   EVP_HPKE_CTX_zero(ctx);
-  ctx->is_sender = 0;
-  ctx->kem = key->kem;
-  ctx->kdf = kdf;
-  ctx->aead = aead;
+
   uint8_t shared_secret[MAX_SHARED_SECRET_LEN];
   size_t shared_secret_len;
 
   // TODO(crbug.com/535883377): Implement in terms of EVP_KEM for all supported
   // HPKE KEMs.
+  int decap_ok;
   if (uses_evp(key->kem)) {
     const EVP_KEM *evp_kem = key->kem->evp_kem_func();
     const EVP_PKEY *decap_key = key->pkey;
     shared_secret_len = EVP_KEM_secret_len(evp_kem);
     assert(size_t{MAX_SHARED_SECRET_LEN} >= shared_secret_len);
 
-    if (!EVP_KEM_decap(evp_kem, shared_secret, shared_secret_len, enc, enc_len,
-                       decap_key) ||
-        !hpke_key_schedule(ctx, HPKE_MODE_BASE, shared_secret,
-                           shared_secret_len, info, info_len)) {
-      EVP_HPKE_CTX_cleanup(ctx);
-      return 0;
-    }
-    return 1;
+    decap_ok = EVP_KEM_decap(evp_kem, shared_secret, shared_secret_len, enc,
+                             enc_len, decap_key);
+  } else {
+    decap_ok = key->kem->decap(key, shared_secret, &shared_secret_len, enc,
+                               enc_len);
   }
 
-  if (!key->kem->decap(key, shared_secret, &shared_secret_len, enc, enc_len) ||
-      !hpke_key_schedule(ctx, HPKE_MODE_BASE, shared_secret, shared_secret_len,
-                         info, info_len)) {
-    EVP_HPKE_CTX_cleanup(ctx);
-    return 0;
-  }
-  return 1;
+  return decap_ok && EVP_HPKE_CTX_setup_recipient_with_shared_secret(
+                         ctx, key->kem, kdf, aead, shared_secret,
+                         shared_secret_len, info, info_len);
 }
 
 
