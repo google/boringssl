@@ -68,7 +68,7 @@ int EVP_KEM_encap(const EVP_KEM *kem, uint8_t *out_ciphertext,
   if (!check_kem_invocation(kem, &ciphertext_len, secret_len, pkey_impl)) {
     return 0;
   }
-  return kem->encap(Span(out_ciphertext, ciphertext_len),
+  return kem->encap(kem, Span(out_ciphertext, ciphertext_len),
                     Span(out_secret, secret_len), pkey_impl);
 }
 
@@ -84,7 +84,7 @@ int EVP_KEM_encap_external_entropy_for_testing(
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_ENTROPY_LENGTH);
     return 0;
   }
-  return kem->encap_external_entropy(Span(out_ciphertext, ciphertext_len),
+  return kem->encap_external_entropy(kem, Span(out_ciphertext, ciphertext_len),
                                      Span(out_secret, secret_len), pkey_impl,
                                      Span(entropy, entropy_len));
 }
@@ -96,6 +96,6 @@ int EVP_KEM_decap(const EVP_KEM *kem, uint8_t *out_secret, size_t secret_len,
   if (!check_kem_invocation(kem, nullptr, secret_len, pkey_impl)) {
     return 0;
   }
-  return kem->decap(Span(out_secret, secret_len),
+  return kem->decap(kem, Span(out_secret, secret_len),
                     Span(ciphertext, ciphertext_len), pkey_impl);
 }

@@ -164,7 +164,7 @@ static int pkey_xwing_keygen(EvpPkeyCtx *ctx, EvpPkey *pkey) {
   return 1;
 }
 
-static int xwing_kem_encap(Span<uint8_t> out_ciphertext,
+static int xwing_kem_encap(const EVP_KEM *kem, Span<uint8_t> out_ciphertext,
                            Span<uint8_t> out_secret, const EVP_PKEY *peer_key) {
   if (out_ciphertext.size() != XWING_CIPHERTEXT_BYTES) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
@@ -180,7 +180,8 @@ static int xwing_kem_encap(Span<uint8_t> out_ciphertext,
                      peer_pubkey->pub);
 }
 
-static int xwing_kem_encap_external_entropy(Span<uint8_t> out_ciphertext,
+static int xwing_kem_encap_external_entropy(const EVP_KEM *kem,
+                                            Span<uint8_t> out_ciphertext,
                                             Span<uint8_t> out_secret,
                                             const EVP_PKEY *peer_key,
                                             Span<const uint8_t> entropy) {
@@ -202,7 +203,7 @@ static int xwing_kem_encap_external_entropy(Span<uint8_t> out_ciphertext,
                                       peer_pubkey->pub, entropy.data());
 }
 
-static int xwing_kem_decap(Span<uint8_t> out_secret,
+static int xwing_kem_decap(const EVP_KEM *kem, Span<uint8_t> out_secret,
                            Span<const uint8_t> ciphertext,
                            const EVP_PKEY *key) {
   const XWING_KEY *priv = reinterpret_cast<XWING_KEY *>(FromOpaque(key)->pkey);

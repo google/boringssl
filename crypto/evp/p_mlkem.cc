@@ -356,8 +356,8 @@ struct MLKEMImplementation {
     return 1;
   }
 
-  static int KemEncap(Span<uint8_t> out_ciphertext, Span<uint8_t> out_secret,
-                      const EVP_PKEY *peer_key) {
+  static int KemEncap(const EVP_KEM *kem, Span<uint8_t> out_ciphertext,
+                      Span<uint8_t> out_secret, const EVP_PKEY *peer_key) {
     const auto *peer_pubkey = GetKeyData(FromOpaque(peer_key))->GetPublicKey();
     if (out_ciphertext.size() != Traits::kCiphertextBytes) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
@@ -371,7 +371,8 @@ struct MLKEMImplementation {
     return 1;
   }
 
-  static int KemEncapExternalEntropy(Span<uint8_t> out_ciphertext,
+  static int KemEncapExternalEntropy(const EVP_KEM *kem,
+                                     Span<uint8_t> out_ciphertext,
                                      Span<uint8_t> out_secret,
                                      const EVP_PKEY *peer_key,
                                      Span<const uint8_t> entropy) {
@@ -393,8 +394,8 @@ struct MLKEMImplementation {
     return 1;
   }
 
-  static int KemDecap(Span<uint8_t> out_secret, Span<const uint8_t> ciphertext,
-                      const EVP_PKEY *key) {
+  static int KemDecap(const EVP_KEM *kem, Span<uint8_t> out_secret,
+                      Span<const uint8_t> ciphertext, const EVP_PKEY *key) {
     const auto *priv = GetKeyData(FromOpaque(key))->AsPrivateKeyData();
     if (priv == nullptr) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
