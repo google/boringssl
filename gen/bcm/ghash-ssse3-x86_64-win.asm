@@ -450,7 +450,7 @@ $L$reverse_bytes:
 ; .Llow4_mask is an XMM mask which selects the low four bits of each byte.
 $L$low4_mask:
 	DQ	0x0f0f0f0f0f0f0f0f,0x0f0f0f0f0f0f0f0f
-section	.text code align=64
+section	.text
 
 section	.pdata rdata align=4
 ALIGN	4
