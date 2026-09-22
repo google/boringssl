@@ -34,6 +34,8 @@ void bssl::OPENSSL_cpuid_setup() {
   static const unsigned long kSHA256 = 1 << 6;
   static const unsigned long kSHA3 = 1 << 17;
   static const unsigned long kSHA512 = 1 << 21;
+  static const unsigned long kDIT = 1 << 24;
+  static const unsigned long kSB = 1 << 29;
 
   if ((hwcap & kNEON) == 0) {
     // Matching OpenSSL, if NEON is missing, don't report other features
@@ -60,6 +62,12 @@ void bssl::OPENSSL_cpuid_setup() {
   }
   if (hwcap & kSHA3) {
     OPENSSL_armcap_P |= ARMV8_SHA3;
+  }
+  if (hwcap & kDIT) {
+    OPENSSL_armcap_P |= ARMV8_DIT;
+  }
+  if (hwcap & kSB) {
+    OPENSSL_armcap_P |= ARMV8_SB;
   }
 }
 

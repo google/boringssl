@@ -150,3 +150,71 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings) {
 void OPENSSL_cleanup() {}
 
 FILE *bssl::CRYPTO_get_stderr() { return stderr; }
+
+#if defined(OPENSSL_ARM_DIT)
+// ARMv8.4 Data-Independent Timing
+
+namespace {
+
+// We had an option to encode the system register directly as "dit" but older
+// compilers do not recognize it, so we adopt the direct encoding.
+uint64_t ReadDit() {
+  uint64_t previous;
+  __asm__ __volatile__("mrs %0, S3_3_C4_C2_5" : "=r"(previous) : : "memory");
+  return previous;
+}
+void SwitchOnDit() {
+  uint64_t on = 1ULL << 24;
+  __asm__ __volatile__("msr S3_3_C4_C2_5, %0" ::"r"(on) : "memory");
+}
+void SwitchOffDit() {
+  __asm__ __volatile__("msr S3_3_C4_C2_5, xzr" ::: "memory");
+}
+
+#if defined(OPENSSL_APPLE)
+SB_FEATURE void SpeculationBarrier() {
+  __asm__ __volatile__("sb" ::: "memory");
+}
+void FullSynchronizationBarrier() {
+  __asm__ __volatile__("dsb nsh" ::: "memory");
+  __asm__ __volatile__("isb sy" ::: "memory");
+}
+#endif  // OPENSSL_APPLE
+
+}  // namespace
+
+ConstTimeGuard::ConstTimeGuard() {
+  if (CRYPTO_is_ARMv8_DIT_capable()) {
+    uint64_t previous = ReadDit();
+    // DIT is located on Bit 24.
+    // See
+    // https://support.arm.com/documentation/102670/0301/AArch64-registers/AArch64-register-descriptions/AArch64-Generic-System-control-register-description/DIT--Data-Independent-Timing
+    previous_dit_ = (previous & (1ULL << 24)) != 0;
+    if (!previous_dit_) {
+      SwitchOnDit();
+      // Arm documents that barriers are not necessary when writing to, or
+      // reading from, PSTATE fields. However, Apple documentation indicates
+      // that barriers should be used, in particular when setting the PSTATE.DIT
+      // field. Barriers aren't cheap, so only use them on Apple silicon for
+      // now.
+      //
+      // See go.dev/issue/77776.
+#if defined(OPENSSL_APPLE)
+      if (CRYPTO_is_ARMv8_SB_capable()) {
+        SpeculationBarrier();
+      } else {
+        FullSynchronizationBarrier();
+      }
+#endif  // OPENSSL_APPLE
+    }
+  } else {
+    previous_dit_ = true;
+  }
+}
+
+ConstTimeGuard::~ConstTimeGuard() {
+  if (!previous_dit_) {
+    SwitchOffDit();
+  }
+}
+#endif  // OPENSSL_ARM_DIT
