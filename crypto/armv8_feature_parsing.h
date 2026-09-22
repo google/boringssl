@@ -1,8 +1,9 @@
 #ifndef OPENSSL_CRYPTO_CPU_ARMV8_FEATURE_PARSING_H
 #define OPENSSL_CRYPTO_CPU_ARMV8_FEATURE_PARSING_H
 
-#include <openssl/cpu.h>
 #include <stdint.h>
+
+#include <openssl/cpu.h>
 
 #include "internal.h"
 
@@ -18,6 +19,8 @@ namespace armcap {
 #define ID_AA64ISAR0_SHA1_FIELD_IDX 2  // Bits [11:8]
 #define ID_AA64ISAR0_SHA2_FIELD_IDX 3  // Bits [15:12]
 #define ID_AA64ISAR0_SHA3_FIELD_IDX 8  // Bits [35:32]
+#define ID_AA64ISAR1_SB_FIELD_IDX 9    // Bits [39:36]
+#define ID_AA64PFR0_DIT_FIELD_IDX 12   // Bits [51:48]
 #define NBITS_ID_FIELD 4
 
 // Helper function to extract a 4-bit field based on its index.
@@ -55,6 +58,20 @@ inline uint32_t ParseISAR0Flags(uint64_t isar0) {
   unsigned sha3 = GetIDField(isar0, ID_AA64ISAR0_SHA3_FIELD_IDX);
   if (sha3 > 0) {
     armcap |= ARMV8_SHA3;
+  }
+  return armcap;
+}
+
+inline uint32_t ParseISAR1Flags(uint64_t isar1) {
+  return GetIDField(isar1, ID_AA64ISAR1_SB_FIELD_IDX) != 0 ? ARMV8_SB : 0;
+}
+
+inline uint32_t ParsePFR0Flags(uint64_t pfr0) {
+  uint32_t armcap = 0;
+  // DIT check
+  unsigned dit = GetIDField(pfr0, ID_AA64PFR0_DIT_FIELD_IDX);
+  if (dit != 0) {
+    armcap |= ARMV8_DIT;
   }
   return armcap;
 }

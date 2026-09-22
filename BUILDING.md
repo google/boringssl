@@ -152,7 +152,7 @@ information and the operating system.
 
 BoringSSL determines capabilities at compile-time based on `__ARM_NEON`,
 `__ARM_FEATURE_AES`, and other preprocessor symbols defined in
-[Arm C Language Extensions (ACLE)](https://developer.arm.com/architectures/system-architectures/software-standards/acle).
+[Arm C Language Extensions (ACLE)](https://support.arm.com/architectures/arm-c-language-extensions).
 These values are usually controlled by the `-march` flag. You can also define
 any of the following to enable the corresponding ARM feature, but using the ACLE
 symbols via `-march` is recommended.

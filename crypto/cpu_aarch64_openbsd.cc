@@ -40,6 +40,20 @@ void bssl::OPENSSL_cpuid_setup() {
 
   // Use the common parsing function to check other features.
   OPENSSL_armcap_P |= armcap::ParseISAR0Flags(cpu_id);
+
+  int isar1_mib[] = {CTL_MACHDEP, CPU_ID_AA64ISAR1};
+  cpu_id = 0;
+  len = sizeof(cpu_id);
+  if (sysctl(isar1_mib, 2, &cpu_id, &len, nullptr, 0) == 0) {
+    OPENSSL_armcap_P |= armcap::ParseISAR1Flags(cpu_id);
+  }
+
+  int pfr0_mib[] = {CTL_MACHDEP, CPU_ID_AA64PFR0};
+  cpu_id = 0;
+  len = sizeof(cpu_id);
+  if (sysctl(pfr0_mib, 2, &cpu_id, &len, nullptr, 0) == 0) {
+    OPENSSL_armcap_P |= armcap::ParsePFR0Flags(cpu_id);
+  }
 }
 
 #endif  // OPENSSL_AARCH64 && OPENSSL_OPENBSD && !OPENSSL_STATIC_ARMCAP
