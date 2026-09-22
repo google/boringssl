@@ -20,11 +20,7 @@ macro_rules! check_lib_error {
         match $e {
             1 => {}
             _ => {
-                let err = $crate::errors::Error::extract_lib_err().unwrap_or_else(|| {
-                    $crate::errors::Error::Unknown(::alloc::boxed::Box::new(
-                        ::alloc::string::ToString::to_string("unknown library error"),
-                    ))
-                });
+                let err = $crate::errors::Error::extract_lib_err_or_unknown();
                 return Err(err);
             }
         }

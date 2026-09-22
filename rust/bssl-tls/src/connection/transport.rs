@@ -15,7 +15,6 @@
 //! TLS Connection transport settings
 //!
 
-use alloc::boxed::Box;
 use core::{
     mem::{
         MaybeUninit,
@@ -39,7 +38,8 @@ use crate::{
     },
     errors::{
         Error,
-        TlsRetryReason, //
+        TlsRetryReason,
+        UnknownError, //
     },
     io::{
         AbstractReader,
@@ -219,9 +219,7 @@ impl<R> TlsConnection<R, DtlsMode> {
                 TlsRetryReason::WantRead => {
                     unreachable!("DTLS should never want to read for timeout handling")
                 }
-                _ => Err(Error::Unknown(Box::new(alloc::format!(
-                    "unknown dtls timeout error ({reason:?})"
-                )))),
+                _ => Err(Error::Unknown(UnknownError("unknown dtls timeout error"))),
             },
             _ => Err(self.extract_tls_error(code)),
         }

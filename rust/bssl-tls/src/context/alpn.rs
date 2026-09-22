@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::boxed::Box;
-
 use super::TlsContextBuilder;
 
 use crate::{
@@ -53,8 +51,7 @@ impl<M: SupportedMode> TlsContextBuilder<M> {
             bssl_sys::SSL_CTX_set_alpn_protos(self.ptr(), protos, len)
         };
         if rc == 1 {
-            Err(Error::extract_lib_err()
-                .unwrap_or_else(|| Error::Unknown(Box::new("unknown alpn configuration error"))))
+            Err(Error::extract_lib_err_or_unknown())
         } else {
             Ok(self)
         }

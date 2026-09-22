@@ -39,7 +39,8 @@ use crate::{
     errors::{
         Error,
         IoError,
-        TlsRetryReason, //
+        TlsRetryReason,
+        UnknownError, //
     },
     ffi::slice_into_ffi_raw_parts,
     io::IoStatus, //
@@ -80,15 +81,14 @@ where
     #[inline]
     pub(crate) fn extract_tls_error(&mut self, code: c_int) -> Error {
         match code {
-            bssl_sys::SSL_ERROR_SSL => Error::extract_lib_err().unwrap_or_else(|| {
-                Error::Unknown(Box::new(alloc::format!("unknown tls error ({code})")))
-            }),
+            bssl_sys::SSL_ERROR_SSL => Error::extract_lib_err()
+                .unwrap_or_else(|| Error::Unknown(UnknownError("unknown tls error"))),
             bssl_sys::SSL_ERROR_SYSCALL => self
                 .extract_pending_error()
                 .unwrap_or(Error::Io(IoError::EndOfStream)),
-            _ => self.extract_pending_error().unwrap_or_else(|| {
-                Error::Unknown(Box::new(alloc::format!("unknown tls error ({code})")))
-            }),
+            _ => self
+                .extract_pending_error()
+                .unwrap_or_else(|| Error::Unknown(UnknownError("unknown tls error"))),
         }
     }
 
@@ -280,7 +280,7 @@ where
         if let Some(err) = self.take_io_err() {
             Err(Error::Io(IoError::Transport(err)))
         } else {
-            Err(Error::Unknown(Box::new("transport error")))
+            Err(Error::Unknown(UnknownError("transport error")))
         }
     }
 

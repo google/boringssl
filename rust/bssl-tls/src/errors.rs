@@ -16,7 +16,6 @@
 
 use alloc::boxed::Box;
 use core::{
-    any::Any,
     ffi::{
         CStr,
         c_uint, //
@@ -56,7 +55,17 @@ pub enum Error {
     /// PKI errors
     Pki(PkiError),
     /// Unknown error which should be reported as bug
-    Unknown(Box<dyn Any + Send + Sync>),
+    Unknown(UnknownError),
+}
+
+/// Unknown error that should be reported as bug
+#[derive(Debug)]
+pub struct UnknownError(pub(crate) &'static str);
+
+impl Display for UnknownError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(self.0)
+    }
 }
 
 impl From<PkiError> for Error {
@@ -119,6 +128,12 @@ impl Error {
         }
         error
     }
+
+    /// Like [`Self::extract_lib_err`] but for callers that expect no fallback errors this function
+    /// also fills in a default error asserting that the error is unknown.
+    pub(crate) fn extract_lib_err_or_unknown() -> Self {
+        Self::extract_lib_err().unwrap_or_else(|| Self::Unknown(UnknownError("unknown error")))
+    }
 }
 
 impl core::error::Error for Error {
@@ -162,7 +177,7 @@ impl Display for Error {
             Error::Quic(err) => Display::fmt(err, f),
             Error::Io(err) => Display::fmt(err, f),
             Error::Pki(err) => Display::fmt(err, f),
-            Error::Unknown(err) => err.fmt(f),
+            Error::Unknown(err) => write!(f, "{err:?}"),
         }
     }
 }
