@@ -53,6 +53,42 @@ TEST(Ed25519Test, TestVectors) {
   });
 }
 
+TEST(Ed25519Test, TestVectorsPreHash) {
+  FileTestGTest("crypto/curve25519/ed25519ph_tests.txt", [](FileTest *t) {
+    std::vector<uint8_t> private_seed, public_key, context, message,
+        expected_signature;
+    ASSERT_TRUE(t->GetBytes(&private_seed, "PRIVSEED"));
+    ASSERT_EQ(32u, private_seed.size());
+    ASSERT_TRUE(t->GetBytes(&public_key, "PUB"));
+    ASSERT_EQ(32u, public_key.size());
+    ASSERT_TRUE(t->GetBytes(&context, "CONTEXT"));
+    ASSERT_TRUE(t->GetBytes(&message, "MESSAGE"));
+    ASSERT_TRUE(t->GetBytes(&expected_signature, "SIG"));
+    ASSERT_EQ(64u, expected_signature.size());
+
+    uint8_t calculated_public_key[32];
+    uint8_t private_key[64];
+    ED25519_keypair_from_seed(calculated_public_key, private_key,
+                              private_seed.data());
+    ASSERT_EQ(Bytes(public_key), Bytes(calculated_public_key));
+
+    uint8_t digest[SHA512_DIGEST_LENGTH];
+    SHA512(message.data(), message.size(), digest);
+
+    // Signing should not leak the private key or the digest
+    CONSTTIME_SECRET(private_key, sizeof(private_key));
+    CONSTTIME_SECRET(digest, sizeof(digest));
+    uint8_t signature[64];
+    ASSERT_TRUE(ED25519_sign_prehashed(signature, context.data(),
+                                       context.size(), digest, private_key));
+    CONSTTIME_DECLASSIFY(signature, sizeof(signature));
+    CONSTTIME_DECLASSIFY(digest, sizeof(digest));
+    EXPECT_EQ(Bytes(expected_signature), Bytes(signature));
+    EXPECT_TRUE(ED25519_verify_prehashed(context.data(), context.size(), digest,
+                                         signature, public_key.data()));
+  });
+}
+
 TEST(Ed25519Test, Malleability) {
   // https://tools.ietf.org/html/rfc8032#section-5.1.7 adds an additional test
   // that s be in [0, order). This prevents someone from adding a multiple of

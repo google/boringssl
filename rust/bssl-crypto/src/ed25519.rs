@@ -53,6 +53,9 @@ pub const SIGNATURE_LEN: usize = bssl_sys::ED25519_SIGNATURE_LEN as usize;
 // public key, so the keypair length is the same as the private key length.
 const KEYPAIR_LEN: usize = bssl_sys::ED25519_PRIVATE_KEY_LEN as usize;
 
+// The longest Ed25519ph context permitted by RFC 8032.
+const MAX_CONTEXT_LEN: usize = 255;
+
 /// An Ed25519 private key.
 #[derive(Clone)]
 pub struct PrivateKey([u8; KEYPAIR_LEN]);
@@ -124,6 +127,41 @@ impl PrivateKey {
         assert_eq!(result, 1, "allocation failure in bssl_sys::ED25519_sign");
 
         sig_bytes
+    }
+
+    /// Signs the given `sha512_digest` with the given `context` using Ed25519ph.
+    ///
+    /// Note that Ed25519ph (pre-hashed) and "pure" Ed25519 are different algorithms
+    /// defined in RFC 8032. Calling `sign` with the digest of a message will *not*
+    /// return the same output as `sign_prehashed`.
+    ///
+    /// This function returns None if `context` is longer than 255 bytes.
+    pub fn sign_prehashed(&self, context: &[u8], sha512_digest: &[u8; 64]) -> Option<Signature> {
+        if context.len() > MAX_CONTEXT_LEN {
+            return None;
+        }
+
+        let mut sig_bytes = [0u8; SIGNATURE_LEN];
+
+        // Safety:
+        // - On allocation failure we panic.
+        // - The context length is checked above.
+        // - Signature and private keys are always the correct length.
+        let result = unsafe {
+            bssl_sys::ED25519_sign_prehashed(
+                sig_bytes.as_mut_ffi_ptr(),
+                context.as_ffi_ptr(),
+                context.len(),
+                sha512_digest.as_ffi_ptr(),
+                self.0.as_ffi_ptr(),
+            )
+        };
+        assert_eq!(
+            result, 1,
+            "allocation failure in bssl_sys::ED25519_sign_prehashed"
+        );
+
+        Some(sig_bytes)
     }
 
     /// Returns the [`PublicKey`] corresponding to this private key.
@@ -228,11 +266,44 @@ impl PublicKey {
             Err(InvalidSignatureError)
         }
     }
+
+    /// Verifies that `signature` is a valid signature under the given `context`
+    /// of `sha512_digest` using Ed25519ph.
+    ///
+    /// Note that Ed25519ph (pre-hashed) and "pure" Ed25519 are different algorithms
+    /// defined in RFC 8032. Calling `verify` with the digest of a message will *not*
+    /// return the same output as `verify_prehashed`.
+    ///
+    /// A `context` longer than 255 bytes, the maximum permitted by RFC 8032, is
+    /// reported as an invalid signature.
+    pub fn verify_prehashed(
+        &self,
+        context: &[u8],
+        sha512_digest: &[u8; 64],
+        signature: &Signature,
+    ) -> Result<(), InvalidSignatureError> {
+        let ret = unsafe {
+            // Safety: `self.0` is the correct length and other buffers are valid.
+            bssl_sys::ED25519_verify_prehashed(
+                context.as_ffi_ptr(),
+                context.len(),
+                sha512_digest.as_ffi_ptr(),
+                signature.as_ffi_ptr(),
+                self.0.as_ffi_ptr(),
+            )
+        };
+        if ret == 1 {
+            Ok(())
+        } else {
+            Err(InvalidSignatureError)
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::digest::Sha512;
     use crate::test_helpers;
 
     #[test]
@@ -314,5 +385,52 @@ mod test {
         let pub_key = PublicKey::from_bytes(&pk);
         assert_eq!(pub_key.as_bytes(), kp.to_public().as_bytes());
         assert!(pub_key.verify(&msg, &sig).is_ok());
+    }
+
+    #[test]
+    fn ed25519ph_sign_and_verify() {
+        // Test Case 15 from RFC test vectors: https://www.rfc-editor.org/rfc/rfc8032#section-7.3
+        let pk = test_helpers::decode_hex(
+            "ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf",
+        );
+        let sk = test_helpers::decode_hex(
+            "833fe62409237b9d62ec77587520911e9a759cec1d19755b7da901b96dca3d42",
+        );
+        let msg: [u8; 3] = test_helpers::decode_hex("616263");
+        let mut ctx = Sha512::new();
+        ctx.update(&msg);
+        let sha512_digest = ctx.digest();
+        let sig_expected = test_helpers::decode_hex("98a70222f0b8121aa9d30f813d683f809e462b469c7ff87639499bb94e6dae4131f85042463c2a355a2003d062adf5aaa10b8c61e636062aaad11c2a26083406");
+        let kp = PrivateKey::from_seed(&sk);
+
+        let sig = kp.sign_prehashed(&[], &sha512_digest).unwrap();
+        assert_eq!(sig_expected, sig);
+
+        let pub_key = PublicKey::from_bytes(&pk);
+        assert_eq!(pub_key.as_bytes(), kp.to_public().as_bytes());
+        assert!(pub_key.verify_prehashed(&[], &sha512_digest, &sig).is_ok());
+    }
+
+    #[test]
+    fn ed25519ph_max_context_length() {
+        let kp = PrivateKey::generate();
+        let pub_key = kp.to_public();
+        let mut ctx = Sha512::new();
+        ctx.update(b"test message");
+        let sha512_digest = ctx.digest();
+
+        let context = [0u8; 255]; // Maximum allowed context length.
+        let sig = kp.sign_prehashed(&context, &sha512_digest).unwrap();
+        assert!(pub_key
+            .verify_prehashed(&context, &sha512_digest, &sig)
+            .is_ok());
+
+        let too_long_context = [0u8; 256];
+        assert!(kp
+            .sign_prehashed(&too_long_context, &sha512_digest)
+            .is_none());
+        assert!(pub_key
+            .verify_prehashed(&too_long_context, &sha512_digest, &sig)
+            .is_err());
     }
 }

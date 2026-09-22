@@ -869,6 +869,7 @@ crypto_test_data = [
     "crypto/cipher/test/nist_cavp/tdes_ecb.txt",
     "crypto/cipher/test/xchacha20_poly1305_tests.txt",
     "crypto/curve25519/ed25519_tests.txt",
+    "crypto/curve25519/ed25519ph_tests.txt",
     "crypto/ecdh/ecdh_tests.txt",
     "crypto/evp/test/dh_tests.txt",
     "crypto/evp/test/ec_tests.txt",

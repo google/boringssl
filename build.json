@@ -905,6 +905,7 @@
             "crypto/cipher/test/*.txt",
             "crypto/cipher/test/nist_cavp/*.txt",
             "crypto/curve25519/ed25519_tests.txt",
+            "crypto/curve25519/ed25519ph_tests.txt",
             "crypto/ecdh/ecdh_tests.txt",
             "crypto/evp/test/*.txt",
             "crypto/fipsmodule/aes/aes_tests.txt",

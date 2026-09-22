@@ -1890,13 +1890,9 @@ void ED25519_keypair(uint8_t out_public_key[32], uint8_t out_private_key[64]) {
   ED25519_keypair_from_seed(out_public_key, out_private_key, seed);
 }
 
-int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
-                 size_t message_len, const uint8_t private_key[64]) {
-  // NOTE: The documentation on this function says that it returns zero on
-  // allocation failure. While that can't happen with the current
-  // implementation, we want to reserve the ability to allocate in this
-  // implementation in the future.
-
+static int ed25519_sign(uint8_t out_sig[64], const uint8_t *hash_prefix,
+                        size_t hash_prefix_len, const uint8_t *message,
+                        size_t message_len, const uint8_t private_key[64]) {
   uint8_t az[SHA512_DIGEST_LENGTH];
   SHA512(private_key, 32, az);
 
@@ -1906,6 +1902,7 @@ int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
 
   SHA512_CTX hash_ctx;
   SHA512_Init(&hash_ctx);
+  SHA512_Update(&hash_ctx, hash_prefix, hash_prefix_len);
   SHA512_Update(&hash_ctx, az + 32, 32);
   SHA512_Update(&hash_ctx, message, message_len);
   uint8_t nonce[SHA512_DIGEST_LENGTH];
@@ -1917,6 +1914,7 @@ int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
   ge_p3_tobytes(out_sig, &R);
 
   SHA512_Init(&hash_ctx);
+  SHA512_Update(&hash_ctx, hash_prefix, hash_prefix_len);
   SHA512_Update(&hash_ctx, out_sig, 32);
   SHA512_Update(&hash_ctx, private_key + 32, 32);
   SHA512_Update(&hash_ctx, message, message_len);
@@ -1931,8 +1929,10 @@ int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
   return 1;
 }
 
-int ED25519_verify(const uint8_t *message, size_t message_len,
-                   const uint8_t signature[64], const uint8_t public_key[32]) {
+static int ed25519_verify(const uint8_t *hash_prefix, size_t hash_prefix_len,
+                          const uint8_t *message, size_t message_len,
+                          const uint8_t signature[64],
+                          const uint8_t public_key[32]) {
   ge_p3 A;
   if ((signature[63] & 224) != 0 ||
       !x25519_ge_frombytes_vartime(&A, public_key)) {
@@ -1975,6 +1975,7 @@ int ED25519_verify(const uint8_t *message, size_t message_len,
 
   SHA512_CTX hash_ctx;
   SHA512_Init(&hash_ctx);
+  SHA512_Update(&hash_ctx, hash_prefix, hash_prefix_len);
   SHA512_Update(&hash_ctx, signature, 32);
   SHA512_Update(&hash_ctx, public_key, 32);
   SHA512_Update(&hash_ctx, message, message_len);
@@ -1990,6 +1991,78 @@ int ED25519_verify(const uint8_t *message, size_t message_len,
   x25519_ge_tobytes(rcheck, &R);
 
   return CRYPTO_memcmp(rcheck, rcopy, sizeof(rcheck)) == 0;
+}
+
+int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
+                 size_t message_len, const uint8_t private_key[64]) {
+  // NOTE: The documentation on this function says that it returns zero on
+  // allocation failure. While that can't happen with the current
+  // implementation, we want to reserve the ability to allocate in this
+  // implementation in the future.
+
+  return ed25519_sign(out_sig, nullptr, 0, message, message_len, private_key);
+}
+
+int ED25519_verify(const uint8_t *message, size_t message_len,
+                   const uint8_t signature[64], const uint8_t public_key[32]) {
+  return ed25519_verify(nullptr, 0, message, message_len, signature,
+                        public_key);
+}
+
+// ED25519_MAX_CONTEXT is the longest context permitted by RFC 8032.
+#define ED25519_MAX_CONTEXT 255
+#define ED25519_MAX_HASH_PREFIX (32 + 1 + 1 + ED25519_MAX_CONTEXT)
+
+// ed25519_build_hash_prefix implements the `dom2` function from
+// https://datatracker.ietf.org/doc/html/rfc8032#section-2
+static int ed25519_build_hash_prefix(
+    uint8_t out_hash_prefix[ED25519_MAX_HASH_PREFIX],
+    size_t *out_hash_prefix_len, const uint8_t *context, size_t context_len) {
+  if (context_len > ED25519_MAX_CONTEXT) {
+    return 0;
+  }
+
+  OPENSSL_memcpy(out_hash_prefix, "SigEd25519 no Ed25519 collisions", 32);
+  out_hash_prefix[32] = 1;
+  out_hash_prefix[33] = static_cast<uint8_t>(context_len);
+  OPENSSL_memcpy(&out_hash_prefix[34], context, context_len);
+  *out_hash_prefix_len = 32 + 1 + 1 + context_len;
+  return 1;
+}
+
+int ED25519_sign_prehashed(uint8_t out_sig[64], const uint8_t *context,
+                           size_t context_len,
+                           const uint8_t sha512_digest[SHA512_DIGEST_LENGTH],
+                           const uint8_t private_key[64]) {
+  // NOTE: The documentation on this function says that it returns zero on
+  // allocation failure. While that can't happen with the current
+  // implementation, we want to reserve the ability to allocate in this
+  // implementation in the future.
+
+  uint8_t hash_prefix[ED25519_MAX_HASH_PREFIX];
+  size_t hash_prefix_len;
+  if (!ed25519_build_hash_prefix(hash_prefix, &hash_prefix_len, context,
+                                 context_len)) {
+    return 0;
+  }
+
+  return ed25519_sign(out_sig, hash_prefix, hash_prefix_len, sha512_digest,
+                      SHA512_DIGEST_LENGTH, private_key);
+}
+
+int ED25519_verify_prehashed(const uint8_t *context, size_t context_len,
+                             const uint8_t sha512_digest[SHA512_DIGEST_LENGTH],
+                             const uint8_t signature[64],
+                             const uint8_t public_key[32]) {
+  uint8_t hash_prefix[ED25519_MAX_HASH_PREFIX];
+  size_t hash_prefix_len;
+  if (!ed25519_build_hash_prefix(hash_prefix, &hash_prefix_len, context,
+                                 context_len)) {
+    return 0;
+  }
+
+  return ed25519_verify(hash_prefix, hash_prefix_len, sha512_digest,
+                        SHA512_DIGEST_LENGTH, signature, public_key);
 }
 
 void ED25519_keypair_from_seed(uint8_t out_public_key[32],

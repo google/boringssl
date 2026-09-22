@@ -91,6 +91,42 @@ OPENSSL_EXPORT int ED25519_verify(const uint8_t *message, size_t message_len,
                                   const uint8_t signature[64],
                                   const uint8_t public_key[32]);
 
+// ED25519_sign_prehashed sets `out_sig` to be a signature of `sha512_digest`
+// using `private_key` following the Ed25519ph algorithm. It returns one on
+// success, or zero otherwise. `sha512_digest` must be the 64-byte result of
+// hashing the input message with SHA-512. `context` allows for domain
+// separation; see https://www.rfc-editor.org/info/rfc8032/#section-8.3.
+//
+// This function can return zero either on allocation failure, or if
+// `context_len` is greater than 255.
+//
+// Note that Ed25519ph (pre-hashed) and "pure" Ed25519 are different algorithms,
+// calling `ED25519_sign` with the digest of a message will *not* return the
+// same output as `ED25519_sign_prehashed`.
+OPENSSL_EXPORT int ED25519_sign_prehashed(uint8_t out_sig[64],
+                                          const uint8_t *context,
+                                          size_t context_len,
+                                          const uint8_t sha512_digest[64],
+                                          const uint8_t private_key[64]);
+
+// ED25519_verify_prehashed returns one if `signature` is a valid signature, by
+// `public_key`, of `sha512_digest` following the Ed25519ph algorithm. It
+// returns zero otherwise. `sha512_digest` must be the 64-byte result of hashing
+// the input message with SHA-512. `context` allows for domain separation; see
+// https://www.rfc-editor.org/info/rfc8032/#section-8.3.
+//
+// This function can return zero either if the signature is invalid, or if
+// `context_len` is greater than 255.
+//
+// Note that Ed25519ph (pre-hashed) and "pure" Ed25519 are different algorithms,
+// calling `ED25519_verify` with the digest of a message will *not* return the
+// same output as `ED25519_verify_prehashed`.
+OPENSSL_EXPORT int ED25519_verify_prehashed(const uint8_t *context,
+                                            size_t context_len,
+                                            const uint8_t sha512_digest[64],
+                                            const uint8_t signature[64],
+                                            const uint8_t public_key[32]);
+
 // ED25519_keypair_from_seed calculates a public and private key from an
 // Ed25519 “seed”. Seed values are not exposed by this API (although they
 // happen to be the first 32 bytes of a private key) so this function is for
