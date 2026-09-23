@@ -59,17 +59,17 @@ fn translate_res_for_stdio(res: Result<IoStatus, Error>) -> Result<usize, io::Er
 impl<R> io::Read for TlsConnection<R, TlsMode> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut buf = ReceiveBuffer::new(buf);
-        let res = self.sync_read(&mut buf);
+        let res = self.poll_read(&mut buf);
         translate_res_for_stdio(res)
     }
 }
 
 impl<R> io::Write for TlsConnection<R, TlsMode> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        translate_res_for_stdio(self.sync_write(buf))
+        translate_res_for_stdio(self.poll_write(buf))
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        translate_res_for_stdio(self.flush()).map(|_| ())
+        translate_res_for_stdio(self.poll_flush()).map(|_| ())
     }
 }

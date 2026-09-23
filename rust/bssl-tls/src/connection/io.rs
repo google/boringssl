@@ -212,7 +212,7 @@ where
     /// Read data from the socket.
     ///
     /// This method reads up to `buffer.remaining()` bytes from `buffer`.
-    pub fn sync_read(&mut self, buffer: &mut ReceiveBuffer<'_>) -> Result<IoStatus, Error> {
+    pub fn poll_read(&mut self, buffer: &mut ReceiveBuffer<'_>) -> Result<IoStatus, Error> {
         self.read_inner(buffer)
     }
 
@@ -246,14 +246,14 @@ where
     /// Write data to the socket.
     ///
     /// This method writes up to `buffer.len()` bytes from `buffer`.
-    pub fn sync_write(&mut self, buffer: &[u8]) -> Result<IoStatus, Error> {
+    pub fn poll_write(&mut self, buffer: &[u8]) -> Result<IoStatus, Error> {
         self.write_inner(buffer)
     }
 
     /// Flush the data on the **transport**.
     ///
     /// On success, this method always reports the number of bytes moved as `0`.
-    pub fn flush(&mut self) -> Result<IoStatus, Error> {
+    pub fn poll_flush(&mut self) -> Result<IoStatus, Error> {
         let bio = unsafe {
             // Safety: the validity of the handle `self.ptr()` is witnessed by `self`.
             bssl_sys::SSL_get_wbio(self.ptr())
@@ -316,7 +316,7 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Result<Option<IoStatus>, Error> {
-        self.do_async_io(cx, move |this| this.flush())
+        self.do_async_io(cx, move |this| this.poll_flush())
     }
 
     /// Asynchronously read application data from the TLS connection.

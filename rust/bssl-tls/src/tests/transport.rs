@@ -160,7 +160,7 @@ fn abrupt_transport_eof_is_unexpected_eof() {
     let mut buf = [0u8; 16];
     let mut recv_buf = ReceiveBuffer::new(&mut buf);
     assert!(matches!(
-        client_conn.sync_read(&mut recv_buf),
+        client_conn.poll_read(&mut recv_buf),
         Err(Error::Io(IoError::EndOfStream))
     ));
 
