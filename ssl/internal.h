@@ -3966,31 +3966,6 @@ void ssl_reset_error_state(SSLImpl *ssl);
 // current state of the error queue.
 void ssl_set_read_error(SSLImpl *ssl);
 
-BSSL_NAMESPACE_END
-
-
-// Opaque C types.
-//
-// The following types are exported to C code as public typedefs, so they must
-// be defined outside of the namespace.
-//
-// TODO(crbug.com/500444613): Move these to the bssl namespace.
-
-// ssl_method_st backs the public `SSL_METHOD` type. It is a compatibility
-// structure to support the legacy version-locked methods.
-struct ssl_method_st {
-  // version, if non-zero, is the only protocol version acceptable to an
-  // SSL_CTX initialized from this method.
-  uint16_t version;
-  // method is the underlying SSL_PROTOCOL_METHOD that initializes the
-  // SSL_CTX.
-  const bssl::SSL_PROTOCOL_METHOD *method;
-  // x509_method contains pointers to functions that might deal with `X509`
-  // compatibility, or might be a no-op, depending on the application.
-  const bssl::SSL_X509_METHOD *x509_method;
-};
-
-BSSL_NAMESPACE_BEGIN
 class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
  public:
   explicit SSLContext(const SSL_METHOD *ssl_method);
@@ -4579,5 +4554,27 @@ class SSLSession : public ssl_session_st, public RefCounted<SSLSession> {
 };
 
 BSSL_NAMESPACE_END
+
+
+// Opaque C types.
+//
+// `SSL_METHOD` is exported to C code as public typedefs, so it must be defined
+// outside of the namespace. We can switch it to `DECLARE_OPAQUE_STRUCT` if
+// becomes more complex than a plain struct.
+
+// ssl_method_st backs the public `SSL_METHOD` type. It is a compatibility
+// structure to support the legacy version-locked methods.
+struct ssl_method_st {
+  // version, if non-zero, is the only protocol version acceptable to an
+  // SSL_CTX initialized from this method.
+  uint16_t version;
+  // method is the underlying SSL_PROTOCOL_METHOD that initializes the
+  // SSL_CTX.
+  const bssl::SSL_PROTOCOL_METHOD *method;
+  // x509_method contains pointers to functions that might deal with `X509`
+  // compatibility, or might be a no-op, depending on the application.
+  const bssl::SSL_X509_METHOD *x509_method;
+};
+
 
 #endif  // OPENSSL_HEADER_SSL_INTERNAL_H

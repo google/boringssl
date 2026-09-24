@@ -855,6 +855,7 @@ if(BUILD_TESTING)
                   $<TARGET_FILE:crypto>
                   $<TARGET_FILE:decrepit>
                   $<TARGET_FILE:pki>
+                  $<TARGET_FILE:ssl>
           USES_TERMINAL
         )
         add_dependencies(run_tests check_prefixed_symbols)

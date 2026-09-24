@@ -96,6 +96,7 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^snprintf$`),                                    // snprintf()
 	regexp.MustCompile(`^time$`),                                        // MSVC 14.50+ CRT
 	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
+	regexp.MustCompile(`^wmemchr$`),                                     // wmemchr()
 
 	// Symbols in the FIPS module.
 	// They are provided for tooling only and should not be read internally.
@@ -146,6 +147,7 @@ func guessArchiveFiles() []string {
 		"crypto",
 		"decrepit",
 		"pki",
+		"ssl",
 	} {
 		found := ""
 		// Trying patterns for all platforms as the current build might be a cross compile.
