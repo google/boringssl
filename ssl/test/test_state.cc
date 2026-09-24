@@ -69,8 +69,15 @@ TestState *GetTestState(const SSL *ssl) {
 
 static void ssl_ctx_add_session(SSL_SESSION *session, void *void_param) {
   SSL_CTX *ctx = reinterpret_cast<SSL_CTX *>(void_param);
-  UniquePtr<SSL_SESSION> new_session = SSL_SESSION_dup(
-      session, SSL_SESSION_INCLUDE_NONAUTH | SSL_SESSION_INCLUDE_TICKET);
+  // Make a copy of the session.
+  // TODO(crbug.com/527997772): Remove this copy.
+  uint8_t *data;
+  size_t len;
+  if (!SSL_SESSION_to_bytes(session, &data, &len)) {
+    fprintf(stderr, "Error copying SSL_SESSION.\n");
+  }
+  UniquePtr<uint8_t> free_data(data);
+  UniquePtr<SSL_SESSION> new_session(SSL_SESSION_from_bytes(data, len, ctx));
   if (new_session != nullptr) {
     SSL_CTX_add_session(ctx, new_session.get());
   }

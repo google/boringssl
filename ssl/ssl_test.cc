@@ -3110,6 +3110,7 @@ TEST(SSLTest, TLS13ExporterAvailability) {
                                          nullptr, 0, 0));
 }
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
 static void AppendSession(SSL_SESSION *session, void *arg) {
   std::vector<SSL_SESSION *> *out =
       reinterpret_cast<std::vector<SSL_SESSION *> *>(arg);
@@ -3222,6 +3223,7 @@ TEST(SSLTest, InternalSessionCache) {
   ASSERT_TRUE(CacheEquals(ctx.get(), {collision.get(), sessions[9].get(),
                                       sessions[8].get(), sessions[5].get()}));
 }
+#endif  //  !BORINGSSL_SHARED_LIBRARY
 
 static uint16_t EpochFromSequence(uint64_t seq) {
   return static_cast<uint16_t>(seq >> 48);
@@ -3912,6 +3914,7 @@ TEST(SSLTest, EarlyDataRejectStaleUnreportedBytes) {
   EXPECT_EQ(Bytes(received), Bytes(kNewWrite));
 }
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(SSLTest, SessionDuplication) {
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   bssl::UniquePtr<SSL_CTX> server_ctx =
@@ -3943,6 +3946,7 @@ TEST(SSLTest, SessionDuplication) {
 
   EXPECT_EQ(Bytes(s0_bytes, s0_len), Bytes(s1_bytes, s1_len));
 }
+#endif  // !BORINGSSL_SHARED_LIBRARY
 
 static void ExpectFDs(const SSL *ssl, int rfd, int wfd) {
   EXPECT_EQ(rfd, SSL_get_fd(ssl));
