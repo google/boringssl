@@ -3080,6 +3080,7 @@ set(
   include/openssl/srtp.h
   include/openssl/ssl.h
   include/openssl/ssl3.h
+  include/openssl/ssl_deprecated.h
   include/openssl/tls1.h
 )
 

@@ -2973,6 +2973,7 @@ boringssl_ssl_headers := \
   include/openssl/srtp.h \
   include/openssl/ssl.h \
   include/openssl/ssl3.h \
+  include/openssl/ssl_deprecated.h \
   include/openssl/tls1.h
 
 boringssl_ssl_internal_headers := \
