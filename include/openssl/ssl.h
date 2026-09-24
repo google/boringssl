@@ -1251,6 +1251,7 @@ OPENSSL_EXPORT int SSL_set_ocsp_response(SSL *ssl, const uint8_t *response,
 // SSL_get_signature_algorithm_name returns a human-readable name for `sigalg`,
 // or NULL if unknown. If `include_curve` is one, the curve for ECDSA algorithms
 // is included as in TLS 1.3. Otherwise, it is excluded as in TLS 1.2.
+// This string is always an ASCII string.
 OPENSSL_EXPORT const char *SSL_get_signature_algorithm_name(uint16_t sigalg,
                                                             int include_curve);
 
@@ -1266,6 +1267,7 @@ OPENSSL_EXPORT const char *SSL_get_signature_algorithm_name(uint16_t sigalg,
 // placeholder, experimental, or deprecated values that do not apply to every
 // caller. Future versions of BoringSSL may also return strings not in this
 // list, so this does not apply if, say, sending strings across services.
+// The strings are always ASCII-encoded.
 OPENSSL_EXPORT size_t SSL_get_all_signature_algorithm_names(const char **out,
                                                             size_t max_out);
 
@@ -1645,11 +1647,13 @@ OPENSSL_EXPORT uint16_t SSL_CIPHER_get_max_version(const SSL_CIPHER *cipher);
 
 // SSL_CIPHER_standard_name returns the standard IETF name for `cipher`. For
 // example, "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256".
+// The standard name is always an ASCII string.
 OPENSSL_EXPORT const char *SSL_CIPHER_standard_name(const SSL_CIPHER *cipher);
 
 // SSL_CIPHER_get_kx_name returns a string that describes the key-exchange
 // method used by `cipher`. For example, "ECDHE_ECDSA". TLS 1.3 AEAD-only
 // ciphers return the string "GENERIC".
+// The key-exchange method name is always an ASCII string.
 OPENSSL_EXPORT const char *SSL_CIPHER_get_kx_name(const SSL_CIPHER *cipher);
 
 // SSL_CIPHER_get_bits returns the strength, in bits, of `cipher`. If
@@ -1670,6 +1674,7 @@ OPENSSL_EXPORT int SSL_CIPHER_get_bits(const SSL_CIPHER *cipher,
 // placeholder, experimental, or deprecated values that do not apply to every
 // caller. Future versions of BoringSSL may also return strings not in this
 // list, so this does not apply if, say, sending strings across services.
+// The strings are always ASCII-encoded.
 OPENSSL_EXPORT size_t SSL_get_all_cipher_names(const char **out,
                                                size_t max_out);
 
@@ -1686,6 +1691,7 @@ OPENSSL_EXPORT size_t SSL_get_all_cipher_names(const char **out,
 // placeholder, experimental, or deprecated values that do not apply to every
 // caller. Future versions of BoringSSL may also return strings not in this
 // list, so this does not apply if, say, sending strings across services.
+// The strings are always ASCII-encoded.
 OPENSSL_EXPORT size_t SSL_get_all_standard_cipher_names(const char **out,
                                                         size_t max_out);
 
@@ -2062,6 +2068,7 @@ OPENSSL_EXPORT int PEM_write_SSL_SESSION(FILE *fp, const SSL_SESSION *in);
 
 // SSL_SESSION_get_version returns a string describing the TLS or DTLS version
 // `session` was established at. For example, "TLSv1.2" or "DTLSv1".
+// The version string is always an ASCII string.
 OPENSSL_EXPORT const char *SSL_SESSION_get_version(const SSL_SESSION *session);
 
 // SSL_SESSION_get_protocol_version returns the TLS or DTLS version `session`
@@ -2775,6 +2782,7 @@ OPENSSL_EXPORT uint16_t SSL_get_group_id(const SSL *ssl);
 
 // SSL_get_group_name returns a human-readable name for the group specified by
 // the given TLS group ID, or NULL if the group is unknown.
+// The group name is always an ASCII string.
 OPENSSL_EXPORT const char *SSL_get_group_name(uint16_t group_id);
 
 // SSL_get_all_group_names outputs a list of possible strings
@@ -2789,6 +2797,7 @@ OPENSSL_EXPORT const char *SSL_get_group_name(uint16_t group_id);
 // placeholder, experimental, or deprecated values that do not apply to every
 // caller. Future versions of BoringSSL may also return strings not in this
 // list, so this does not apply if, say, sending strings across services.
+// The strings are always ASCII-encoded.
 OPENSSL_EXPORT size_t SSL_get_all_group_names(const char **out, size_t max_out);
 
 // The following APIs also configure Diffie-Hellman groups, but use `NID_*`
@@ -4681,6 +4690,7 @@ OPENSSL_EXPORT enum ssl_early_data_reason_t SSL_get_early_data_reason(
 
 // SSL_early_data_reason_string returns a string representation for `reason`, or
 // NULL if `reason` is unknown. This function may be used for logging.
+// This string is always ASCII-encoded.
 OPENSSL_EXPORT const char *SSL_early_data_reason_string(
     enum ssl_early_data_reason_t reason);
 
@@ -4925,10 +4935,12 @@ OPENSSL_EXPORT int SSL_ech_accepted(const SSL *ssl);
 
 // SSL_alert_type_string_long returns a string description of `value` as an
 // alert type (warning or fatal).
+// This string is always ASCII-encoded.
 OPENSSL_EXPORT const char *SSL_alert_type_string_long(int value);
 
 // SSL_alert_desc_string_long returns a string description of `value` as an
 // alert description or "unknown" if unknown.
+// This string is always ASCII-encoded.
 OPENSSL_EXPORT const char *SSL_alert_desc_string_long(int value);
 
 // SSL_send_fatal_alert sends a fatal alert over `ssl` of the specified type,
@@ -5589,6 +5601,7 @@ OPENSSL_EXPORT void (*SSL_get_info_callback(const SSL *ssl))(const SSL *ssl,
 
 // SSL_state_string_long returns the current state of the handshake state
 // machine as a string. This may be useful for debugging and logging.
+// This string is always ASCII-encoded.
 OPENSSL_EXPORT const char *SSL_state_string_long(const SSL *ssl);
 
 #define SSL_SENT_SHUTDOWN 1
