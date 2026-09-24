@@ -379,7 +379,7 @@ static enum ssl_hs_wait_t do_send_second_client_hello(SSL_HANDSHAKE *hs) {
 }
 
 static bool check_session(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
-                          const SSL_SESSION *session) {
+                          const SSLSession *session) {
   const SSLImpl *const ssl = hs->ssl;
   if (session->ssl_version != ssl->s3->version) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_OLD_SESSION_VERSION_NOT_RETURNED);
@@ -574,7 +574,7 @@ static enum ssl_hs_wait_t do_read_server_hello(SSL_HANDSHAKE *hs) {
         return ssl_hs_error;
       }
     } else {
-      const SSL_SESSION *session = std::get<UniquePtr<SSL_SESSION>>(*psk).get();
+      const SSLSession *session = std::get<UniquePtr<SSLSession>>(*psk).get();
       assert(session == ssl->session.get());
       if (!check_session(hs, &alert, session)) {
         ssl_send_alert(ssl, SSL3_AL_FATAL, alert);
@@ -1223,7 +1223,7 @@ bool tls13_process_new_session_ticket(SSLImpl *ssl, const SSLMessage &msg) {
   }
 
   CBS body = msg.body;
-  UniquePtr<SSL_SESSION> session = tls13_create_session_with_ticket(ssl, &body);
+  UniquePtr<SSLSession> session = tls13_create_session_with_ticket(ssl, &body);
   if (!session) {
     return false;
   }
@@ -1238,9 +1238,9 @@ bool tls13_process_new_session_ticket(SSLImpl *ssl, const SSLMessage &msg) {
   return true;
 }
 
-UniquePtr<SSL_SESSION> tls13_create_session_with_ticket(SSLImpl *ssl,
-                                                        CBS *body) {
-  UniquePtr<SSL_SESSION> session = SSL_SESSION_dup(
+UniquePtr<SSLSession> tls13_create_session_with_ticket(SSLImpl *ssl,
+                                                       CBS *body) {
+  UniquePtr<SSLSession> session = SSL_SESSION_dup(
       ssl->s3->established_session.get(), SSL_SESSION_INCLUDE_NONAUTH);
   if (!session) {
     return nullptr;

@@ -374,7 +374,7 @@ bool SSL_serialize_handback(const SSL *ssl, CBB *out) {
 
   // TODO(mab): make sure everything is serialized.
   CBB seq, key_share;
-  const SSL_SESSION *session;
+  const SSLSession *session;
   if (type == handback_tls13) {
     session = hs->new_session.get();
   } else {
@@ -515,7 +515,7 @@ bool SSL_apply_handback(SSL *ssl, Span<const uint8_t> handback) {
   int session_reused, channel_id_negotiated, cert_request,
       extended_master_secret, ticket_expected, unused_token_binding,
       next_proto_neg_seen;
-  SSL_SESSION *session = nullptr;
+  SSLSession *session = nullptr;
 
   CBS handback_cbs(handback);
   if (!CBS_get_asn1(&handback_cbs, &seq, CBS_ASN1_SEQUENCE) ||  //

@@ -718,7 +718,7 @@ static enum ssl_hs_wait_t do_select_parameters(SSL_HANDSHAKE *hs) {
       Span(client_hello.session_id, client_hello.session_id_len));
 
   // Determine whether we are doing session resumption.
-  UniquePtr<SSL_SESSION> session;
+  UniquePtr<SSLSession> session;
   bool tickets_supported = false, renew_ticket = false;
   enum ssl_hs_wait_t wait = ssl_get_prev_session(
       hs, &session, &tickets_supported, &renew_ticket, &client_hello);
@@ -1639,8 +1639,8 @@ static enum ssl_hs_wait_t do_send_server_finished(SSL_HANDSHAKE *hs) {
   SSLImpl *const ssl = hs->ssl;
 
   if (hs->ticket_expected) {
-    const SSL_SESSION *session;
-    UniquePtr<SSL_SESSION> session_copy;
+    const SSLSession *session;
+    UniquePtr<SSLSession> session_copy;
     if (ssl->session == nullptr) {
       // Fix the timeout to measure from the ticket issuance time.
       ssl_session_rebase_time(ssl, hs->new_session.get());

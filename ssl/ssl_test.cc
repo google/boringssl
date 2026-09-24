@@ -3111,6 +3111,7 @@ TEST(SSLTest, TLS13ExporterAvailability) {
 }
 
 #if !defined(BORINGSSL_SHARED_LIBRARY)
+// TODO(crbug.com/565766495): Take `SSLSession` when the lhash does.
 static void AppendSession(SSL_SESSION *session, void *arg) {
   std::vector<SSL_SESSION *> *out =
       reinterpret_cast<std::vector<SSL_SESSION *> *>(arg);
@@ -3123,14 +3124,14 @@ static bool CacheEquals(SSL_CTX *ctx,
                         const std::vector<SSL_SESSION *> &expected) {
   auto *ctx_impl = FromOpaque(ctx);
   // Check the linked list.
-  SSL_SESSION *ptr = ctx_impl->session_cache_head;
+  SSLSession *ptr = ctx_impl->session_cache_head;
   for (SSL_SESSION *session : expected) {
-    if (ptr != session) {
+    if (ptr != FromOpaque(session)) {
       return false;
     }
     // TODO(davidben): This is an absurd way to denote the end of the list.
     if (ptr->next ==
-        reinterpret_cast<SSL_SESSION *>(&ctx_impl->session_cache_tail)) {
+        reinterpret_cast<SSLSession *>(&ctx_impl->session_cache_tail)) {
       ptr = nullptr;
     } else {
       ptr = ptr->next;
@@ -3929,8 +3930,8 @@ TEST(SSLTest, SessionDuplication) {
                                      server_ctx.get()));
 
   SSL_SESSION *session0 = SSL_get_session(client.get());
-  bssl::UniquePtr<SSL_SESSION> session1 =
-      bssl::SSL_SESSION_dup(session0, SSL_SESSION_DUP_ALL);
+  bssl::UniquePtr<SSLSession> session1 =
+      bssl::SSL_SESSION_dup(FromOpaque(session0), SSL_SESSION_DUP_ALL);
   ASSERT_TRUE(session1);
 
   session1->not_resumable = false;
@@ -7034,7 +7035,8 @@ void VerifyHandoff(bool use_new_alps_codepoint) {
         ASSERT_TRUE(g_last_session);
         SSL_set_session(client.get(), g_last_session.get());
         if (early_data) {
-          EXPECT_GT(g_last_session->ticket_max_early_data, 0u);
+          EXPECT_GT(FromOpaque(g_last_session.get())->ticket_max_early_data,
+                    0u);
         }
       }
 
@@ -8986,7 +8988,7 @@ TEST_F(QUICMethodTest, ForbidCrossProtocolResumptionClient) {
   ASSERT_TRUE(g_last_session);
 
   // Pretend that g_last_session came from a TLS-over-TCP connection.
-  g_last_session->is_quic = false;
+  FromOpaque(g_last_session.get())->is_quic = false;
 
   // Create a second connection and verify that resumption does not occur with
   // a session from a non-QUIC connection. This tests that the client does not
@@ -9043,7 +9045,7 @@ TEST_F(QUICMethodTest, ForbidCrossProtocolResumptionServer) {
 
   // The TLS-over-TCP client will refuse to resume with a quic session, so
   // mark is_quic = false to bypass the client check to test the server check.
-  g_last_session->is_quic = false;
+  FromOpaque(g_last_session.get())->is_quic = false;
   SSL_set_session(client.get(), g_last_session.get());
 
   BIO *bio1, *bio2;
@@ -11560,8 +11562,8 @@ TEST(SSLTest, IDOnlyTLS13Session) {
   ASSERT_TRUE(session);
   EXPECT_TRUE(SSL_SESSION_is_resumable(session.get()));
 
-  session->ticket.Reset();
-  session->session_id.Resize(32);
+  FromOpaque(session.get())->ticket.Reset();
+  FromOpaque(session.get())->session_id.Resize(32);
   EXPECT_FALSE(SSL_SESSION_is_resumable(session.get()));
 }
 

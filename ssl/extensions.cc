@@ -1938,7 +1938,7 @@ bool ssl_setup_pre_shared_keys(SSL_HANDSHAKE *hs) {
     return true;
   }
 
-  if (SSL_SESSION *session = ssl->session.get();
+  if (SSLSession *session = ssl->session.get();
       session != nullptr &&
       ssl_session_get_type(session) == SSLSessionType::kPreSharedKey &&
       !hs->pre_shared_keys.Push(UpRef(session))) {
@@ -2018,7 +2018,7 @@ static bool ext_pre_shared_key_add_clienthello(const SSL_HANDSHAKE *hs,
         return false;
       }
     } else {
-      const SSL_SESSION *session = std::get<UniquePtr<SSL_SESSION>>(psk).get();
+      const SSLSession *session = std::get<UniquePtr<SSLSession>>(psk).get();
       // At most one PSK will be a session.
       assert(session == ssl->session.get());
       OPENSSL_timeval now = ssl_ctx_get_current_time(ssl->ctx.get());
@@ -4964,7 +4964,7 @@ static enum ssl_ticket_aead_result_t ssl_decrypt_ticket_with_method(
 }
 
 enum ssl_ticket_aead_result_t ssl_process_ticket(
-    SSL_HANDSHAKE *hs, UniquePtr<SSL_SESSION> *out_session,
+    SSL_HANDSHAKE *hs, UniquePtr<SSLSession> *out_session,
     bool *out_renew_ticket, Span<const uint8_t> ticket,
     Span<const uint8_t> session_id, bool save_ticket) {
   SSLImpl *const ssl = hs->ssl;
@@ -5046,8 +5046,8 @@ enum ssl_ticket_aead_result_t ssl_process_ticket(
   }
 
   // Decode the session.
-  UniquePtr<SSL_SESSION> session(SSL_SESSION_from_bytes(
-      plaintext.data(), plaintext.size(), ssl->ctx.get()));
+  UniquePtr<SSLSession> session(FromOpaque(SSL_SESSION_from_bytes(
+      plaintext.data(), plaintext.size(), ssl->ctx.get())));
   if (!session) {
     ERR_clear_error();  // Don't leave an error on the queue.
     return ssl_ticket_aead_ignore_ticket;

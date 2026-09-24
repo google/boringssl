@@ -74,7 +74,7 @@ static bool get_key_block_lengths(const SSLImpl *ssl,
 }
 
 static bool generate_key_block(const SSLImpl *ssl, Span<uint8_t> out,
-                               const SSL_SESSION *session) {
+                               const SSLSession *session) {
   const EVP_MD *digest = ssl_session_get_digest(session);
   // Note this function assumes that `session`'s key material corresponds to
   // `ssl->s3->client_random` and `ssl->s3->server_random`.
@@ -84,7 +84,7 @@ static bool generate_key_block(const SSLImpl *ssl, Span<uint8_t> out,
 
 bool tls1_configure_aead(SSLImpl *ssl, evp_aead_direction_t direction,
                          Array<uint8_t> *key_block_cache,
-                         const SSL_SESSION *session,
+                         const SSLSession *session,
                          Span<const uint8_t> iv_override) {
   size_t mac_secret_len, key_len, iv_len;
   if (!get_key_block_lengths(ssl, &mac_secret_len, &key_len, &iv_len,
@@ -204,7 +204,7 @@ int SSL_generate_key_block(const SSL *ssl, uint8_t *out, size_t out_len) {
   }
 
   return generate_key_block(ssl_impl, Span(out, out_len),
-                            SSL_get_session(ssl_impl));
+                            ssl_get_session(ssl_impl));
 }
 
 int SSL_export_keying_material(const SSL *ssl, uint8_t *out, size_t out_len,
@@ -260,7 +260,7 @@ int SSL_export_keying_material(const SSL *ssl, uint8_t *out, size_t out_len,
                    context_len);
   }
 
-  const SSL_SESSION *session = SSL_get_session(ssl);
+  const SSLSession *session = ssl_get_session(ssl_impl);
   const EVP_MD *digest = ssl_session_get_digest(session);
   return tls1_prf(digest, out_span, session->secret, label_sv, seed, {});
 }

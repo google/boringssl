@@ -228,8 +228,8 @@ bool ssl_parse_extensions(const CBS *cbs, uint8_t *out_alert,
   return true;
 }
 
-static bool peer_certificates_equal(const SSL_SESSION *session,
-                                    const SSL_SESSION *prev_session) {
+static bool peer_certificates_equal(const SSLSession *session,
+                                    const SSLSession *prev_session) {
   const uint8_t prev_cert_type = prev_session->peer_cert_type;
   if (session->peer_cert_type != prev_cert_type) {
     return false;
@@ -266,7 +266,7 @@ static bool peer_certificates_equal(const SSL_SESSION *session,
 
 enum ssl_verify_result_t ssl_verify_peer_cert(SSL_HANDSHAKE *hs) {
   SSLImpl *const ssl = hs->ssl;
-  const SSL_SESSION *prev_session = ssl->s3->established_session.get();
+  const SSLSession *prev_session = ssl->s3->established_session.get();
   if (prev_session != nullptr) {
     // If renegotiating, the server must not change the server certificate. See
     // https://mitls.org/pages/attacks/3SHAKE. We never resume on renegotiation,
@@ -447,7 +447,7 @@ enum ssl_hs_wait_t ssl_get_finished(SSL_HANDSHAKE *hs) {
 
 bool ssl_send_finished(SSL_HANDSHAKE *hs) {
   SSLImpl *const ssl = hs->ssl;
-  const SSL_SESSION *session = ssl_handshake_session(hs);
+  const SSLSession *session = ssl_handshake_session(hs);
 
   uint8_t finished_buf[EVP_MAX_MD_SIZE];
   size_t finished_len;
@@ -516,7 +516,7 @@ bool ssl_send_tls12_certificate(SSL_HANDSHAKE *hs) {
   return ssl_add_message_cbb(hs->ssl, cbb.get());
 }
 
-const SSL_SESSION *ssl_handshake_session(const SSL_HANDSHAKE *hs) {
+const SSLSession *ssl_handshake_session(const SSL_HANDSHAKE *hs) {
   if (hs->new_session) {
     return hs->new_session.get();
   }

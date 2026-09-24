@@ -361,12 +361,14 @@ int OPENSSL_init_ssl(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings) {
   return 1;
 }
 
+// TODO(crbug.com/565766495): Take `SSLSession` when the lhash does.
 static uint32_t ssl_session_hash(const SSL_SESSION *sess) {
-  return ssl_hash_session_id(sess->session_id);
+  return ssl_hash_session_id(FromOpaque(sess)->session_id);
 }
 
+// TODO(crbug.com/565766495): Take `SSLSession` when the lhash does.
 static int ssl_session_cmp(const SSL_SESSION *a, const SSL_SESSION *b) {
-  return Span(a->session_id) == b->session_id ? 0 : 1;
+  return Span(FromOpaque(a)->session_id) == FromOpaque(b)->session_id ? 0 : 1;
 }
 
 bssl::SSLContext::SSLContext(const SSL_METHOD *ssl_method)
@@ -2171,7 +2173,7 @@ int SSL_set1_groups_list(SSL *ssl, const char *groups) {
 }
 
 uint16_t SSL_get_group_id(const SSL *ssl) {
-  SSL_SESSION *session = SSL_get_session(ssl);
+  SSLSession *session = ssl_get_session(FromOpaque(ssl));
   if (session == nullptr) {
     return 0;
   }
@@ -2362,7 +2364,7 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
 
 void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                          size_t *out_len) {
-  SSL_SESSION *session = SSL_get_session(ssl);
+  SSLSession *session = ssl_get_session(FromOpaque(ssl));
   if (FromOpaque(ssl)->server || !session ||
       !session->signed_cert_timestamp_list) {
     *out_len = 0;
@@ -2376,7 +2378,7 @@ void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
 
 void SSL_get0_ocsp_response(const SSL *ssl, const uint8_t **out,
                             size_t *out_len) {
-  SSL_SESSION *session = SSL_get_session(ssl);
+  SSLSession *session = ssl_get_session(FromOpaque(ssl));
   if (FromOpaque(ssl)->server || !session || !session->ocsp_response) {
     *out_len = 0;
     *out = nullptr;
@@ -2567,7 +2569,7 @@ int SSL_add_application_settings(SSL *ssl, const uint8_t *proto,
 void SSL_get0_peer_application_settings(const SSL *ssl,
                                         const uint8_t **out_data,
                                         size_t *out_len) {
-  const SSL_SESSION *session = SSL_get_session(ssl);
+  const SSLSession *session = ssl_get_session(FromOpaque(ssl));
   Span<const uint8_t> settings =
       session ? session->peer_application_settings : Span<const uint8_t>();
   *out_data = settings.data();
@@ -2575,7 +2577,7 @@ void SSL_get0_peer_application_settings(const SSL *ssl,
 }
 
 int SSL_has_application_settings(const SSL *ssl) {
-  const SSL_SESSION *session = SSL_get_session(ssl);
+  const SSLSession *session = ssl_get_session(FromOpaque(ssl));
   return session && session->has_application_settings;
 }
 
@@ -2707,7 +2709,7 @@ EVP_PKEY *SSL_CTX_get0_privatekey(const SSL_CTX *ctx) {
 }
 
 const SSL_CIPHER *SSL_get_current_cipher(const SSL *ssl) {
-  const SSL_SESSION *session = SSL_get_session(ssl);
+  const SSLSession *session = ssl_get_session(FromOpaque(ssl));
   return session == nullptr ? nullptr : session->cipher;
 }
 
@@ -2955,7 +2957,7 @@ const char *SSL_get_psk_identity(const SSL *ssl) {
   if (ssl == nullptr) {
     return nullptr;
   }
-  SSL_SESSION *session = SSL_get_session(ssl);
+  SSLSession *session = ssl_get_session(FromOpaque(ssl));
   if (session == nullptr) {
     return nullptr;
   }
@@ -3256,7 +3258,7 @@ int SSL_get_dtls_write_traffic_secret(const SSL *ssl, const uint8_t **out_data,
 }
 
 uint16_t SSL_get_peer_signature_algorithm(const SSL *ssl) {
-  SSL_SESSION *session = SSL_get_session(ssl);
+  SSLSession *session = ssl_get_session(FromOpaque(ssl));
   if (session == nullptr) {
     return 0;
   }
@@ -3383,7 +3385,7 @@ int SSL_clear(SSL *ssl) {
   // In OpenSSL, reusing a client `SSL` with `SSL_clear` causes the previously
   // established session to be offered the next time around. wpa_supplicant
   // depends on this behavior, so emulate it.
-  UniquePtr<SSL_SESSION> session;
+  UniquePtr<SSLSession> session;
   if (!ssl_impl->server && ssl_impl->s3->established_session != nullptr) {
     session = UpRef(ssl_impl->s3->established_session);
   }
@@ -3481,7 +3483,7 @@ SSL_SESSION *SSL_process_tls13_new_session_ticket(SSL *ssl, const uint8_t *buf,
     return nullptr;
   }
 
-  UniquePtr<SSL_SESSION> session =
+  UniquePtr<SSLSession> session =
       tls13_create_session_with_ticket(ssl_impl, &body);
   if (!session) {
     // `tls13_create_session_with_ticket` puts the correct error.
@@ -4115,14 +4117,16 @@ int SSL_set1_available_client_cert_types(SSL *ssl, const uint8_t *values,
 }
 
 int SSL_get_peer_cert_type(const SSL *ssl) {
-  if (const SSL_SESSION *session = SSL_get_session(ssl); session != nullptr) {
+  if (const SSLSession *session = ssl_get_session(FromOpaque(ssl));
+      session != nullptr) {
     return session->peer_cert_type;
   }
   return kDefaultCertType;
 }
 
 EVP_PKEY *SSL_get0_peer_rpk(const SSL *ssl) {
-  if (const SSL_SESSION *session = SSL_get_session(ssl); session != nullptr) {
+  if (const SSLSession *session = ssl_get_session(FromOpaque(ssl));
+      session != nullptr) {
     return session->peer_raw_public_key.get();
   }
   return nullptr;

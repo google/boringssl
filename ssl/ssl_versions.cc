@@ -418,17 +418,17 @@ size_t SSL_get_all_version_names(const char **out, size_t max_out) {
 }
 
 const char *SSL_SESSION_get_version(const SSL_SESSION *session) {
-  return ssl_version_to_string(session->ssl_version);
+  return ssl_version_to_string(FromOpaque(session)->ssl_version);
 }
 
 uint16_t SSL_SESSION_get_protocol_version(const SSL_SESSION *session) {
-  return wire_version_to_api(session->ssl_version);
+  return wire_version_to_api(FromOpaque(session)->ssl_version);
 }
 
 int SSL_SESSION_set_protocol_version(SSL_SESSION *session, uint16_t version) {
   // This picks a representative TLS 1.3 version, but this API should only be
   // used on unit test sessions anyway.
-  return api_version_to_wire(&session->ssl_version, version);
+  return api_version_to_wire(&FromOpaque(session)->ssl_version, version);
 }
 
 int SSL_CTX_set_record_protocol_version(SSL_CTX *ctx, int version) {

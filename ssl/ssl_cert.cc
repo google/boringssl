@@ -637,7 +637,7 @@ void SSL_set_cert_cb_ex(SSL *ssl,
 }
 
 const STACK_OF(CRYPTO_BUFFER) *SSL_get0_peer_certificates(const SSL *ssl) {
-  SSL_SESSION *session = SSL_get_session(ssl);
+  SSLSession *session = ssl_get_session(FromOpaque(ssl));
   if (session == nullptr) {
     return nullptr;
   }

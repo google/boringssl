@@ -152,7 +152,7 @@ static const CBS_ASN1_TAG kPeerRawPublicKeyTag =
     CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 33;
 
 
-static int SSL_SESSION_to_bytes_full(const SSL_SESSION *in, CBB *cbb,
+static int SSL_SESSION_to_bytes_full(const SSLSession *in, CBB *cbb,
                                      int for_ticket) {
   if (in == nullptr || in->cipher == nullptr) {
     return 0;
@@ -384,8 +384,8 @@ static int SSL_SESSION_to_bytes_full(const SSL_SESSION *in, CBB *cbb,
   return CBB_flush(cbb);
 }
 
-static int SSL_SESSION_to_bytes_if_not_resumable(const SSL_SESSION *in,
-                                                 CBB *out, int for_ticket) {
+static int SSL_SESSION_to_bytes_if_not_resumable(const SSLSession *in, CBB *out,
+                                                 int for_ticket) {
   if (in->not_resumable) {
     // If the caller has an unresumable session, e.g. if `SSL_get_session`
     // were called on a TLS 1.3 or False Started connection, serialize with
@@ -500,10 +500,10 @@ static int SSL_SESSION_parse_u16(CBS *cbs, uint16_t *out, CBS_ASN1_TAG tag,
   return 1;
 }
 
-UniquePtr<SSL_SESSION> SSL_SESSION_parse(CBS *cbs,
-                                         const SSL_X509_METHOD *x509_method,
-                                         CRYPTO_BUFFER_POOL *pool) {
-  UniquePtr<SSL_SESSION> ret = ssl_session_new(x509_method);
+UniquePtr<SSLSession> SSL_SESSION_parse(CBS *cbs,
+                                        const SSL_X509_METHOD *x509_method,
+                                        CRYPTO_BUFFER_POOL *pool) {
+  UniquePtr<SSLSession> ret = ssl_session_new(x509_method);
   if (!ret) {
     return nullptr;
   }
@@ -794,7 +794,7 @@ UniquePtr<SSL_SESSION> SSL_SESSION_parse(CBS *cbs,
   return ret;
 }
 
-bool ssl_session_serialize(const SSL_SESSION *in, CBB *cbb) {
+bool ssl_session_serialize(const SSLSession *in, CBB *cbb) {
   return SSL_SESSION_to_bytes_full(in, cbb, 0);
 }
 
@@ -806,7 +806,7 @@ int SSL_SESSION_to_bytes(const SSL_SESSION *in, uint8_t **out_data,
                          size_t *out_len) {
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 256) ||
-      !SSL_SESSION_to_bytes_if_not_resumable(in, cbb.get(), 0) ||
+      !SSL_SESSION_to_bytes_if_not_resumable(FromOpaque(in), cbb.get(), 0) ||
       !CBB_finish(cbb.get(), out_data, out_len)) {
     return 0;
   }
@@ -817,7 +817,7 @@ int SSL_SESSION_to_bytes_for_ticket(const SSL_SESSION *in, uint8_t **out_data,
                                     size_t *out_len) {
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 256) ||
-      !SSL_SESSION_to_bytes_full(in, cbb.get(), 1) ||
+      !SSL_SESSION_to_bytes_full(FromOpaque(in), cbb.get(), 1) ||
       !CBB_finish(cbb.get(), out_data, out_len)) {
     return 0;
   }
@@ -827,7 +827,7 @@ int SSL_SESSION_to_bytes_for_ticket(const SSL_SESSION *in, uint8_t **out_data,
 int i2d_SSL_SESSION(const SSL_SESSION *in, uint8_t **pp) {
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 256) ||
-      !SSL_SESSION_to_bytes_if_not_resumable(in, cbb.get(), 0)) {
+      !SSL_SESSION_to_bytes_if_not_resumable(FromOpaque(in), cbb.get(), 0)) {
     return 0;
   }
   return CBB_finish_i2d(cbb.get(), pp);
@@ -838,7 +838,7 @@ SSL_SESSION *SSL_SESSION_from_bytes(const uint8_t *in, size_t in_len,
   auto *ctx_impl = FromOpaque(ctx);
   CBS cbs;
   CBS_init(&cbs, in, in_len);
-  UniquePtr<SSL_SESSION> ret =
+  UniquePtr<SSLSession> ret =
       SSL_SESSION_parse(&cbs, ctx_impl->x509_method, ctx_impl->pool.get());
   if (!ret) {
     return nullptr;

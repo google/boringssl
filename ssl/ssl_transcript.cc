@@ -202,7 +202,7 @@ bool SSLTranscript::GetHash(uint8_t *out, size_t *out_len) const {
 }
 
 bool SSLTranscript::GetFinishedMAC(uint8_t *out, size_t *out_len,
-                                   const SSL_SESSION *session,
+                                   const SSLSession *session,
                                    bool from_server) const {
   uint8_t digest[EVP_MAX_MD_SIZE];
   size_t digest_len;

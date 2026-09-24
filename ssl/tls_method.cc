@@ -144,15 +144,15 @@ static void ssl_noop_x509_free(CERT *cert) {}
 static void ssl_noop_x509_dup(CERT *new_cert, const CERT *cert) {}
 static void ssl_noop_x509_flush_cached_leaf(CERT *cert) {}
 static void ssl_noop_x509_flush_cached_chain(CERT *cert) {}
-static bool ssl_noop_x509_session_cache_objects(SSL_SESSION *sess) {
+static bool ssl_noop_x509_session_cache_objects(SSLSession *sess) {
   return true;
 }
-static bool ssl_noop_x509_session_dup(SSL_SESSION *new_session,
-                                      const SSL_SESSION *session) {
+static bool ssl_noop_x509_session_dup(SSLSession *new_session,
+                                      const SSLSession *session) {
   return true;
 }
-static void ssl_noop_x509_session_clear(SSL_SESSION *session) {}
-static bool ssl_noop_x509_session_verify_cert_chain(SSL_SESSION *session,
+static void ssl_noop_x509_session_clear(SSLSession *session) {}
+static bool ssl_noop_x509_session_verify_cert_chain(SSLSession *session,
                                                     SSL_HANDSHAKE *hs,
                                                     uint8_t *out_alert) {
   return false;
