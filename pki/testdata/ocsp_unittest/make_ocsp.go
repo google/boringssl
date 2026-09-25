@@ -96,29 +96,49 @@ func loadKey(path string) *rsa.PrivateKey {
 	return key.(*rsa.PrivateKey)
 }
 
-func createCert(name, keyPath string, signer *certInfo, ocsp bool) *certInfo {
-	privKey := loadKey(keyPath)
-	subjectDER := makeNameDER(name)
+type certOptions struct {
+	name            string
+	keyPath         string
+	signer          *certInfo
+	ocsp            bool
+	extraExtensions []pkix.Extension
+	notBefore       time.Time
+	notAfter        time.Time
+}
+
+func createCertWithOptions(opts certOptions) *certInfo {
+	privKey := loadKey(opts.keyPath)
+	subjectDER := makeNameDER(opts.name)
 
 	serial := nextSerial
 	nextSerial++
 
+	notBefore := opts.notBefore
+	if notBefore.IsZero() {
+		notBefore = certDate
+	}
+	notAfter := opts.notAfter
+	if notAfter.IsZero() {
+		notAfter = certExpire
+	}
+
 	tmpl := &x509.Certificate{
 		SerialNumber:       big.NewInt(serial),
 		RawSubject:         subjectDER,
-		NotBefore:          certDate,
-		NotAfter:           certExpire,
+		NotBefore:          notBefore,
+		NotAfter:           notAfter,
 		SignatureAlgorithm: x509.SHA256WithRSA,
+		ExtraExtensions:    opts.extraExtensions,
 	}
-	if ocsp {
+	if opts.ocsp {
 		tmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageOCSPSigning}
 	}
 
 	var issuerTmpl *x509.Certificate
 	var issuerKey *rsa.PrivateKey
-	if signer != nil {
-		issuerTmpl = signer.cert
-		issuerKey = signer.key
+	if opts.signer != nil {
+		issuerTmpl = opts.signer.cert
+		issuerKey = opts.signer.key
 	} else {
 		issuerTmpl = tmpl
 		issuerKey = privKey
@@ -139,12 +159,21 @@ func createCert(name, keyPath string, signer *certInfo, ocsp bool) *certInfo {
 		key:         privKey,
 		serialBytes: []byte{byte(serial)},
 	}
-	if signer != nil {
-		info.issuer = signer
+	if opts.signer != nil {
+		info.issuer = opts.signer
 	} else {
 		info.issuer = info
 	}
 	return info
+}
+
+func createCert(name, keyPath string, signer *certInfo, ocsp bool) *certInfo {
+	return createCertWithOptions(certOptions{
+		name:    name,
+		keyPath: keyPath,
+		signer:  signer,
+		ocsp:    ocsp,
+	})
 }
 
 // createCertWithRawSerial creates a copy of baseCert with its serialNumber INTEGER
@@ -558,6 +587,25 @@ func main() {
 	caBadLink := createCert("Test False OCSP Signer", "bad_ocsp_signer.key", ca, false)
 	cert := createCert("Test Cert", "cert.key", ca, false)
 	junkCert := createCert("Random Cert", "cert2.key", nil, false)
+	caCriticalExtLink := createCertWithOptions(certOptions{
+		name:    "Test OCSP Signer",
+		keyPath: "ocsp_signer.key",
+		signer:  ca,
+		ocsp:    true,
+		extraExtensions: []pkix.Extension{
+			{Id: asn1.ObjectIdentifier{1, 2, 3, 4}, Critical: true, Value: []byte("DEADBEEF")},
+		},
+	})
+	ca2 := createCert("Test Intermediate CA 2", "intermediate.key", rootCA, false)
+	ca2Link := createCert("Test OCSP Signer", "ocsp_signer.key", ca2, true)
+	caExpiredLink := createCertWithOptions(certOptions{
+		name:      "Test OCSP Signer",
+		keyPath:   "ocsp_signer.key",
+		signer:    ca,
+		ocsp:      true,
+		notBefore: certDate,
+		notAfter:  verifyDate.Add(-1 * 24 * time.Hour),
+	})
 
 	create := func(resp ocspResponse) []byte {
 		if resp.signer == nil {
@@ -633,6 +681,27 @@ func main() {
 		"Signed through an intermediate without the correct key usage",
 		ca, cert,
 		create(ocspResponse{signer: caBadLink, certs: []*certInfo{caBadLink}}),
+	)
+
+	store(
+		"ocsp_sign_bad_indirect_critical_extension",
+		"Signed through an intermediate with an unknown critical extension",
+		ca, cert,
+		create(ocspResponse{signer: caCriticalExtLink, certs: []*certInfo{caCriticalExtLink}}),
+	)
+
+	store(
+		"ocsp_sign_bad_indirect_wrong_issuer",
+		"Signed through an intermediate issued by a differently named CA with the same key",
+		ca, cert,
+		create(ocspResponse{signer: ca2Link, certs: []*certInfo{ca2Link}}),
+	)
+
+	store(
+		"ocsp_sign_bad_indirect_expired",
+		"Signed through an intermediate that is not valid at the verification time",
+		ca, cert,
+		create(ocspResponse{signer: caExpiredLink, certs: []*certInfo{caExpiredLink}}),
 	)
 
 	store(
