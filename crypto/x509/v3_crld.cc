@@ -286,27 +286,10 @@ static void *v2i_crld(const X509V3_EXT_METHOD *method, const X509V3_CTX *ctx,
   return crld.release();
 }
 
-static int dpn_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
-                  void *exarg) {
-  DIST_POINT_NAME *dpn = asn1_load_ptr_as<DIST_POINT_NAME>(pval);
-
-  switch (operation) {
-    case ASN1_OP_NEW_POST:
-      dpn->dpname = nullptr;
-      break;
-
-    case ASN1_OP_FREE_POST:
-      X509_NAME_free(dpn->dpname);
-      break;
-  }
-  return 1;
-}
-
-
-ASN1_CHOICE_cb(DIST_POINT_NAME, dpn_cb) = {
+ASN1_CHOICE(DIST_POINT_NAME) = {
     ASN1_IMP_SEQUENCE_OF(DIST_POINT_NAME, name.fullname, GENERAL_NAME, 0),
     ASN1_IMP_SET_OF(DIST_POINT_NAME, name.relativename, X509_NAME_ENTRY, 1),
-} ASN1_CHOICE_END_cb(DIST_POINT_NAME, DIST_POINT_NAME, type)
+} ASN1_CHOICE_END(DIST_POINT_NAME)
 
 IMPLEMENT_ASN1_ALLOC_FUNCTIONS(DIST_POINT_NAME)
 

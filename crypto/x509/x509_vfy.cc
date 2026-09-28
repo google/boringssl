@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <ctype.h>
 #include <limits.h>
 #include <string.h>
 #include <time.h>
@@ -902,14 +901,22 @@ static int crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl, X509 **pissuer,
   return 0;
 }
 
-static int idp_check_dp(DIST_POINT_NAME *a, DIST_POINT_NAME *b) {
-  GENERAL_NAME *gena, *genb;
-  size_t i, j;
-  if (!a || !b) {
+static int idp_check_dp(const DIST_POINT_NAME *dp_cert,
+                        const DIST_POINT_NAME *dp_crl) {
+  // If the CRL IDP does not have a distributionPoint field, the CRL is scoped
+  // to the entire CA and matches everything.
+  //
+  // TODO(crbug.com/42290219): This covers a null `dp_crl`, but not `dp_cert`.
+  // If `dp_cert` is null, that means the certificate's DistributionPoint lacks
+  // a distributionPoint. However, DistributionPoints are required to have
+  // either distributionPoint or cRLIssuer (indirect CRL) and we reject the
+  // latter. However, we don't seem to check this in the parser. Enforce this so
+  // that `dp_cert` cannot be null.
+  if (!dp_cert || !dp_crl) {
     return 1;
   }
   // We only support fullName, not nameRelativeToCRLIssuer.
-  if (a->type != 0 || b->type != 0) {
+  if (dp_cert->type != 0 || dp_crl->type != 0) {
     return 0;
   }
   // Check that the CRL's distributionPoint has some name in common with the
@@ -917,16 +924,13 @@ static int idp_check_dp(DIST_POINT_NAME *a, DIST_POINT_NAME *b) {
   // are looking at the right shard.
   //
   // TODO(crbug.com/565047760): This should not be an O(N^2) comparison.
-  for (i = 0; i < sk_GENERAL_NAME_num(a->name.fullname); i++) {
-    gena = sk_GENERAL_NAME_value(a->name.fullname, i);
-    for (j = 0; j < sk_GENERAL_NAME_num(b->name.fullname); j++) {
-      genb = sk_GENERAL_NAME_value(b->name.fullname, j);
-      if (!GENERAL_NAME_cmp(gena, genb)) {
+  for (const GENERAL_NAME *gen_cert : dp_cert->name.fullname) {
+    for (const GENERAL_NAME *gen_crl : dp_crl->name.fullname) {
+      if (GENERAL_NAME_cmp(gen_cert, gen_crl) == 0) {
         return 1;
       }
     }
   }
-
   return 0;
 }
 
@@ -945,8 +949,7 @@ static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score) {
       return 0;
     }
   }
-  for (size_t i = 0; i < sk_DIST_POINT_num(impl->crldp.get()); i++) {
-    DIST_POINT *dp = sk_DIST_POINT_value(impl->crldp.get(), i);
+  for (const DIST_POINT *dp : impl->crldp.get()) {
     // Skip distribution points with a reasons field or a CRL issuer:
     //
     // We do not support CRLs partitioned by reason code. RFC 5280 requires CAs

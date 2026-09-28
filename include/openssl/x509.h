@@ -2311,8 +2311,6 @@ typedef struct DIST_POINT_NAME_st {
     GENERAL_NAMES *fullname;
     STACK_OF(X509_NAME_ENTRY) *relativename;
   } name;
-  // This field is unused and will be removed.
-  X509_NAME *dpname;
 } DIST_POINT_NAME;
 
 // DIST_POINT_NAME_new returns a newly-allocated, empty `DIST_POINT_NAME`
