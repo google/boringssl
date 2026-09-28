@@ -2029,6 +2029,9 @@ static bssl::UniquePtr<X509_NAME> MakeTestName(std::string_view common_name) {
   return name;
 }
 
+// kTestCertSerial is the serial number of certificates made by `MakeTestCert`.
+static const uint64_t kTestCertSerial = 42;
+
 static bssl::UniquePtr<X509> MakeTestCert(
     std::string_view issuer, std::string_view subject, EVP_PKEY *key,
     bool is_ca, std::optional<int64_t> pathlen = std::nullopt) {
@@ -2039,7 +2042,7 @@ static bssl::UniquePtr<X509> MakeTestCert(
   if (issuer_name == nullptr || subject_name == nullptr || cert == nullptr ||
       serial == nullptr ||  //
       !X509_set_version(cert.get(), X509_VERSION_3) ||
-      !ASN1_INTEGER_set_uint64(serial.get(), 42) ||
+      !ASN1_INTEGER_set_uint64(serial.get(), kTestCertSerial) ||
       !X509_set_serialNumber(cert.get(), serial.get()) ||
       !X509_set_issuer_name(cert.get(), issuer_name.get()) ||
       !X509_set_subject_name(cert.get(), subject_name.get()) ||
@@ -2130,6 +2133,125 @@ static bool AddAuthorityKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
   return true;
 }
 
+// MakeFullDistPointName returns a `DIST_POINT_NAME` with a fullName of `uris`,
+// or nullptr on error.
+static UniquePtr<DIST_POINT_NAME> MakeFullDistPointName(
+    const std::vector<std::string_view> &uris) {
+  UniquePtr<DIST_POINT_NAME> dpn(DIST_POINT_NAME_new());
+  UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
+  if (dpn == nullptr || names == nullptr) {
+    return nullptr;
+  }
+  for (std::string_view uri : uris) {
+    UniquePtr<GENERAL_NAME> name = MakeGeneralName(GEN_URI, uri);
+    if (name == nullptr || !PushToStack(names.get(), std::move(name))) {
+      return nullptr;
+    }
+  }
+  dpn->type = 0;
+  dpn->name.fullname = names.release();
+  return dpn;
+}
+
+// MakeFullDistPointNameDirectory returns a `DIST_POINT_NAME` with a fullName of
+// a single directoryName, `name`, or nullptr on error.
+static UniquePtr<DIST_POINT_NAME> MakeFullDistPointNameDirectory(
+    const X509_NAME *name) {
+  UniquePtr<DIST_POINT_NAME> dpn(DIST_POINT_NAME_new());
+  UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
+  UniquePtr<GENERAL_NAME> gen(GENERAL_NAME_new());
+  if (dpn == nullptr || names == nullptr || gen == nullptr) {
+    return nullptr;
+  }
+  gen->type = GEN_DIRNAME;
+  gen->d.directoryName = X509_NAME_dup(name);
+  if (gen->d.directoryName == nullptr ||
+      !PushToStack(names.get(), std::move(gen))) {
+    return nullptr;
+  }
+  dpn->type = 0;
+  dpn->name.fullname = names.release();
+  return dpn;
+}
+
+// MakeRelativeDistPointName returns a `DIST_POINT_NAME` with a
+// nameRelativeToCRLIssuer of a single commonName attribute with value
+// `common_name`, or nullptr on error.
+static UniquePtr<DIST_POINT_NAME> MakeRelativeDistPointName(
+    std::string_view common_name) {
+  auto bytes = StringAsBytes(common_name);
+  UniquePtr<DIST_POINT_NAME> dpn(DIST_POINT_NAME_new());
+  UniquePtr<STACK_OF(X509_NAME_ENTRY)> entries(sk_X509_NAME_ENTRY_new_null());
+  UniquePtr<X509_NAME_ENTRY> entry(X509_NAME_ENTRY_create_by_NID(
+      /*out=*/nullptr, NID_commonName, MBSTRING_UTF8, bytes.data(),
+      bytes.size()));
+  if (dpn == nullptr || entries == nullptr || entry == nullptr ||
+      !PushToStack(entries.get(), std::move(entry))) {
+    return nullptr;
+  }
+  dpn->type = 1;
+  dpn->name.relativename = entries.release();
+  return dpn;
+}
+
+// Bit positions for the ReasonFlags BIT STRING type. These are not same as
+// `CRL_REASON_*` constants, which are values for CRLReason ENUMERATED type.
+enum class ReasonFlag {
+  kKeyCompromise = 1,
+  kCACompromise = 2,
+  kAffiliationChanged = 3,
+  kSuperseded = 4,
+  kCessationOfOperation = 5,
+  kCertificateHold = 6,
+  kPrivilegeWithdrawn = 7,
+  kAACompromise = 8,
+};
+
+struct DistributionPoint {
+  UniquePtr<DIST_POINT_NAME> name;
+  std::vector<ReasonFlag> reasons;
+};
+
+// MakeDistributionPoint returns a `DIST_POINT` with distributionPoint
+// `distpoint`, or nullptr on error. If `reasons` is non-empty, the
+// DistributionPoint is additionally scoped to those reason codes.
+static UniquePtr<DIST_POINT> MakeDistributionPoint(
+    UniquePtr<DIST_POINT_NAME> distpoint,
+    const std::vector<ReasonFlag> &reasons = {}) {
+  UniquePtr<DIST_POINT> dp(DIST_POINT_new());
+  if (dp == nullptr || distpoint == nullptr) {
+    return nullptr;
+  }
+  dp->distpoint = distpoint.release();
+  if (!reasons.empty()) {
+    dp->reasons = ASN1_BIT_STRING_new();
+    if (dp->reasons == nullptr) {
+      return nullptr;
+    }
+    for (ReasonFlag reason : reasons) {
+      if (!ASN1_BIT_STRING_set_bit(dp->reasons, static_cast<int>(reason), 1)) {
+        return nullptr;
+      }
+    }
+  }
+  return dp;
+}
+
+static bool AddCRLDistributionPoints(X509 *x509,
+                                     Span<UniquePtr<DIST_POINT>> dps) {
+  UniquePtr<CRL_DIST_POINTS> crldp(CRL_DIST_POINTS_new());
+  if (crldp == nullptr) {
+    return false;
+  }
+  for (auto &dp : dps) {
+    if (dp == nullptr || !PushToStack(crldp.get(), std::move(dp))) {
+      return false;
+    }
+  }
+  return X509_add1_ext_i2d(x509, NID_crl_distribution_points, crldp.get(),
+                           /*crit=*/0, /*flags=*/0);
+}
+
 static bssl::UniquePtr<X509_CRL> MakeTestCRL(std::string_view issuer,
                                              int this_update_offset_day,
                                              int next_update_offset_day) {
@@ -2183,6 +2305,21 @@ static bool AddAuthorityKeyIdentifier(X509_CRL *crl,
     return false;
   }
   return true;
+}
+
+static bool AddIssuingDistributionPoint(X509_CRL *crl,
+                                        UniquePtr<DIST_POINT_NAME> distpoint,
+                                        bool only_user = false,
+                                        bool only_ca = false) {
+  UniquePtr<ISSUING_DIST_POINT> idp(ISSUING_DIST_POINT_new());
+  if (idp == nullptr) {
+    return false;
+  }
+  idp->distpoint = distpoint.release();
+  idp->onlyuser = only_user ? ASN1_BOOLEAN_TRUE : ASN1_BOOLEAN_FALSE;
+  idp->onlyCA = only_ca ? ASN1_BOOLEAN_TRUE : ASN1_BOOLEAN_FALSE;
+  return X509_CRL_add1_ext_i2d(crl, NID_issuing_distribution_point, idp.get(),
+                               /*crit=*/1, /*flags=*/0);
 }
 
 TEST(X509Test, NameConstraints) {
@@ -2692,6 +2829,21 @@ static bssl::UniquePtr<X509_CRL> ReencodeCRL(X509_CRL *crl) {
 
   const uint8_t *inp = der;
   return UniquePtr<X509_CRL>(d2i_X509_CRL(nullptr, &inp, len));
+}
+
+// SignAndReencodeCRL signs `crl` with `key` and `md`, then returns a re-encoded
+// copy of it, or nullptr on error.
+//
+// TODO(crbug.com/443261873): Some state in CRLs does not get correctly set up
+// unless it is parsed from data. `X509_CRL_sign` should reset it internally,
+// after which callers can sign the CRL in place.
+static bssl::UniquePtr<X509_CRL> SignAndReencodeCRL(X509_CRL *crl,
+                                                    EVP_PKEY *key,
+                                                    const EVP_MD *md) {
+  if (!X509_CRL_sign(crl, key, md)) {
+    return nullptr;
+  }
+  return ReencodeCRL(crl);
 }
 
 static bssl::UniquePtr<X509_REQ> ReencodeCSR(X509_REQ *req) {
@@ -9800,10 +9952,7 @@ TEST(X509Test, DuplicateName) {
   UniquePtr<X509_CRL> crl1 = MakeTestCRL("CA", -1, 1);
   ASSERT_TRUE(crl1);
   ASSERT_TRUE(AddAuthorityKeyIdentifier(crl1.get(), key_id1));
-  ASSERT_TRUE(X509_CRL_sign(crl1.get(), key1.get(), EVP_sha256()));
-  // TODO(crbug.com/443261873): Some state in CRLs does not get correctly set up
-  // unless it is parsed from data. `X509_CRL_sign` should reset it internally.
-  crl1 = ReencodeCRL(crl1.get());
+  crl1 = SignAndReencodeCRL(crl1.get(), key1.get(), EVP_sha256());
   ASSERT_TRUE(crl1);
 
   UniquePtr<EVP_PKEY> key2 = PrivateKeyFromPEM(kRSAKey);
@@ -9821,10 +9970,7 @@ TEST(X509Test, DuplicateName) {
   UniquePtr<X509_CRL> crl2 = MakeTestCRL("CA", -2, 2);
   ASSERT_TRUE(crl2);
   ASSERT_TRUE(AddAuthorityKeyIdentifier(crl2.get(), key_id2));
-  ASSERT_TRUE(X509_CRL_sign(crl2.get(), key2.get(), EVP_sha256()));
-  // TODO(crbug.com/443261873): Some state in CRLs does not get correctly set up
-  // unless it is parsed from data. `X509_CRL_sign` should reset it internally.
-  crl2 = ReencodeCRL(crl2.get());
+  crl2 = SignAndReencodeCRL(crl2.get(), key2.get(), EVP_sha256());
   ASSERT_TRUE(crl2);
 
   for (bool key1_first : {false, true}) {
@@ -9883,6 +10029,411 @@ TEST(X509Test, DuplicateName) {
       }
     }
   }
+}
+
+static const char kCRLURI1[] = "http://crl.example.com/shard1.crl";
+static const char kCRLURI2[] = "http://crl.example.com/shard2.crl";
+static const char kCRLURI3[] = "http://crl.example.com/shard3.crl";
+
+// Test that we check the scope of the CRL.
+TEST(X509Test, CRLScope) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  // CRLs must match the certificate's CRL-DP to be considered. Any name in
+  // common between the certificate's CRL-DP and CRL's IDP suffices.
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(MakeFullDistPointName({kCRLURI1, kCRLURI2}))};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509_CRL> crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl.get(), MakeFullDistPointName({kCRLURI3, kCRLURI2})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl.get()}, X509_V_FLAG_CRL_CHECK));
+
+  // Revocations in a matching CRL are honored.
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(
+      AddRevokedSerialU64(crl.get(), kTestCertSerial, /*offset_day=*/-1));
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl.get(), MakeFullDistPointName({kCRLURI3, kCRLURI2})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+            Verify(leaf.get(), {ca.get()}, /*intermediates=*/{}, {crl.get()},
+                   X509_V_FLAG_CRL_CHECK));
+
+  // A CRL for a different distribution point does not match. This prevents a
+  // different CRL shard from being substituted for the one that covers this
+  // certificate.
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(
+      AddRevokedSerialU64(crl.get(), kTestCertSerial, /*offset_day=*/-1));
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl.get(),
+                                          MakeFullDistPointName({kCRLURI3})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
+            Verify(leaf.get(), {ca.get()}, /*intermediates=*/{}, {crl.get()},
+                   X509_V_FLAG_CRL_CHECK));
+
+  // A certificate may have multiple DistributionPoints. A match across any of
+  // them suffices.
+  leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(MakeFullDistPointName({kCRLURI1})),
+        MakeDistributionPoint(MakeFullDistPointName({kCRLURI2}))};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl.get(),
+                                          MakeFullDistPointName({kCRLURI2})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl.get()}, X509_V_FLAG_CRL_CHECK));
+}
+
+// TODO(crbug.com/42290571): Remove this feature.
+TEST(X509Test, CRLScopeNameRelativeToCRLIssuer) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  // The distribution point is named CN="Shard 1", CN=CA, expressed relative to
+  // the CA, CN=CA.
+  static const char kRelativeName[] = "Shard 1";
+  UniquePtr<X509_NAME> absolute_name = MakeTestName("CA");
+  ASSERT_TRUE(absolute_name);
+  auto bytes = StringAsBytes(kRelativeName);
+  ASSERT_TRUE(X509_NAME_add_entry_by_txt(absolute_name.get(), "CN",
+                                         MBSTRING_UTF8, bytes.data(),
+                                         bytes.size(), /*loc=*/-1, /*set=*/0));
+
+  UniquePtr<X509> relative_leaf =
+      MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(relative_leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(MakeRelativeDistPointName(kRelativeName))};
+    ASSERT_TRUE(AddCRLDistributionPoints(relative_leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(relative_leaf.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509> absolute_leaf =
+      MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(absolute_leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {MakeDistributionPoint(
+        MakeFullDistPointNameDirectory(absolute_name.get()))};
+    ASSERT_TRUE(AddCRLDistributionPoints(absolute_leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(absolute_leaf.get(), key.get(), EVP_sha256()));
+
+  // Both sides use nameRelativeToCRLIssuer.
+  UniquePtr<X509_CRL> crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl.get(), MakeRelativeDistPointName(kRelativeName)));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK,
+            Verify(relative_leaf.get(), {ca.get()}, /*intermediates=*/{},
+                   {crl.get()}, X509_V_FLAG_CRL_CHECK));
+
+  // The certificate uses nameRelativeToCRLIssuer and the CRL the equivalent
+  // fullName.
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl.get(), MakeFullDistPointNameDirectory(absolute_name.get())));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK,
+            Verify(relative_leaf.get(), {ca.get()}, /*intermediates=*/{},
+                   {crl.get()}, X509_V_FLAG_CRL_CHECK));
+
+  // The certificate uses the fullName and the CRL uses nameRelativeToCRLIssuer.
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl.get(), MakeRelativeDistPointName(kRelativeName)));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK,
+            Verify(absolute_leaf.get(), {ca.get()}, /*intermediates=*/{},
+                   {crl.get()}, X509_V_FLAG_CRL_CHECK));
+}
+
+// When several CRLs are available, the one that is in scope is used.
+TEST(X509Test, CRLScopeTwoCRLs) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(MakeFullDistPointName({kCRLURI1}))};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509_CRL> crl_match = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl_match);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_match.get(),
+                                          MakeFullDistPointName({kCRLURI1})));
+  crl_match = SignAndReencodeCRL(crl_match.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_match);
+
+  UniquePtr<X509_CRL> crl_wrong1 = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl_wrong1);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_wrong1.get(),
+                                          MakeFullDistPointName({kCRLURI2})));
+  crl_wrong1 = SignAndReencodeCRL(crl_wrong1.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_wrong1);
+
+  UniquePtr<X509_CRL> crl_wrong2 = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl_wrong2);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_wrong2.get(),
+                                          MakeFullDistPointName({kCRLURI3})));
+  crl_wrong2 = SignAndReencodeCRL(crl_wrong2.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_wrong2);
+
+  // Given only out-of-scope CRLs, verification fails.
+  EXPECT_EQ(
+      X509_V_ERR_DIFFERENT_CRL_SCOPE,
+      Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+             {crl_wrong1.get(), crl_wrong2.get()}, X509_V_FLAG_CRL_CHECK));
+
+  // The verifier is satisfied by any one matching CRL.
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                   {crl_wrong1.get(), crl_wrong2.get(), crl_match.get()},
+                   X509_V_FLAG_CRL_CHECK));
+}
+
+// A CRL with no issuingDistributionPoint covers the entire CA, so it is in
+// scope for any certificate.
+TEST(X509Test, CRLScopeNoIDP) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509_CRL> crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+
+  // `crl` matches whether or not the certificate has a CRL-DP extension.
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl.get()}, X509_V_FLAG_CRL_CHECK));
+
+  leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(MakeFullDistPointName({kCRLURI1}))};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl.get()}, X509_V_FLAG_CRL_CHECK));
+}
+
+// A certificate with no CRL-DP is only covered by CRLs that span the entire CA.
+TEST(X509Test, CRLScopeNoCRLDistributionPoints) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  // The CRL is scoped to a distribution point, so it does not cover a
+  // certificate that names none.
+  UniquePtr<X509_CRL> crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl.get(),
+                                          MakeFullDistPointName({kCRLURI1})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
+            Verify(leaf.get(), {ca.get()}, /*intermediates=*/{}, {crl.get()},
+                   X509_V_FLAG_CRL_CHECK));
+}
+
+// We do not support CRLs partitioned by reason code.
+TEST(X509Test, CRLScopeReasons) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  // The certificate's only DistributionPoint is scoped by reason. (RFC 5280
+  // forbids this.)
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {MakeDistributionPoint(
+        MakeFullDistPointName({kCRLURI1}),
+        {ReasonFlag::kKeyCompromise, ReasonFlag::kCACompromise})};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  // The CRL names the same distribution point, but the certificate's
+  // DistributionPoint is ignored, leaving nothing for the CRL to match.
+  UniquePtr<X509_CRL> crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl.get(),
+                                          MakeFullDistPointName({kCRLURI1})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
+            Verify(leaf.get(), {ca.get()}, /*intermediates=*/{}, {crl.get()},
+                   X509_V_FLAG_CRL_CHECK));
+
+  // A CRL that spans the entire CA still matches via the default CRL-DP.
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl.get()}, X509_V_FLAG_CRL_CHECK));
+
+  // RFC 5280 that some DistributionPoint covers all reasons. We use that one.
+  leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(
+            MakeFullDistPointName({kCRLURI1}),
+            {ReasonFlag::kKeyCompromise, ReasonFlag::kCACompromise}),
+        MakeDistributionPoint(MakeFullDistPointName({kCRLURI2}))};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  crl = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl.get(),
+                                          MakeFullDistPointName({kCRLURI2})));
+  crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl);
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl.get()}, X509_V_FLAG_CRL_CHECK));
+}
+
+// Test that the onlyContainsUserCerts and onlyContainsCACerts flags are
+// checked.
+TEST(X509Test, CRLScopeOnlyUserOrCA) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_TRUE(key);
+
+  // Make a three-certificate chain.
+  UniquePtr<X509> root =
+      MakeTestCert("Root", "Root", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(root);
+  ASSERT_TRUE(X509_sign(root.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509> ca = MakeTestCert("Root", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_TRUE(ca);
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf);
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  // Make an onlyContainsCACerts CRL for the root, and an onlyContainsUserCerts
+  // for the intermediate.
+  UniquePtr<X509_CRL> crl_root = MakeTestCRL("Root", -1, 1);
+  ASSERT_TRUE(crl_root);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_root.get(), /*distpoint=*/nullptr,
+                                          /*only_user=*/false,
+                                          /*only_ca=*/true));
+  crl_root = SignAndReencodeCRL(crl_root.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_root);
+
+  UniquePtr<X509_CRL> crl_ca = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl_ca);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_ca.get(), /*distpoint=*/nullptr,
+                                          /*only_user=*/true,
+                                          /*only_ca=*/false));
+  crl_ca = SignAndReencodeCRL(crl_ca.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_ca);
+
+  // Make an onlyContainsUserCerts CRL for the root, and an onlyContainsCACerts
+  // for the intermediate. Neither of these apply to our chain.
+  UniquePtr<X509_CRL> crl_root_wrong = MakeTestCRL("Root", -1, 1);
+  ASSERT_TRUE(crl_root_wrong);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_root_wrong.get(),
+                                          /*distpoint=*/nullptr,
+                                          /*only_user=*/true,
+                                          /*only_ca=*/false));
+  crl_root_wrong =
+      SignAndReencodeCRL(crl_root_wrong.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_root_wrong);
+
+
+  UniquePtr<X509_CRL> crl_ca_wrong = MakeTestCRL("CA", -1, 1);
+  ASSERT_TRUE(crl_ca_wrong);
+  ASSERT_TRUE(AddIssuingDistributionPoint(crl_ca_wrong.get(),
+                                          /*distpoint=*/nullptr,
+                                          /*only_user=*/false,
+                                          /*only_ca=*/true));
+  crl_ca_wrong =
+      SignAndReencodeCRL(crl_ca_wrong.get(), key.get(), EVP_sha256());
+  ASSERT_TRUE(crl_ca_wrong);
+
+  // The correct CRLs are accepted.
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {crl_root.get(), crl_ca.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+
+  // The incorrect ones do not match.
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {crl_root_wrong.get(), crl_ca.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {crl_root.get(), crl_ca_wrong.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
 }
 
 TEST(X509Test, ParseIPAddress) {

@@ -973,8 +973,6 @@ static int idp_check_dp(DIST_POINT_NAME *a, DIST_POINT_NAME *b) {
 // Check CRLDP and IDP
 static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score) {
   auto *impl = FromOpaque(x);
-  // TODO(bbe): crbug.com/409778435 Make tests for the corner cases we hit
-  // here so that we stay correct for RFC 5280 6.3.3 steps b.1 and b.2
   if (crl->idp_flags & IDP_ONLYATTR) {
     return 0;
   }
@@ -1009,10 +1007,10 @@ static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score) {
   }
 
   // If the CRL does not specify an issuing distribution point, allow it to
-  // match anything.
-  //
-  // TODO(davidben): Does this match RFC 5280? It's hard to follow because RFC
-  // 5280 starts from distribution points, while this starts from CRLs.
+  // match anything. This partially implements RFC 5280. The final paragraph of
+  // RFC 5280, section 6.3.3, specifies a default CRL-DP. This default would
+  // match IDP-less CRLs and CRLs with an IDP of the default CRL-DP. We do not
+  // implement the second condition.
   return !crl->idp || !crl->idp->distpoint;
 }
 
