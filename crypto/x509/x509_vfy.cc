@@ -902,61 +902,21 @@ static int crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl, X509 **pissuer,
   return 0;
 }
 
-// Check for match between two dist point names: three separate cases. 1.
-// Both are relative names and compare X509_NAME types. 2. One full, one
-// relative. Compare X509_NAME to GENERAL_NAMES. 3. Both are full names and
-// compare two GENERAL_NAMES. 4. One is NULL: automatic match.
 static int idp_check_dp(DIST_POINT_NAME *a, DIST_POINT_NAME *b) {
-  X509_NAME *nm = nullptr;
-  GENERAL_NAMES *gens = nullptr;
   GENERAL_NAME *gena, *genb;
   size_t i, j;
   if (!a || !b) {
     return 1;
   }
-  if (a->type == 1) {
-    if (!a->dpname) {
-      return 0;
-    }
-    // Case 1: two X509_NAME
-    if (b->type == 1) {
-      if (!b->dpname) {
-        return 0;
-      }
-      if (!X509_NAME_cmp(a->dpname, b->dpname)) {
-        return 1;
-      } else {
-        return 0;
-      }
-    }
-    // Case 2: set name and GENERAL_NAMES appropriately
-    nm = a->dpname;
-    gens = b->name.fullname;
-  } else if (b->type == 1) {
-    if (!b->dpname) {
-      return 0;
-    }
-    // Case 2: set name and GENERAL_NAMES appropriately
-    gens = a->name.fullname;
-    nm = b->dpname;
-  }
-
-  // Handle case 2 with one GENERAL_NAMES and one X509_NAME
-  if (nm) {
-    for (i = 0; i < sk_GENERAL_NAME_num(gens); i++) {
-      gena = sk_GENERAL_NAME_value(gens, i);
-      if (gena->type != GEN_DIRNAME) {
-        continue;
-      }
-      if (!X509_NAME_cmp(nm, gena->d.directoryName)) {
-        return 1;
-      }
-    }
+  // We only support fullName, not nameRelativeToCRLIssuer.
+  if (a->type != 0 || b->type != 0) {
     return 0;
   }
-
-  // Else case 3: two GENERAL_NAMES
-
+  // Check that the CRL's distributionPoint has some name in common with the
+  // certificate's. A CA might shard across multiple CRLs. This check ensures we
+  // are looking at the right shard.
+  //
+  // TODO(crbug.com/565047760): This should not be an O(N^2) comparison.
   for (i = 0; i < sk_GENERAL_NAME_num(a->name.fullname); i++) {
     gena = sk_GENERAL_NAME_value(a->name.fullname, i);
     for (j = 0; j < sk_GENERAL_NAME_num(b->name.fullname); j++) {

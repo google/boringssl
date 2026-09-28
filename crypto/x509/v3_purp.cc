@@ -146,25 +146,6 @@ int X509_supported_extension(const X509_EXTENSION *ex) {
          nid == NID_pe_mtcCertificationAuthority_draft;
 }
 
-static int setup_dp(X509 *x, DIST_POINT *dp) {
-  if (!dp->distpoint || (dp->distpoint->type != 1)) {
-    return 1;
-  }
-  X509_NAME *iname = nullptr;
-  for (size_t i = 0; i < sk_GENERAL_NAME_num(dp->CRLissuer); i++) {
-    GENERAL_NAME *gen = sk_GENERAL_NAME_value(dp->CRLissuer, i);
-    if (gen->type == GEN_DIRNAME) {
-      iname = gen->d.directoryName;
-      break;
-    }
-  }
-  if (!iname) {
-    iname = X509_get_issuer_name(x);
-  }
-
-  return DIST_POINT_set_dpname(dp->distpoint, iname);
-}
-
 static int setup_crldp(X509 *x) {
   int j;
   auto *impl = FromOpaque(x);
@@ -172,11 +153,6 @@ static int setup_crldp(X509 *x) {
       X509_get_ext_d2i(x, NID_crl_distribution_points, &j, nullptr)));
   if (impl->crldp == nullptr && j != -1) {
     return 0;
-  }
-  for (size_t i = 0; i < sk_DIST_POINT_num(impl->crldp.get()); i++) {
-    if (!setup_dp(x, sk_DIST_POINT_value(impl->crldp.get(), i))) {
-      return 0;
-    }
   }
   return 1;
 }

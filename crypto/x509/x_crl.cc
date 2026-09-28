@@ -260,10 +260,7 @@ static int setup_idp(X509_CRL *crl, ISSUING_DIST_POINT *idp) {
   if (idp->onlysomereasons) {
     crl->idp_flags |= IDP_REASONS;
   }
-
-  // TODO(davidben): The new verifier does not support nameRelativeToCRLIssuer.
-  // Remove this?
-  return DIST_POINT_set_dpname(idp->distpoint, X509_CRL_get_issuer(crl));
+  return 1;
 }
 
 BSSL_NAMESPACE_BEGIN

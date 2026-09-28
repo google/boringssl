@@ -10113,7 +10113,7 @@ TEST(X509Test, CRLScope) {
                               {crl.get()}, X509_V_FLAG_CRL_CHECK));
 }
 
-// TODO(crbug.com/42290571): Remove this feature.
+// We do not support the nameRelativeToCRLIssuer form of DistributionPointName.
 TEST(X509Test, CRLScopeNameRelativeToCRLIssuer) {
   UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
   ASSERT_TRUE(key);
@@ -10158,7 +10158,7 @@ TEST(X509Test, CRLScopeNameRelativeToCRLIssuer) {
       crl.get(), MakeRelativeDistPointName(kRelativeName)));
   crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
   ASSERT_TRUE(crl);
-  EXPECT_EQ(X509_V_OK,
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
             Verify(relative_leaf.get(), {ca.get()}, /*intermediates=*/{},
                    {crl.get()}, X509_V_FLAG_CRL_CHECK));
 
@@ -10170,7 +10170,7 @@ TEST(X509Test, CRLScopeNameRelativeToCRLIssuer) {
       crl.get(), MakeFullDistPointNameDirectory(absolute_name.get())));
   crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
   ASSERT_TRUE(crl);
-  EXPECT_EQ(X509_V_OK,
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
             Verify(relative_leaf.get(), {ca.get()}, /*intermediates=*/{},
                    {crl.get()}, X509_V_FLAG_CRL_CHECK));
 
@@ -10181,7 +10181,7 @@ TEST(X509Test, CRLScopeNameRelativeToCRLIssuer) {
       crl.get(), MakeRelativeDistPointName(kRelativeName)));
   crl = SignAndReencodeCRL(crl.get(), key.get(), EVP_sha256());
   ASSERT_TRUE(crl);
-  EXPECT_EQ(X509_V_OK,
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
             Verify(absolute_leaf.get(), {ca.get()}, /*intermediates=*/{},
                    {crl.get()}, X509_V_FLAG_CRL_CHECK));
 }

@@ -486,32 +486,3 @@ static int i2r_crldp(const X509V3_EXT_METHOD *method, void *pcrldp, BIO *out,
   }
   return 1;
 }
-
-int bssl::DIST_POINT_set_dpname(DIST_POINT_NAME *dpn, X509_NAME *iname) {
-  size_t i;
-  STACK_OF(X509_NAME_ENTRY) *frag;
-  X509_NAME_ENTRY *ne;
-  if (!dpn || (dpn->type != 1)) {
-    return 1;
-  }
-  frag = dpn->name.relativename;
-  dpn->dpname = X509_NAME_dup(iname);
-  if (!dpn->dpname) {
-    return 0;
-  }
-  for (i = 0; i < sk_X509_NAME_ENTRY_num(frag); i++) {
-    ne = sk_X509_NAME_ENTRY_value(frag, i);
-    if (!X509_NAME_add_entry(dpn->dpname, ne, -1, i ? 0 : 1)) {
-      X509_NAME_free(dpn->dpname);
-      dpn->dpname = nullptr;
-      return 0;
-    }
-  }
-  // generate cached encoding of name
-  if (i2d_X509_NAME(dpn->dpname, nullptr) < 0) {
-    X509_NAME_free(dpn->dpname);
-    dpn->dpname = nullptr;
-    return 0;
-  }
-  return 1;
-}
