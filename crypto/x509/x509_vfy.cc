@@ -827,24 +827,28 @@ static int get_crl_sk(X509_STORE_CTX *ctx, X509_CRL **pcrl, X509 **pissuer,
 // the certificate issuer this is returned in *pissuer.
 static int get_crl_score(X509_STORE_CTX *ctx, X509 **pissuer, X509_CRL *crl,
                          X509 *x) {
-  int crl_score = 0;
-
-  // First see if we can reject CRL straight away
-
-  // Invalid IDP cannot be processed
-  if (crl->idp_flags & IDP_INVALID) {
-    return 0;
+  if (crl->idp) {
+    // Per RFC 5280, section 5.2.5, at most one of onlyContainsUserCerts,
+    // onlyContainsCACerts, and onlyContainsAttributeCerts may be true.
+    // TODO(crbug.com/42290307): Move this check to the `ISSUING_DIST_POINT`
+    // parser.
+    int num_only =
+        (!!crl->idp->onlyuser) + (!!crl->idp->onlyCA) + (!!crl->idp->onlyattr);
+    if (num_only > 1) {
+      return 0;
+    }
+    // Reason codes and indirect CRLs are not supported.
+    if (crl->idp->indirectCRL || crl->idp->onlysomereasons) {
+      return 0;
+    }
   }
-  // Reason codes and indirect CRLs are not supported.
-  if (crl->idp_flags & (IDP_INDIRECT | IDP_REASONS)) {
-    return 0;
-  }
+
   // We do not support indirect CRLs, so the issuer names must match.
   if (X509_NAME_cmp(X509_get_issuer_name(x), X509_CRL_get_issuer(crl))) {
     return 0;
   }
-  crl_score |= CRL_SCORE_ISSUER_NAME;
 
+  int crl_score = CRL_SCORE_ISSUER_NAME;
   if (!(crl->flags & EXFLAG_CRITICAL)) {
     crl_score |= CRL_SCORE_NOCRITICAL;
   }
@@ -937,15 +941,12 @@ static int idp_check_dp(const DIST_POINT_NAME *dp_cert,
 // Check CRLDP and IDP
 static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score) {
   auto *impl = FromOpaque(x);
-  if (crl->idp_flags & IDP_ONLYATTR) {
-    return 0;
-  }
   if (impl->ex_flags & EXFLAG_CA) {
-    if (crl->idp_flags & IDP_ONLYUSER) {
+    if (crl->idp && crl->idp->onlyuser) {
       return 0;
     }
   } else {
-    if (crl->idp_flags & IDP_ONLYCA) {
+    if (crl->idp && crl->idp->onlyCA) {
       return 0;
     }
   }
@@ -1045,13 +1046,6 @@ static int check_crl(X509_STORE_CTX *ctx, X509_CRL *crl) {
 
     if (!(ctx->current_crl_score & CRL_SCORE_SCOPE)) {
       ctx->error = X509_V_ERR_DIFFERENT_CRL_SCOPE;
-      if (!call_verify_cb(0, ctx)) {
-        return 0;
-      }
-    }
-
-    if (crl->idp_flags & IDP_INVALID) {
-      ctx->error = X509_V_ERR_INVALID_EXTENSION;
       if (!call_verify_cb(0, ctx)) {
         return 0;
       }

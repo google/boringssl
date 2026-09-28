@@ -33,7 +33,6 @@ using namespace bssl;
 
 static int X509_REVOKED_cmp(const X509_REVOKED *const *a,
                             const X509_REVOKED *const *b);
-static int setup_idp(X509_CRL *crl, ISSUING_DIST_POINT *idp);
 
 BSSL_NAMESPACE_BEGIN
 
@@ -141,7 +140,6 @@ static int crl_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
       crl->idp = nullptr;
       crl->akid = nullptr;
       crl->flags = 0;
-      crl->idp_flags = 0;
       break;
 
     case ASN1_OP_D2I_POST: {
@@ -176,11 +174,7 @@ static int crl_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
 
       crl->idp = reinterpret_cast<ISSUING_DIST_POINT *>(X509_CRL_get_ext_d2i(
           crl, NID_issuing_distribution_point, &i, nullptr));
-      if (crl->idp != nullptr) {
-        if (!setup_idp(crl, crl->idp)) {
-          return 0;
-        }
-      } else if (i != -1) {
+      if (crl->idp == nullptr && i != -1) {
         return 0;
       }
 
@@ -219,46 +213,6 @@ static int crl_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
       AUTHORITY_KEYID_free(crl->akid);
       ISSUING_DIST_POINT_free(crl->idp);
       break;
-  }
-  return 1;
-}
-
-// Convert IDP into a more convenient form
-//
-// TODO(davidben): Each of these flags are already booleans, so this is not
-// really more convenient. We can probably remove `idp_flags`.
-static int setup_idp(X509_CRL *crl, ISSUING_DIST_POINT *idp) {
-  int idp_only = 0;
-  // Set various flags according to IDP
-  crl->idp_flags |= IDP_PRESENT;
-  if (idp->onlyuser > 0) {
-    idp_only++;
-    crl->idp_flags |= IDP_ONLYUSER;
-  }
-  if (idp->onlyCA > 0) {
-    idp_only++;
-    crl->idp_flags |= IDP_ONLYCA;
-  }
-  if (idp->onlyattr > 0) {
-    idp_only++;
-    crl->idp_flags |= IDP_ONLYATTR;
-  }
-
-  // Per RFC 5280, section 5.2.5, at most one of onlyContainsUserCerts,
-  // onlyContainsCACerts, and onlyContainsAttributeCerts may be true.
-  //
-  // TODO(crbug.com/boringssl/443): Move this check to the `ISSUING_DIST_POINT`
-  // parser.
-  if (idp_only > 1) {
-    crl->idp_flags |= IDP_INVALID;
-  }
-
-  if (idp->indirectCRL > 0) {
-    crl->idp_flags |= IDP_INDIRECT;
-  }
-
-  if (idp->onlysomereasons) {
-    crl->idp_flags |= IDP_REASONS;
   }
   return 1;
 }
