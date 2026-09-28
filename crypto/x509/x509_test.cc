@@ -4870,6 +4870,7 @@ TEST(X509Test, AlgorithmParameters) {
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_PARAMETER));
 }
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(X509Test, GeneralName) {
   const std::vector<uint8_t> kNames[] = {
       // [0] {
@@ -5058,6 +5059,7 @@ TEST(X509Test, GeneralName) {
     }
   }
 }
+#endif  // !BORINGSSL_SHARED_LIBRARY
 
 // Test that extracting fields of an `X509_ALGOR` works correctly.
 TEST(X509Test, X509AlgorExtract) {
