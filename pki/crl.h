@@ -221,10 +221,7 @@ GetCRLStatusForCert(der::Input cert_serial, CrlVersion crl_version,
 //        implemented as time since the `thisUpdate` field in the CRL
 //        TBSCertList. Responses older than `max_age_seconds` will be
 //        considered invalid.
-//  * `delegate`: If non-null, used to check the signature algorithm.
-//
-// TODO(mattm): Make the `delegate` non-optional. The other wrapper could
-// configure a default one itself instead of passing in null.
+//  * `delegate`: Used to check the signature algorithm.
 [[nodiscard]] OPENSSL_EXPORT CRLRevocationStatus CheckCRL(
     std::string_view raw_crl, const ParsedCertificateList &valid_chain,
     size_t target_cert_index, const ParsedDistributionPoint &cert_dp,

@@ -663,16 +663,6 @@ std::shared_ptr<const ParsedCertificate> OCSPParseCertificate(
     const std::shared_ptr<const ParsedCertificate> &issuer_certificate,
     int64_t verify_time_epoch_seconds,
     VerifyCertificateChainDelegate *delegate) {
-  // If a delegate is not supplied, use a default delegate that matches the
-  // previous behavior of allowing SHA-1. (This doesn't actually need a
-  // PathBuilderDelegate, but there isn't a
-  // SimpleVerifyCertificateChainDelegate.)
-  SimplePathBuilderDelegate default_verify_delegate(
-      /*min_rsa_modulus_length_bits=*/1024,
-      SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1);
-  if (!delegate) {
-    delegate = &default_verify_delegate;
-  }
   CertPathErrors errors;
   TrustAnchor issuer_trust(CertificateTrust::ForTrustAnchor());
   der::GeneralizedTime verify_time;
@@ -716,14 +706,14 @@ std::shared_ptr<const ParsedCertificate> OCSPParseCertificate(
     VerifyCertificateChainDelegate *delegate) {
   // Check the signature algorithm against policy.
   CertErrors unused_errors;
-  if (delegate && !delegate->IsSignatureAlgorithmAcceptable(
-                      response.signature_algorithm, &unused_errors)) {
+  if (!delegate->IsSignatureAlgorithmAcceptable(response.signature_algorithm,
+                                                &unused_errors)) {
     return false;
   }
 
   return VerifySignedData(response.signature_algorithm, response.data,
                           response.signature, cert->tbs().spki_tlv,
-                          delegate ? delegate->GetVerifyCache() : nullptr);
+                          delegate->GetVerifyCache());
 }
 
 // Verifies that the OCSP response has a valid signature using
@@ -1010,22 +1000,17 @@ OCSPRevocationStatus CheckOCSP(
       OCSPParseCertificate(StringAsBytes(certificate_der));
   std::shared_ptr<const ParsedCertificate> parsed_issuer_certificate =
       OCSPParseCertificate(StringAsBytes(issuer_certificate_der));
+  // Use a default delegate that matches the previous behavior of allowing
+  // SHA-1. (This doesn't actually need a PathBuilderDelegate, but there isn't
+  // a SimpleVerifyCertificateChainDelegate.)
+  // TODO(mattm): tighten the default allowed sigalgs?
+  SimplePathBuilderDelegate default_verify_delegate(
+      /*min_rsa_modulus_length_bits=*/1024,
+      SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1);
 
   return CheckOCSP(raw_response, parsed_certificate.get(),
                    parsed_issuer_certificate, verify_time_epoch_seconds,
-                   max_age_seconds, nullptr, response_details);
-}
-
-OCSPRevocationStatus CheckOCSP(
-    std::string_view raw_response, const ParsedCertificate *certificate,
-    const ParsedCertificate *issuer_certificate,
-    int64_t verify_time_epoch_seconds, std::optional<int64_t> max_age_seconds,
-    OCSPVerifyResult::ResponseStatus *response_details) {
-  std::shared_ptr<const ParsedCertificate> parsed_issuer_certificate =
-      OCSPParseCertificate(issuer_certificate->der_cert());
-  return CheckOCSP(raw_response, certificate, parsed_issuer_certificate,
-                   verify_time_epoch_seconds, max_age_seconds,
-                   nullptr, response_details);
+                   max_age_seconds, &default_verify_delegate, response_details);
 }
 
 OCSPRevocationStatus CheckOCSP(
@@ -1035,6 +1020,7 @@ OCSPRevocationStatus CheckOCSP(
     int64_t verify_time_epoch_seconds, std::optional<int64_t> max_age_seconds,
     VerifyCertificateChainDelegate *delegate,
     OCSPVerifyResult::ResponseStatus *response_details) {
+  BSSL_CHECK(delegate);
   return CheckOCSP(raw_response, certificate.get(), issuer_certificate,
                    verify_time_epoch_seconds, max_age_seconds, delegate,
                    response_details);

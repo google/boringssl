@@ -25,6 +25,7 @@
 #include "parse_values.h"
 #include "parser.h"
 #include "revocation_util.h"
+#include "simple_path_builder_delegate.h"
 #include "signature_algorithm.h"
 #include "verify_name_match.h"
 #include "verify_signed_data.h"
@@ -429,6 +430,7 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
                              std::optional<int64_t> max_age_seconds,
                              VerifyCertificateChainDelegate *delegate) {
   BSSL_CHECK(target_cert_index < valid_chain.size());
+  BSSL_CHECK(delegate);
 
   if (cert_dp.reasons) {
     // Reason codes are not supported. If the distribution point contains a
@@ -470,8 +472,8 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
   }
   // Check the signature algorithm against policy.
   CertErrors unused_errors;
-  if (delegate && !delegate->IsSignatureAlgorithmAcceptable(
-                      *signature_algorithm, &unused_errors)) {
+  if (!delegate->IsSignatureAlgorithmAcceptable(*signature_algorithm,
+                                                &unused_errors)) {
     return CRLRevocationStatus::UNKNOWN;
   }
 
@@ -667,7 +669,7 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
     //           key validated in step (f).
     if (!VerifySignedData(*signature_algorithm, tbs_cert_list_tlv,
                           signature_value, issuer_cert->tbs().spki_tlv,
-                          delegate ? delegate->GetVerifyCache() : nullptr)) {
+                          delegate->GetVerifyCache())) {
       continue;
     }
 
@@ -698,8 +700,16 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
                              const ParsedDistributionPoint &cert_dp,
                              int64_t verify_time_epoch_seconds,
                              std::optional<int64_t> max_age_seconds) {
+  // Use a default delegate that matches the previous behavior of allowing
+  // SHA-1. (This doesn't actually need a PathBuilderDelegate, but there isn't
+  // a SimpleVerifyCertificateChainDelegate.)
+  // TODO(mattm): tighten the default allowed sigalgs?
+  SimplePathBuilderDelegate default_verify_delegate(
+      /*min_rsa_modulus_length_bits=*/1024,
+      SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1);
   return CheckCRL(raw_crl, valid_chain, target_cert_index, cert_dp,
-                  verify_time_epoch_seconds, max_age_seconds, nullptr);
+                  verify_time_epoch_seconds, max_age_seconds,
+                  &default_verify_delegate);
 }
 
 BSSL_NAMESPACE_END

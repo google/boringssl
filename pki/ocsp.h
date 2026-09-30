@@ -276,24 +276,13 @@ OPENSSL_EXPORT bool ParseOCSPResponse(der::Input raw_tlv, OCSPResponse *out);
 //
 // Arguments are the same as the CheckOCSP from the public ocsp.h, except that
 // it takes already parsed instances of the certificate and issuer certificate
-// and takes a optional `delegate` for signature and certificate verification
-// policy.
-//
-// TODO(mattm): Make the `delegate` non-optional. The other wrapper could
-// configure a default one itself instead of passing in null.
+// and takes a `delegate` for signature and certificate verification policy.
 [[nodiscard]] OPENSSL_EXPORT OCSPRevocationStatus CheckOCSP(
     std::string_view raw_response,
     const std::shared_ptr<const ParsedCertificate> &certificate,
     const std::shared_ptr<const ParsedCertificate> &issuer_certificate,
     int64_t verify_time_epoch_seconds, std::optional<int64_t> max_age_seconds,
     VerifyCertificateChainDelegate *delegate,
-    OCSPVerifyResult::ResponseStatus *response_details);
-
-// TODO(mattm): remove this after Chrome is updated to use the new signature.
-[[nodiscard]] OPENSSL_EXPORT OCSPRevocationStatus CheckOCSP(
-    std::string_view raw_response, const ParsedCertificate *certificate,
-    const ParsedCertificate *issuer_certificate,
-    int64_t verify_time_epoch_seconds, std::optional<int64_t> max_age_seconds,
     OCSPVerifyResult::ResponseStatus *response_details);
 
 // Creates a DER-encoded OCSPRequest for `cert`. The request is fairly basic:
