@@ -349,6 +349,14 @@ static const CipherTest kCipherTests[] = {
         },
         false,
     },
+    // TLSv1 matches everything that existed before TLS 1.2.
+    {
+        "AES128-SHA:ECDHE-RSA-AES128-GCM-SHA256:!TLSv1",
+        {
+            {SSL_CIPHER_ECDHE_RSA_WITH_AES_128_GCM_SHA256, 0},
+        },
+        false,
+    },
     // TLSv1.2 matches everything added in TLS 1.2.
     {
         "AES128-SHA:ECDHE-RSA-AES128-GCM-SHA256:!TLSv1.2",
@@ -364,6 +372,23 @@ static const CipherTest kCipherTests[] = {
         {
             {SSL_CIPHER_RSA_WITH_AES_128_CBC_SHA, 0},
             {SSL_CIPHER_ECDHE_RSA_WITH_AES_128_GCM_SHA256, 0},
+        },
+        false,
+    },
+    // Multipart aliases should combine commutatively with version aliases.
+    {
+        "TLSv1+RSA",
+        {
+            {SSL_CIPHER_RSA_WITH_AES_128_CBC_SHA, 0},
+            {SSL_CIPHER_RSA_WITH_AES_256_CBC_SHA, 0},
+        },
+        false,
+    },
+    {
+        "RSA+TLSv1",
+        {
+            {SSL_CIPHER_RSA_WITH_AES_128_CBC_SHA, 0},
+            {SSL_CIPHER_RSA_WITH_AES_256_CBC_SHA, 0},
         },
         false,
     },
