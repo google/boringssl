@@ -400,7 +400,7 @@ where
     /// - `FIPS` is an alias for `HIGH`.
     ///
     /// - `SSLv3` and `TLSv1` match ciphers available in TLS 1.1 or earlier.
-    ///   `TLSv1_2` matches ciphers new in TLS 1.2. This is confusing and should not
+    ///   `TLSv1.2` matches ciphers new in TLS 1.2. This is confusing and should not
     ///   be used.
     ///
     /// [cipher suite configuration]: <https://docs.openssl.org/3.0/man1/openssl-ciphers/#cipher-list-format>

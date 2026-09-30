@@ -1761,7 +1761,7 @@ OPENSSL_EXPORT size_t SSL_get_all_standard_cipher_names(const char **out,
 // - `FIPS` is an alias for `HIGH`.
 //
 // - `SSLv3` and `TLSv1` match ciphers available in TLS 1.1 or earlier.
-//   `TLSv1_2` matches ciphers new in TLS 1.2. This is confusing and should not
+//   `TLSv1.2` matches ciphers new in TLS 1.2. This is confusing and should not
 //   be used.
 //
 // Unknown rules are silently ignored by legacy APIs, and rejected by APIs with

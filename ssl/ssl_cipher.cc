@@ -30,7 +30,6 @@
 #include <openssl/sha.h>
 #include <openssl/stack.h>
 
-#include "../crypto/internal.h"
 #include "internal.h"
 
 
@@ -450,8 +449,8 @@ static const CIPHER_ALIAS kCipherAliases[] = {
 
     // Legacy protocol minimum version aliases. "TLSv1" is intentionally the
     // same as "SSLv3".
-    {"SSLv3", ~0u, ~0u, ~0u, ~0u, SSL3_VERSION},
-    {"TLSv1", ~0u, ~0u, ~0u, ~0u, SSL3_VERSION},
+    {"SSLv3", ~0u, ~0u, ~0u, ~0u, TLS1_VERSION},
+    {"TLSv1", ~0u, ~0u, ~0u, ~0u, TLS1_VERSION},
     {"TLSv1.2", ~0u, ~0u, ~0u, ~0u, TLS1_2_VERSION},
 
     // Legacy strength classes.
@@ -1518,7 +1517,7 @@ uint16_t SSL_CIPHER_get_min_version(const SSL_CIPHER *cipher) {
     // afterwards specify a particular hash.
     return TLS1_2_VERSION;
   }
-  return SSL3_VERSION;
+  return TLS1_VERSION;
 }
 
 uint16_t SSL_CIPHER_get_max_version(const SSL_CIPHER *cipher) {
