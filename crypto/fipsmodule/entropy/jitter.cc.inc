@@ -32,6 +32,7 @@
 
 #include <openssl/mem.h>
 
+#include "../../internal.h"
 #include "internal.h"
 #include "sha512.cc.inc"
 
@@ -88,6 +89,11 @@ class MemoryAccessSampler {
         array_size_ & (array_size_ - 1)) {
       abort();
     }
+
+    if (boringssl_fips_break_test("JITTER_APT")) {
+      // In this break test, array_[0] is used to keep state. See below.
+      array_[0] = 0;
+    }
   }
 
   ~MemoryAccessSampler() { OPENSSL_free(const_cast<uint8_t *>(array_)); }
@@ -104,16 +110,28 @@ class MemoryAccessSampler {
   }
 
   bool Next(uint64_t *out) {
-    // Perform some memory accesses and measure how long it took. The LCG is
-    // intended to defeat any CPU predictors and thus expose this code to as
-    // much system entropy as possible.
-    for (unsigned i = 0; i < num_samples_; i++) {
-      // The lower bits of an LCG tend to fall into short cycles and so are
-      // discarded here.
-      array_[(lcg_.Next() >> 6) & (array_size_ - 1)] += 1;
-    }
+    if (boringssl_fips_break_test("JITTER_RCT")) {
+      // To break the repetition test a constant value is returned.
+      *out = 1;
+    } else if (boringssl_fips_break_test("JITTER_APT")) {
+      // To break the adaptive test, but not the repetition test, a counter
+      // that advances every fourth call is returned. Since samples are
+      // processed by `DeltaSampler`, the tests see 0,0,0,1,... which exceeds
+      // the APT cutoff (348/512) without tripping the RCT (26).
+      *out = array_[0] >> 2;
+      array_[0]++;
+    } else {
+      // Perform some memory accesses and measure how long it took. The LCG is
+      // intended to defeat any CPU predictors and thus expose this code to as
+      // much system entropy as possible.
+      for (unsigned i = 0; i < num_samples_; i++) {
+        // The lower bits of an LCG tend to fall into short cycles and so are
+        // discarded here.
+        array_[(lcg_.Next() >> 6) & (array_size_ - 1)] += 1;
+      }
 
-    *out = GetTimestamp();
+      *out = GetTimestamp();
+    }
     return true;
   }
 
@@ -226,6 +244,9 @@ class RepetitionCountTest {
       last_sample_ = sample;
     }
     if (count_ >= kThreshold) {
+#if defined(BORINGSSL_FIPS_BREAK_TESTS)
+      fprintf(stderr, "Jitter RCT failure.\n");
+#endif
       return false;
     }
     *out = sample;
@@ -351,6 +372,9 @@ class AdaptiveProportionTest {
     const uint16_t new_count = ++counts_[sample];
 
     if (new_count > kThreshold) {
+#if defined(BORINGSSL_FIPS_BREAK_TESTS)
+      fprintf(stderr, "Jitter APT failure.\n");
+#endif
       return false;
     }
 
