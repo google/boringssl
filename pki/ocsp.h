@@ -31,6 +31,7 @@
 BSSL_NAMESPACE_BEGIN
 
 class ParsedCertificate;
+class VerifyCertificateChainDelegate;
 
 // OCSPCertID contains a representation of a DER-encoded RFC 6960 "CertID".
 //
@@ -273,8 +274,22 @@ OPENSSL_EXPORT bool ParseOCSPResponse(der::Input raw_tlv, OCSPResponse *out);
 // Checks the revocation status of `certificate` by using the DER-encoded
 // `raw_response`.
 //
-// Arguments are the same as above, except that it takes already parsed
-// instances of the certificate and issuer certificate.
+// Arguments are the same as the CheckOCSP from the public ocsp.h, except that
+// it takes already parsed instances of the certificate and issuer certificate
+// and takes a optional `delegate` for signature and certificate verification
+// policy.
+//
+// TODO(mattm): Make the `delegate` non-optional. The other wrapper could
+// configure a default one itself instead of passing in null.
+[[nodiscard]] OPENSSL_EXPORT OCSPRevocationStatus CheckOCSP(
+    std::string_view raw_response,
+    const std::shared_ptr<const ParsedCertificate> &certificate,
+    const std::shared_ptr<const ParsedCertificate> &issuer_certificate,
+    int64_t verify_time_epoch_seconds, std::optional<int64_t> max_age_seconds,
+    VerifyCertificateChainDelegate *delegate,
+    OCSPVerifyResult::ResponseStatus *response_details);
+
+// TODO(mattm): remove this after Chrome is updated to use the new signature.
 [[nodiscard]] OPENSSL_EXPORT OCSPRevocationStatus CheckOCSP(
     std::string_view raw_response, const ParsedCertificate *certificate,
     const ParsedCertificate *issuer_certificate,

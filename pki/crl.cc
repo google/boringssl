@@ -28,6 +28,7 @@
 #include "signature_algorithm.h"
 #include "verify_name_match.h"
 #include "verify_signed_data.h"
+#include "verify_certificate_chain.h"
 
 BSSL_NAMESPACE_BEGIN
 
@@ -425,7 +426,8 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
                              size_t target_cert_index,
                              const ParsedDistributionPoint &cert_dp,
                              int64_t verify_time_epoch_seconds,
-                             std::optional<int64_t> max_age_seconds) {
+                             std::optional<int64_t> max_age_seconds,
+                             VerifyCertificateChainDelegate *delegate) {
   BSSL_CHECK(target_cert_index < valid_chain.size());
 
   if (cert_dp.reasons) {
@@ -461,12 +463,15 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
   }
 
   // 5.1.1.2  signatureAlgorithm
-  //
-  // TODO(https://crbug.com/749276): Check the signature algorithm against
-  // policy.
   std::optional<SignatureAlgorithm> signature_algorithm =
       ParseSignatureAlgorithm(signature_algorithm_tlv);
   if (!signature_algorithm) {
+    return CRLRevocationStatus::UNKNOWN;
+  }
+  // Check the signature algorithm against policy.
+  CertErrors unused_errors;
+  if (delegate && !delegate->IsSignatureAlgorithmAcceptable(
+                      *signature_algorithm, &unused_errors)) {
     return CRLRevocationStatus::UNKNOWN;
   }
 
@@ -662,7 +667,7 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
     //           key validated in step (f).
     if (!VerifySignedData(*signature_algorithm, tbs_cert_list_tlv,
                           signature_value, issuer_cert->tbs().spki_tlv,
-                          /*cache=*/nullptr)) {
+                          delegate ? delegate->GetVerifyCache() : nullptr)) {
       continue;
     }
 
@@ -685,6 +690,16 @@ CRLRevocationStatus CheckCRL(std::string_view raw_crl,
 
   // Did not find the issuer & signer of `raw_crl` in `valid_chain`.
   return CRLRevocationStatus::UNKNOWN;
+}
+
+CRLRevocationStatus CheckCRL(std::string_view raw_crl,
+                             const ParsedCertificateList &valid_chain,
+                             size_t target_cert_index,
+                             const ParsedDistributionPoint &cert_dp,
+                             int64_t verify_time_epoch_seconds,
+                             std::optional<int64_t> max_age_seconds) {
+  return CheckCRL(raw_crl, valid_chain, target_cert_index, cert_dp,
+                  verify_time_epoch_seconds, max_age_seconds, nullptr);
 }
 
 BSSL_NAMESPACE_END
