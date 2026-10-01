@@ -860,6 +860,7 @@ boringssl_crypto_test_data := \
   crypto/curve25519/ed25519ph_tests.txt \
   crypto/ecdh/ecdh_tests.txt \
   crypto/evp/test/dh_tests.txt \
+  crypto/evp/test/dhkem_tests.txt \
   crypto/evp/test/ec_tests.txt \
   crypto/evp/test/ed25519_tests.txt \
   crypto/evp/test/evp_tests.txt \

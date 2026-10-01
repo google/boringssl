@@ -1257,7 +1257,7 @@ OPENSSL_EXPORT const EVP_KEM *EVP_kem_ml_kem_1024(void);
 // defined in draft-irtf-cfrg-concrete-hybrid-kems.
 OPENSSL_EXPORT const EVP_KEM *EVP_kem_xwing(void);
 
-// TODO(crbug.com/449751916): Add more supported KEMs.
+// Additional KEMs are defined in hpke.h: See `EVP_kem_dhkem_*`.
 
 // EVP_KEM_ciphertext_len returns the fixed length, in bytes, of a ciphertext
 // produced and consumed by `kem`.

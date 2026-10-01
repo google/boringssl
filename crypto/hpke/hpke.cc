@@ -596,7 +596,9 @@ static constexpr HpkeKeyMethod kX25519KeyMethod = {
     /*derive_key_pair=*/x25519_derive_key_pair,
 };
 
-const EVP_KEM *evp_kem_dhkem_x25519_hkdf_sha256() {
+}  // namespace
+
+const EVP_KEM *EVP_kem_dhkem_x25519_hkdf_sha256() {
   static constexpr EVP_KEM_DHKEM kDhkemX25519 = {
       /*EVP_KEM=*/{
           /*pkey_id=*/EVP_PKEY_X25519,
@@ -617,12 +619,10 @@ const EVP_KEM *evp_kem_dhkem_x25519_hkdf_sha256() {
   return &kDhkemX25519;
 }
 
-}  // namespace
-
 const EVP_HPKE_KEM *EVP_hpke_x25519_hkdf_sha256() {
   static const EVP_HPKE_KEM kKEM = {
       /*id=*/EVP_HPKE_DHKEM_X25519_HKDF_SHA256,
-      /*evp_kem_func=*/&evp_kem_dhkem_x25519_hkdf_sha256,
+      /*evp_kem_func=*/&EVP_kem_dhkem_x25519_hkdf_sha256,
       /*key_method=*/&kX25519KeyMethod,
       /*public_key_len=*/0,
       /*private_key_len=*/0,
@@ -746,7 +746,9 @@ static constexpr HpkeKeyMethod kP256KeyMethod = {
     /*derive_key_pair=*/&p256_derive_key_pair,
 };
 
-const EVP_KEM *evp_kem_dhkem_p256_hkdf_sha256() {
+}  // namespace
+
+const EVP_KEM *EVP_kem_dhkem_p256_hkdf_sha256() {
   static constexpr EVP_KEM_DHKEM kDhkemP256 = {
       /*EVP_KEM=*/{
           /*pkey_id=*/EVP_PKEY_EC,
@@ -766,12 +768,10 @@ const EVP_KEM *evp_kem_dhkem_p256_hkdf_sha256() {
   return &kDhkemP256;
 }
 
-}  // namespace
-
 const EVP_HPKE_KEM *EVP_hpke_p256_hkdf_sha256() {
   static const EVP_HPKE_KEM kKEM = {
       /*id=*/EVP_HPKE_DHKEM_P256_HKDF_SHA256,
-      /*evp_kem_func=*/&evp_kem_dhkem_p256_hkdf_sha256,
+      /*evp_kem_func=*/&EVP_kem_dhkem_p256_hkdf_sha256,
       /*key_method=*/&kP256KeyMethod,
       /*public_key_len=*/0,
       /*private_key_len=*/0,
