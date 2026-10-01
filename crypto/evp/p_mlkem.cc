@@ -414,6 +414,7 @@ struct MLKEMImplementation {
       /*ciphertext_len=*/Traits::kCiphertextBytes,
       /*secret_len=*/MLKEM_SHARED_SECRET_BYTES,
       /*entropy_len=*/BCM_MLKEM_ENCAP_ENTROPY,
+      /*check_key=*/nullptr,
       &KemEncap,
       &KemEncapExternalEntropy,
       &KemDecap,

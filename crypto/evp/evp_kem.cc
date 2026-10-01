@@ -36,7 +36,8 @@ static bool check_kem_invocation(const EVP_KEM *kem,
     OPENSSL_PUT_ERROR(EVP, ERR_R_PASSED_NULL_PARAMETER);
     return false;
   }
-  if (kem->pkey_id != EVP_PKEY_id(pkey_impl)) {
+  if (kem->pkey_id != EVP_PKEY_id(pkey_impl) ||
+      (kem->check_key != nullptr && !kem->check_key(kem, pkey_impl))) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     return false;
   }

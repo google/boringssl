@@ -224,6 +224,7 @@ const EVP_KEM xwing_evp_kem = {
     XWING_CIPHERTEXT_BYTES,             //
     XWING_SHARED_SECRET_BYTES,          //
     kXwingEncapEntropyBytes,            //
+    /*check_key=*/nullptr,              //
     &xwing_kem_encap,                   //
     &xwing_kem_encap_external_entropy,  //
     &xwing_kem_decap,                   //

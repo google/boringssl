@@ -317,6 +317,10 @@ struct evp_kem_st {
   // Fixed length of external entropy for testing.
   size_t entropy_len;
 
+  // check_key, if non-null, returns whether `key`, whose type matches
+  // `pkey_id`, is usable with this KEM.
+  bool (*check_key)(const EVP_KEM *kem, const EVP_PKEY *key);
+
   int (*encap)(const EVP_KEM *kem, bssl::Span<uint8_t> out_ciphertext,
                bssl::Span<uint8_t> out_secret, const EVP_PKEY *peer_key);
   int (*encap_external_entropy)(const EVP_KEM *kem,
