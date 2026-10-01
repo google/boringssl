@@ -306,9 +306,12 @@ static int dhkem_encap_with_ephemeral_key(const EVP_KEM_DHKEM *dhkem,
                                           const EVP_PKEY *peer_key,
                                           const EVP_PKEY *ephemeral_key) {
   const size_t public_len = dhkem->key_method->public_key_len;
-  if (out_ciphertext.size() != public_len ||
-      out_secret.size() != dhkem->secret_len) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
+  if (out_ciphertext.size() != public_len) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
+    return 0;
+  }
+  if (out_secret.size() != dhkem->secret_len) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
     return 0;
   }
   // dh = DH(skE, pkR)
@@ -408,9 +411,12 @@ static int dhkem_auth_encap_with_ephemeral_key(const EVP_KEM_DHKEM *dhkem,
                                                const EVP_PKEY *auth_key,
                                                const EVP_PKEY *ephemeral_key) {
   const size_t public_len = dhkem->key_method->public_key_len;
-  if (out_ciphertext.size() != public_len ||
-      out_secret.size() != dhkem->secret_len) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
+  if (out_ciphertext.size() != public_len) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH);
+    return 0;
+  }
+  if (out_secret.size() != dhkem->secret_len) {
+    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_SECRET_LENGTH);
     return 0;
   }
   // dh = concat(DH(skE, pkR), DH(skS, pkR))
@@ -593,17 +599,6 @@ constexpr size_t kP256SharedKeyLen = 32;
 
 // RFC 9180's SerializePublicKey format for DHKEM(P-256, HKDF-SHA256) is the
 // uncompressed X9.62 point, and its private keys are the big-endian scalar.
-EVP_PKEY *p256_deserialize_private_key(const EVP_PKEY_ALG *alg,
-                                       const uint8_t *in, size_t len) {
-  const uint8_t kAllZeros[kP256PrivateKeyLen] = {0};
-  if (len != kP256PrivateKeyLen ||
-      CRYPTO_memcmp(kAllZeros, in, sizeof(kAllZeros)) == 0) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
-    return nullptr;
-  }
-  return EVP_PKEY_from_ec_private_scalar(alg, in, len);
-}
-
 int p256_serialize_public_key(const EVP_PKEY *pkey, uint8_t *out,
                               size_t *out_len) {
   CBB cbb;
@@ -681,7 +676,7 @@ static constexpr HpkeKeyMethod kP256KeyMethod = {
     /*public_key_len=*/kP256PublicValueLen,
     /*private_key_len=*/kP256PrivateKeyLen,
     /*alg_func=*/&EVP_pkey_ec_p256,
-    /*deserialize_private_key=*/&p256_deserialize_private_key,
+    /*deserialize_private_key=*/&EVP_PKEY_from_ec_private_scalar,
     /*serialize_private_key=*/&p256_serialize_private_key,
     /*deserialize_public_key=*/&EVP_PKEY_from_ec_uncompressed_point,
     /*serialize_public_key=*/&p256_serialize_public_key,
@@ -1121,13 +1116,6 @@ static int hpke_setup_sender_impl(
   }
   *out_enc_len = EVP_KEM_ciphertext_len(evp_kem);
 
-  // Check the length here rather than in `EVP_PKEY`, so that the
-  // expected error is emitted.
-  // TODO(crbug.com/535883377): Clean up error codes.
-  if (peer_public_key.size() != kem->key_method->public_key_len) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
-    return 0;
-  }
   UniquePtr<EVP_PKEY> peer_pubkey(kem->key_method->deserialize_public_key(
       kem->key_method->alg_func(), peer_public_key.data(),
       peer_public_key.size()));
@@ -1215,14 +1203,6 @@ int EVP_HPKE_CTX_setup_recipient(EVP_HPKE_CTX *ctx, const EVP_HPKE_KEY *key,
   const EVP_KEM *evp_kem = key->kem->evp_kem_func();
   const EVP_PKEY *decap_key = key->pkey;
 
-  // Check the length here rather than in `EVP_KEM_decap`, so that the
-  // expected error is emitted.
-  // TODO(crbug.com/535883377): Clean up error codes.
-  if (enc_len != EVP_KEM_ciphertext_len(evp_kem)) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
-    return 0;
-  }
-
   InplaceVector<uint8_t, MAX_SHARED_SECRET_LEN> shared_secret;
   if (!shared_secret.TryResizeForOverwrite(evp_kem->secret_len)) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
@@ -1255,14 +1235,6 @@ static int hpke_setup_auth_sender_impl(
   ctx->aead = aead;
   if (max_enc < kem->ciphertext_len) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
-    return 0;
-  }
-  if (entropy.has_value() && entropy->size() != kem->entropy_len) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
-    return 0;
-  }
-  if (peer_public_key.size() != key->kem->key_method->public_key_len) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
     return 0;
   }
   UniquePtr<EVP_PKEY> peer_key(key->kem->key_method->deserialize_public_key(
@@ -1338,11 +1310,6 @@ int EVP_HPKE_CTX_setup_auth_recipient(
   InplaceVector<uint8_t, MAX_SHARED_SECRET_LEN> shared_secret;
   if (!shared_secret.TryResizeForOverwrite(kem->secret_len)) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
-    return 0;
-  }
-  if (enc_len != kem->ciphertext_len ||
-      peer_public_key_len != key->kem->key_method->public_key_len) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
     return 0;
   }
   UniquePtr<EVP_PKEY> peer_key(key->kem->key_method->deserialize_public_key(

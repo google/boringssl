@@ -642,8 +642,7 @@ TEST(HPKETest, SetupRecipientWrongLengthEnc) {
       recipient_ctx.get(), key.get(), EVP_hpke_hkdf_sha256(),
       EVP_hpke_aes_128_gcm(), bogus_enc, sizeof(bogus_enc), nullptr, 0));
   EXPECT_TRUE(
-      ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY));
-  ERR_clear_error();
+      ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_CIPHERTEXT_LENGTH}}));
 }
 
 TEST(HPKETest, SetupSenderWrongLengthPeerPublicValue) {
@@ -656,9 +655,7 @@ TEST(HPKETest, SetupSenderWrongLengthPeerPublicValue) {
       EVP_hpke_x25519_hkdf_sha256(), EVP_hpke_hkdf_sha256(),
       EVP_hpke_aes_128_gcm(), bogus_public_key_r, sizeof(bogus_public_key_r),
       nullptr, 0));
-  EXPECT_TRUE(
-      ErrorEquals(ERR_get_error(), ERR_LIB_EVP, EVP_R_INVALID_PEER_KEY));
-  ERR_clear_error();
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DECODE_ERROR}}));
 }
 
 TEST(HPKETest, InvalidRecipientKey) {
@@ -673,7 +670,7 @@ TEST(HPKETest, InvalidP256PrivateKey) {
   ScopedEVP_HPKE_KEY key;
   EXPECT_FALSE(EVP_HPKE_KEY_init(key.get(), EVP_hpke_p256_hkdf_sha256(),
                                  zero_key, sizeof(zero_key)));
-  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_DECODE_ERROR}}));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EC, EC_R_INVALID_PRIVATE_KEY}}));
 
   uint8_t all_ones_key[32];
   OPENSSL_memset(all_ones_key, 0xff, sizeof(all_ones_key));
