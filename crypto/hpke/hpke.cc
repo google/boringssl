@@ -26,6 +26,7 @@
 #include <openssl/curve25519.h>
 #include <openssl/digest.h>
 #include <openssl/ec.h>
+#include <openssl/ec_key.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/evp_errors.h>
@@ -51,7 +52,7 @@ using namespace bssl;
 #define MAX_SEED_LEN XWING_SEED_LEN
 #define MAX_SHARED_SECRET_LEN SHA256_DIGEST_LENGTH
 #define MAX_DHKEM_DH_SHARED_KEY_LEN X25519_SHARED_KEY_LEN
-#define MAX_DHKEM_PUBLIC_KEY_LEN X25519_PUBLIC_VALUE_LEN
+#define MAX_DHKEM_PUBLIC_KEY_LEN 65  // kP256PublicValueLen
 
 namespace {
 
@@ -641,299 +642,151 @@ const EVP_HPKE_KEM *EVP_hpke_x25519_hkdf_sha256() {
   return &kKEM;
 }
 
-#define P256_PRIVATE_KEY_LEN 32
-#define P256_PUBLIC_KEY_LEN 65
-#define P256_PUBLIC_VALUE_LEN 65
-#define P256_SEED_LEN 32
-#define P256_SHARED_KEY_LEN 32
+namespace {
 
-static int p256_public_from_private(uint8_t out_pub[P256_PUBLIC_VALUE_LEN],
-                                    const uint8_t priv[P256_PRIVATE_KEY_LEN]) {
-  const EC_GROUP *const group = EC_group_p256();
-  const uint8_t kAllZeros[P256_PRIVATE_KEY_LEN] = {0};
-  EC_SCALAR private_scalar;
-  EC_JACOBIAN public_point;
-  EC_AFFINE public_point_affine;
+constexpr size_t kP256PrivateKeyLen = 32;
+constexpr size_t kP256PublicValueLen = 65;
+constexpr size_t kP256SeedLen = 32;
+constexpr size_t kP256SharedKeyLen = 32;
 
-  if (CRYPTO_memcmp(kAllZeros, priv, sizeof(kAllZeros)) == 0) {
+// RFC 9180's SerializePublicKey format for DHKEM(P-256, HKDF-SHA256) is the
+// uncompressed X9.62 point, and its private keys are the big-endian scalar.
+EVP_PKEY *p256_deserialize_private_key(const EVP_PKEY_ALG *alg,
+                                       const uint8_t *in, size_t len) {
+  const uint8_t kAllZeros[kP256PrivateKeyLen] = {0};
+  if (len != kP256PrivateKeyLen ||
+      CRYPTO_memcmp(kAllZeros, in, sizeof(kAllZeros)) == 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
+    return nullptr;
+  }
+  return EVP_PKEY_from_ec_private_scalar(alg, in, len);
+}
+
+int p256_serialize_public_key(const EVP_PKEY *pkey, uint8_t *out,
+                              size_t *out_len) {
+  CBB cbb;
+  CBB_init_fixed(&cbb, out, *out_len);
+  if (!EVP_PKEY_marshal_ec_uncompressed_point(&cbb, pkey)) {
     return 0;
   }
-
-  if (!ec_scalar_from_bytes(group, &private_scalar, priv,
-                            P256_PRIVATE_KEY_LEN) ||
-      !ec_point_mul_scalar_base(group, &public_point, &private_scalar) ||
-      !ec_jacobian_to_affine(group, &public_point_affine, &public_point)) {
-    return 0;
-  }
-
-  size_t out_len_x, out_len_y;
-  out_pub[0] = POINT_CONVERSION_UNCOMPRESSED;
-  ec_felem_to_bytes(group, &out_pub[1], &out_len_x, &public_point_affine.X);
-  ec_felem_to_bytes(group, &out_pub[33], &out_len_y, &public_point_affine.Y);
+  *out_len = CBB_len(&cbb);
   return 1;
 }
 
-static int p256_init_key(EVP_HPKE_KEY *key, const uint8_t *priv_key,
-                         size_t priv_key_len) {
-  if (priv_key_len != P256_PRIVATE_KEY_LEN) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
+int p256_serialize_private_key(const EVP_PKEY *pkey, uint8_t *out,
+                               size_t *out_len) {
+  CBB cbb;
+  CBB_init_fixed(&cbb, out, *out_len);
+  if (!EVP_PKEY_marshal_ec_private_scalar(&cbb, pkey)) {
     return 0;
   }
-
-  if (!p256_public_from_private(key->public_key, priv_key)) {
-    return 0;
-  }
-
-  OPENSSL_memcpy(key->private_key, priv_key, priv_key_len);
+  *out_len = CBB_len(&cbb);
   return 1;
 }
 
-static int p256_private_key_from_seed(uint8_t out_priv[P256_PRIVATE_KEY_LEN],
-                                      const uint8_t *seed, size_t seed_len) {
+EVP_PKEY *p256_derive_key_pair(const EVP_PKEY_ALG *alg, uint16_t kem_suite_id,
+                               Span<const uint8_t> ikm) {
   // https://www.rfc-editor.org/rfc/rfc9180.html#name-derivekeypair
-  auto suite_id = hpke_kem_suite_id(EVP_HPKE_DHKEM_P256_HKDF_SHA256);
-  uint8_t dkp_prk[32];
+  auto suite_id = hpke_kem_suite_id(kem_suite_id);
+  uint8_t dkp_prk[SHA256_DIGEST_LENGTH];
   size_t dkp_prk_len;
   if (!hpke_labeled_extract(EVP_sha256(), dkp_prk, &dkp_prk_len, nullptr, 0,
-                            suite_id.data(), suite_id.size(), "dkp_prk", seed,
-                            seed_len)) {
-    return 0;
+                            suite_id.data(), suite_id.size(), "dkp_prk",
+                            ikm.data(), ikm.size())) {
+    return nullptr;
   }
   assert(dkp_prk_len == sizeof(dkp_prk));
-
   const EC_GROUP *const group = EC_group_p256();
-  EC_SCALAR private_scalar;
 
-  for (unsigned counter = 0; counter < 256; counter++) {
+  // Rejection sampling.
+  uint8_t priv[kP256PrivateKeyLen];
+  for (size_t counter = 0; counter < 256; counter++) {
     const uint8_t counter_byte = counter & 0xff;
-    if (!hpke_labeled_expand(EVP_sha256(), out_priv, P256_PRIVATE_KEY_LEN,
-                             dkp_prk, sizeof(dkp_prk), suite_id.data(),
-                             suite_id.size(), "candidate", &counter_byte,
+    if (!hpke_labeled_expand(EVP_sha256(), priv, sizeof(priv), dkp_prk,
+                             sizeof(dkp_prk), suite_id.data(), suite_id.size(),
+                             "candidate", &counter_byte,
                              sizeof(counter_byte))) {
-      return 0;
+      return nullptr;
     }
-
+    EC_SCALAR private_scalar;
     // `ec_scalar_from_bytes` checks that the scalar is less than the order.
-    if (ec_scalar_from_bytes(group, &private_scalar, out_priv,
-                             P256_PRIVATE_KEY_LEN) &&
+    if (ec_scalar_from_bytes(group, &private_scalar, priv, sizeof(priv)) &&
         !ec_scalar_is_zero(group, &private_scalar)) {
-      return 1;
+      return EVP_PKEY_from_ec_private_scalar(alg, priv, sizeof(priv));
     }
   }
-
   // This happens with probability of 2^-(32*256).
   OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
-  return 0;
+  return nullptr;
 }
 
-static int p256_derive_key(EVP_HPKE_KEY *key, Span<const uint8_t> ikm) {
-  if (!p256_private_key_from_seed(key->private_key, ikm.data(), ikm.size()) ||
-      !p256_public_from_private(key->public_key, key->private_key)) {
-    return 0;
-  }
-  return 1;
+// The P-256 encap entropy is ikmE, the input to DeriveKeyPair.
+EVP_PKEY *p256_key_from_encap_entropy(const EVP_PKEY_ALG *alg,
+                                      const uint8_t *in, size_t len) {
+  return p256_derive_key_pair(alg, EVP_HPKE_DHKEM_P256_HKDF_SHA256,
+                              Span(in, len));
 }
 
-static int p256_generate_key(EVP_HPKE_KEY *key) {
-  uint8_t seed[P256_SEED_LEN];
-  RAND_bytes(seed, sizeof(seed));
-  return p256_derive_key(key, seed);
+bool p256_check_key(const EVP_KEM *kem, const EVP_PKEY *key) {
+  const EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(key);
+  return ec_key != nullptr &&
+         EC_GROUP_cmp(EC_KEY_get0_group(ec_key), EC_group_p256(),
+                      /*ignored=*/nullptr) == 0;
 }
 
-static int p256(uint8_t out_dh[P256_SHARED_KEY_LEN],
-                const uint8_t my_private[P256_PRIVATE_KEY_LEN],
-                const uint8_t their_public[P256_PUBLIC_VALUE_LEN]) {
-  const EC_GROUP *const group = EC_group_p256();
-  EC_SCALAR private_scalar;
-  EC_FELEM x, y;
-  EC_JACOBIAN shared_point, their_point;
-  EC_AFFINE their_point_affine, shared_point_affine;
+static constexpr HpkeKeyMethod kP256KeyMethod = {
+    /*hpke_kem_id=*/EVP_HPKE_DHKEM_P256_HKDF_SHA256,
+    /*public_key_len=*/kP256PublicValueLen,
+    /*private_key_len=*/kP256PrivateKeyLen,
+    /*alg_func=*/&EVP_pkey_ec_p256,
+    /*deserialize_private_key=*/&p256_deserialize_private_key,
+    /*serialize_private_key=*/&p256_serialize_private_key,
+    /*deserialize_public_key=*/&EVP_PKEY_from_ec_uncompressed_point,
+    /*serialize_public_key=*/&p256_serialize_public_key,
+    /*derive_key_pair=*/&p256_derive_key_pair,
+};
 
-  if (their_public[0] != POINT_CONVERSION_UNCOMPRESSED ||
-      !ec_felem_from_bytes(group, &x, &their_public[1], 32) ||
-      !ec_felem_from_bytes(group, &y, &their_public[33], 32) ||
-      !ec_point_set_affine_coordinates(group, &their_point_affine, &x, &y) ||
-      !ec_scalar_from_bytes(group, &private_scalar, my_private,
-                            P256_PRIVATE_KEY_LEN)) {
-    OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
-    return 0;
-  }
-
-  ec_affine_to_jacobian(group, &their_point, &their_point_affine);
-  if (!ec_point_mul_scalar(group, &shared_point, &their_point,
-                           &private_scalar) ||
-      !ec_jacobian_to_affine(group, &shared_point_affine, &shared_point)) {
-    OPENSSL_PUT_ERROR(EVP, ERR_R_INTERNAL_ERROR);
-    return 0;
-  }
-
-  size_t out_len;
-  ec_felem_to_bytes(group, out_dh, &out_len, &shared_point_affine.X);
-  assert(out_len == P256_SHARED_KEY_LEN);
-  return 1;
+const EVP_KEM *evp_kem_dhkem_p256_hkdf_sha256() {
+  static constexpr EVP_KEM_DHKEM kDhkemP256 = {
+      /*EVP_KEM=*/{
+          /*pkey_id=*/EVP_PKEY_EC,
+          /*ciphertext_len=*/kP256PublicValueLen,
+          /*secret_len=*/SHA256_DIGEST_LENGTH,
+          /*entropy_len=*/kP256SeedLen,
+          /*check_key=*/&p256_check_key,
+          /*encap=*/&dhkem_encap,
+          /*encap_external_entropy=*/&dhkem_encap_external_entropy,
+          /*decap=*/&dhkem_decap,
+      },
+      /*dh_shared_key_len=*/kP256SharedKeyLen,
+      /*key_method=*/&kP256KeyMethod,
+      /*hkdf_digest_func=*/&EVP_sha256,
+      /*key_from_encap_entropy=*/&p256_key_from_encap_entropy,
+  };
+  return &kDhkemP256;
 }
 
-static int p256_encap_with_seed(const EVP_HPKE_KEM *kem,
-                                uint8_t *out_shared_secret,
-                                size_t *out_shared_secret_len, uint8_t *out_enc,
-                                size_t *out_enc_len, size_t max_enc,
-                                const uint8_t *peer_public_key,
-                                size_t peer_public_key_len, const uint8_t *seed,
-                                size_t seed_len) {
-  if (max_enc < P256_PUBLIC_VALUE_LEN) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
-    return 0;
-  }
-  if (seed_len != P256_SEED_LEN) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
-    return 0;
-  }
-  uint8_t private_key[P256_PRIVATE_KEY_LEN];
-  if (!p256_private_key_from_seed(private_key, seed, seed_len) ||
-      !p256_public_from_private(out_enc, private_key)) {
-    return 0;
-  }
-
-  uint8_t dh[P256_SHARED_KEY_LEN];
-  if (peer_public_key_len != P256_PUBLIC_VALUE_LEN ||
-      !p256(dh, private_key, peer_public_key)) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
-    return 0;
-  }
-
-  uint8_t kem_context[2 * P256_PUBLIC_VALUE_LEN];
-  OPENSSL_memcpy(kem_context, out_enc, P256_PUBLIC_VALUE_LEN);
-  OPENSSL_memcpy(kem_context + P256_PUBLIC_VALUE_LEN, peer_public_key,
-                 P256_PUBLIC_VALUE_LEN);
-  if (!dhkem_extract_and_expand(kem->id, EVP_sha256(), out_shared_secret,
-                                SHA256_DIGEST_LENGTH, dh, sizeof(dh),
-                                kem_context, sizeof(kem_context))) {
-    return 0;
-  }
-
-  *out_enc_len = P256_PUBLIC_VALUE_LEN;
-  *out_shared_secret_len = SHA256_DIGEST_LENGTH;
-  return 1;
-}
-
-static int p256_decap(const EVP_HPKE_KEY *key, uint8_t *out_shared_secret,
-                      size_t *out_shared_secret_len, const uint8_t *enc,
-                      size_t enc_len) {
-  uint8_t dh[P256_SHARED_KEY_LEN];
-  if (enc_len != P256_PUBLIC_VALUE_LEN ||  //
-      !p256(dh, key->private_key, enc)) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
-    return 0;
-  }
-
-  uint8_t kem_context[2 * P256_PUBLIC_VALUE_LEN];
-  OPENSSL_memcpy(kem_context, enc, P256_PUBLIC_VALUE_LEN);
-  OPENSSL_memcpy(kem_context + P256_PUBLIC_VALUE_LEN, key->public_key,
-                 P256_PUBLIC_VALUE_LEN);
-  if (!dhkem_extract_and_expand(key->kem->id, EVP_sha256(), out_shared_secret,
-                                SHA256_DIGEST_LENGTH, dh, sizeof(dh),
-                                kem_context, sizeof(kem_context))) {
-    return 0;
-  }
-
-  *out_shared_secret_len = SHA256_DIGEST_LENGTH;
-  return 1;
-}
-
-static int p256_auth_encap_with_seed(
-    const EVP_HPKE_KEY *key, uint8_t *out_shared_secret,
-    size_t *out_shared_secret_len, uint8_t *out_enc, size_t *out_enc_len,
-    size_t max_enc, const uint8_t *peer_public_key, size_t peer_public_key_len,
-    const uint8_t *seed, size_t seed_len) {
-  if (max_enc < P256_PUBLIC_VALUE_LEN) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
-    return 0;
-  }
-  if (seed_len != P256_SEED_LEN) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
-    return 0;
-  }
-  uint8_t private_key[P256_PRIVATE_KEY_LEN];
-  if (!p256_private_key_from_seed(private_key, seed, seed_len) ||
-      !p256_public_from_private(out_enc, private_key)) {
-    return 0;
-  }
-
-  uint8_t dh[2 * P256_SHARED_KEY_LEN];
-  if (peer_public_key_len != P256_PUBLIC_VALUE_LEN ||
-      !p256(dh, private_key, peer_public_key) ||
-      !p256(dh + P256_SHARED_KEY_LEN, key->private_key, peer_public_key)) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
-    return 0;
-  }
-
-  uint8_t kem_context[3 * P256_PUBLIC_VALUE_LEN];
-  OPENSSL_memcpy(kem_context, out_enc, P256_PUBLIC_VALUE_LEN);
-  OPENSSL_memcpy(kem_context + P256_PUBLIC_VALUE_LEN, peer_public_key,
-                 P256_PUBLIC_VALUE_LEN);
-  OPENSSL_memcpy(kem_context + 2 * P256_PUBLIC_VALUE_LEN, key->public_key,
-                 P256_PUBLIC_VALUE_LEN);
-  if (!dhkem_extract_and_expand(key->kem->id, EVP_sha256(), out_shared_secret,
-                                SHA256_DIGEST_LENGTH, dh, sizeof(dh),
-                                kem_context, sizeof(kem_context))) {
-    return 0;
-  }
-
-  *out_enc_len = P256_PUBLIC_VALUE_LEN;
-  *out_shared_secret_len = SHA256_DIGEST_LENGTH;
-  return 1;
-}
-
-static int p256_auth_decap(const EVP_HPKE_KEY *key, uint8_t *out_shared_secret,
-                           size_t *out_shared_secret_len, const uint8_t *enc,
-                           size_t enc_len, const uint8_t *peer_public_key,
-                           size_t peer_public_key_len) {
-  uint8_t dh[2 * P256_SHARED_KEY_LEN];
-  if (enc_len != P256_PUBLIC_VALUE_LEN ||
-      peer_public_key_len != P256_PUBLIC_VALUE_LEN ||
-      !p256(dh, key->private_key, enc) ||
-      !p256(dh + P256_SHARED_KEY_LEN, key->private_key, peer_public_key)) {
-    OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
-    return 0;
-  }
-
-  uint8_t kem_context[3 * P256_PUBLIC_VALUE_LEN];
-  OPENSSL_memcpy(kem_context, enc, P256_PUBLIC_VALUE_LEN);
-  OPENSSL_memcpy(kem_context + P256_PUBLIC_VALUE_LEN, key->public_key,
-                 P256_PUBLIC_VALUE_LEN);
-  OPENSSL_memcpy(kem_context + 2 * P256_PUBLIC_VALUE_LEN, peer_public_key,
-                 P256_PUBLIC_VALUE_LEN);
-  if (!dhkem_extract_and_expand(key->kem->id, EVP_sha256(), out_shared_secret,
-                                SHA256_DIGEST_LENGTH, dh, sizeof(dh),
-                                kem_context, sizeof(kem_context))) {
-    return 0;
-  }
-
-  *out_shared_secret_len = SHA256_DIGEST_LENGTH;
-  return 1;
-}
+}  // namespace
 
 const EVP_HPKE_KEM *EVP_hpke_p256_hkdf_sha256() {
   static const EVP_HPKE_KEM kKEM = {
       /*id=*/EVP_HPKE_DHKEM_P256_HKDF_SHA256,
-      // TODO(crbug.com/503758094): Expose this as an EVP_KEM.
-      /*evp_kem_func=*/nullptr,
-      /*key_method=*/nullptr,
-      /*public_key_len=*/P256_PUBLIC_KEY_LEN,
-      /*private_key_len=*/P256_PRIVATE_KEY_LEN,
-      /*seed_len=*/P256_SEED_LEN,
-      /*enc_len=*/P256_PUBLIC_VALUE_LEN,
-      p256_init_key,
-      p256_generate_key,
-      p256_derive_key,
-      p256_encap_with_seed,
-      p256_decap,
-      p256_auth_encap_with_seed,
-      p256_auth_decap,
-      /*evp_auth_encap=*/nullptr,
-      /*evp_auth_encap_external_entropy=*/nullptr,
-      /*evp_auth_decap=*/nullptr,
+      /*evp_kem_func=*/&evp_kem_dhkem_p256_hkdf_sha256,
+      /*key_method=*/&kP256KeyMethod,
+      /*public_key_len=*/0,
+      /*private_key_len=*/0,
+      /*seed_len=*/0,
+      /*enc_len=*/0,
+      /*init_key=*/nullptr,
+      /*generate_key=*/nullptr,
+      /*derive_key=*/nullptr,
+      /*encap_with_seed=*/nullptr,
+      /*decap=*/nullptr,
+      /*auth_encap_with_seed=*/nullptr,
+      /*auth_decap=*/nullptr,
+      /*evp_auth_encap=*/&dhkem_auth_encap,
+      /*evp_auth_encap_external_entropy=*/&dhkem_auth_encap_external_entropy,
+      /*evp_auth_decap=*/&dhkem_auth_decap,
   };
   return &kKEM;
 }
