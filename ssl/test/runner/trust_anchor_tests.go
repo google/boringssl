@@ -14,7 +14,12 @@
 
 package runner
 
-import "golang.org/x/crypto/cryptobyte"
+import (
+	"bytes"
+	"fmt"
+
+	"golang.org/x/crypto/cryptobyte"
+)
 
 func trustAnchorListFlagValue(ids ...[]byte) string {
 	b := cryptobyte.NewBuilder(nil)
@@ -131,28 +136,52 @@ func addTrustAnchorTests() {
 		},
 	})
 
-	// An empty trust anchor ID is a syntax error, so most be rejected in both
-	// ClientHello and EncryptedExtensions.
-	testCases = append(testCases, testCase{
-		testType: serverTest,
-		name:     "TrustAnchors-EmptyID-ClientHello",
-		config: Config{
-			MinVersion:          VersionTLS13,
-			RequestTrustAnchors: [][]byte{{}},
-		},
-		shouldFail:    true,
-		expectedError: ":DECODE_ERROR:",
-	})
-	testCases = append(testCases, testCase{
-		name: "TrustAnchors-EmptyID-EncryptedExtensions",
-		config: Config{
-			MinVersion:            VersionTLS13,
-			AvailableTrustAnchors: [][]byte{{}},
-		},
-		flags:         []string{"-requested-trust-anchors", trustAnchorListFlagValue(id1)},
-		shouldFail:    true,
-		expectedError: ":DECODE_ERROR:",
-	})
+	// Invalid trust anchor IDs are rejected in ClientHello, EncryptedExtensions,
+	// and configuration.
+	invalidIDs := []struct {
+		name string
+		id   []byte
+	}{
+		{"Empty", []byte{}},
+		{"TooLong", bytes.Repeat([]byte{5}, 33)},
+		{"NonMinimalComponent", []byte{0x80, 0x01}},
+		{"TruncatedComponent", []byte{0xff}},
+	}
+	for _, id := range invalidIDs {
+		testCases = append(testCases, testCase{
+			testType: serverTest,
+			name:     fmt.Sprintf("TrustAnchors-%s-ClientHello", id.name),
+			config: Config{
+				MinVersion:          VersionTLS13,
+				RequestTrustAnchors: [][]byte{id.id},
+			},
+			shouldFail:    true,
+			expectedError: ":DECODE_ERROR:",
+		})
+		testCases = append(testCases, testCase{
+			name: fmt.Sprintf("TrustAnchors-%s-EncryptedExtensions", id.name),
+			config: Config{
+				MinVersion:            VersionTLS13,
+				AvailableTrustAnchors: [][]byte{id.id},
+			},
+			flags:         []string{"-requested-trust-anchors", trustAnchorListFlagValue(id1)},
+			shouldFail:    true,
+			expectedError: ":DECODE_ERROR:",
+		})
+		testCases = append(testCases, testCase{
+			testType:        serverTest,
+			name:            fmt.Sprintf("TrustAnchors-%s-ConfigCredential", id.name),
+			shimCredentials: []*Credential{rsaCertificate.WithTrustAnchorID(id.id)},
+			shouldFail:      true,
+			expectedError:   ":INVALID_TRUST_ANCHOR_ID:",
+		})
+		testCases = append(testCases, testCase{
+			name:          fmt.Sprintf("TrustAnchors-%s-ConfigRequest", id.name),
+			flags:         []string{"-requested-trust-anchors", trustAnchorListFlagValue(id.id)},
+			shouldFail:    true,
+			expectedError: ":INVALID_TRUST_ANCHOR_LIST:",
+		})
+	}
 
 	// Test the server selection logic, as well as whether it correctly reports
 	// available trust anchors and the match status. (The general selection flow

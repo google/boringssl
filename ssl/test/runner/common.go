@@ -2426,19 +2426,19 @@ type CertificatePropertyList struct {
 }
 
 func (c *CertificatePropertyList) Empty() bool {
-	return len(c.TrustAnchorID) == 0 && len(c.TrustAnchorGroups) == 0
+	return c.TrustAnchorID == nil && c.TrustAnchorGroups == nil
 }
 
 func (c *CertificatePropertyList) Marshal() []byte {
 	bb := cryptobyte.NewBuilder(nil)
 	bb.AddUint16LengthPrefixed(func(props *cryptobyte.Builder) {
-		if len(c.TrustAnchorID) != 0 {
+		if c.TrustAnchorID != nil {
 			props.AddUint16(certPropTrustAnchorID)
 			// The ID is encoded directly in the property data, with
 			// no additional length prefix.
 			addUint16LengthPrefixedBytes(props, c.TrustAnchorID)
 		}
-		if len(c.TrustAnchorGroups) != 0 {
+		if c.TrustAnchorGroups != nil {
 			props.AddUint16(certPropTrustAnchorGroups)
 			props.AddUint16LengthPrefixed(func(prop *cryptobyte.Builder) {
 				prop.AddUint16LengthPrefixed(func(ranges *cryptobyte.Builder) {

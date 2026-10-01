@@ -2776,6 +2776,22 @@ func parseCAs(reader *cryptobyte.String, out *[][]byte) bool {
 	return true
 }
 
+func isValidTrustAnchorID(id []byte) bool {
+	if len(id) == 0 || len(id) > 32 {
+		return false
+	}
+	// Check OID components are minimally-encoded. That is, no OID component can
+	// begin with 0x80.
+	for i, b := range id {
+		startOfComponent := i == 0 || id[i-1]&0x80 == 0
+		if b == 0x80 && startOfComponent {
+			return false
+		}
+	}
+	// The final OID component cannot be truncated.
+	return id[len(id)-1]&0x80 == 0
+}
+
 func parseTrustAnchors(reader *cryptobyte.String, out *[][]byte) bool {
 	var ids cryptobyte.String
 	if !reader.ReadUint16LengthPrefixed(&ids) {
@@ -2785,7 +2801,8 @@ func parseTrustAnchors(reader *cryptobyte.String, out *[][]byte) bool {
 	*out = [][]byte{}
 	for len(ids) > 0 {
 		var id []byte
-		if !readUint8LengthPrefixedBytes(&ids, &id) {
+		if !readUint8LengthPrefixedBytes(&ids, &id) ||
+			!isValidTrustAnchorID(id) {
 			return false
 		}
 		*out = append(*out, id)

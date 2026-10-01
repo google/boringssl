@@ -612,7 +612,7 @@ TEST(SSLTest, ECHPublicName) {
   EXPECT_FALSE(ssl_is_valid_ech_public_name(StringAsBytes("0X01.")));
 }
 
-// See Appendix A of draft-ietf-tls-trust-anchor-ids-05.
+// See Appendix A of draft-ietf-tls-trust-anchor-ids-06.
 TEST(SSLTest, TrustAnchorIDPattern) {
   // 32473.{123-456}.{789-}
   const std::vector<uint8_t> kTestPattern1 = {

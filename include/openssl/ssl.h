@@ -883,7 +883,7 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
 
 // SSL_CREDENTIAL_set1_certificate_properties parses
 // `certificate_property_list` as a CertificatePropertyList (see Section 7 of
-// draft-ietf-tls-trust-anchor-ids-05) and applies recognized properties to
+// draft-ietf-tls-trust-anchor-ids-06) and applies recognized properties to
 // `cred`. It returns one on success and zero on error. It is an error if
 // `certificate_property_list` does not parse correctly, or if any recognized
 // properties from `certificate_property_list` cannot be applied to `cred`.
@@ -3352,7 +3352,7 @@ OPENSSL_EXPORT int SSL_add_bio_cert_subjects_to_stack(STACK_OF(X509_NAME) *out,
 // SSL_CREDENTIAL_set1_trust_anchor_id sets `cred`'s trust anchor ID to `id`, or
 // clears it if `id_len` is zero. It returns one on success and zero on
 // error. If not clearing, `id` must be in binary format (Section 4 of
-// draft-ietf-tls-trust-anchor-ids-05) of length `id_len`, and describe the
+// draft-ietf-tls-trust-anchor-ids-06) of length `id_len`, and describe the
 // issuer of the final certificate in `cred`'s certificate chain.
 //
 // Additionally, `cred` must enable issuer matching (see
@@ -3383,10 +3383,10 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_add1_trust_anchor_group(
 // trust anchor IDs in wire-format (a series of non-empty, 8-bit length-prefixed
 // strings).
 //
-// See Section 5.2 of draft-ietf-tls-trust-anchor-ids-05 for guidance on
+// See Section 5.2 of draft-ietf-tls-trust-anchor-ids-06 for guidance on
 // determining this list. If applicable, client applications can use
 // `SSL_get0_peer_available_trust_anchors` to implement the recovery flow from
-// Section 5.6 of draft-ietf-tls-trust-anchor-ids-05.
+// Section 5.6 of draft-ietf-tls-trust-anchor-ids-06.
 //
 // If empty (`ids_len` is zero), the trust_anchors extension will still be sent
 // in ClientHello. This may be used by a client application to signal support
@@ -3425,7 +3425,7 @@ OPENSSL_EXPORT int SSL_peer_matched_trust_anchor(const SSL *ssl);
 // This value is only available during the handshake and is expected to be
 // called in the event of certificate verification failure. Client applications
 // can use it to retry the connection, requesting different trust anchors. See
-// Section 5.6 of draft-ietf-tls-trust-anchor-ids-05 for details.
+// Section 5.6 of draft-ietf-tls-trust-anchor-ids-06 for details.
 // `CBS_get_u8_length_prefixed` may be used to iterate over the format.
 //
 // If needed in other contexts, callers may save the value during certificate
@@ -7172,6 +7172,7 @@ BSSL_NAMESPACE_END
 #define SSL_R_UNUSABLE_ECH_CONFIG_LIST 337
 #define SSL_R_INVALID_CIPHER_FLAGS 338
 #define SSL_R_DUPLICATE_CIPHER 339
+#define SSL_R_INVALID_TRUST_ANCHOR_ID 340
 #define SSL_R_SSLV3_ALERT_CLOSE_NOTIFY 1000
 #define SSL_R_SSLV3_ALERT_UNEXPECTED_MESSAGE 1010
 #define SSL_R_SSLV3_ALERT_BAD_RECORD_MAC 1020

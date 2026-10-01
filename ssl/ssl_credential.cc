@@ -786,6 +786,11 @@ void SSL_CREDENTIAL_set_must_match_issuer(SSL_CREDENTIAL *cred, int match) {
 
 int SSL_CREDENTIAL_set1_trust_anchor_id(SSL_CREDENTIAL *cred, const uint8_t *id,
                                         size_t id_len) {
+  if (!ssl_is_valid_trust_anchor_id(Span(id, id_len))) {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_TRUST_ANCHOR_ID);
+    return 0;
+  }
+
   auto *cred_impl = FromOpaque(cred);
   // For now, this is only valid for X.509.
   if (!cred_impl->UsesX509()) {
@@ -847,18 +852,16 @@ int SSL_CREDENTIAL_set1_certificate_properties(
 
     switch (type) {
       case 0:  // trust_anchor_id
-        // See draft-ietf-tls-trust-anchor-ids-05, Section 7.1.
-        if (!CBS_len(&data)) {
-          OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_TRUST_ANCHOR_LIST);
-          return 0;
-        }
+        // See draft-ietf-tls-trust-anchor-ids-06, Section 7.1.
+        // `SSL_CREDENTIAL_set1_trust_anchor_id` will check that `data` is
+        // valid.
         if (!SSL_CREDENTIAL_set1_trust_anchor_id(cred_impl, CBS_data(&data),
                                                  CBS_len(&data))) {
           return 0;
         }
         break;
       case 1: {  // trust_anchor_groups
-        // See draft-ietf-tls-trust-anchor-ids-05, Section 7.2.
+        // See draft-ietf-tls-trust-anchor-ids-06, Section 7.2.
         CBS pattern_list;
         if (!CBS_get_u16_length_prefixed(&data, &pattern_list) ||
             CBS_len(&data) != 0 || CBS_len(&pattern_list) == 0) {
@@ -879,7 +882,7 @@ int SSL_CREDENTIAL_set1_certificate_properties(
         break;
       }
       case 2: {  // trust_anchor_negotiation
-        // See draft-ietf-tls-trust-anchor-ids-05, Section 7.3.
+        // See draft-ietf-tls-trust-anchor-ids-06, Section 7.3.
         if (CBS_len(&data) != 0) {
           OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_CERTIFICATE_PROPERTY_LIST);
           return 0;

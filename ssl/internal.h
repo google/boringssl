@@ -2358,8 +2358,11 @@ bool ssl_get_local_application_settings(const SSL_HANDSHAKE *hs,
 bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                         const SSL_CLIENT_HELLO *client_hello);
 
+// ssl_is_valid_trust_anchor_id returns whether `in` is a valid trust anchor ID.
+bool ssl_is_valid_trust_anchor_id(Span<const uint8_t> id);
+
 // ssl_is_valid_trust_anchor_list returns whether `in` is a valid trust anchor
-// identifiers list.
+// ID list.
 bool ssl_is_valid_trust_anchor_list(Span<const uint8_t> in);
 
 struct SSLExtension {
