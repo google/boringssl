@@ -20,3 +20,5 @@ default = ["std"]
 # `std` depends on the Rust `std` crate, but adds some useful trait impls if
 # available.
 std = ["bssl-crypto/std"]
+# `experimental` enables experimental APIs that may change without notice.
+experimental = []
