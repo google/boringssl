@@ -149,6 +149,21 @@ impl PrivateKey {
             .ok_or_else(PkiError::extract_lib_err)
     }
 
+    /// Parse a DER-encoded PKCS#8 `PrivateKeyInfo` or algorithm-specific key into a [`PrivateKey`].
+    pub fn from_der(der: &[u8]) -> Result<Self, PkiError> {
+        let mut bio = Bio::from_bytes(der)?;
+        let evp_pkey = unsafe {
+            // Safety:
+            // - `bio` is a valid memory BIO initialized from `der`.
+            // - the second parameter `a` is null, so BoringSSL allocates and returns a new
+            //   `EVP_PKEY`.
+            bssl_sys::d2i_PrivateKey_bio(bio.ptr(), null_mut())
+        };
+        NonNull::new(evp_pkey)
+            .map(Self)
+            .ok_or_else(PkiError::extract_lib_err)
+    }
+
     /// Get the algorithm ID of the private key.
     ///
     /// This method returns [`None`] if the key algorithm is unrecognised.

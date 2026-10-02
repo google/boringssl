@@ -188,3 +188,23 @@ fn format_serial_number_padding() {
         "1e51139d9c81903825327251f3331b70d09b6a5c     "
     );
 }
+
+#[test]
+fn parse_der_privkey_invalid() {
+    assert!(keys::PrivateKey::from_der(b"not valid der").is_err());
+}
+
+#[test]
+fn parse_der_privkey_roundtrip() {
+    let pem_key = keys::PrivateKey::from_pem(PEM_WITH_PASS, || b"BoringSSL is awesome!").unwrap();
+    let der = pem_key.private_key_to_der();
+    let der_key = keys::PrivateKey::from_der(&der).unwrap();
+    assert_eq!(der_key.private_key_to_der(), der);
+}
+
+#[test]
+fn parse_der_privkey_ec_p256() {
+    let ec_key = bssl_crypto::ecdsa::PrivateKey::<bssl_crypto::ec::P256>::generate();
+    let ec_der_key = keys::PrivateKey::from_der(ec_key.to_der_private_key_info().as_ref()).unwrap();
+    assert_eq!(ec_der_key.algorithm(), Some(keys::PrivateKeyAlgorithm::Ec));
+}
