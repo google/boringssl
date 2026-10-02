@@ -29,7 +29,8 @@ use crate::{
         ConfigurationError,
         KeyExchangeGroupFlag,
         KeyExchangeGroups,
-        ProtocolVersion, //
+        ProtocolVersion,
+        SrtpProtectionProfile, //
     },
     connection::{
         TlsConnectionBuilder,
@@ -251,6 +252,42 @@ where
         check_lib_error!(unsafe {
             // Safety: the validity of the handle `self.0` is witnessed by `self`
             bssl_sys::SSL_CTX_set_min_proto_version(self.ptr(), version)
+        });
+        Ok(self)
+    }
+
+    /// Configure the `use_srtp` extension profiles for DTLS-SRTP per [RFC 5764], in the order of
+    /// descending preference.
+    ///
+    /// This method returns [`ConfigurationError::InvalidParameters`] if `profiles` is empty, or
+    /// [`ConfigurationError::DuplicatedParameters`] if `profiles` contains duplicates.
+    ///
+    /// [RFC 5764]: <https://datatracker.ietf.org/doc/html/rfc5764>
+    pub fn with_srtp_profiles(
+        &mut self,
+        profiles: &[SrtpProtectionProfile],
+    ) -> Result<&mut Self, Error> {
+        if profiles.is_empty() {
+            return Err(Error::Configuration(ConfigurationError::InvalidParameters));
+        }
+        if has_duplicates(profiles) {
+            return Err(Error::Configuration(
+                ConfigurationError::DuplicatedParameters,
+            ));
+        }
+        let mut names = alloc::vec::Vec::new();
+        for (i, profile) in profiles.iter().enumerate() {
+            if i > 0 {
+                names.push(b':');
+            }
+            names.extend_from_slice(profile.bssl_name().as_bytes());
+        }
+        names.push(b'\0');
+        check_lib_error!(unsafe {
+            // Safety:
+            // - the validity of the handle `self.ptr` is witnessed by `self`;
+            // - `names` is a valid NUL-terminated ASCII string of profile names.
+            bssl_sys::SSL_CTX_set_srtp_profiles(self.ptr(), names.as_ptr() as *const _)
         });
         Ok(self)
     }

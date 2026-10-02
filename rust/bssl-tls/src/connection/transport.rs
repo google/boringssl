@@ -25,7 +25,10 @@ use core::{
 
 use crate::{
     check_lib_error,
-    config::ConfigurationError,
+    config::{
+        ConfigurationError,
+        SrtpProtectionProfile, //
+    },
     connection::{
         TlsConnection,
         TlsConnectionBuilder,
@@ -83,6 +86,20 @@ where
         socket: S,
     ) -> Result<&mut Self, Error> {
         self.set_io_inner(socket)
+    }
+
+    /// Return the negotiated DTLS-SRTP protection profile per [RFC 5764],
+    /// or [`None`] if no profile was negotiated.
+    ///
+    /// [RFC 5764]: <https://datatracker.ietf.org/doc/html/rfc5764>
+    pub fn selected_srtp_profile(&self) -> Option<SrtpProtectionProfile> {
+        let profile = unsafe {
+            // Safety: `self.ptr()` is a valid `SSL` handle, and `SSL_get_selected_srtp_profile`
+            // returns either null or a pointer to a static `SRTP_PROTECTION_PROFILE`.
+            bssl_sys::SSL_get_selected_srtp_profile(self.ptr()).as_ref()?
+        };
+        let id = u16::try_from(profile.id).ok()?;
+        SrtpProtectionProfile::try_from(id).ok()
     }
 }
 

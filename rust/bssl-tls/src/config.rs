@@ -91,6 +91,36 @@ bitflags::bitflags! {
     }
 }
 
+bssl_enum! {
+    /// DTLS-SRTP protection profiles per [RFC 5764] and [RFC 7714].
+    ///
+    /// [RFC 5764]: <https://datatracker.ietf.org/doc/html/rfc5764>
+    /// [RFC 7714]: <https://datatracker.ietf.org/doc/html/rfc7714>
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    #[non_exhaustive]
+    pub enum SrtpProtectionProfile: u16 {
+        /// `SRTP_AES128_CM_HMAC_SHA1_80`
+        Aes128CmSha1_80 = bssl_sys::SRTP_AES128_CM_SHA1_80 as u16,
+        /// `SRTP_AES128_CM_HMAC_SHA1_32`
+        Aes128CmSha1_32 = bssl_sys::SRTP_AES128_CM_SHA1_32 as u16,
+        /// `SRTP_AEAD_AES_128_GCM`
+        AeadAes128Gcm = bssl_sys::SRTP_AEAD_AES_128_GCM as u16,
+        /// `SRTP_AEAD_AES_256_GCM`
+        AeadAes256Gcm = bssl_sys::SRTP_AEAD_AES_256_GCM as u16,
+    }
+}
+
+impl SrtpProtectionProfile {
+    pub(crate) const fn bssl_name(self) -> &'static str {
+        match self {
+            Self::Aes128CmSha1_80 => "SRTP_AES128_CM_SHA1_80",
+            Self::Aes128CmSha1_32 => "SRTP_AES128_CM_SHA1_32",
+            Self::AeadAes128Gcm => "SRTP_AEAD_AES_128_GCM",
+            Self::AeadAes256Gcm => "SRTP_AEAD_AES_256_GCM",
+        }
+    }
+}
+
 /// Configuration errors
 #[derive(Debug)]
 #[non_exhaustive]
