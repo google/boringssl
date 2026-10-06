@@ -17,8 +17,7 @@
     unsafe_op_in_unsafe_fn,
     clippy::indexing_slicing,
     clippy::unwrap_used,
-    clippy::panic,
-    clippy::expect_used
+    clippy::panic
 )]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
@@ -43,6 +42,7 @@ pub mod aes;
 /// Ciphers.
 pub mod cipher;
 
+pub mod cpace;
 pub mod digest;
 pub mod ec;
 pub mod ecdh;

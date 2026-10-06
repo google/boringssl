@@ -2901,6 +2901,7 @@ boringssl_rust_bssl_crypto_sources := \
   rust/bssl-crypto/src/cipher/aes_cbc.rs \
   rust/bssl-crypto/src/cipher/aes_ctr.rs \
   rust/bssl-crypto/src/cipher/mod.rs \
+  rust/bssl-crypto/src/cpace.rs \
   rust/bssl-crypto/src/digest.rs \
   rust/bssl-crypto/src/ec.rs \
   rust/bssl-crypto/src/ecdh.rs \
