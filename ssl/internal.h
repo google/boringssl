@@ -1695,8 +1695,6 @@ enum ssl_hs_wait_t {
   ssl_hs_read_message,
   ssl_hs_flush,
   ssl_hs_certificate_selection_pending,
-  ssl_hs_handoff,
-  ssl_hs_handback,
   ssl_hs_x509_lookup,
   ssl_hs_private_key_operation,
   ssl_hs_pending_session,
@@ -1719,61 +1717,6 @@ enum ssl_grease_index_t {
   ssl_grease_ech_config_id,
   ssl_grease_signature_algorithm,
   ssl_grease_last_index = ssl_grease_signature_algorithm,
-};
-
-enum tls12_server_hs_state_t {
-  state12_start_accept = 0,
-  state12_read_client_hello,
-  state12_read_client_hello_after_ech,
-  state12_cert_callback,
-  state12_tls13,
-  state12_select_parameters,
-  state12_send_server_hello,
-  state12_send_server_certificate,
-  state12_send_server_key_exchange,
-  state12_send_server_hello_done,
-  state12_read_client_certificate,
-  state12_verify_client_certificate,
-  state12_read_client_key_exchange,
-  state12_read_client_certificate_verify,
-  state12_read_change_cipher_spec,
-  state12_process_change_cipher_spec,
-  state12_read_next_proto,
-  state12_read_channel_id,
-  state12_read_client_finished,
-  state12_send_server_finished,
-  state12_finish_server_handshake,
-  state12_done,
-};
-
-enum tls13_server_hs_state_t {
-  state13_select_parameters = 0,
-  state13_select_session,
-  state13_send_hello_retry_request,
-  state13_read_second_client_hello,
-  state13_send_server_hello,
-  state13_send_server_certificate_verify,
-  state13_send_server_finished,
-  state13_send_half_rtt_ticket,
-  state13_read_second_client_flight,
-  state13_process_end_of_early_data,
-  state13_read_client_encrypted_extensions,
-  state13_read_client_certificate,
-  state13_read_client_certificate_verify,
-  state13_read_channel_id,
-  state13_read_client_finished,
-  state13_send_new_session_ticket,
-  state13_done,
-};
-
-// handback_t lists the points in the state machine where a handback can occur.
-// These are the different points at which key material is no longer needed.
-enum handback_t {
-  handback_after_session_resumption = 0,
-  handback_after_ecdhe = 1,
-  handback_after_handshake = 2,
-  handback_tls13 = 3,
-  handback_max_value = handback_tls13,
 };
 
 // SSL_HANDSHAKE_HINTS contains handshake hints for a connection. See
@@ -2119,12 +2062,6 @@ struct SSL_HANDSHAKE {
   // pending_private_key_op is true if there is a pending private key operation
   // in progress.
   bool pending_private_key_op : 1;
-
-  // handback indicates that a server should pause the handshake after
-  // finishing operations that require private key material, in such a way that
-  // `SSL_get_error` returns `SSL_ERROR_HANDBACK`.  It is set by
-  // `SSL_apply_handoff`.
-  bool handback : 1;
 
   // cert_compression_negotiated is true iff `cert_compression_alg_id` is valid.
   bool cert_compression_negotiated : 1;
@@ -3621,12 +3558,6 @@ struct SSL_CONFIG {
   // session space. Only effective on the server side.
   bool retain_only_sha256_of_client_certs : 1;
 
-  // handoff indicates that a server should stop after receiving the
-  // ClientHello and pause the handshake in such a way that `SSL_get_error`
-  // returns `SSL_ERROR_HANDOFF`. This is copied in `SSL_new` from the `SSL_CTX`
-  // element of the same name and may be cleared if the handoff is declined.
-  bool handoff : 1;
-
   // shed_handshake_config indicates that the handshake config (this object!)
   // should be freed after the handshake completes.
   bool shed_handshake_config : 1;
@@ -4270,11 +4201,6 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
   // false_start_allowed_without_alpn is whether False Start (if
   // `SSL_MODE_ENABLE_FALSE_START` is enabled) is allowed without ALPN.
   bool false_start_allowed_without_alpn : 1;
-
-  // handoff indicates that a server should stop after receiving the
-  // ClientHello and pause the handshake in such a way that `SSL_get_error`
-  // returns `SSL_ERROR_HANDOFF`.
-  bool handoff : 1;
 
   // If enable_early_data is true, early data can be sent and accepted.
   bool enable_early_data : 1;

@@ -270,10 +270,6 @@ OPENSSL_timeval ssl_ctx_get_current_time(const SSLContext *ctx) {
 #endif
 }
 
-void SSL_CTX_set_handoff_mode(SSL_CTX *ctx, bool on) {
-  FromOpaque(ctx)->handoff = on;
-}
-
 static bool ssl_can_renegotiate(const SSLImpl *ssl) {
   if (ssl->server || SSL_is_dtls(ssl)) {
     return false;
@@ -314,14 +310,6 @@ static void ssl_maybe_shed_handshake_config(SSLImpl *ssl) {
   }
 
   ssl->config.reset();
-}
-
-void SSL_set_handoff_mode(SSL *ssl, bool on) {
-  auto *ssl_impl = FromOpaque(ssl);
-  if (!ssl_impl->config) {
-    return;
-  }
-  ssl_impl->config->handoff = on;
 }
 
 bool SSL_get_traffic_secrets(const SSL *ssl,
@@ -385,7 +373,6 @@ bssl::SSLContext::SSLContext(const SSL_METHOD *ssl_method)
       permute_extensions(false),
       allow_unknown_alpn_protos(false),
       false_start_allowed_without_alpn(false),
-      handoff(false),
       enable_early_data(false),
       resumption_across_names_enabled(false) {
   CRYPTO_new_ex_data(&ex_data);
@@ -559,7 +546,6 @@ SSL *SSL_new(SSL_CTX *ctx) {
   ssl->config->signed_cert_timestamps_enabled =
       ctx_impl->signed_cert_timestamps_enabled;
   ssl->config->ocsp_stapling_enabled = ctx_impl->ocsp_stapling_enabled;
-  ssl->config->handoff = ctx_impl->handoff;
   ssl->quic_method = ctx_impl->quic_method;
 
   if (!ssl->method->ssl_new(ssl.get()) ||
@@ -578,7 +564,6 @@ SSL_CONFIG::SSL_CONFIG(SSLImpl *ssl_arg)
       ocsp_stapling_enabled(false),
       channel_id_enabled(false),
       retain_only_sha256_of_client_certs(false),
-      handoff(false),
       shed_handshake_config(false),
       jdk11_workaround(false),
       quic_use_legacy_codepoint(false),
@@ -1243,8 +1228,6 @@ int SSL_get_error(const SSL *ssl, int ret_code) {
   switch (ssl_impl->s3->rwstate) {
     case SSL_ERROR_PENDING_SESSION:
     case SSL_ERROR_PENDING_CERTIFICATE:
-    case SSL_ERROR_HANDOFF:
-    case SSL_ERROR_HANDBACK:
     case SSL_ERROR_WANT_X509_LOOKUP:
     case SSL_ERROR_WANT_PRIVATE_KEY_OPERATION:
     case SSL_ERROR_PENDING_TICKET:
@@ -1331,10 +1314,6 @@ const char *SSL_error_description(int err) {
       return "EARLY_DATA_REJECTED";
     case SSL_ERROR_WANT_CERTIFICATE_VERIFY:
       return "WANT_CERTIFICATE_VERIFY";
-    case SSL_ERROR_HANDOFF:
-      return "HANDOFF";
-    case SSL_ERROR_HANDBACK:
-      return "HANDBACK";
     case SSL_ERROR_WANT_RENEGOTIATE:
       return "WANT_RENEGOTIATE";
     case SSL_ERROR_HANDSHAKE_HINTS_READY:
