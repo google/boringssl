@@ -319,7 +319,7 @@ where
     }
 }
 
-bssl_macros::bssl_enum! {
+bssl_crypto::bssl_enum! {
     enum InfoCallbackConnectionState : i32 {
         ReadAlert = bssl_sys::SSL_CB_READ_ALERT as i32,
         WriteAlert = bssl_sys::SSL_CB_WRITE_ALERT as i32,

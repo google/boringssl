@@ -92,7 +92,7 @@ use crate::{
     },
 };
 
-bssl_macros::bssl_enum! {
+bssl_crypto::bssl_enum! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum GeneralNameKind: u8 {
         /// Other Name

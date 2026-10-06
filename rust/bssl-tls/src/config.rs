@@ -16,7 +16,7 @@
 
 use core::ffi::c_int;
 
-use bssl_macros::bssl_enum;
+use bssl_crypto::bssl_enum;
 
 bssl_enum! {
     /// Protocol version for TLS or DTLS

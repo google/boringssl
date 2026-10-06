@@ -180,7 +180,7 @@ impl<'a, M> ServerCertificateSelectionContext<'a, M> {
     }
 }
 
-bssl_macros::bssl_enum! {
+bssl_crypto::bssl_enum! {
     /// Requested certificate types defined in [RFC 5246] §7.4.4.
     ///
     /// [RFC 5246]: <https://datatracker.ietf.org/doc/html/rfc5246#section-7.4.4>

@@ -28,8 +28,10 @@ use core::{
     }, //
 };
 
-use bssl_macros::bssl_enum;
-use bssl_sys::LibCode;
+use bssl_crypto::{
+    LibCode,
+    bssl_enum, //
+};
 use bssl_x509::errors::{
     PemReason,
     PkiError, //

@@ -46,17 +46,32 @@
 
 use alloc::vec::Vec;
 use core::{
-    ffi::{c_char, c_int, c_void},
+    ffi::{
+        c_char,
+        c_int,
+        c_void, //
+    },
     mem::transmute,
     panic::AssertUnwindSafe,
-    ptr::{NonNull, null_mut},
+    ptr::{
+        NonNull,
+        null_mut, //
+    }, //
 };
 
-use bssl_crypto::{FfiSlice, cbb_to_buffer};
-use bssl_macros::bssl_enum;
+use bssl_crypto::bssl_enum;
+use bssl_crypto::{
+    FfiSlice,
+    cbb_to_buffer, //
+};
 
-use crate::ffi::abort_on_panic;
-use crate::{errors::PkiError, ffi::Bio};
+use crate::{
+    errors::PkiError,
+    ffi::{
+        Bio,
+        abort_on_panic, //
+    }, //
+};
 
 bssl_enum! {
     /// EVP public key algorithm types.
