@@ -44,6 +44,15 @@ OPENSSL_EXPORT const EVP_MD *EVP_sha512(void);
 OPENSSL_EXPORT const EVP_MD *EVP_sha512_256(void);
 OPENSSL_EXPORT const EVP_MD *EVP_blake2b256(void);
 
+// SHA-3 family of digest functions.
+//
+// WARNING: Prefer to use SHA-2 (e.g. `EVP_sha256`) over SHA-3. Despite being a
+// newer hash function, SHA-3 performs poorly and should only be used when
+// necessary for interoperability with existing systems.
+
+OPENSSL_EXPORT const EVP_MD *EVP_sha3_256(void);
+OPENSSL_EXPORT const EVP_MD *EVP_sha3_512(void);
+
 // EVP_md5_sha1 is a TLS-specific `EVP_MD` which computes the concatenation of
 // MD5 and SHA-1, as used in TLS 1.1 and below.
 OPENSSL_EXPORT const EVP_MD *EVP_md5_sha1(void);
@@ -127,7 +136,7 @@ OPENSSL_EXPORT int EVP_DigestUpdate(EVP_MD_CTX *ctx, const void *data,
 
 // EVP_MAX_MD_BLOCK_SIZE is the largest digest block size supported, in
 // bytes.
-#define EVP_MAX_MD_BLOCK_SIZE 128  // SHA-512 is the longest so far.
+#define EVP_MAX_MD_BLOCK_SIZE 136  // SHA3-256 is the longest so far.
 
 // EVP_DigestFinal_ex finishes the digest in `ctx` and writes the output to
 // `md_out`. `EVP_MD_CTX_size` bytes are written, which is at most
@@ -344,9 +353,9 @@ OPENSSL_EXPORT int EVP_Q_digest(OSSL_LIB_CTX *libctx, const char *name,
 struct evp_md_pctx_ops;
 
 // EVP_MAX_MD_DATA_SIZE is a private constant which specifies the size of the
-// largest digest state. SHA-512 and BLAKE2b are joint-largest. Consuming code
-// only uses this via the `EVP_MD_CTX` type.
-#define EVP_MAX_MD_DATA_SIZE 208
+// largest digest state. SHA3-256 is the largest. Consuming code only uses this
+// via the `EVP_MD_CTX` type.
+#define EVP_MAX_MD_DATA_SIZE 240
 
 // env_md_ctx_st is typoed ("evp" -> "env"), but the typo comes from OpenSSL
 // and some consumers forward-declare these structures so we're leaving it

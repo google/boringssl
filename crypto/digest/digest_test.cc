@@ -60,6 +60,8 @@ static const MD sha512 = {"SHA512", &EVP_sha512, &SHA512};
 static const MD sha512_256 = {"SHA512-256", &EVP_sha512_256, &SHA512_256};
 static const MD md5_sha1 = {"MD5-SHA1", &EVP_md5_sha1, nullptr};
 static const MD blake2b256 = {"BLAKE2b-256", &EVP_blake2b256, nullptr};
+static const MD sha3_256 = {"SHA3-256", &EVP_sha3_256, nullptr};
+static const MD sha3_512 = {"SHA3-512", &EVP_sha3_512, nullptr};
 
 struct DigestTestVector {
   // md is the digest to test.
@@ -155,6 +157,24 @@ static const DigestTestVector kTestVectors[] = {
     // BLAKE2b-256 tests.
     {blake2b256, "abc", 1,
      "bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319"},
+
+    // SHA3-256 tests, from
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-256_Msg0.pdf
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-256_1600.pdf
+    {sha3_256, "", 1,
+     "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"},
+    {sha3_256, "\xa3", 200,
+     "79f38adec5c20307a98ef76e8324afbfd46cfd81b22e3973c65fa1bd9de31787"},
+
+    // SHA3-512 tests, from
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-512_Msg0.pdf
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-512_1600.pdf
+    {sha3_512, "", 1,
+     "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a6"
+     "15b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"},
+    {sha3_512, "\xa3", 200,
+     "e76dfad22084a8b1467fcf2ffa58361bec7628edf5f3fdc0e4805dc48caeeca8"
+     "1b7c13c30adf52a3659584739a2df46be589c51ca1a4a8416df6545a1ce8ba00"},
 };
 
 static void CompareDigest(const DigestTestVector *test, const uint8_t *digest,
