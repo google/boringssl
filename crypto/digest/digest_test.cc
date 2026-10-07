@@ -18,6 +18,7 @@
 
 #include <iterator>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -63,6 +64,8 @@ static const MD blake2b256 = {"BLAKE2b-256", &EVP_blake2b256, nullptr};
 static const MD sha3_256 = {"SHA3-256", &EVP_sha3_256, nullptr};
 static const MD sha3_384 = {"SHA3-384", &EVP_sha3_384, nullptr};
 static const MD sha3_512 = {"SHA3-512", &EVP_sha3_512, nullptr};
+static const MD shake256 = {"SHAKE256", &EVP_shake256, nullptr};
+static const MD turboshake256 = {"TurboSHAKE256", &EVP_turboshake256, nullptr};
 
 struct DigestTestVector {
   // md is the digest to test.
@@ -186,6 +189,19 @@ static const DigestTestVector kTestVectors[] = {
     {sha3_512, "\xa3", 200,
      "e76dfad22084a8b1467fcf2ffa58361bec7628edf5f3fdc0e4805dc48caeeca8"
      "1b7c13c30adf52a3659584739a2df46be589c51ca1a4a8416df6545a1ce8ba00"},
+
+    // SHAKE256 tests, from
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg0.pdf
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg1600.pdf
+    {shake256, "", 1,
+     "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"},
+    {shake256, "\xa3", 200,
+     "cd8a920ed141aa0407a22d59288652e9d9f1a7ee0c1e7c1ca699424da84a904d"},
+
+    // TurboSHAKE256 tests, from
+    // https://www.rfc-editor.org/rfc/rfc9861.html#section-5
+    {turboshake256, "", 1,
+     "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"},
 };
 
 static void CompareDigest(const DigestTestVector *test, const uint8_t *digest,
@@ -391,6 +407,114 @@ TEST(DigestTest, Uninitialized) {
     EVP_MD_CTX_cleanup(&ctx);
   }
 }
+
+TEST(DigestTest, XOF) {
+  ScopedEVP_MD_CTX ctx;
+
+  // Non-XOF digests should fail `EVP_DigestSqueeze`.
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr));
+  uint8_t out[64];
+  EXPECT_FALSE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
+  ERR_clear_error();
+
+  // SHAKE256 512-bit test vectors from NIST:
+  // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg0.pdf
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_shake256(), nullptr));
+  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
+  EXPECT_EQ(
+      "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"
+      "d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be",
+      EncodeHex(out));
+
+  // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg1600.pdf
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_shake256(), nullptr));
+  std::vector<uint8_t> input(200, 0xa3);
+  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), input.data(), input.size()));
+  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
+  EXPECT_EQ(
+      "cd8a920ed141aa0407a22d59288652e9d9f1a7ee0c1e7c1ca699424da84a904d"
+      "2d700caae7396ece96604440577da4f3aa22aeb8857f961c4cd8e06f0ae6610b",
+      EncodeHex(out));
+
+  // TurboSHAKE256 512-bit test vector from RFC 9861, section 5.
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_turboshake256(), nullptr));
+  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
+  EXPECT_EQ(
+      "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"
+      "11edc0e12e91ea60eb6b32df06dd7f002fbafabb6e13ec1cc20d995547600db0",
+      EncodeHex(out));
+}
+
+struct XOFTestVector {
+  const char *name;
+  const EVP_MD *(*md)();
+  const std::string_view input_hex;
+  const std::string_view expected_hex;
+};
+
+class XOFSqueeze : public testing::TestWithParam<XOFTestVector> {};
+
+TEST_P(XOFSqueeze, Squeeze) {
+  const auto &test = GetParam();
+
+  ScopedEVP_MD_CTX ctx;
+  std::vector<uint8_t> input;
+  ASSERT_TRUE(DecodeHex(&input, test.input_hex));
+  std::vector<uint8_t> expected;
+  ASSERT_TRUE(DecodeHex(&expected, test.expected_hex));
+  std::vector<uint8_t> out(expected.size());
+
+  // One shot
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test.md(), nullptr));
+  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), input.data(), input.size()));
+  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out.data(), out.size()));
+  EXPECT_EQ(Bytes(out), Bytes(expected));
+
+  // Absorb one at a time
+  out.assign(expected.size(), 0);
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test.md(), nullptr));
+  for (const auto &byte : input) {
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), &byte, 1));
+  }
+  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out.data(), out.size()));
+  EXPECT_EQ(Bytes(out), Bytes(expected));
+
+  // Squeeze one at a time
+  out.assign(expected.size(), 0);
+  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test.md(), nullptr));
+  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), input.data(), input.size()));
+  for (auto &byte : out) {
+    ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), &byte, 1));
+  }
+  EXPECT_EQ(Bytes(out), Bytes(expected));
+}
+
+constexpr XOFTestVector kSqueezeVectors[] = {
+    {"SHAKE256_MSG", EVP_shake256,
+     "e4baace59e93f0a59db1e7a9a3e6ba9de6be97e6ada3e8bc89e6a5b5e68192e6"
+     "b2b3e6b299e998bfe583a7e7a587e982a3e794b1e4bb96e4b88de58fafe6809d"
+     "e8adb0",
+     "64feb2a33554eb5f27246625c20969bc2fb62e1f57b4a5426ea38ac9de186e96"
+     "e28ec780c3869eca3f43d7d33d46d4582ff57a378733a0af272e7da58ec385c1"
+     "93609d5a3a95d07819e3eb868b263321e248ff3bcc9bed506a1e8c507c8f953d"
+     "acbe9911c261ab378dd08ccb6a9cee43fdd637a324dc37b8366fa692b9ea0e3e"
+     "439bb85202c6b0141c6956604f5758ff3b1cd73977afe98c53d2352d987f2d48"
+     "71e02afd919d39b72fba2bae479b8871b75a98c0bf8ec802f29ab88133a8379e"
+     "3b8e4a70fd3bf5c4"},
+    {"TURBOSHAKE256_MSG", EVP_turboshake256,
+     "e58886e58e98e6af9be7b3b8e5bfbde5beaee7b98ae6b299e5a1b5e59f83e6b8"
+     "bae6bca0e6a8a1e7b38ae980a1e5b7a1e9a088e887bee79eace681af",
+     "3311577e7908dded934b818db25d18b578513e04199071f9b4f7b37761326fab"
+     "15edbd103627c7cbcfbd32bba069488d7257f6c652831679ee050d6e0ad7807c"
+     "cc746ccd6a3124696bd21d224d3cd588fb7c52637c5ae448a16eb156d5000482"
+     "be97e26d6429e252f43e3f18fda98af2ad748f2814e7473b96e2bdc7252027be"
+     "3310a49106e5eccedf9d08efc1172f25595a3624addd65c943cab15a5ab7059f"
+     "929e6d7f8d3b938da5811ce385268c5a30f35d131fd96db6ab363cd681e1453b"
+     "d237e182969d2376"}};
+INSTANTIATE_TEST_SUITE_P(All, XOFSqueeze, testing::ValuesIn(kSqueezeVectors),
+                         [](const testing::TestParamInfo<XOFTestVector> &v) {
+                           return v.param.name;
+                         });
 
 }  // namespace
 BSSL_NAMESPACE_END

@@ -30,6 +30,9 @@ BSSL_NAMESPACE_BEGIN
 #define SHA3_256_CBLOCK SHA3_BLOCK_SIZE(256)
 #define SHA3_384_CBLOCK SHA3_BLOCK_SIZE(384)
 #define SHA3_512_CBLOCK SHA3_BLOCK_SIZE(512)
+#define SHAKE256_CBLOCK SHA3_BLOCK_SIZE(256)
+
+const size_t kShake256CblockSize = SHAKE256_CBLOCK;
 
 enum boringssl_keccak_config_t : int32_t {
   boringssl_sha3_256,

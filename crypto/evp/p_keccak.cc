@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Family of Keccak-derived hash functions including:
-// - SHA3-256
-// - SHA3-512
 
 #include <openssl/evp.h>
 
 #include "../fipsmodule/digest/internal.h"  // IWYU pragma: keep
 #include "../fipsmodule/keccak/internal.h"
+
 
 BSSL_NAMESPACE_BEGIN
 namespace {
@@ -41,6 +39,12 @@ void keccak_final(EVP_MD_CTX *ctx, uint8_t *out) {
       static_cast<uint8_t *>(out), Size);
 }
 
+void keccak_squeeze(EVP_MD_CTX *ctx, uint8_t *out, size_t len) {
+  BORINGSSL_keccak_squeeze(
+      reinterpret_cast<BORINGSSL_keccak_st *>(ctx->md_data),
+      static_cast<uint8_t *>(out), len);
+}
+
 constexpr EVP_MD evp_md_sha3_256 = {
     /*type=*/NID_undef,
     /*md_size=*/SHA3_256_DIGEST_LENGTH,
@@ -48,6 +52,7 @@ constexpr EVP_MD evp_md_sha3_256 = {
     /*init=*/keccak_init<boringssl_sha3_256>,
     /*update=*/keccak_update,
     /*final=*/keccak_final<SHA3_256_DIGEST_LENGTH>,
+    /*squeeze=*/nullptr,
     /*block_size=*/SHA3_256_CBLOCK,
     /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
 };
@@ -59,6 +64,7 @@ constexpr EVP_MD evp_md_sha3_384 = {
     /*init=*/keccak_init<boringssl_sha3_384>,
     /*update=*/keccak_update,
     /*final=*/keccak_final<SHA3_384_DIGEST_LENGTH>,
+    /*squeeze=*/nullptr,
     /*block_size=*/SHA3_384_CBLOCK,
     /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
 };
@@ -70,15 +76,43 @@ constexpr EVP_MD evp_md_sha3_512 = {
     /*init=*/keccak_init<boringssl_sha3_512>,
     /*update=*/keccak_update,
     /*final=*/keccak_final<SHA3_512_DIGEST_LENGTH>,
+    /*squeeze=*/nullptr,
     /*block_size=*/SHA3_512_CBLOCK,
+    /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
+};
+
+constexpr EVP_MD evp_md_shake256 = {
+    /*type=*/NID_undef,
+    /*md_size=*/32,
+    /*flags=*/0,
+    /*init=*/keccak_init<boringssl_shake256>,
+    /*update=*/keccak_update,
+    /*final=*/keccak_final<32>,
+    /*squeeze=*/keccak_squeeze,
+    /*block_size=*/SHAKE256_CBLOCK,
+    /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
+};
+
+constexpr EVP_MD evp_md_turboshake256 = {
+    /*type=*/NID_undef,
+    /*md_size=*/32,
+    /*flags=*/0,
+    /*init=*/keccak_init<boringssl_turboshake256>,
+    /*update=*/keccak_update,
+    /*final=*/keccak_final<32>,
+    /*squeeze=*/keccak_squeeze,
+    /*block_size=*/SHAKE256_CBLOCK,
     /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
 };
 
 static_assert(sizeof(BORINGSSL_keccak_st) <= EVP_MAX_MD_DATA_SIZE);
 static_assert(SHA3_256_CBLOCK <= EVP_MAX_MD_BLOCK_SIZE);
+static_assert(SHAKE256_CBLOCK <= EVP_MAX_MD_BLOCK_SIZE);
 }  // namespace
 BSSL_NAMESPACE_END
 
 const EVP_MD *EVP_sha3_256() { return &bssl::evp_md_sha3_256; }
 const EVP_MD *EVP_sha3_384() { return &bssl::evp_md_sha3_384; }
 const EVP_MD *EVP_sha3_512() { return &bssl::evp_md_sha3_512; }
+const EVP_MD *EVP_shake256() { return &bssl::evp_md_shake256; }
+const EVP_MD *EVP_turboshake256() { return &bssl::evp_md_turboshake256; }

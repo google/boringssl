@@ -28,7 +28,6 @@
 
 #include "../asn1/internal.h"
 #include "../fipsmodule/digest/internal.h"
-#include "../internal.h"
 
 
 struct nid_to_digest {
@@ -260,9 +259,15 @@ static void blake2b256_final(EVP_MD_CTX *ctx, uint8_t *md) {
 }
 
 static const EVP_MD evp_md_blake2b256 = {
-    NID_undef,       BLAKE2B256_DIGEST_LENGTH, 0,
-    blake2b256_init, blake2b256_update,        blake2b256_final,
-    BLAKE2B_CBLOCK,  sizeof(BLAKE2B_CTX),
+    /*type=*/NID_undef,
+    /*md_size=*/BLAKE2B256_DIGEST_LENGTH,
+    /*flags=*/0,
+    /*init=*/blake2b256_init,
+    /*update=*/blake2b256_update,
+    /*final=*/blake2b256_final,
+    /*squeeze=*/nullptr,
+    /*block_size=*/BLAKE2B_CBLOCK,
+    /*ctx_size=*/sizeof(BLAKE2B_CTX),
 };
 
 const EVP_MD *EVP_blake2b256() { return &evp_md_blake2b256; }
@@ -284,14 +289,15 @@ static void md4_final(EVP_MD_CTX *ctx, uint8_t *out) {
 }
 
 static const EVP_MD evp_md_md4 = {
-    NID_md4,            //
-    MD4_DIGEST_LENGTH,  //
-    0,
-    md4_init,
-    md4_update,
-    md4_final,
-    64,
-    sizeof(MD4_CTX),
+    /*type=*/NID_md4,
+    /*md_size=*/MD4_DIGEST_LENGTH,
+    /*flags=*/0,
+    /*init=*/md4_init,
+    /*update=*/md4_update,
+    /*final=*/md4_final,
+    /*squeeze=*/nullptr,
+    /*block_size=*/64,
+    /*ctx_size=*/sizeof(MD4_CTX),
 };
 
 const EVP_MD *EVP_md4() { return &evp_md_md4; }
@@ -313,8 +319,15 @@ static void md5_final(EVP_MD_CTX *ctx, uint8_t *out) {
 }
 
 static const EVP_MD evp_md_md5 = {
-    NID_md5,    MD5_DIGEST_LENGTH, 0,  md5_init,
-    md5_update, md5_final,         64, sizeof(MD5_CTX),
+    /*type=*/NID_md5,
+    /*md_size=*/MD5_DIGEST_LENGTH,
+    /*flags=*/0,
+    /*init=*/md5_init,
+    /*update=*/md5_update,
+    /*final=*/md5_final,
+    /*squeeze=*/nullptr,
+    /*block_size=*/64,
+    /*ctx_size=*/sizeof(MD5_CTX),
 };
 
 const EVP_MD *EVP_md5() { return &evp_md_md5; }
@@ -346,14 +359,15 @@ static void md5_sha1_final(EVP_MD_CTX *md_ctx, uint8_t *out) {
 }
 
 const EVP_MD evp_md_md5_sha1 = {
-    NID_md5_sha1,
-    MD5_DIGEST_LENGTH + SHA_DIGEST_LENGTH,
-    0,
-    md5_sha1_init,
-    md5_sha1_update,
-    md5_sha1_final,
-    64,
-    sizeof(MD5_SHA1_CTX),
+    /*type=*/NID_md5_sha1,
+    /*md_size=*/MD5_DIGEST_LENGTH + SHA_DIGEST_LENGTH,
+    /*flags=*/0,
+    /*init=*/md5_sha1_init,
+    /*update=*/md5_sha1_update,
+    /*final=*/md5_sha1_final,
+    /*squeeze=*/nullptr,
+    /*block_size=*/64,
+    /*ctx_size=*/sizeof(MD5_SHA1_CTX),
 };
 
 const EVP_MD *EVP_md5_sha1() { return &evp_md_md5_sha1; }
