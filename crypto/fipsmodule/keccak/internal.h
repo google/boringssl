@@ -33,6 +33,7 @@ BSSL_NAMESPACE_BEGIN
 
 enum boringssl_keccak_config_t : int32_t {
   boringssl_sha3_256,
+  boringssl_sha3_384,
   boringssl_sha3_512,
   boringssl_shake128,
   boringssl_shake256,

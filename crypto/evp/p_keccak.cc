@@ -52,6 +52,17 @@ constexpr EVP_MD evp_md_sha3_256 = {
     /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
 };
 
+constexpr EVP_MD evp_md_sha3_384 = {
+    /*type=*/NID_undef,
+    /*md_size=*/SHA3_384_DIGEST_LENGTH,
+    /*flags=*/0,
+    /*init=*/keccak_init<boringssl_sha3_384>,
+    /*update=*/keccak_update,
+    /*final=*/keccak_final<SHA3_384_DIGEST_LENGTH>,
+    /*block_size=*/SHA3_384_CBLOCK,
+    /*ctx_size=*/sizeof(BORINGSSL_keccak_st),
+};
+
 constexpr EVP_MD evp_md_sha3_512 = {
     /*type=*/NID_undef,
     /*md_size=*/SHA3_512_DIGEST_LENGTH,
@@ -69,4 +80,5 @@ static_assert(SHA3_256_CBLOCK <= EVP_MAX_MD_BLOCK_SIZE);
 BSSL_NAMESPACE_END
 
 const EVP_MD *EVP_sha3_256() { return &bssl::evp_md_sha3_256; }
+const EVP_MD *EVP_sha3_384() { return &bssl::evp_md_sha3_384; }
 const EVP_MD *EVP_sha3_512() { return &bssl::evp_md_sha3_512; }

@@ -61,6 +61,7 @@ static const MD sha512_256 = {"SHA512-256", &EVP_sha512_256, &SHA512_256};
 static const MD md5_sha1 = {"MD5-SHA1", &EVP_md5_sha1, nullptr};
 static const MD blake2b256 = {"BLAKE2b-256", &EVP_blake2b256, nullptr};
 static const MD sha3_256 = {"SHA3-256", &EVP_sha3_256, nullptr};
+static const MD sha3_384 = {"SHA3-384", &EVP_sha3_384, nullptr};
 static const MD sha3_512 = {"SHA3-512", &EVP_sha3_512, nullptr};
 
 struct DigestTestVector {
@@ -165,6 +166,16 @@ static const DigestTestVector kTestVectors[] = {
      "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"},
     {sha3_256, "\xa3", 200,
      "79f38adec5c20307a98ef76e8324afbfd46cfd81b22e3973c65fa1bd9de31787"},
+
+    // SHA3-384 tests, from
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-384_Msg0.pdf
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-384_1600.pdf
+    {sha3_384, "", 1,
+     "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2a"
+     "c3713831264adb47fb6bd1e058d5f004"},
+    {sha3_384, "\xa3", 200,
+     "1881de2ca7e41ef95dc4732b8f5f002b189cc1e42b74168ed1732649ce1dbcdd"
+     "76197a31fd55ee989f2d7050dd473e8f"},
 
     // SHA3-512 tests, from
     // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA3-512_Msg0.pdf

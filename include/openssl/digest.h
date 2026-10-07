@@ -51,6 +51,7 @@ OPENSSL_EXPORT const EVP_MD *EVP_blake2b256(void);
 // necessary for interoperability with existing systems.
 
 OPENSSL_EXPORT const EVP_MD *EVP_sha3_256(void);
+OPENSSL_EXPORT const EVP_MD *EVP_sha3_384(void);
 OPENSSL_EXPORT const EVP_MD *EVP_sha3_512(void);
 
 // EVP_md5_sha1 is a TLS-specific `EVP_MD` which computes the concatenation of
