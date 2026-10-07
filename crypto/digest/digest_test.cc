@@ -51,21 +51,21 @@ struct MD {
   uint8_t *(*one_shot_func)(const uint8_t *, size_t, uint8_t *);
 };
 
-static const MD md4 = {"MD4", &EVP_md4, nullptr};
-static const MD md5 = {"MD5", &EVP_md5, &MD5};
-static const MD sha1 = {"SHA1", &EVP_sha1, &SHA1};
-static const MD sha224 = {"SHA224", &EVP_sha224, &SHA224};
-static const MD sha256 = {"SHA256", &EVP_sha256, &SHA256};
-static const MD sha384 = {"SHA384", &EVP_sha384, &SHA384};
-static const MD sha512 = {"SHA512", &EVP_sha512, &SHA512};
-static const MD sha512_256 = {"SHA512-256", &EVP_sha512_256, &SHA512_256};
-static const MD md5_sha1 = {"MD5-SHA1", &EVP_md5_sha1, nullptr};
-static const MD blake2b256 = {"BLAKE2b-256", &EVP_blake2b256, nullptr};
-static const MD sha3_256 = {"SHA3-256", &EVP_sha3_256, nullptr};
-static const MD sha3_384 = {"SHA3-384", &EVP_sha3_384, nullptr};
-static const MD sha3_512 = {"SHA3-512", &EVP_sha3_512, nullptr};
-static const MD shake256 = {"SHAKE256", &EVP_shake256, nullptr};
-static const MD turboshake256 = {"TurboSHAKE256", &EVP_turboshake256, nullptr};
+const MD md4 = {"MD4", &EVP_md4, nullptr};
+const MD md5 = {"MD5", &EVP_md5, &MD5};
+const MD sha1 = {"SHA1", &EVP_sha1, &SHA1};
+const MD sha224 = {"SHA224", &EVP_sha224, &SHA224};
+const MD sha256 = {"SHA256", &EVP_sha256, &SHA256};
+const MD sha384 = {"SHA384", &EVP_sha384, &SHA384};
+const MD sha512 = {"SHA512", &EVP_sha512, &SHA512};
+const MD sha512_256 = {"SHA512-256", &EVP_sha512_256, &SHA512_256};
+const MD md5_sha1 = {"MD5-SHA1", &EVP_md5_sha1, nullptr};
+const MD blake2b256 = {"BLAKE2b-256", &EVP_blake2b256, nullptr};
+const MD sha3_256 = {"SHA3-256", &EVP_sha3_256, nullptr};
+const MD sha3_384 = {"SHA3-384", &EVP_sha3_384, nullptr};
+const MD sha3_512 = {"SHA3-512", &EVP_sha3_512, nullptr};
+const MD shake256 = {"SHAKE256", &EVP_shake256, nullptr};
+const MD turboshake256 = {"TurboSHAKE256", &EVP_turboshake256, nullptr};
 
 struct DigestTestVector {
   // md is the digest to test.
@@ -78,7 +78,7 @@ struct DigestTestVector {
   const char *expected_hex;
 };
 
-static const DigestTestVector kTestVectors[] = {
+const DigestTestVector kTestVectors[] = {
     // MD4 tests, from RFC 1320. (crypto/md4 does not provide a
     // one-shot MD4 function.)
     {md4, "", 1, "31d6cfe0d16ae931b73c59d7e0c089c0"},
@@ -204,12 +204,12 @@ static const DigestTestVector kTestVectors[] = {
      "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"},
 };
 
-static void CompareDigest(const DigestTestVector *test, const uint8_t *digest,
-                          size_t digest_len) {
+void CompareDigest(const DigestTestVector *test, const uint8_t *digest,
+                   size_t digest_len) {
   EXPECT_EQ(test->expected_hex, EncodeHex(Span(digest, digest_len)));
 }
 
-static void TestDigest(const DigestTestVector *test) {
+void TestDigest(const DigestTestVector *test) {
   ScopedEVP_MD_CTX ctx;
 
   // Test the input provided.
