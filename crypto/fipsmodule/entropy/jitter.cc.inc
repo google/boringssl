@@ -119,7 +119,7 @@ class MemoryAccessSampler {
       // processed by `DeltaSampler`, the tests see 0,0,0,1,... which exceeds
       // the APT cutoff (348/512) without tripping the RCT (26).
       *out = array_[0] >> 2;
-      array_[0]++;
+      array_[0] += 1;
     } else {
       // Perform some memory accesses and measure how long it took. The LCG is
       // intended to defeat any CPU predictors and thus expose this code to as
