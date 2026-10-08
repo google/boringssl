@@ -163,6 +163,7 @@ class MTCCACosigner {
 
     CBS seq, log_hash;
     if (!CBS_get_asn1(&ext_value, &seq, CBS_ASN1_SEQUENCE) ||         //
+        CBS_len(&ext_value) != 0 ||                                   //
         !CBS_get_asn1_element(&seq, &log_hash, CBS_ASN1_SEQUENCE) ||  //
         !x509_parse_algorithm(&seq, cosign_sigalg_.get()) ||          //
         !CBS_get_asn1_uint64(&seq, &min_serial_) ||                   //

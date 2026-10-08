@@ -12315,5 +12315,32 @@ TEST_F(X509VerifyMTCTest, InvalidMTCCABadSubject) {
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
 }
 
+TEST_F(X509VerifyMTCTest, InvalidMTCCAExtensionTrailingData) {
+  UniquePtr<X509> bad_ca(X509_dup(mtc_ca_cert_.get()));
+  ASSERT_TRUE(bad_ca);
+  int ext_index = X509_get_ext_by_NID(
+      bad_ca.get(), NID_pe_mtcCertificationAuthority_draft, -1);
+  ASSERT_GE(ext_index, 0);
+  X509_EXTENSION *ext = X509_get_ext(bad_ca.get(), ext_index);
+  ASSERT_TRUE(ext);
+  Span<const uint8_t> value = ASN1StringAsBytes(X509_EXTENSION_get_data(ext));
+
+  std::vector<uint8_t> new_value(value.begin(), value.end());
+  // Append trailing data.
+  new_value.push_back(0x05);
+  new_value.push_back(0x00);
+  UniquePtr<ASN1_OCTET_STRING> new_value_str(ASN1_OCTET_STRING_new());
+  ASSERT_TRUE(new_value_str);
+  ASSERT_TRUE(ASN1_OCTET_STRING_set(new_value_str.get(), new_value.data(),
+                                    new_value.size()));
+  ASSERT_TRUE(X509_EXTENSION_set_data(ext, new_value_str.get()));
+
+  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+            VerifyMTC(mtc_10_subtree_8_11_.get(),
+                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_05,
+                      /*mtc_ca=*/bad_ca.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_ASN1, ASN1_R_DECODE_ERROR));
+}
+
 }  // namespace
 BSSL_NAMESPACE_END
