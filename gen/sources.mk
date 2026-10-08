@@ -2342,6 +2342,14 @@ boringssl_pki_test_data := \
   pki/testdata/path_builder_unittest/mtc_plants04/mtc-leaf-standalone-no_ca_signer.pem \
   pki/testdata/path_builder_unittest/mtc_plants04/mtc-leaf-standalone.pem \
   pki/testdata/path_builder_unittest/mtc_plants04/mtc-leaf.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/leaf.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-ica.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-leaf-standalone-3cosigners.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-leaf-standalone-cosigner_wrong_order.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-leaf-standalone-duplicate_ca_signer.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-leaf-standalone-no_ca_signer.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-leaf-standalone.pem \
+  pki/testdata/path_builder_unittest/mtc_plants07/mtc-leaf.pem \
   pki/testdata/path_builder_unittest/multi-root-A-by-B.pem \
   pki/testdata/path_builder_unittest/multi-root-B-by-C.pem \
   pki/testdata/path_builder_unittest/multi-root-B-by-F.pem \

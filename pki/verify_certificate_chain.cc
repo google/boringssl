@@ -1129,32 +1129,32 @@ void PathVerifier::ApplyPolicyConstraints(const ParsedCertificate &cert) {
   }
 }
 
-static bool VerifyMTCProofSignaturePlants04(
+static bool VerifyMTCProofSignature(
     const CBS *cosigner_id, Span<const uint8_t> log_id_text, uint64_t start,
     uint64_t end, const TreeHash &expected_subtree_hash,
     Span<const uint8_t> signature, SignatureAlgorithm signature_algorithm,
     const CRYPTO_BUFFER *key_bytes, SignatureVerifyCache *cache) {
-  ScopedCBB cosigned_message;
+  ScopedCBB cosigned_subtree;
   // `cosigner_name` and `log_origin` are the only variable-length parts of
-  // `CosignedMessage`. Allocate the initial buffer size with 48 bytes for those
+  // `CosignedSubtree`. Allocate the initial buffer size with 48 bytes for those
   // (16 byte prefix + 32 bytes for the text representation of the
   // relative-oid.)
-  if (!CBB_init(cosigned_message.get(), 12 + 48 + 8 + 48 + 8 + 8 + 32)) {
+  if (!CBB_init(cosigned_subtree.get(), 12 + 48 + 8 + 48 + 8 + 8 + 32)) {
     return false;
   }
   // Section 7.2 step 12:
   // Signatures are verified as described in Section 5.3.1. For each signature
-  // verification, the CosignedMessage structure is constructed as follows:
+  // verification, the CosignedSubtree structure is constructed as follows:
   //
   // Section 5.3.1:
   //     uint8 label[12] = "subtree/v1\n\0";
   // (C string constants implicitly have a null terminator, so it's not
   // explicitly included here:)
   static constexpr uint8_t kLabel[12] = "subtree/v1\n";
-  if (!CBB_add_bytes(cosigned_message.get(), kLabel, sizeof(kLabel))) {
+  if (!CBB_add_bytes(cosigned_subtree.get(), kLabel, sizeof(kLabel))) {
     return false;
   }
-  // Section 7.2: Set the CosignedMessage's cosigner_name based on the cosigner
+  // Section 7.2: Set the CosignedSubtree's cosigner_name based on the cosigner
   // ID as described in Section 5.3.1.
   // Section 5.3.1: opaque cosigner_name<1..2^8-1>;
   static constexpr uint8_t kTaiPrefix[16] = {'o', 'i', 'd', '/', '1', '.',
@@ -1168,54 +1168,54 @@ static bool VerifyMTCProofSignaturePlants04(
   Span<const uint8_t> cosigner_id_text =
       StringAsBytes(cosigner_id_text_buf.get());
   CBB cosigner_name;
-  if (!CBB_add_u8_length_prefixed(cosigned_message.get(), &cosigner_name) ||
+  if (!CBB_add_u8_length_prefixed(cosigned_subtree.get(), &cosigner_name) ||
       !CBB_add_bytes(&cosigner_name, kTaiPrefix, sizeof(kTaiPrefix)) ||
       !CBB_add_bytes(&cosigner_name, cosigner_id_text.data(),
                      cosigner_id_text.size())) {
     return false;
   }
 
-  // Section 7.2: Set the CosignedMessage's timestamp to zero.
+  // Section 7.2: Set the CosignedSubtree's timestamp to zero.
   // Section 5.3.1: uint64 timestamp;
-  if (!CBB_add_u64(cosigned_message.get(), 0u)) {
+  if (!CBB_add_u64(cosigned_subtree.get(), 0u)) {
     return false;
   }
 
-  // Section 7.2: Set the CosignedMessage's log_origin based on log_id as
+  // Section 7.2: Set the CosignedSubtree's log_origin based on log_id as
   // described in Section 5.3.1.
   // Section 5.3.1:     opaque log_origin<1..2^8-1>;
   CBB log_origin;
-  if (!CBB_add_u8_length_prefixed(cosigned_message.get(), &log_origin) ||
+  if (!CBB_add_u8_length_prefixed(cosigned_subtree.get(), &log_origin) ||
       !CBB_add_bytes(&log_origin, kTaiPrefix, sizeof(kTaiPrefix)) ||
       !CBB_add_bytes(&log_origin, log_id_text.data(), log_id_text.size())) {
     return false;
   }
 
-  // Section 7.2: Set the CosignedMessage's start and end to the MTCProof's
+  // Section 7.2: Set the CosignedSubtree's start and end to the MTCProof's
   // start and end, respectively.
   // Section 5.3.1: uint64 start;
   // Section 5.3.1: uint64 end;
-  if (!CBB_add_u64(cosigned_message.get(), start) ||
-      !CBB_add_u64(cosigned_message.get(), end)) {
+  if (!CBB_add_u64(cosigned_subtree.get(), start) ||
+      !CBB_add_u64(cosigned_subtree.get(), end)) {
     return false;
   }
 
-  // Section 7.2: Set the CosignedMessage's subtree_hash to
+  // Section 7.2: Set the CosignedSubtree's subtree_hash to
   // expected_subtree_hash.
   // Section 5.3.1: HashValue subtree_hash;
-  if (!CBB_add_bytes(cosigned_message.get(), expected_subtree_hash.data(),
+  if (!CBB_add_bytes(cosigned_subtree.get(), expected_subtree_hash.data(),
                      expected_subtree_hash.size())) {
     return false;
   }
 
-  if (!CBB_flush(cosigned_message.get())) {
+  if (!CBB_flush(cosigned_subtree.get())) {
     return false;
   }
 
   return VerifySignedData(
       signature_algorithm,
-      Span<const uint8_t>(CBB_data(cosigned_message.get()),
-                          CBB_len(cosigned_message.get())),
+      Span<const uint8_t>(CBB_data(cosigned_subtree.get()),
+                          CBB_len(cosigned_subtree.get())),
       der::BitString(signature, 0),
       Span(CRYPTO_BUFFER_data(key_bytes), CRYPTO_BUFFER_len(key_bytes)), cache);
 }
@@ -1237,18 +1237,28 @@ enum class VerifyMTCResult {
   // The MTC verified successfully.
   kSuccess,
 };
-// This function implements draft-ietf-plants-merkle-tree-certs-04 section 7.2:
+// This function implements draft-ietf-plants-merkle-tree-certs-07 section 7.2:
 // Verifying Certificate Signatures.
 static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
                                  const MTCAnchor *mtc_anchor,
                                  VerifyCertificateChainDelegate *delegate) {
-  // Step 1: Check that the TBSCertificate's signature field is id-alg-mtcProof
-  // (kMtcProofDraftPlants04) with omitted parameters.
-  if (cert.signature_algorithm() !=
-      SignatureAlgorithm::kMtcProofDraftPlants04) {
-    // When we parse the signature algorithm, we check that the parameters are
-    // omitted.
-    return VerifyMTCResult::kFailed;
+  if (mtc_anchor->spec_version() == MTCAnchor::kPlants04) {
+    // Step 1: Check that the TBSCertificate's signature field is
+    // id-alg-mtcProof (kMtcProofDraftPlants04) with omitted parameters.
+    if (cert.signature_algorithm() !=
+        SignatureAlgorithm::kMtcProofDraftPlants04) {
+      // When we parse the signature algorithm, we check that the parameters are
+      // omitted.
+      return VerifyMTCResult::kFailed;
+    }
+  } else {
+    // Step 1: Check that the TBSCertificate's signature field is
+    // id-alg-mtcProof with omitted parameters.
+    if (cert.signature_algorithm() != SignatureAlgorithm::kMtcProof) {
+      // When we parse the signature algorithm, we check that the parameters are
+      // omitted.
+      return VerifyMTCResult::kFailed;
+    }
   }
 
   // Step 2: Decode the signatureValue as an MTCProof.
@@ -1258,9 +1268,21 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   if (cert.signature_value().unused_bits() != 0 ||
       !CBS_get_u16_length_prefixed(&mtc_proof, &extensions) ||
       !CBS_get_u48(&mtc_proof, &start) || !CBS_get_u48(&mtc_proof, &end) ||
-      !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof) ||
-      !CBS_get_u16_length_prefixed(&mtc_proof, &signatures) ||
-      CBS_len(&mtc_proof) != 0) {
+      !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof)) {
+    return VerifyMTCResult::kFailed;
+  }
+
+  if (mtc_anchor->spec_version() == MTCAnchor::kPlants04) {
+    if (!CBS_get_u16_length_prefixed(&mtc_proof, &signatures)) {
+      return VerifyMTCResult::kFailed;
+    }
+  } else {
+    if (!CBS_get_u24_length_prefixed(&mtc_proof, &signatures)) {
+      return VerifyMTCResult::kFailed;
+    }
+  }
+
+  if (CBS_len(&mtc_proof) != 0) {
     return VerifyMTCResult::kFailed;
   }
 
@@ -1497,7 +1519,7 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
     // could first find and verify the CA signature before bothering to check
     // any of the other ones.
     if (cosigner_id == mtc_anchor->ca_id()) {
-      found_valid_ca_signature = VerifyMTCProofSignaturePlants04(
+      found_valid_ca_signature = VerifyMTCProofSignature(
           &cbs_cosigner_id, StringAsBytes(log_id_text), start, end,
           expected_subtree_hash.value(), signature,
           mtc_anchor->ca_signature_algorithm(), mtc_anchor->ca_key(),
@@ -1510,7 +1532,7 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
     } else {
       auto cosigner = delegate->GetMTCCosigner(cosigner_id);
       bool this_cosignature_was_valid = false;
-      if (cosigner && VerifyMTCProofSignaturePlants04(
+      if (cosigner && VerifyMTCProofSignature(
                           &cbs_cosigner_id, StringAsBytes(log_id_text), start,
                           end, expected_subtree_hash.value(), signature,
                           cosigner->signature_algorithm, cosigner->key.get(),

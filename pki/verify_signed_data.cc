@@ -239,6 +239,7 @@ bool VerifySignedData(SignatureAlgorithm algorithm, der::Input signed_data,
       break;
 
     case SignatureAlgorithm::kMtcProofDraftPlants04:
+    case SignatureAlgorithm::kMtcProof:
       // This function can't verify MTC proofs.
       return false;
 
