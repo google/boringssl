@@ -545,9 +545,13 @@ int x509_verify_mtc(const X509 *x509, const EVP_PKEY *pkey,
   }
   uint8_t spki_digest[EVP_MAX_MD_SIZE];
   unsigned int spki_digest_len;
+  // The short-form DER length can only encode lengths up to 127 (0x7f). The MTC
+  // spec permits longer hash lengths up to 255 (0xff), which would require a
+  // long-form length, but no `EVP_MD` currently outputs more than 127 bytes, so
+  // reject them here instead of supporting both short and long encoding forms.
   if (!EVP_Digest(CBS_data(&spki), CBS_len(&spki), spki_digest,
                   &spki_digest_len, issuer_mtc_ca.log_hash(), nullptr) ||
-      spki_digest_len == 0 || spki_digest_len > 0xff) {
+      spki_digest_len == 0 || spki_digest_len > 0x7f) {
     OPENSSL_PUT_ERROR(X509, ERR_R_INTERNAL_ERROR);
     return 0;
   }
