@@ -90,6 +90,7 @@ extern "C" {
 #define V_ASN1_REAL 9
 #define V_ASN1_ENUMERATED 10
 #define V_ASN1_UTF8STRING 12
+#define V_ASN1_RELATIVE_OID 13
 #define V_ASN1_SEQUENCE 16
 #define V_ASN1_SET 17
 #define V_ASN1_NUMERICSTRING 18
