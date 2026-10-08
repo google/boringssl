@@ -1350,6 +1350,14 @@ static std::string_view ASN1StringAsView(const ASN1_STRING *str) {
   return BytesAsStringView(ASN1StringAsBytes(str));
 }
 
+static UniquePtr<ASN1_INTEGER> ASN1IntegerFromU64(uint64_t v) {
+  UniquePtr<ASN1_INTEGER> ret(ASN1_INTEGER_new());
+  if (ret == nullptr || !ASN1_INTEGER_set_uint64(ret.get(), v)) {
+    return nullptr;
+  }
+  return ret;
+}
+
 // CRLsToStack converts a vector of `X509_CRL*` to an OpenSSL
 // STACK_OF(X509_CRL), bumping the reference counts for each CRL in question.
 static bssl::UniquePtr<STACK_OF(X509_CRL)> CRLsToStack(
@@ -2099,16 +2107,15 @@ static bssl::UniquePtr<X509_NAME> MakeTestName(std::string_view common_name) {
 static const uint64_t kTestCertSerial = 42;
 
 static bssl::UniquePtr<X509> MakeTestCert(
-    std::string_view issuer, std::string_view subject, EVP_PKEY *key,
+    std::string_view issuer, std::string_view subject, const EVP_PKEY *key,
     bool is_ca, std::optional<int64_t> pathlen = std::nullopt) {
   UniquePtr<X509_NAME> issuer_name = MakeTestName(issuer);
   UniquePtr<X509_NAME> subject_name = MakeTestName(subject);
   UniquePtr<X509> cert(X509_new());
-  UniquePtr<ASN1_INTEGER> serial(ASN1_INTEGER_new());
+  UniquePtr<ASN1_INTEGER> serial = ASN1IntegerFromU64(kTestCertSerial);
   if (issuer_name == nullptr || subject_name == nullptr || cert == nullptr ||
       serial == nullptr ||  //
       !X509_set_version(cert.get(), X509_VERSION_3) ||
-      !ASN1_INTEGER_set_uint64(serial.get(), kTestCertSerial) ||
       !X509_set_serialNumber(cert.get(), serial.get()) ||
       !X509_set_issuer_name(cert.get(), issuer_name.get()) ||
       !X509_set_subject_name(cert.get(), subject_name.get()) ||
@@ -2343,11 +2350,10 @@ static bssl::UniquePtr<X509_CRL> MakeTestCRL(std::string_view issuer,
 static bool AddRevokedSerialU64(X509_CRL *crl, uint64_t serial,
                                 int offset_day) {
   UniquePtr<X509_REVOKED> rev(X509_REVOKED_new());
-  UniquePtr<ASN1_INTEGER> serial_asn1(ASN1_INTEGER_new());
+  UniquePtr<ASN1_INTEGER> serial_asn1 = ASN1IntegerFromU64(serial);
   UniquePtr<ASN1_TIME> rev_date(
       ASN1_TIME_adj(nullptr, kReferenceTime, offset_day, /*offset_sec=*/0));
   if (rev == nullptr || serial_asn1 == nullptr || rev_date == nullptr ||
-      !ASN1_INTEGER_set_uint64(serial_asn1.get(), serial) ||
       !X509_REVOKED_set_serialNumber(rev.get(), serial_asn1.get()) ||
       !X509_REVOKED_set_revocationDate(rev.get(), rev_date.get()) ||
       !X509_CRL_add0_revoked(crl, rev.get())) {
@@ -9785,9 +9791,8 @@ TEST(X509Test, DirHash) {
                                  unsigned long flags) -> int {
       UniquePtr<X509> cert =
           MakeTestCert(issuer, "Leaf", key.get(), /*is_ca=*/false);
-      UniquePtr<ASN1_INTEGER> serial_asn1(ASN1_INTEGER_new());
+      UniquePtr<ASN1_INTEGER> serial_asn1 = ASN1IntegerFromU64(serial);
       if (cert == nullptr || serial_asn1 == nullptr ||
-          !ASN1_INTEGER_set_uint64(serial_asn1.get(), serial) ||
           !X509_set_serialNumber(cert.get(), serial_asn1.get()) ||
           !X509_sign(cert.get(), key.get(), EVP_sha256())) {
         return X509_V_ERR_UNSPECIFIED;
@@ -10621,6 +10626,168 @@ TEST_P(X509VerifyTest, CRLScopeOnlyUserOrCA) {
             Verify(leaf.get(), {root.get()}, {ca.get()},
                    {crl_root.get(), crl_ca_wrong.get()},
                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+}
+
+TEST_P(X509VerifyTest, CRLCheckAll) {
+  auto sign_cert = [](std::string_view issuer, const EVP_PKEY *issuer_key,
+                      std::string_view subject, const EVP_PKEY *subject_key,
+                      bool is_ca, uint64_t serial) -> UniquePtr<X509> {
+    UniquePtr<ASN1_INTEGER> serial_bn = ASN1IntegerFromU64(serial);
+    UniquePtr<X509> cert = MakeTestCert(issuer, subject, subject_key, is_ca);
+    if (cert == nullptr || serial_bn == nullptr ||
+        !X509_set_serialNumber(cert.get(), serial_bn.get()) ||
+        !X509_sign(cert.get(), issuer_key, EVP_sha256())) {
+      return nullptr;
+    }
+    return cert;
+  };
+
+  // Make a three-certificate chain.
+  UniquePtr<EVP_PKEY> root_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(root_key);
+  constexpr uint64_t kRootSerial = 1;
+  UniquePtr<X509> root = sign_cert("Root", root_key.get(), "Root",
+                                   root_key.get(), /*is_ca=*/true, kRootSerial);
+  ASSERT_TRUE(root);
+
+  UniquePtr<EVP_PKEY> ca_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(ca_key);
+  constexpr uint64_t kCASerial = 2;
+  UniquePtr<X509> ca = sign_cert("Root", root_key.get(), "CA", ca_key.get(),
+                                 /*is_ca=*/true, kCASerial);
+  ASSERT_TRUE(ca);
+
+  UniquePtr<EVP_PKEY> leaf_key(EVP_PKEY_generate_from_alg(EVP_pkey_ec_p256()));
+  ASSERT_TRUE(leaf_key);
+  constexpr uint64_t kLeafSerial = 3;
+  UniquePtr<X509> leaf = sign_cert("CA", ca_key.get(), "Leaf", leaf_key.get(),
+                                   /*is_ca=*/false, kLeafSerial);
+  ASSERT_TRUE(leaf);
+
+  auto make_crl = [](std::string_view issuer, EVP_PKEY *issuer_key,
+                     std::vector<uint64_t> revoke) -> UniquePtr<X509_CRL> {
+    UniquePtr<X509_CRL> crl = MakeTestCRL(issuer, -1, 1);
+    if (!crl) {
+      return nullptr;
+    }
+    for (uint64_t serial : revoke) {
+      if (!AddRevokedSerialU64(crl.get(), serial, -1)) {
+        return nullptr;
+      }
+    }
+    return SignAndReencodeCRL(crl.get(), issuer_key, EVP_sha256());
+  };
+
+  UniquePtr<X509_CRL> root_crl_empty = make_crl("Root", root_key.get(), {});
+  ASSERT_TRUE(root_crl_empty);
+  UniquePtr<X509_CRL> root_crl_revoke_root =
+      make_crl("Root", root_key.get(), {kRootSerial});
+  ASSERT_TRUE(root_crl_revoke_root);
+  UniquePtr<X509_CRL> root_crl_revoke_ca =
+      make_crl("Root", root_key.get(), {kCASerial});
+  ASSERT_TRUE(root_crl_revoke_ca);
+  UniquePtr<X509_CRL> ca_crl_empty = make_crl("CA", ca_key.get(), {});
+  ASSERT_TRUE(ca_crl_empty);
+  UniquePtr<X509_CRL> ca_crl_revoke_leaf =
+      make_crl("CA", ca_key.get(), {kLeafSerial});
+  ASSERT_TRUE(ca_crl_revoke_leaf);
+
+  // By default, we neither require nor check CRLs.
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {root.get()}, {ca.get()}, {}));
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {root_crl_revoke_ca.get(), ca_crl_revoke_leaf.get()}));
+
+  // `X509_V_FLAG_CRL_CHECK` requires and checks a CRL on the leaf, but CRLs on
+  // other certificates go unnoticed.
+  EXPECT_EQ(
+      X509_V_ERR_UNABLE_TO_GET_CRL,
+      Verify(leaf.get(), {root.get()}, {ca.get()}, {}, X509_V_FLAG_CRL_CHECK));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {root.get()}, {ca.get()},
+                              {ca_crl_empty.get()}, X509_V_FLAG_CRL_CHECK));
+  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {ca_crl_revoke_leaf.get()}, X509_V_FLAG_CRL_CHECK));
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {root.get()}, {ca.get()},
+                              {root_crl_revoke_ca.get(), ca_crl_empty.get()},
+                              X509_V_FLAG_CRL_CHECK));
+
+  // X509_V_FLAG_CRL_CHECK_ALL` requires and CRLs for every certificate in the
+  // path.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+            Verify(leaf.get(), {root.get()}, {ca.get()}, {},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,  // No CRL for root
+            Verify(leaf.get(), {root.get()}, {ca.get()}, {ca_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {ca_crl_empty.get(), root_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {ca_crl_revoke_leaf.get(), root_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {ca_crl_empty.get(), root_crl_revoke_ca.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+
+  // Revocation is checked for the trust anchor.
+  // TODO(crbug.com/561609863): Remove this. See below.
+  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+            Verify(leaf.get(), {root.get()}, {ca.get()},
+                   {ca_crl_empty.get(), root_crl_revoke_root.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL));
+
+  // When the trust anchor is not represented as a self-signed certificate,
+  // `X509_V_FLAG_CRL_CHECK` still checks revocation of the leaf.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+            Verify(leaf.get(), {ca.get()}, {}, {},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_OK,
+            Verify(leaf.get(), {ca.get()}, {}, {ca_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CERT_REVOKED,
+            Verify(leaf.get(), {ca.get()}, {}, {ca_crl_revoke_leaf.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
+
+  // TODO(crbug.com/561609863): But `X509_V_FLAG_CRL_CHECK_ALL` in this scenario
+  // is broken. It tries to find a CRL for the trust anchor, but this is not
+  // coherent or possible. It ends up getting confused and thinking the CRL's
+  // issuer is "Root" but its key is `ca_key`, resulting in the signature
+  // verification failing.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+            Verify(leaf.get(), {ca.get()}, {}, {},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
+                       X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+            Verify(leaf.get(), {ca.get()}, {}, {ca_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
+                       X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+            Verify(leaf.get(), {ca.get()}, {},
+                   {ca_crl_empty.get(), root_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
+                       X509_V_FLAG_PARTIAL_CHAIN));
+
+  // TODO(crbug.com/561609863): If the "path" is a single leaf certificate that
+  // was already trusted in the root store, both `X509_V_FLAG_CRL_CHECK` and
+  // `X509_V_FLAG_CRL_CHECK_ALL` exhibit this bug.
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+            Verify(leaf.get(), {leaf.get()}, {}, {},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+            Verify(leaf.get(), {leaf.get()}, {}, {ca_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_UNABLE_TO_GET_CRL,
+            Verify(leaf.get(), {leaf.get()}, {}, {},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
+                       X509_V_FLAG_PARTIAL_CHAIN));
+  EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+            Verify(leaf.get(), {leaf.get()}, {}, {ca_crl_empty.get()},
+                   X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL |
+                       X509_V_FLAG_PARTIAL_CHAIN));
 }
 
 TEST(X509Test, ParseIPAddress) {
