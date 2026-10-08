@@ -123,7 +123,59 @@
       ]
     },
     {
-      "Repeat": 2000,
+      "//0": "Well-formed MTCEntryExtensions of unrecognized types 1 and 2, which are ignored: 0001 0000 0002 0001 ff",
+      "MTCEntryExtensions": "AAEAAAACAAH/",
+      "PublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyxiC16lts+SOL87OwHhGDzK9/dyUd7sM80jAf53VL+AV38HoHKpmA7LJoYLf4yVhcVleNcxufsAfcPueTLX0Vg==",
+      "NotBefore": "2020-01-01T00:00:00Z",
+      "NotAfter": "2030-12-31T23:59:59Z",
+      "DNSNames": ["a.example"],
+      "KeyUsage": ["DigitalSignature"],
+      "ExtKeyUsage": ["ServerAuth"],
+      "Certificates": [
+        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"]}
+      ]
+    },
+    {
+      "//0": "Invalid because MTCEntryExtensions is truncated: 0001 0005 ff",
+      "MTCEntryExtensions": "AAEABf8=",
+      "PublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyxiC16lts+SOL87OwHhGDzK9/dyUd7sM80jAf53VL+AV38HoHKpmA7LJoYLf4yVhcVleNcxufsAfcPueTLX0Vg==",
+      "NotBefore": "2020-01-01T00:00:00Z",
+      "NotAfter": "2030-12-31T23:59:59Z",
+      "DNSNames": ["a.example"],
+      "KeyUsage": ["DigitalSignature"],
+      "ExtKeyUsage": ["ServerAuth"],
+      "Certificates": [
+        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"]}
+      ]
+    },
+    {
+      "//0": "Invalid because MTCEntryExtensions has a duplicate type: 0001 0000 0001 0000",
+      "MTCEntryExtensions": "AAEAAAABAAA=",
+      "PublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyxiC16lts+SOL87OwHhGDzK9/dyUd7sM80jAf53VL+AV38HoHKpmA7LJoYLf4yVhcVleNcxufsAfcPueTLX0Vg==",
+      "NotBefore": "2020-01-01T00:00:00Z",
+      "NotAfter": "2030-12-31T23:59:59Z",
+      "DNSNames": ["a.example"],
+      "KeyUsage": ["DigitalSignature"],
+      "ExtKeyUsage": ["ServerAuth"],
+      "Certificates": [
+        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"]}
+      ]
+    },
+    {
+      "//0": "Invalid because MTCEntryExtensions types are in descending order: 0002 0000 0001 0000",
+      "MTCEntryExtensions": "AAIAAAABAAA=",
+      "PublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyxiC16lts+SOL87OwHhGDzK9/dyUd7sM80jAf53VL+AV38HoHKpmA7LJoYLf4yVhcVleNcxufsAfcPueTLX0Vg==",
+      "NotBefore": "2020-01-01T00:00:00Z",
+      "NotAfter": "2030-12-31T23:59:59Z",
+      "DNSNames": ["a.example"],
+      "KeyUsage": ["DigitalSignature"],
+      "ExtKeyUsage": ["ServerAuth"],
+      "Certificates": [
+        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"]}
+      ]
+    },
+    {
+      "Repeat": 1996,
       "Subject": {"CommonName": "Some more filler certificates"},
       "PublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyxiC16lts+SOL87OwHhGDzK9/dyUd7sM80jAf53VL+AV38HoHKpmA7LJoYLf4yVhcVleNcxufsAfcPueTLX0Vg==",
       "NotBefore": "2020-01-01T00:00:00Z",

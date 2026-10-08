@@ -144,6 +144,29 @@ bool DigestUpdateNextASN1Element(EVP_MD_CTX *ctx, CBS *cbs) {
   return EVP_DigestUpdate(ctx, CBS_data(&element), CBS_len(&element));
 }
 
+// CheckMTCLogEntryExtensions returns whether `extensions` is a well-formed list
+// of MTCLogEntryExtension structures, sorted in strictly ascending order by
+// extension type (see section 5.2.1). No extension types are currently
+// recognized, so the contents are otherwise ignored (see section 12.5).
+bool CheckMTCLogEntryExtensions(CBS extensions) {
+  std::optional<uint16_t> prev_type;
+  while (CBS_len(&extensions) > 0) {
+    uint16_t type;
+    CBS data;
+    if (!CBS_get_u16(&extensions, &type) ||
+        !CBS_get_u16_length_prefixed(&extensions, &data)) {
+      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_MTC_PROOF);
+      return false;
+    }
+    if (prev_type.has_value() && *prev_type >= type) {
+      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_MTC_PROOF);
+      return false;
+    }
+    prev_type = type;
+  }
+  return true;
+}
+
 // MTCCACosigner represents a Merkle Tree CA and its corresponding CA cosigner
 // (see draft-ietf-plants-merkle-tree-certs, section 5.5).
 // Only id-pe-mtcCertificationAuthority-SHA256 is supported.
@@ -431,6 +454,9 @@ int x509_verify_mtc(const X509 *x509, const EVP_PKEY *pkey,
       !CBS_get_u24_length_prefixed(&mtc_proof, &signatures) ||
       CBS_len(&mtc_proof) != 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
+    return 0;
+  }
+  if (!CheckMTCLogEntryExtensions(extensions)) {
     return 0;
   }
 

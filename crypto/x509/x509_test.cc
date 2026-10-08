@@ -12681,6 +12681,41 @@ TEST_P(X509VerifyMTCTest, EmptyUnrecognizedCosignature) {
   EXPECT_EQ(X509_V_OK, VerifyMTC(mtc_33_empty_unrecognized_cosignature.get()));
 }
 
+TEST_P(X509VerifyMTCTest, UnrecognizedEntryExtensions) {
+  UniquePtr<X509> mtc_34_unrecognized_extensions =
+      CertFromPEM(GetTestData("crypto/x509/test/mtc/cert_34_0.pem"));
+  ASSERT_TRUE(mtc_34_unrecognized_extensions);
+  EXPECT_EQ(X509_V_OK, VerifyMTC(mtc_34_unrecognized_extensions.get()));
+}
+
+TEST_P(X509VerifyMTCTest, InvalidEntryExtensions) {
+  UniquePtr<X509> mtc_35_truncated_extensions =
+      CertFromPEM(GetTestData("crypto/x509/test/mtc/cert_35_0.pem"));
+  ASSERT_TRUE(mtc_35_truncated_extensions);
+  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+            VerifyMTC(mtc_35_truncated_extensions.get()));
+  EXPECT_TRUE(
+      ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_PROOF));
+  ERR_clear_error();
+
+  UniquePtr<X509> mtc_36_duplicate_extensions =
+      CertFromPEM(GetTestData("crypto/x509/test/mtc/cert_36_0.pem"));
+  ASSERT_TRUE(mtc_36_duplicate_extensions);
+  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+            VerifyMTC(mtc_36_duplicate_extensions.get()));
+  EXPECT_TRUE(
+      ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_PROOF));
+  ERR_clear_error();
+
+  UniquePtr<X509> mtc_37_misordered_extensions =
+      CertFromPEM(GetTestData("crypto/x509/test/mtc/cert_37_0.pem"));
+  ASSERT_TRUE(mtc_37_misordered_extensions);
+  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+            VerifyMTC(mtc_37_misordered_extensions.get()));
+  EXPECT_TRUE(
+      ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_PROOF));
+}
+
 TEST_P(X509VerifyMTCTest, InvalidSerial) {
   // This cert with index 2 is below the minSerial for the CA, which is:
   // {"Log": 1, "Index": 8}.
