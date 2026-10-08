@@ -1097,7 +1097,9 @@
             "crypto/x509/test/*.pem",
             "crypto/x509/test/*.pk8",
             "crypto/x509/test/mtc/*.pem",
-            "crypto/x509/test/mtc/*.txt",
+            "crypto/x509/test/mtc/*/*.pem",
+            "crypto/x509/test/mtc/large_merkle_tree_consistency_proof_tests.txt",
+            "crypto/x509/test/mtc/large_merkle_tree_inclusion_proof_tests.txt",
             "third_party/wycheproof_testvectors/*.txt"
         ],
         "internal_hdrs": [

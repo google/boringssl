@@ -991,6 +991,14 @@ boringssl_crypto_test_data := \
   crypto/x509/test/many_names2.pem \
   crypto/x509/test/many_names3.pem \
   crypto/x509/test/mtc/ca_cert.pem \
+  crypto/x509/test/mtc/ca_ext_oid_wrong/ca_cert.pem \
+  crypto/x509/test/mtc/ca_ext_oid_wrong/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_ext_trailing_data/ca_cert.pem \
+  crypto/x509/test/mtc/ca_ext_trailing_data/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_id_too_long/ca_cert.pem \
+  crypto/x509/test/mtc/ca_id_too_long/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_min_serial_too_low/ca_cert.pem \
+  crypto/x509/test/mtc/ca_min_serial_too_low/cert_1_0.pem \
   crypto/x509/test/mtc/cert_10_0.pem \
   crypto/x509/test/mtc/cert_10_1.pem \
   crypto/x509/test/mtc/cert_2034_0.pem \
@@ -999,6 +1007,7 @@ boringssl_crypto_test_data := \
   crypto/x509/test/mtc/cert_32_0.pem \
   crypto/x509/test/mtc/cert_33_0.pem \
   crypto/x509/test/mtc/cert_33_1.pem \
+  crypto/x509/test/mtc/cert_33_10.pem \
   crypto/x509/test/mtc/cert_33_2.pem \
   crypto/x509/test/mtc/cert_33_3.pem \
   crypto/x509/test/mtc/cert_33_4.pem \
@@ -1010,6 +1019,8 @@ boringssl_crypto_test_data := \
   crypto/x509/test/mtc/cert_5036_0.pem \
   crypto/x509/test/mtc/large_merkle_tree_consistency_proof_tests.txt \
   crypto/x509/test/mtc/large_merkle_tree_inclusion_proof_tests.txt \
+  crypto/x509/test/mtc/old_draft_version/ca_cert.pem \
+  crypto/x509/test/mtc/old_draft_version/cert_1_0.pem \
   crypto/x509/test/policy_intermediate.pem \
   crypto/x509/test/policy_intermediate_any.pem \
   crypto/x509/test/policy_intermediate_duplicate.pem \
@@ -1394,6 +1405,7 @@ boringssl_pki_test_sources := \
   pki/verify_unittest.cc
 
 boringssl_pki_test_data := \
+  crypto/x509/test/mtc/README.txt \
   crypto/x509/test/mtc/large_merkle_tree_consistency_proof_tests.txt \
   crypto/x509/test/mtc/large_merkle_tree_inclusion_proof_tests.txt \
   pki/testdata/cert_issuer_source_static_unittest/c1.pem \

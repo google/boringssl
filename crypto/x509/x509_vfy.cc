@@ -1175,7 +1175,7 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
 static int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
                             const X509 *issuer, EVP_PKEY *pkey) {
   int ret;
-  if ((ctx->param->flags & X509_V_FLAG_USE_MTC_DRAFT_PLANTS_05) &&
+  if ((ctx->param->flags & X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07) &&
       x509_is_merkle_tree_ca(issuer)) {
     ret = x509_verify_mtc(x509, pkey, issuer);
   } else {

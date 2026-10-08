@@ -1,5 +1,5 @@
 {
-  "Version": "plants-05",
+  "Version": "plants-07",
   "ID": "32473.1",
   "LogNumber": 1,
   "Cosigners": [
@@ -116,7 +116,8 @@
         {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1", "32473.1", "32473.2.2"], "DontSortCosigners": true},
         {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1", "32473.2.2", "32473.2.2"], "DontSortCosigners": true},
         {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"], "OverrideSignatureAlgorithm": "MAsGCWCGSAFlAwQDEQ=="},
-        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"], "OverrideTBSSignatureAlgorithm": "MAsGCWCGSAFlAwQDEQ=="}
+        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"], "OverrideTBSSignatureAlgorithm": "MAsGCWCGSAFlAwQDEQ=="},
+        {"SubtreeStart": 32, "SubtreeEnd": 64, "Cosigners": ["32473.1"], "OverrideSignatureAlgorithm": "MAwGCisGAQQBgtpLLwA=", "OverrideTBSSignatureAlgorithm": "MAwGCisGAQQBgtpLLwA="}
       ]
     },
     {

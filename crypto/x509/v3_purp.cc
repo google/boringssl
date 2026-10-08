@@ -18,6 +18,7 @@
 #include <openssl/digest.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
+#include <openssl/nid.h>
 #include <openssl/obj.h>
 #include <openssl/stack.h>
 #include <openssl/x509.h>
@@ -142,8 +143,8 @@ int X509_supported_extension(const X509_EXTENSION *ex) {
          nid == NID_policy_constraints ||    //
          nid == NID_name_constraints ||      //
          nid == NID_policy_mappings ||       //
-         nid == NID_inhibit_any_policy ||
-         nid == NID_pe_mtcCertificationAuthority_draft;
+         nid == NID_inhibit_any_policy ||    //
+         nid == NID_pe_mtcCertificationAuthority_SHA256;
 }
 
 static int setup_crldp(X509 *x) {

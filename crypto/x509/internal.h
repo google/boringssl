@@ -646,7 +646,7 @@ int x509_name_copy(X509_NAME *dst, const X509_NAME *src);
 // Merkle Tree Certificate (MTC) verification functions.
 
 // x509_is_merkle_tree_ca returns whether `x509` contains an extension of type
-// id-pe-mtcCertificationAuthority.
+// id-pe-mtcCertificationAuthority-SHA256.
 bool x509_is_merkle_tree_ca(const X509 *x509);
 
 // x509_evaluate_mtc_subtree_inclusion_proof carries out the procedure in
