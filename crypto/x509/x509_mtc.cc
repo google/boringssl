@@ -442,8 +442,7 @@ int x509_verify_mtc(const X509 *x509, const EVP_PKEY *pkey,
   while (CBS_len(&signatures) > 0) {
     if (!CBS_get_u8_length_prefixed(&signatures, &cosigner_id) ||
         CBS_len(&cosigner_id) == 0 ||
-        !CBS_get_u16_length_prefixed(&signatures, &signature) ||
-        CBS_len(&signature) == 0) {
+        !CBS_get_u16_length_prefixed(&signatures, &signature)) {
       OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
       return 0;
     }

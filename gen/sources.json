@@ -1004,6 +1004,7 @@
       "crypto/x509/test/mtc/cert_33_0.pem",
       "crypto/x509/test/mtc/cert_33_1.pem",
       "crypto/x509/test/mtc/cert_33_10.pem",
+      "crypto/x509/test/mtc/cert_33_11.pem",
       "crypto/x509/test/mtc/cert_33_2.pem",
       "crypto/x509/test/mtc/cert_33_3.pem",
       "crypto/x509/test/mtc/cert_33_4.pem",

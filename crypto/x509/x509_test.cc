@@ -12583,6 +12583,16 @@ TEST_P(X509VerifyMTCTest, InvalidCosignaturesArray) {
   ERR_clear_error();
 }
 
+TEST_P(X509VerifyMTCTest, EmptyUnrecognizedCosignature) {
+  // This cert has, in addition to the CA cosignature, an empty cosignature from
+  // an unrecognized cosigner. The empty signature is syntactically valid, and
+  // unrecognized cosigners are ignored.
+  UniquePtr<X509> mtc_33_empty_unrecognized_cosignature =
+      CertFromPEM(GetTestData("crypto/x509/test/mtc/cert_33_11.pem"));
+  ASSERT_TRUE(mtc_33_empty_unrecognized_cosignature);
+  EXPECT_EQ(X509_V_OK, VerifyMTC(mtc_33_empty_unrecognized_cosignature.get()));
+}
+
 TEST_P(X509VerifyMTCTest, InvalidSerial) {
   // This cert with index 2 is below the minSerial for the CA, which is:
   // {"Log": 1, "Index": 8}.
