@@ -63,8 +63,8 @@ constexpr uint64_t leb128_len(uint64_t len) {
   return (bssl::CRYPTO_bit_width(len) + 6) / 7;
 }
 
-constexpr size_t kMaxLenTagSize = leb128_len(UINT64_MAX);
-constexpr std::string_view kDSI = "CPace255";
+static constexpr size_t kMaxLenTagSize = leb128_len(UINT64_MAX);
+static constexpr std::string_view kDSI = "CPace255";
 
 constexpr size_t leb128_tag(uint64_t len, uint8_t tag[kMaxLenTagSize]) {
   size_t tag_len = leb128_len(len);

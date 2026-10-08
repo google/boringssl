@@ -38,17 +38,17 @@
 BSSL_NAMESPACE_BEGIN
 namespace {
 
-const decltype(&EVP_hpke_x25519_hkdf_sha256) kAllKEMs[] = {
+static const decltype(&EVP_hpke_x25519_hkdf_sha256) kAllKEMs[] = {
     &EVP_hpke_p256_hkdf_sha256, &EVP_hpke_x25519_hkdf_sha256, &EVP_hpke_xwing,
     &EVP_hpke_mlkem768, &EVP_hpke_mlkem1024};
 
-const decltype(&EVP_hpke_aes_128_gcm) kAllAEADs[] = {
+static const decltype(&EVP_hpke_aes_128_gcm) kAllAEADs[] = {
     &EVP_hpke_aes_128_gcm,
     &EVP_hpke_aes_256_gcm,
     &EVP_hpke_chacha20_poly1305,
 };
 
-const decltype(&EVP_hpke_hkdf_sha256) kAllKDFs[] = {
+static const decltype(&EVP_hpke_hkdf_sha256) kAllKDFs[] = {
     &EVP_hpke_hkdf_sha256,
     &EVP_hpke_hkdf_sha384,
 };

@@ -30,17 +30,17 @@
 
 
 BSSL_NAMESPACE_BEGIN
+
 namespace {
 
-static constexpr uint8_t kPassword[] = {'P', 'a', 's', 's', 'w', 'o', 'r', 'd'};
-static constexpr uint8_t kChannelId[] = {
-    0x0b, 'A', '_', 'i', 'n', 'i', 't', 'i', 'a', 't', 'o', 'r',
-    0x0b, 'B', '_', 'r', 'e', 's', 'p', 'o', 'n', 'd', 'e', 'r'};
-static constexpr uint8_t kAda[] = {'A', 'D', 'a'};
-static constexpr uint8_t kAdb[] = {'A', 'D', 'b'};
-static constexpr uint8_t kSid[] = {0x7e, 0x4b, 0x47, 0x91, 0xd6, 0xa8,
-                                   0xef, 0x01, 0x9b, 0x93, 0x6c, 0x79,
-                                   0xfb, 0x7f, 0x2c, 0x57};
+constexpr uint8_t kPassword[] = {'P', 'a', 's', 's', 'w', 'o', 'r', 'd'};
+constexpr uint8_t kChannelId[] = {0x0b, 'A', '_', 'i', 'n',  'i', 't', 'i',
+                                  'a',  't', 'o', 'r', 0x0b, 'B', '_', 'r',
+                                  'e',  's', 'p', 'o', 'n',  'd', 'e', 'r'};
+constexpr uint8_t kAda[] = {'A', 'D', 'a'};
+constexpr uint8_t kAdb[] = {'A', 'D', 'b'};
+constexpr uint8_t kSid[] = {0x7e, 0x4b, 0x47, 0x91, 0xd6, 0xa8, 0xef, 0x01,
+                            0x9b, 0x93, 0x6c, 0x79, 0xfb, 0x7f, 0x2c, 0x57};
 
 struct CPACERun {
   bool Run() {
