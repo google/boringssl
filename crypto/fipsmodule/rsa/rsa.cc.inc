@@ -31,7 +31,6 @@
 
 #include "../../internal.h"
 #include "../../mem_internal.h"
-#include "../bcm_interface.h"
 #include "../bn/internal.h"
 #include "../delocate.h"
 #include "internal.h"
@@ -220,6 +219,15 @@ void RSA_free(RSA *rsa) {
 int RSA_up_ref(RSA *rsa) {
   FromOpaque(rsa)->UpRefInternal();
   return 1;
+}
+
+RSA *RSA_dup_ref(const RSA *rsa) {
+  if (rsa == nullptr) {
+    return nullptr;
+  }
+  auto *ptr = const_cast<RSA *>(rsa);
+  RSA_up_ref(ptr);
+  return ptr;
 }
 
 unsigned RSA_bits(const RSA *rsa) {

@@ -77,6 +77,10 @@ OPENSSL_EXPORT SSL_CTX *SSL_CTX_new(const SSL_METHOD *method);
 // SSL_CTX_up_ref increments the reference count of `ctx`. It returns one.
 OPENSSL_EXPORT int SSL_CTX_up_ref(SSL_CTX *ctx);
 
+// SSL_CTX_dup_ref increments the reference count of `ctx` and returns the same
+// handle.
+OPENSSL_EXPORT SSL_CTX *SSL_CTX_dup_ref(const SSL_CTX *ctx);
+
 // SSL_CTX_free releases memory associated with `ctx`.
 OPENSSL_EXPORT void SSL_CTX_free(SSL_CTX *ctx);
 
@@ -2018,6 +2022,10 @@ OPENSSL_EXPORT SSL_SESSION *SSL_SESSION_new(const SSL_CTX *ctx);
 // SSL_SESSION_up_ref increments the reference count of `session` and returns
 // one.
 OPENSSL_EXPORT int SSL_SESSION_up_ref(SSL_SESSION *session);
+
+// SSL_SESSION_dup_ref increments the reference count of `session` and returns
+// the same handle.
+OPENSSL_EXPORT SSL_SESSION *SSL_SESSION_dup_ref(const SSL_SESSION *session);
 
 // SSL_SESSION_free decrements the reference count of `session`. If it reaches
 // zero, all data referenced by `session` and `session` itself are released.
@@ -4800,6 +4808,10 @@ OPENSSL_EXPORT SSL_ECH_KEYS *SSL_ECH_KEYS_new(void);
 
 // SSL_ECH_KEYS_up_ref increments the reference count of `keys`.
 OPENSSL_EXPORT void SSL_ECH_KEYS_up_ref(SSL_ECH_KEYS *keys);
+
+// SSL_ECH_KEYS_dup_ref increments the reference count of `keys` and returns the
+// same handle.
+OPENSSL_EXPORT SSL_ECH_KEYS *SSL_ECH_KEYS_dup_ref(const SSL_ECH_KEYS *keys);
 
 // SSL_ECH_KEYS_free releases memory associated with `keys`.
 OPENSSL_EXPORT void SSL_ECH_KEYS_free(SSL_ECH_KEYS *keys);

@@ -15,7 +15,7 @@
 #ifndef OPENSSL_HEADER_RSA_H
 #define OPENSSL_HEADER_RSA_H
 
-#include <openssl/base.h>   // IWYU pragma: export
+#include <openssl/base.h>  // IWYU pragma: export
 
 #include <openssl/engine.h>
 #include <openssl/ex_data.h>
@@ -64,6 +64,11 @@ OPENSSL_EXPORT void RSA_free(RSA *rsa);
 // RSA_up_ref increments the reference count of `rsa` and returns one. It does
 // not mutate `rsa` for thread-safety purposes and may be used concurrently.
 OPENSSL_EXPORT int RSA_up_ref(RSA *rsa);
+
+// RSA_dup_ref increments the reference count of `rsa` and returns the same
+// handle. It does not mutate `rsa` for thread-safety purposes and may be used
+// concurrently.
+OPENSSL_EXPORT RSA *RSA_dup_ref(const RSA *rsa);
 
 
 // Properties.

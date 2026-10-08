@@ -95,6 +95,15 @@ int CRYPTO_BUFFER_POOL_up_ref(CRYPTO_BUFFER_POOL *pool) {
   return 1;
 }
 
+CRYPTO_BUFFER_POOL *CRYPTO_BUFFER_POOL_dup_ref(const CRYPTO_BUFFER_POOL *pool) {
+  if (pool == nullptr) {
+    return nullptr;
+  }
+  auto *ptr = const_cast<CRYPTO_BUFFER_POOL *>(pool);
+  CRYPTO_BUFFER_POOL_up_ref(ptr);
+  return ptr;
+}
+
 void CryptoBuffer::UpRefInternal() const {
   // This is safe in the case that `buf->pool` is NULL because it's just
   // standard reference counting in that case.

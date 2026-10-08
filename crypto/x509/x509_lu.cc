@@ -149,6 +149,15 @@ int X509_STORE_up_ref(X509_STORE *store) {
   return 1;
 }
 
+X509_STORE *X509_STORE_dup_ref(const X509_STORE *store) {
+  if (store == nullptr) {
+    return nullptr;
+  }
+  auto *ptr = const_cast<X509_STORE *>(store);
+  X509_STORE_up_ref(ptr);
+  return ptr;
+}
+
 void X509_STORE_free(X509_STORE *vfy) {
   if (vfy == nullptr) {
     return;

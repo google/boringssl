@@ -1025,6 +1025,15 @@ void SSL_ECH_KEYS_up_ref(SSL_ECH_KEYS *keys) {
   FromOpaque(keys)->UpRefInternal();
 }
 
+SSL_ECH_KEYS *SSL_ECH_KEYS_dup_ref(const SSL_ECH_KEYS *keys) {
+  if (keys == nullptr) {
+    return nullptr;
+  }
+  auto *ptr = const_cast<SSL_ECH_KEYS *>(keys);
+  SSL_ECH_KEYS_up_ref(ptr);
+  return ptr;
+}
+
 void SSL_ECH_KEYS_free(SSL_ECH_KEYS *keys) {
   if (keys != nullptr) {
     FromOpaque(keys)->DecRefInternal();

@@ -2800,6 +2800,10 @@ OPENSSL_EXPORT X509_STORE *X509_STORE_new(void);
 // Although `store` is not const, this function's use of `store` is thread-safe.
 OPENSSL_EXPORT int X509_STORE_up_ref(X509_STORE *store);
 
+// X509_STORE_dup_ref adds one to the reference count of `store` and returns
+// the same handle.
+OPENSSL_EXPORT X509_STORE *X509_STORE_dup_ref(const X509_STORE *store);
+
 // X509_STORE_free releases memory associated with `store`.
 OPENSSL_EXPORT void X509_STORE_free(X509_STORE *store);
 
@@ -5350,7 +5354,7 @@ BORINGSSL_MAKE_DELETER(X509_VERIFY_PARAM, X509_VERIFY_PARAM_free)
 
 BSSL_NAMESPACE_END
 
-}       // extern C++
+}  // extern C++
 #endif  // !BORINGSSL_NO_CXX
 
 #define X509_R_AKID_MISMATCH 100
