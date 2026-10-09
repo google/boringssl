@@ -150,9 +150,7 @@ EC_KEY *EC_KEY_dup_ref(const EC_KEY *key) {
   if (key == nullptr) {
     return nullptr;
   }
-  auto *ptr = const_cast<EC_KEY *>(key);
-  EC_KEY_up_ref(ptr);
-  return ptr;
+  return FromOpaque(key)->DupRefInternal();
 }
 
 int EC_KEY_is_opaque(const EC_KEY *key) {

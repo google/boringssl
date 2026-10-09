@@ -487,9 +487,7 @@ SSL_CREDENTIAL *SSL_CREDENTIAL_dup_ref(const SSL_CREDENTIAL *cred) {
   if (cred == nullptr) {
     return nullptr;
   }
-  auto *cred_impl = FromOpaque(cred);
-  cred_impl->UpRefInternal();
-  return const_cast<SSL_CREDENTIAL *>(cred);
+  return FromOpaque(cred)->DupRefInternal();
 }
 
 void SSL_CREDENTIAL_free(SSL_CREDENTIAL *cred) {

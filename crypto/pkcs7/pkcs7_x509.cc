@@ -472,9 +472,9 @@ static int write_signer_info(CBB *out, void *arg) {
   return 1;
 }
 
-int bssl::pkcs7_add_external_signature(CBB *out, X509 *sign_cert, EVP_PKEY *key,
-                                       const EVP_MD *md, BIO *data,
-                                       bool use_key_id) {
+int bssl::pkcs7_add_external_signature(CBB *out, X509 *sign_cert,
+                                       const EVP_PKEY *key, const EVP_MD *md,
+                                       BIO *data, bool use_key_id) {
   signer_info_data si_data;
   si_data.use_key_id = use_key_id;
   si_data.sign_cert = sign_cert;
@@ -494,7 +494,7 @@ int bssl::pkcs7_add_external_signature(CBB *out, X509 *sign_cert, EVP_PKEY *key,
       /*cert_crl_cb=*/nullptr, write_signer_info, &si_data);
 }
 
-PKCS7 *PKCS7_sign(X509 *sign_cert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
+PKCS7 *PKCS7_sign(X509 *sign_cert, const EVP_PKEY *pkey, STACK_OF(X509) *certs,
                   BIO *data, int flags) {
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 2048)) {

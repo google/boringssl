@@ -27,7 +27,6 @@
 #include "cert_error_params.h"
 #include "cert_errors.h"
 #include "signature_algorithm.h"
-#include "verify_signed_data.h"
 
 BSSL_NAMESPACE_BEGIN
 
@@ -74,7 +73,7 @@ SimplePathBuilderDelegate::GetMTCCosigner(Span<const uint8_t> cosigner_id) {
 }
 
 bool SimplePathBuilderDelegate::IsCosignatureVerificationResultAcceptable(
-    const MTCAnchor* mtc_anchor,
+    const MTCAnchor *mtc_anchor,
     std::vector<std::vector<uint8_t>> valid_additional_cosigners) {
   return true;
 }
@@ -111,8 +110,8 @@ bool SimplePathBuilderDelegate::IsSignatureAlgorithmAcceptable(
   return false;
 }
 
-bool SimplePathBuilderDelegate::IsPublicKeyAcceptable(EVP_PKEY *public_key,
-                                                      CertErrors *errors) {
+bool SimplePathBuilderDelegate::IsPublicKeyAcceptable(
+    const EVP_PKEY *public_key, CertErrors *errors) {
   int pkey_id = EVP_PKEY_id(public_key);
   if (pkey_id == EVP_PKEY_RSA) {
     // Extract the modulus length from the key.

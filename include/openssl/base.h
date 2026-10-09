@@ -395,7 +395,7 @@ typedef void *OPENSSL_BLOCK;
 #if defined(BORINGSSL_NO_CXX)
 
 #define BORINGSSL_MAKE_DELETER(type, deleter)
-#define BORINGSSL_MAKE_UP_REF(type, up_ref_func)
+#define BORINGSSL_MAKE_UP_REF(type, dup_ref_func)
 #define BORINGSSL_MAKE_STACK_TRAITS(type, init_func, cleanup_func)
 #define BORINGSSL_MAKE_STACK_TRAITS_MOVABLE(type, init_func, cleanup_func, \
                                             move_func)
@@ -527,12 +527,9 @@ class StackAllocatedMovable {
 template <typename T>
 using UniquePtr = std::unique_ptr<T, internal::Deleter>;
 
-#define BORINGSSL_MAKE_UP_REF(type, up_ref_func)             \
-  inline UniquePtr<type> UpRef(type *v) {                    \
-    if (v != nullptr) {                                      \
-      up_ref_func(v);                                        \
-    }                                                        \
-    return UniquePtr<type>(v);                               \
+#define BORINGSSL_MAKE_UP_REF(type, dup_ref_func)            \
+  inline UniquePtr<type> UpRef(const type *v) {              \
+    return UniquePtr<type>(dup_ref_func(v));                 \
   }                                                          \
                                                              \
   inline UniquePtr<type> UpRef(const UniquePtr<type> &ptr) { \

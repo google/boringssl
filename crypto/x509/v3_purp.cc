@@ -342,7 +342,7 @@ static int check_ca(const X509 *x) {
 }
 
 int X509_check_ca(const X509 *x) {
-  if (!x509v3_cache_extensions(const_cast<X509*>(x))) {
+  if (!x509v3_cache_extensions(const_cast<X509 *>(x))) {
     return 0;
   }
   return check_ca(x);

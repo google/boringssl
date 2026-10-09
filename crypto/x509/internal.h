@@ -61,7 +61,7 @@ class X509Pubkey : public X509_pubkey_st {
 int x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
                           Span<const EVP_PKEY_ALG *const> algs);
 int x509_marshal_public_key(CBB *cbb, const X509_PUBKEY *in);
-int x509_pubkey_set1(X509_PUBKEY *key, EVP_PKEY *pkey);
+int x509_pubkey_set1(X509_PUBKEY *key, const EVP_PKEY *pkey);
 
 // X509_PUBKEY is an `ASN1_ITEM` whose ASN.1 type is SubjectPublicKeyInfo and C
 // type is `X509_PUBKEY*`.

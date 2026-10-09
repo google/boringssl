@@ -42,12 +42,10 @@
 #include <openssl/xwing.h>
 
 #include "../bytestring/internal.h"
-#include "../fipsmodule/bcm_interface.h"
 #include "../test/der_trailing_data.h"
 #include "../test/file_test.h"
 #include "../test/test_util.h"
 #include "../test/wycheproof_util.h"
-#include "internal.h"
 
 
 BSSL_NAMESPACE_BEGIN
@@ -1151,7 +1149,7 @@ bool TestEVPOperation(FileTest *t, const KeyMap *key_map, EVP_PKEY *key,
   int (*key_op)(EVP_PKEY_CTX *ctx, uint8_t *out, size_t *out_len,
                 const uint8_t *in, size_t in_len) = nullptr;
   int (*md_op_init)(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
-                    ENGINE *e, EVP_PKEY *pkey) = nullptr;
+                    ENGINE *e, const EVP_PKEY *pkey) = nullptr;
   bool is_verify = false;
   if (t->GetType() == "Decrypt") {
     key_op_init = EVP_PKEY_decrypt_init;

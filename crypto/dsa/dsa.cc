@@ -76,9 +76,7 @@ DSA *DSA_dup_ref(const DSA *dsa) {
   if (dsa == nullptr) {
     return nullptr;
   }
-  auto *ptr = const_cast<DSA *>(dsa);
-  DSA_up_ref(ptr);
-  return ptr;
+  return FromOpaque(dsa)->DupRefInternal();
 }
 
 unsigned DSA_bits(const DSA *dsa) {

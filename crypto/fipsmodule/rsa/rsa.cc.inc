@@ -225,9 +225,7 @@ RSA *RSA_dup_ref(const RSA *rsa) {
   if (rsa == nullptr) {
     return nullptr;
   }
-  auto *ptr = const_cast<RSA *>(rsa);
-  RSA_up_ref(ptr);
-  return ptr;
+  return FromOpaque(rsa)->DupRefInternal();
 }
 
 unsigned RSA_bits(const RSA *rsa) {

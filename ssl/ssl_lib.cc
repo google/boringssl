@@ -443,9 +443,7 @@ SSL_CTX *SSL_CTX_dup_ref(const SSL_CTX *ctx) {
   if (ctx == nullptr) {
     return nullptr;
   }
-  auto *ptr = const_cast<SSL_CTX *>(ctx);
-  SSL_CTX_up_ref(ptr);
-  return ptr;
+  return FromOpaque(ctx)->DupRefInternal();
 }
 
 void SSL_CTX_free(SSL_CTX *ctx) {

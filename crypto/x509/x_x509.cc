@@ -331,9 +331,7 @@ X509 *X509_dup_ref(const X509 *x) {
   if (x == nullptr) {
     return nullptr;
   }
-  auto *x_ref = const_cast<X509 *>(x);
-  X509_up_ref(x_ref);
-  return x_ref;
+  return FromOpaque(x)->DupRefInternal();
 }
 
 int X509_get_ex_new_index(long argl, void *argp, CRYPTO_EX_unused *unused,

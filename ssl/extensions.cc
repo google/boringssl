@@ -348,7 +348,7 @@ bool tls12_add_verify_sigalgs(const SSL_HANDSHAKE *hs, CBB *out) {
 }
 
 bool tls12_check_peer_sigalg(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
-                             uint16_t sigalg, EVP_PKEY *pkey) {
+                             uint16_t sigalg, const EVP_PKEY *pkey) {
   // The peer must have selected an algorithm that is consistent with its public
   // key, the TLS version, and what we advertised.
   Span<const uint16_t> sigalgs = tls12_get_verify_sigalgs(hs);

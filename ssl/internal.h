@@ -883,13 +883,13 @@ UniquePtr<EVP_PKEY> ssl_parse_peer_subject_public_key_info(
 
 // ssl_pkey_supports_algorithm returns whether `pkey` may be used to sign
 // `sigalg`.
-bool ssl_pkey_supports_algorithm(const SSLImpl *ssl, EVP_PKEY *pkey,
+bool ssl_pkey_supports_algorithm(const SSLImpl *ssl, const EVP_PKEY *pkey,
                                  uint16_t sigalg, bool is_verify);
 
 // ssl_public_key_verify verifies that the `signature` is valid for the public
 // key `pkey` and input `in`, using the signature algorithm `sigalg`.
 bool ssl_public_key_verify(SSLImpl *ssl, Span<const uint8_t> signature,
-                           uint16_t sigalg, EVP_PKEY *pkey,
+                           uint16_t sigalg, const EVP_PKEY *pkey,
                            Span<const uint8_t> in);
 
 
@@ -2511,7 +2511,7 @@ bool tls12_add_verify_sigalgs(const SSL_HANDSHAKE *hs, CBB *out);
 // signature from `pkey`. It returns true on success and false on error, setting
 // `*out_alert` to an alert to send.
 bool tls12_check_peer_sigalg(const SSL_HANDSHAKE *hs, uint8_t *out_alert,
-                             uint16_t sigalg, EVP_PKEY *pkey);
+                             uint16_t sigalg, const EVP_PKEY *pkey);
 
 
 // Underdocumented functions.

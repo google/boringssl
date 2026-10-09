@@ -142,7 +142,7 @@ bssl::UniquePtr<EVP_PKEY> ssl_parse_peer_subject_public_key_info(
       spki.data(), spki.size(), algs, std::size(algs)));
 }
 
-bool ssl_pkey_supports_algorithm(const SSLImpl *ssl, EVP_PKEY *pkey,
+bool ssl_pkey_supports_algorithm(const SSLImpl *ssl, const EVP_PKEY *pkey,
                                  uint16_t sigalg, bool is_verify) {
   const SSL_SIGNATURE_ALGORITHM *alg = get_signature_algorithm(sigalg);
   if (alg == nullptr || EVP_PKEY_id(pkey) != alg->pkey_type) {
@@ -197,7 +197,7 @@ bool ssl_pkey_supports_algorithm(const SSLImpl *ssl, EVP_PKEY *pkey,
   return true;
 }
 
-static bool setup_ctx(SSLImpl *ssl, EVP_MD_CTX *ctx, EVP_PKEY *pkey,
+static bool setup_ctx(SSLImpl *ssl, EVP_MD_CTX *ctx, const EVP_PKEY *pkey,
                       uint16_t sigalg, bool is_verify) {
   if (!ssl_pkey_supports_algorithm(ssl, pkey, sigalg, is_verify)) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_WRONG_SIGNATURE_TYPE);
@@ -273,7 +273,7 @@ enum ssl_private_key_result_t ssl_private_key_sign(
         ret = key_method->complete(ssl, out, out_len, max_out);
       } else {
         ret = key_method->sign(ssl, out, out_len, max_out, sigalg, in.data(),
-                              in.size());
+                               in.size());
       }
       if (ret == ssl_private_key_failure) {
         OPENSSL_PUT_ERROR(SSL, SSL_R_PRIVATE_KEY_OPERATION_FAILED);
@@ -305,7 +305,7 @@ enum ssl_private_key_result_t ssl_private_key_sign(
 }
 
 bool ssl_public_key_verify(SSLImpl *ssl, Span<const uint8_t> signature,
-                           uint16_t sigalg, EVP_PKEY *pkey,
+                           uint16_t sigalg, const EVP_PKEY *pkey,
                            Span<const uint8_t> in) {
   ScopedEVP_MD_CTX ctx;
   if (!setup_ctx(ssl, ctx.get(), pkey, sigalg, true /* verify */)) {

@@ -486,9 +486,8 @@ OPENSSL_EXPORT int X509_set_issuer_name(X509 *x509, const X509_NAME *name);
 OPENSSL_EXPORT int X509_set_subject_name(X509 *x509, const X509_NAME *name);
 
 // X509_set_pubkey sets `x509`'s public key to `pkey`. It returns one on success
-// and zero on error. This function does not take ownership of `pkey` and
-// internally copies and updates reference counts as needed.
-OPENSSL_EXPORT int X509_set_pubkey(X509 *x509, EVP_PKEY *pkey);
+// and zero on error.
+OPENSSL_EXPORT int X509_set_pubkey(X509 *x509, const EVP_PKEY *pkey);
 
 // X509_delete_ext removes the extension in `x` at index `loc` and returns the
 // removed extension, or NULL if `loc` was out of bounds. If non-NULL, the
@@ -681,6 +680,10 @@ DEFINE_STACK_OF(X509_REVOKED)
 
 // X509_CRL_up_ref adds one to the reference count of `crl` and returns one.
 OPENSSL_EXPORT int X509_CRL_up_ref(X509_CRL *crl);
+
+// X509_CRL_dup_ref adds one to the reference count of `crl` and returns the
+// same.
+OPENSSL_EXPORT X509_CRL *X509_CRL_dup_ref(const X509_CRL *crl);
 
 // X509_CRL_dup returns a newly-allocated copy of `crl`, or NULL on error. This
 // function works by serializing the structure, so if `crl` is incomplete, it
@@ -4519,7 +4522,7 @@ OPENSSL_EXPORT int ASN1_item_verify(const ASN1_ITEM *it,
 OPENSSL_EXPORT int ASN1_item_sign(const ASN1_ITEM *it, X509_ALGOR *algor1,
                                   X509_ALGOR *algor2,
                                   ASN1_BIT_STRING *signature, void *data,
-                                  EVP_PKEY *pkey, const EVP_MD *type);
+                                  const EVP_PKEY *pkey, const EVP_MD *type);
 
 // ASN1_item_sign_ctx behaves like `ASN1_item_sign` except the signature is
 // signed with `ctx`, `ctx`, which must have been initialized with
@@ -5333,11 +5336,11 @@ BORINGSSL_MAKE_DELETER(POLICYQUALINFO, POLICYQUALINFO_free)
 BORINGSSL_MAKE_DELETER(RSA_PSS_PARAMS, RSA_PSS_PARAMS_free)
 BORINGSSL_MAKE_DELETER(USERNOTICE, USERNOTICE_free)
 BORINGSSL_MAKE_DELETER(X509, X509_free)
-BORINGSSL_MAKE_UP_REF(X509, X509_up_ref)
+BORINGSSL_MAKE_UP_REF(X509, X509_dup_ref)
 BORINGSSL_MAKE_DELETER(X509_ALGOR, X509_ALGOR_free)
 BORINGSSL_MAKE_DELETER(X509_ATTRIBUTE, X509_ATTRIBUTE_free)
 BORINGSSL_MAKE_DELETER(X509_CRL, X509_CRL_free)
-BORINGSSL_MAKE_UP_REF(X509_CRL, X509_CRL_up_ref)
+BORINGSSL_MAKE_UP_REF(X509_CRL, X509_CRL_dup_ref)
 BORINGSSL_MAKE_DELETER(X509_EXTENSION, X509_EXTENSION_free)
 BORINGSSL_MAKE_DELETER(X509_INFO, X509_INFO_free)
 BORINGSSL_MAKE_DELETER(X509_LOOKUP, X509_LOOKUP_free)
@@ -5349,7 +5352,7 @@ BORINGSSL_MAKE_DELETER(X509_REQ, X509_REQ_free)
 BORINGSSL_MAKE_DELETER(X509_REVOKED, X509_REVOKED_free)
 BORINGSSL_MAKE_DELETER(X509_SIG, X509_SIG_free)
 BORINGSSL_MAKE_DELETER(X509_STORE, X509_STORE_free)
-BORINGSSL_MAKE_UP_REF(X509_STORE, X509_STORE_up_ref)
+BORINGSSL_MAKE_UP_REF(X509_STORE, X509_STORE_dup_ref)
 BORINGSSL_MAKE_DELETER(X509_STORE_CTX, X509_STORE_CTX_free)
 BORINGSSL_MAKE_DELETER(X509_VERIFY_PARAM, X509_VERIFY_PARAM_free)
 

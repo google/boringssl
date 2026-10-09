@@ -897,9 +897,7 @@ SSL_SESSION *SSL_SESSION_dup_ref(const SSL_SESSION *session) {
   if (session == nullptr) {
     return nullptr;
   }
-  auto *ptr = const_cast<SSL_SESSION *>(session);
-  SSL_SESSION_up_ref(ptr);
-  return ptr;
+  return FromOpaque(session)->DupRefInternal();
 }
 
 void SSL_SESSION_free(SSL_SESSION *session) {
