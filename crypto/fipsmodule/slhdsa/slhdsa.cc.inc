@@ -65,12 +65,15 @@ bcm_infallible generate_key_from_seed_no_self_test(const slh_dsa_config *config,
   // Initialize PK.seed from seed.
   OPENSSL_memcpy(out_public_key, seed + 2 * config->n, config->n);
 
+  slhdsa_hash_ctx hash_ctx;
+  slhdsa_hash_ctx_init(config, &hash_ctx, out_public_key);
+
   uint8_t addr[32] = {0};
   slhdsa_set_layer_addr(config, addr, config->d - 1);
 
   // Set PK.root
   slhdsa_treehash(config, out_public_key + config->n, out_secret_key, 0,
-                  config->tree_height, out_public_key, addr);
+                  config->tree_height, &hash_ctx, addr);
   OPENSSL_memcpy(out_secret_key + 3 * config->n, out_public_key + config->n,
                  config->n);
 
@@ -157,15 +160,17 @@ bcm_infallible sign_internal_no_self_test(
   slhdsa_set_type(config, addr, SLHDSA_ADDR_TYPE_FORSTREE);
   slhdsa_set_keypair_addr(config, addr, idx_leaf);
 
-  slhdsa_fors_sign(config, out_signature + n, fors_digest, sk_seed, pk_seed,
+  slhdsa_hash_ctx hash_ctx;
+  slhdsa_hash_ctx_init(config, &hash_ctx, pk_seed);
+  slhdsa_fors_sign(config, out_signature + n, fors_digest, sk_seed, &hash_ctx,
                    addr);
 
   uint8_t pk_fors[SLHDSA_MAX_N];
   slhdsa_fors_pk_from_sig(config, pk_fors, out_signature + n, fors_digest,
-                          pk_seed, addr);
+                          &hash_ctx, addr);
 
   slhdsa_ht_sign(config, out_signature + n + slhdsa_fors_bytes(config), pk_fors,
-                 idx_tree, idx_leaf, sk_seed, pk_seed);
+                 idx_tree, idx_leaf, sk_seed, &hash_ctx);
   return bcm_infallible::approved;
 }
 
@@ -213,11 +218,13 @@ bcm_status verify_internal(const slh_dsa_config *config,
   slhdsa_set_keypair_addr(config, addr, idx_leaf);
 
   uint8_t pk_fors[SLHDSA_MAX_N];
-  slhdsa_fors_pk_from_sig(config, pk_fors, sig_fors, fors_digest, pk_seed,
+  slhdsa_hash_ctx hash_ctx;
+  slhdsa_hash_ctx_init(config, &hash_ctx, pk_seed);
+  slhdsa_fors_pk_from_sig(config, pk_fors, sig_fors, fors_digest, &hash_ctx,
                           addr);
 
   if (!slhdsa_ht_verify(config, sig_ht, pk_fors, idx_tree, idx_leaf, pk_root,
-                        pk_seed)) {
+                        &hash_ctx)) {
     return bcm_status::failure;
   }
 
