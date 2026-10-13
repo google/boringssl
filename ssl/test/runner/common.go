@@ -2778,13 +2778,11 @@ var (
 	downgradeJDK11 = []byte{0xed, 0xbf, 0xb4, 0xa8, 0xc2, 0x47, 0x10, 0xff}
 )
 
-func containsGREASE(values []uint16) bool {
-	return slices.ContainsFunc(values, isGREASEValue)
-}
+type GREASEable interface{ ~uint16 }
 
-func containsSigAlgsGREASE(values []signatureAlgorithm) bool {
-	return slices.ContainsFunc(values, func(s signatureAlgorithm) bool {
-		return isGREASEValue(uint16(s))
+func containsGREASE[T GREASEable](values []T) bool {
+	return slices.ContainsFunc(values, func(val T) bool {
+		return isGREASEValue(uint16(val))
 	})
 }
 
