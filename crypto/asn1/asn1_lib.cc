@@ -235,6 +235,8 @@ ASN1_STRING *ASN1_STRING_dup(const ASN1_STRING *str) {
   return ret;
 }
 
+static_assert(ASN1_STRING_MAX < INT_MAX, "len will not overflow int");
+
 int ASN1_STRING_set(ASN1_STRING *str, const void *_data, ossl_ssize_t len_s) {
   const char *data = reinterpret_cast<const char *>(_data);
   size_t len;
@@ -247,7 +249,6 @@ int ASN1_STRING_set(ASN1_STRING *str, const void *_data, ossl_ssize_t len_s) {
     len = (size_t)len_s;
   }
 
-  static_assert(ASN1_STRING_MAX < INT_MAX, "len will not overflow int");
   if (len > ASN1_STRING_MAX) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_OVERFLOW);
     return 0;
@@ -274,6 +275,8 @@ int ASN1_STRING_set(ASN1_STRING *str, const void *_data, ossl_ssize_t len_s) {
     // `ASN1_STRING`s, in case anyone accidentally passed `str->data` into a
     // function expecting a C string. We retain this behavior for compatibility,
     // but code must not rely on this. See CVE-2021-3712.
+    // TODO(crbug.com/476131577): Make this function a wrapper around
+    // `ASN1_STRING_set1_data`, after dropping the null-termination here.
     str->data[len] = '\0';
   }
   return 1;
@@ -285,6 +288,25 @@ void ASN1_STRING_set0(ASN1_STRING *str, void *data, int len) {
   str->data = reinterpret_cast<uint8_t *>(data);
   str->length = len;
   str->flags &= ~0x07;  // Clear unused bits if this is a BIT STRING.
+}
+
+int ASN1_STRING_set1_data(ASN1_STRING *str, const uint8_t *data, size_t len) {
+  if (len > ASN1_STRING_MAX) {
+    OPENSSL_PUT_ERROR(ASN1, ERR_R_OVERFLOW);
+    return 0;
+  }
+  uint8_t *new_data = nullptr;
+  if (len != 0) {
+    new_data = reinterpret_cast<uint8_t *>(OPENSSL_memdup(data, len));
+    if (new_data == nullptr) {
+      return 0;
+    }
+  }
+  OPENSSL_free(str->data);
+  str->data = new_data;
+  str->length = len;
+  str->flags &= ~0x07;  // Clear unused bits if this is a BIT STRING.
+  return 1;
 }
 
 ASN1_STRING *ASN1_STRING_new() {

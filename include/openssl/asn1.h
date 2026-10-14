@@ -536,14 +536,16 @@ OPENSSL_EXPORT size_t ASN1_STRING_get_length(const ASN1_STRING *str);
 // values numerically. For a numerical comparison, use `ASN1_INTEGER_cmp`.
 OPENSSL_EXPORT int ASN1_STRING_cmp(const ASN1_STRING *a, const ASN1_STRING *b);
 
-// ASN1_STRING_set sets the contents of `str` to a copy of `len` bytes from
-// `data`. It returns one on success and zero on error. If `data` is NULL, it
-// updates the length and allocates the buffer as needed, but does not
-// initialize the contents.
+// ASN1_STRING_set1_data sets the contents of `str` to `len` bytes from `data`.
 //
 // If `str` is a BIT STRING, this function sets the number of unused bits to
 // zero. `ASN1_BIT_STRING_set1` may be used to set a BIT STRING that is not a
 // whole number of bytes.
+OPENSSL_EXPORT int ASN1_STRING_set1_data(ASN1_STRING *str, const uint8_t *data,
+                                         size_t len);
+
+// ASN1_STRING_set behaves like `ASN1_STRING_set1_data` except that, if `len` is
+// negative, it implicitly calls `strlen` on data to determine the length.
 OPENSSL_EXPORT int ASN1_STRING_set(ASN1_STRING *str, const void *data,
                                    ossl_ssize_t len);
 
