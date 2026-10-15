@@ -42,9 +42,6 @@ class VerifyCertificateChainDelegate;
 //    serialNumber            CertificateSerialNumber
 // }
 struct OPENSSL_EXPORT OCSPCertID {
-  OCSPCertID();
-  ~OCSPCertID();
-
   DigestAlgorithm hash_algorithm;
   der::Input issuer_name_hash;
   der::Input issuer_key_hash;
@@ -122,9 +119,6 @@ struct OCSPCertStatus {
 //      singleExtensions   [1]       EXPLICIT Extensions OPTIONAL
 // }
 struct OPENSSL_EXPORT OCSPSingleResponse {
-  OCSPSingleResponse();
-  ~OCSPSingleResponse();
-
   der::Input cert_id_tlv;
   OCSPCertStatus cert_status;
   der::GeneralizedTime this_update;
@@ -155,9 +149,6 @@ struct OPENSSL_EXPORT OCSPResponseData {
     der::Input name;
     der::Input key_hash;
   };
-
-  OCSPResponseData();
-  ~OCSPResponseData();
 
   uint8_t version;
   OCSPResponseData::ResponderID responder_id;
@@ -214,9 +205,6 @@ struct OPENSSL_EXPORT OCSPResponse {
 
     LAST = UNAUTHORIZED,
   };
-
-  OCSPResponse();
-  ~OCSPResponse();
 
   ResponseStatus status;
   der::Input data;

@@ -2219,8 +2219,6 @@ void PathVerifier::Run(
 
 }  // namespace
 
-VerifyCertificateChainDelegate::~VerifyCertificateChainDelegate() = default;
-
 void VerifyCertificateChain(
     const ParsedCertificateList &certs, const TrustAnchor &last_cert_trust,
     VerifyCertificateChainDelegate *delegate, const der::GeneralizedTime &time,

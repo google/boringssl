@@ -133,7 +133,7 @@ class OPENSSL_EXPORT VerifyCertificateChainDelegate {
   // only called if IsDebugLogEnabled (above) returns true.
   virtual void DebugLog(std::string_view msg) = 0;
 
-  virtual ~VerifyCertificateChainDelegate();
+  virtual ~VerifyCertificateChainDelegate() = default;
 };
 
 // VerifyCertificateChain() verifies an ordered certificate path in accordance

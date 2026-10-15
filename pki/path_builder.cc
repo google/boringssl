@@ -741,9 +741,6 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
   }
 }
 
-CertPathBuilderResultPath::CertPathBuilderResultPath() = default;
-CertPathBuilderResultPath::~CertPathBuilderResultPath() = default;
-
 bool CertPathBuilderResultPath::IsValid() const {
   return GetTrustedCert() && !errors.ContainsHighSeverityErrors();
 }
@@ -865,13 +862,6 @@ VerifyError CertPathBuilderResultPath::GetVerifyError() const {
                                  : VerifyError::StatusCode::CERTIFICATE_INVALID,
                      depth, std::move(diagnostic));
 }
-
-
-CertPathBuilder::Result::Result() = default;
-CertPathBuilder::Result::Result(Result &&) = default;
-CertPathBuilder::Result::~Result() = default;
-CertPathBuilder::Result &CertPathBuilder::Result::operator=(Result &&) =
-    default;
 
 bool CertPathBuilder::Result::HasValidPath() const {
   return GetBestValidPath() != nullptr;

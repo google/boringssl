@@ -100,9 +100,6 @@ enum class CrlVersion {
 
 // Corresponds with "TBSCertList" from RFC 5280 Section 5.1:
 struct OPENSSL_EXPORT ParsedCrlTbsCertList {
-  ParsedCrlTbsCertList();
-  ~ParsedCrlTbsCertList();
-
   //         version                 Version OPTIONAL,
   //                                      -- if present, MUST be v2
   //

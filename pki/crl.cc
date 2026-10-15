@@ -419,9 +419,6 @@ CRLRevocationStatus GetCRLStatusForCert(
   return CRLRevocationStatus::GOOD;
 }
 
-ParsedCrlTbsCertList::ParsedCrlTbsCertList() = default;
-ParsedCrlTbsCertList::~ParsedCrlTbsCertList() = default;
-
 CRLRevocationStatus CheckCRL(std::string_view raw_crl,
                              const ParsedCertificateList &valid_chain,
                              size_t target_cert_index,

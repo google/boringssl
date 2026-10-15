@@ -407,12 +407,6 @@ void MTCAnchor::CreateSyntheticCert(bssl::Span<const uint8_t> ca_id) {
       ParseCertificateOptions{}, nullptr);
 }
 
-TrustAnchor::TrustAnchor(CertificateTrust trust)
-    : TrustAnchor(trust, nullptr) {}
-TrustAnchor::TrustAnchor(CertificateTrust trust,
-                         std::shared_ptr<const bssl::MTCAnchor> mtc_anchor)
-    : trust_(trust), mtc_anchor_(mtc_anchor) {}
-
 void TrustAnchor::OverrideCertTrust(CertificateTrust new_trust) {
   trust_ = new_trust;
 }
@@ -422,8 +416,6 @@ CertificateTrust TrustAnchor::CertTrust() const { return trust_; }
 std::shared_ptr<const MTCAnchor> TrustAnchor::MTCAnchor() const {
   return mtc_anchor_;
 }
-
-TrustStore::TrustStore() = default;
 
 std::shared_ptr<const MTCAnchor> TrustStore::GetTrustedMTCIssuerOf(
     const ParsedCertificate *cert) {

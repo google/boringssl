@@ -108,9 +108,6 @@ class CertErrorParams2SizeT : public CertErrorParams {
 
 }  // namespace
 
-CertErrorParams::CertErrorParams() = default;
-CertErrorParams::~CertErrorParams() = default;
-
 std::unique_ptr<CertErrorParams> CreateCertErrorParams1Der(const char *name,
                                                            der::Input der) {
   BSSL_CHECK(name);

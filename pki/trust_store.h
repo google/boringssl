@@ -260,9 +260,10 @@ class OPENSSL_EXPORT TrustAnchor {
   TrustAnchor() = default;
 
   // Creates a TrustAnchor with no associated MTCAnchor.
-  explicit TrustAnchor(CertificateTrust trust);
+  explicit TrustAnchor(CertificateTrust trust) : TrustAnchor(trust, nullptr) {}
   TrustAnchor(CertificateTrust trust,
-              std::shared_ptr<const MTCAnchor> mtc_anchor);
+              std::shared_ptr<const MTCAnchor> mtc_anchor)
+      : trust_(trust), mtc_anchor_(std::move(mtc_anchor)) {}
 
   // TODO(nharper): Temporarily add ParsedCertificate member and accessor.
 
@@ -289,7 +290,7 @@ class OPENSSL_EXPORT TrustAnchor {
 // trustedness of certificates.
 class OPENSSL_EXPORT TrustStore : public CertIssuerSource {
  public:
-  TrustStore();
+  TrustStore() = default;
 
   TrustStore(const TrustStore &) = delete;
   TrustStore &operator=(const TrustStore &) = delete;

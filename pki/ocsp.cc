@@ -34,18 +34,6 @@
 
 BSSL_NAMESPACE_BEGIN
 
-OCSPCertID::OCSPCertID() = default;
-OCSPCertID::~OCSPCertID() = default;
-
-OCSPSingleResponse::OCSPSingleResponse() = default;
-OCSPSingleResponse::~OCSPSingleResponse() = default;
-
-OCSPResponseData::OCSPResponseData() = default;
-OCSPResponseData::~OCSPResponseData() = default;
-
-OCSPResponse::OCSPResponse() = default;
-OCSPResponse::~OCSPResponse() = default;
-
 // CertID ::= SEQUENCE {
 //    hashAlgorithm           AlgorithmIdentifier,
 //    issuerNameHash          OCTET STRING, -- Hash of issuer's DN
