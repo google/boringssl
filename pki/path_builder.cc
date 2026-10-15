@@ -66,9 +66,9 @@ std::string PathDebugString(const ParsedCertificateList &certs) {
   std::string s;
   for (const auto &cert : certs) {
     if (!s.empty()) {
-      s += "\n";
+      s += '\n';
     }
-    s += " " + CertDebugString(cert.get());
+    s += ' ' + CertDebugString(cert.get());
   }
   return s;
 }

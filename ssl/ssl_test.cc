@@ -575,12 +575,12 @@ static std::string CipherListToString(SSL_CTX *ctx) {
       ret += "\t[\n";
       in_group = true;
     }
-    ret += "\t";
+    ret += '\t';
     if (in_group) {
       ret += "  ";
     }
     ret += SSL_CIPHER_get_name(cipher);
-    ret += "\n";
+    ret += '\n';
     if (in_group && !SSL_CTX_cipher_in_group(ctx, i)) {
       ret += "\t]\n";
       in_group = false;
@@ -6701,7 +6701,7 @@ std::string TicketAEADMethodParamToString(
   }
   char retry_count[256];
   snprintf(retry_count, sizeof(retry_count), "%u", std::get<1>(params.param));
-  ret += "_";
+  ret += '_';
   ret += retry_count;
   ret += "Retries_";
   switch (std::get<2>(params.param)) {
@@ -7044,7 +7044,7 @@ static std::string SigAlgsToString(Span<const uint16_t> sigalgs) {
     ret += std::string(buf);
   }
 
-  ret += "}";
+  ret += '}';
   return ret;
 }
 
