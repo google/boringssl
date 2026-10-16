@@ -2822,7 +2822,7 @@ OPENSSL_EXPORT void X509_STORE_free(X509_STORE *store);
 // is a race condition whether `x509` is available for issuer lookups.
 // Moreover, the result may differ for each issuer lookup performed by a single
 // `X509_verify_cert` call.
-OPENSSL_EXPORT int X509_STORE_add_cert(X509_STORE *store, X509 *x509);
+OPENSSL_EXPORT int X509_STORE_add_cert(X509_STORE *store, const X509 *x509);
 
 // X509_STORE_add_crl adds `crl` to `store`. It returns one on success and zero
 // on error. This function internally increments `crl`'s reference count, so the
@@ -2839,7 +2839,7 @@ OPENSSL_EXPORT int X509_STORE_add_cert(X509_STORE *store, X509 *x509);
 // To vary the set of CRLs over time, callers should either create a new
 // `X509_STORE` or configure CRLs on a per-verification basis with
 // `X509_STORE_CTX_set0_crls`.
-OPENSSL_EXPORT int X509_STORE_add_crl(X509_STORE *store, X509_CRL *crl);
+OPENSSL_EXPORT int X509_STORE_add_crl(X509_STORE *store, const X509_CRL *crl);
 
 // X509_STORE_get0_param returns `store`'s verification parameters. This object
 // is mutable and may be modified by the caller. For an individual certificate
