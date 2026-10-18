@@ -386,7 +386,7 @@ static bool digest_sign_update(EVP_MD_CTX *ctx, BIO *data) {
 
 namespace {
 struct signer_info_data {
-  X509 *sign_cert = nullptr;
+  const X509 *sign_cert = nullptr;
   ScopedEVP_MD_CTX sign_ctx;
   bool use_key_id = false;
 };
@@ -472,7 +472,7 @@ static int write_signer_info(CBB *out, void *arg) {
   return 1;
 }
 
-int bssl::pkcs7_add_external_signature(CBB *out, X509 *sign_cert,
+int bssl::pkcs7_add_external_signature(CBB *out, const X509 *sign_cert,
                                        const EVP_PKEY *key, const EVP_MD *md,
                                        BIO *data, bool use_key_id) {
   signer_info_data si_data;
@@ -494,8 +494,8 @@ int bssl::pkcs7_add_external_signature(CBB *out, X509 *sign_cert,
       /*cert_crl_cb=*/nullptr, write_signer_info, &si_data);
 }
 
-PKCS7 *PKCS7_sign(X509 *sign_cert, const EVP_PKEY *pkey, STACK_OF(X509) *certs,
-                  BIO *data, int flags) {
+PKCS7 *PKCS7_sign(const X509 *sign_cert, const EVP_PKEY *pkey,
+                  const STACK_OF(X509) *certs, BIO *data, int flags) {
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 2048)) {
     return nullptr;

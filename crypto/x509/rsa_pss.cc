@@ -122,7 +122,7 @@ int bssl::x509_rsa_ctx_to_pss(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
 }
 
 int bssl::x509_rsa_pss_to_ctx(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
-                              EVP_PKEY *pkey) {
+                              const EVP_PKEY *pkey) {
   assert(OBJ_obj2nid(sigalg->algorithm) == NID_rsassaPss);
   rsa_pss_params_t params;
   if (!rsa_pss_decode(sigalg, &params)) {

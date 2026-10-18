@@ -65,7 +65,7 @@ void X509_free(X509 *x509) {
   impl->DecRefInternal();
 }
 
-X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
+X509 *X509_parse_with_algorithms(const CRYPTO_BUFFER *buf,
                                  const EVP_PKEY_ALG *const *algs,
                                  size_t num_algs) {
   UniquePtr<X509Impl> ret(FromOpaque(X509_new()));
@@ -179,7 +179,7 @@ X509 *X509_parse_with_algorithms(CRYPTO_BUFFER *buf,
   return ret.release();
 }
 
-X509 *X509_parse_from_buffer(CRYPTO_BUFFER *buf) {
+X509 *X509_parse_from_buffer(const CRYPTO_BUFFER *buf) {
   auto algs = GetDefaultEVPAlgorithms();
   return X509_parse_with_algorithms(buf, algs.data(), algs.size());
 }

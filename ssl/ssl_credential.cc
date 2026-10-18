@@ -448,7 +448,7 @@ SSL_CREDENTIAL *SSL_CREDENTIAL_new_delegated() {
   return New<SSLCredential>(SSLCredentialType::kDelegated);
 }
 
-SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key(EVP_PKEY *pkey) {
+SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key(const EVP_PKEY *pkey) {
   if (!EVP_PKEY_has_public(pkey) || !EVP_PKEY_has_private(pkey)) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_MISSING_KEY);
     return nullptr;
@@ -464,7 +464,7 @@ SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key(EVP_PKEY *pkey) {
 }
 
 SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key_custom(
-    EVP_PKEY *pubkey, const SSL_PRIVATE_KEY_METHOD *method) {
+    const EVP_PKEY *pubkey, const SSL_PRIVATE_KEY_METHOD *method) {
   if (!EVP_PKEY_has_public(pubkey)) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_MISSING_KEY);
     return nullptr;
@@ -500,7 +500,7 @@ int SSL_CREDENTIAL_is_complete(const SSL_CREDENTIAL *cred) {
   return FromOpaque(cred)->IsComplete();
 }
 
-int SSL_CREDENTIAL_set1_private_key(SSL_CREDENTIAL *cred, EVP_PKEY *key) {
+int SSL_CREDENTIAL_set1_private_key(SSL_CREDENTIAL *cred, const EVP_PKEY *key) {
   auto *cred_impl = FromOpaque(cred);
   if (!cred_impl->UsesPrivateKey()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
@@ -557,7 +557,7 @@ int SSL_CREDENTIAL_set1_cert_chain(SSL_CREDENTIAL *cred,
 }
 
 int SSL_CREDENTIAL_set1_delegated_credential(SSL_CREDENTIAL *cred,
-                                             CRYPTO_BUFFER *dc) {
+                                             const CRYPTO_BUFFER *dc) {
   auto *cred_impl = FromOpaque(cred);
   if (cred_impl->type != SSLCredentialType::kDelegated) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
@@ -612,7 +612,7 @@ int SSL_CREDENTIAL_set1_delegated_credential(SSL_CREDENTIAL *cred,
 }
 
 int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
-                                      CRYPTO_BUFFER *ocsp) {
+                                      const CRYPTO_BUFFER *ocsp) {
   auto *cred_impl = FromOpaque(cred);
   if (!cred_impl->UsesX509()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
@@ -623,8 +623,8 @@ int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
   return 1;
 }
 
-int SSL_CREDENTIAL_set1_signed_cert_timestamp_list(SSL_CREDENTIAL *cred,
-                                                   CRYPTO_BUFFER *sct_list) {
+int SSL_CREDENTIAL_set1_signed_cert_timestamp_list(
+    SSL_CREDENTIAL *cred, const CRYPTO_BUFFER *sct_list) {
   auto *cred_impl = FromOpaque(cred);
   if (!cred_impl->UsesX509()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
@@ -821,7 +821,7 @@ int SSL_CREDENTIAL_add1_trust_anchor_group(SSL_CREDENTIAL *cred,
 }
 
 int SSL_CREDENTIAL_set1_certificate_properties(
-    SSL_CREDENTIAL *cred, CRYPTO_BUFFER *cert_property_list) {
+    SSL_CREDENTIAL *cred, const CRYPTO_BUFFER *cert_property_list) {
   auto *cred_impl = FromOpaque(cred);
   // For now, this is only valid for X.509.
   if (!cred_impl->UsesX509()) {

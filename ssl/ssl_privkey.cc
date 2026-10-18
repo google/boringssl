@@ -371,7 +371,7 @@ BSSL_NAMESPACE_END
 
 using namespace bssl;
 
-int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa) {
+int SSL_use_RSAPrivateKey(SSL *ssl, const RSA *rsa) {
   if (rsa == nullptr || FromOpaque(ssl)->config == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
@@ -397,7 +397,7 @@ int SSL_use_RSAPrivateKey_ASN1(SSL *ssl, const uint8_t *der, size_t der_len) {
   return SSL_use_RSAPrivateKey(ssl, rsa.get());
 }
 
-int SSL_use_PrivateKey(SSL *ssl, EVP_PKEY *pkey) {
+int SSL_use_PrivateKey(SSL *ssl, const EVP_PKEY *pkey) {
   auto *ssl_impl = FromOpaque(ssl);
   if (pkey == nullptr || ssl_impl->config == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
@@ -425,7 +425,7 @@ int SSL_use_PrivateKey_ASN1(int type, SSL *ssl, const uint8_t *der,
   return SSL_use_PrivateKey(ssl, pkey.get());
 }
 
-int SSL_CTX_use_RSAPrivateKey(SSL_CTX *ctx, RSA *rsa) {
+int SSL_CTX_use_RSAPrivateKey(SSL_CTX *ctx, const RSA *rsa) {
   if (rsa == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
@@ -451,7 +451,7 @@ int SSL_CTX_use_RSAPrivateKey_ASN1(SSL_CTX *ctx, const uint8_t *der,
   return SSL_CTX_use_RSAPrivateKey(ctx, rsa.get());
 }
 
-int SSL_CTX_use_PrivateKey(SSL_CTX *ctx, EVP_PKEY *pkey) {
+int SSL_CTX_use_PrivateKey(SSL_CTX *ctx, const EVP_PKEY *pkey) {
   if (pkey == nullptr) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
     return 0;

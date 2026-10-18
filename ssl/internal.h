@@ -3669,7 +3669,7 @@ const EVP_MD *ssl_session_get_digest(const SSLSession *session);
 // on the peer's certificate type) or a valid SHA-256 hash thereof.
 bool ssl_session_has_peer_cred(const SSLSession *session);
 
-void ssl_set_session(SSLImpl *ssl, SSLSession *session);
+void ssl_set_session(SSLImpl *ssl, const SSLSession *session);
 
 // ssl_get_session implements `SSL_get_session`.
 SSLSession *ssl_get_session(const SSLImpl *ssl);

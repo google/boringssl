@@ -604,7 +604,7 @@ OPENSSL_EXPORT SSL_SESSION *SSL_get_session(const SSL *ssl);
 
 // SSL_get1_session acts like `SSL_get_session` but returns a new reference to
 // the session.
-OPENSSL_EXPORT SSL_SESSION *SSL_get1_session(SSL *ssl);
+OPENSSL_EXPORT SSL_SESSION *SSL_get1_session(const SSL *ssl);
 
 #define OPENSSL_INIT_NO_LOAD_SSL_STRINGS 0
 #define OPENSSL_INIT_LOAD_SSL_STRINGS 0

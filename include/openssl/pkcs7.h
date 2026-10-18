@@ -214,8 +214,9 @@ OPENSSL_EXPORT int PKCS7_type_is_signedAndEnveloped(const PKCS7 *p7);
 //
 // Note this function only implements a subset of the corresponding OpenSSL
 // function. It is provided for backwards compatibility only.
-OPENSSL_EXPORT PKCS7 *PKCS7_sign(X509 *sign_cert, const EVP_PKEY *pkey,
-                                 STACK_OF(X509) *certs, BIO *data, int flags);
+OPENSSL_EXPORT PKCS7 *PKCS7_sign(const X509 *sign_cert, const EVP_PKEY *pkey,
+                                 const STACK_OF(X509) *certs, BIO *data,
+                                 int flags);
 
 
 #if defined(__cplusplus)

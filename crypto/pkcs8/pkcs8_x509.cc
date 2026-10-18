@@ -947,7 +947,7 @@ static int add_bag_attributes(CBB *bag, const char *name, size_t name_len,
   return CBB_flush_asn1_set_of(&attrs) && CBB_flush(bag);
 }
 
-static int add_cert_bag(CBB *cbb, X509 *cert, const char *name,
+static int add_cert_bag(CBB *cbb, const X509 *cert, const char *name,
                         const uint8_t *key_id, size_t key_id_len) {
   CBB bag, bag_contents, cert_bag, wrapped_cert, cert_value;
   if (  // See https://tools.ietf.org/html/rfc7292#section-4.2.
@@ -990,7 +990,7 @@ static int add_cert_bag(CBB *cbb, X509 *cert, const char *name,
   return 1;
 }
 
-static int add_cert_safe_contents(CBB *cbb, X509 *cert,
+static int add_cert_safe_contents(CBB *cbb, const X509 *cert,
                                   const STACK_OF(X509) *chain, const char *name,
                                   const uint8_t *key_id, size_t key_id_len) {
   CBB safe_contents;
@@ -1071,7 +1071,7 @@ static int add_encrypted_data(CBB *out, int pbe_nid,
 }
 
 PKCS12 *PKCS12_create(const char *password, const char *name,
-                      const EVP_PKEY *pkey, X509 *cert,
+                      const EVP_PKEY *pkey, const X509 *cert,
                       const STACK_OF(X509) *chain, int key_nid, int cert_nid,
                       int iterations, int mac_iterations, int key_type) {
   if (key_nid == 0) {

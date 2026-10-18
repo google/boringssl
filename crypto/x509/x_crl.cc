@@ -256,7 +256,7 @@ int X509_CRL_add0_revoked(X509_CRL *crl, X509_REVOKED *rev) {
   return 1;
 }
 
-int X509_CRL_verify(const X509_CRL *crl, EVP_PKEY *pkey) {
+int X509_CRL_verify(const X509_CRL *crl, const EVP_PKEY *pkey) {
   if (X509_ALGOR_cmp(crl->sig_alg, crl->crl->sig_alg) != 0) {
     OPENSSL_PUT_ERROR(X509, X509_R_SIGNATURE_ALGORITHM_MISMATCH);
     return 0;

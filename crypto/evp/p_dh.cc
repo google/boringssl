@@ -288,12 +288,8 @@ const EVP_PKEY_CTX_METHOD dh_pkey_meth = {
 
 }  // namespace
 
-int EVP_PKEY_set1_DH(EVP_PKEY *pkey, DH *key) {
-  if (EVP_PKEY_assign_DH(pkey, key)) {
-    DH_up_ref(key);
-    return 1;
-  }
-  return 0;
+int EVP_PKEY_set1_DH(EVP_PKEY *pkey, const DH *key) {
+  return EVP_PKEY_assign_DH(pkey, DH_dup_ref(key));
 }
 
 int EVP_PKEY_assign_DH(EVP_PKEY *pkey, DH *key) {

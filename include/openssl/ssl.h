@@ -860,7 +860,7 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_is_complete(const SSL_CREDENTIAL *cred);
 // SSL_CREDENTIAL_set1_private_key sets `cred`'s private key to `cred`. It
 // returns one on success and zero on failure.
 OPENSSL_EXPORT int SSL_CREDENTIAL_set1_private_key(SSL_CREDENTIAL *cred,
-                                                   EVP_PKEY *key);
+                                                   const EVP_PKEY *key);
 
 // SSL_CREDENTIAL_set1_signing_algorithm_prefs configures `cred` to use `prefs`
 // as the preference list when signing with `cred`'s private key. It returns one
@@ -883,7 +883,7 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_cert_chain(SSL_CREDENTIAL *cred,
 // SSL_CREDENTIAL_set1_ocsp_response sets `cred`'s stapled OCSP response to
 // `ocsp`. It returns one on success and zero on error.
 OPENSSL_EXPORT int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
-                                                     CRYPTO_BUFFER *ocsp);
+                                                     const CRYPTO_BUFFER *ocsp);
 
 // SSL_CREDENTIAL_set1_certificate_properties parses
 // `certificate_property_list` as a CertificatePropertyList (see Section 7 of
@@ -904,7 +904,7 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_ocsp_response(SSL_CREDENTIAL *cred,
 // Note this function does not automatically enable issuer matching. Callers
 // must separately call `SSL_CREDENTIAL_set_must_match_issuer` if desired.
 OPENSSL_EXPORT int SSL_CREDENTIAL_set1_certificate_properties(
-    SSL_CREDENTIAL *cred, CRYPTO_BUFFER *cert_property_list);
+    SSL_CREDENTIAL *cred, const CRYPTO_BUFFER *cert_property_list);
 
 // SSL_CREDENTIAL_set1_signed_cert_timestamp_list sets `cred`'s list of signed
 // certificate timestamps `sct_list`. `sct_list` must contain one or more SCT
@@ -914,7 +914,7 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_certificate_properties(
 // prefixed SCTs are themselves also prefixed by a uint16 length. It returns one
 // on success and zero on error.
 OPENSSL_EXPORT int SSL_CREDENTIAL_set1_signed_cert_timestamp_list(
-    SSL_CREDENTIAL *cred, CRYPTO_BUFFER *sct_list);
+    SSL_CREDENTIAL *cred, const CRYPTO_BUFFER *sct_list);
 
 // SSL_CREDENTIAL_set_must_match_issuer configures whether `cred` should check
 // if the peer supports the certificate chain's issuer.
@@ -1006,22 +1006,22 @@ OPENSSL_EXPORT const SSL_CREDENTIAL *SSL_get0_selected_credential(
 // SSL_CTX_use_certificate sets `ctx`'s leaf certificate to `x509`. It returns
 // one on success and zero on failure. If `ctx` has a private key which is
 // inconsistent with `x509`, the private key is silently dropped.
-OPENSSL_EXPORT int SSL_CTX_use_certificate(SSL_CTX *ctx, X509 *x509);
+OPENSSL_EXPORT int SSL_CTX_use_certificate(SSL_CTX *ctx, const X509 *x509);
 
 // SSL_use_certificate sets `ssl`'s leaf certificate to `x509`. It returns one
 // on success and zero on failure. If `ssl` has a private key which is
 // inconsistent with `x509`, the private key is silently dropped.
-OPENSSL_EXPORT int SSL_use_certificate(SSL *ssl, X509 *x509);
+OPENSSL_EXPORT int SSL_use_certificate(SSL *ssl, const X509 *x509);
 
 // SSL_CTX_use_PrivateKey sets `ctx`'s private key to `pkey`. It returns one on
 // success and zero on failure. If `ctx` had a private key or
 // `SSL_PRIVATE_KEY_METHOD` previously configured, it is replaced.
-OPENSSL_EXPORT int SSL_CTX_use_PrivateKey(SSL_CTX *ctx, EVP_PKEY *pkey);
+OPENSSL_EXPORT int SSL_CTX_use_PrivateKey(SSL_CTX *ctx, const EVP_PKEY *pkey);
 
 // SSL_use_PrivateKey sets `ssl`'s private key to `pkey`. It returns one on
 // success and zero on failure. If `ssl` had a private key or
 // `SSL_PRIVATE_KEY_METHOD` previously configured, it is replaced.
-OPENSSL_EXPORT int SSL_use_PrivateKey(SSL *ssl, EVP_PKEY *pkey);
+OPENSSL_EXPORT int SSL_use_PrivateKey(SSL *ssl, const EVP_PKEY *pkey);
 
 // SSL_CTX_set0_chain sets `ctx`'s certificate chain, excluding the leaf, to
 // `chain`. On success, it returns one and takes ownership of `chain`.
@@ -1031,7 +1031,8 @@ OPENSSL_EXPORT int SSL_CTX_set0_chain(SSL_CTX *ctx, STACK_OF(X509) *chain);
 // SSL_CTX_set1_chain sets `ctx`'s certificate chain, excluding the leaf, to
 // `chain`. It returns one on success and zero on failure. The caller retains
 // ownership of `chain` and may release it freely.
-OPENSSL_EXPORT int SSL_CTX_set1_chain(SSL_CTX *ctx, STACK_OF(X509) *chain);
+OPENSSL_EXPORT int SSL_CTX_set1_chain(SSL_CTX *ctx,
+                                      const STACK_OF(X509) *chain);
 
 // SSL_set0_chain sets `ssl`'s certificate chain, excluding the leaf, to
 // `chain`. On success, it returns one and takes ownership of `chain`.
@@ -1041,7 +1042,7 @@ OPENSSL_EXPORT int SSL_set0_chain(SSL *ssl, STACK_OF(X509) *chain);
 // SSL_set1_chain sets `ssl`'s certificate chain, excluding the leaf, to
 // `chain`. It returns one on success and zero on failure. The caller retains
 // ownership of `chain` and may release it freely.
-OPENSSL_EXPORT int SSL_set1_chain(SSL *ssl, STACK_OF(X509) *chain);
+OPENSSL_EXPORT int SSL_set1_chain(SSL *ssl, const STACK_OF(X509) *chain);
 
 // SSL_CTX_add0_chain_cert appends `x509` to `ctx`'s certificate chain. On
 // success, it returns one and takes ownership of `x509`. Otherwise, it returns
@@ -1051,7 +1052,7 @@ OPENSSL_EXPORT int SSL_CTX_add0_chain_cert(SSL_CTX *ctx, X509 *x509);
 // SSL_CTX_add1_chain_cert appends `x509` to `ctx`'s certificate chain. It
 // returns one on success and zero on failure. The caller retains ownership of
 // `x509` and may release it freely.
-OPENSSL_EXPORT int SSL_CTX_add1_chain_cert(SSL_CTX *ctx, X509 *x509);
+OPENSSL_EXPORT int SSL_CTX_add1_chain_cert(SSL_CTX *ctx, const X509 *x509);
 
 // SSL_add0_chain_cert appends `x509` to `ctx`'s certificate chain. On success,
 // it returns one and takes ownership of `x509`. Otherwise, it returns zero.
@@ -1063,7 +1064,7 @@ OPENSSL_EXPORT int SSL_CTX_add_extra_chain_cert(SSL_CTX *ctx, X509 *x509);
 // SSL_add1_chain_cert appends `x509` to `ctx`'s certificate chain. It returns
 // one on success and zero on failure. The caller retains ownership of `x509`
 // and may release it freely.
-OPENSSL_EXPORT int SSL_add1_chain_cert(SSL *ssl, X509 *x509);
+OPENSSL_EXPORT int SSL_add1_chain_cert(SSL *ssl, const X509 *x509);
 
 // SSL_CTX_clear_chain_certs clears `ctx`'s certificate chain and returns
 // one.
@@ -1322,15 +1323,15 @@ OPENSSL_EXPORT int SSL_set_signing_algorithm_prefs(SSL *ssl,
 // may be non-NULL. Returns one on success and zero on error.
 OPENSSL_EXPORT int SSL_CTX_set_chain_and_key(
     SSL_CTX *ctx, CRYPTO_BUFFER *const *certs, size_t num_certs,
-    EVP_PKEY *privkey, const SSL_PRIVATE_KEY_METHOD *privkey_method);
+    const EVP_PKEY *privkey, const SSL_PRIVATE_KEY_METHOD *privkey_method);
 
 // SSL_set_chain_and_key sets the certificate chain and private key for a TLS
 // client or server. References to the given `CRYPTO_BUFFER` and `EVP_PKEY`
 // objects are added as needed. Exactly one of `privkey` or `privkey_method`
 // may be non-NULL. Returns one on success and zero on error.
 OPENSSL_EXPORT int SSL_set_chain_and_key(
-    SSL *ssl, CRYPTO_BUFFER *const *certs, size_t num_certs, EVP_PKEY *privkey,
-    const SSL_PRIVATE_KEY_METHOD *privkey_method);
+    SSL *ssl, CRYPTO_BUFFER *const *certs, size_t num_certs,
+    const EVP_PKEY *privkey, const SSL_PRIVATE_KEY_METHOD *privkey_method);
 
 // SSL_CTX_get0_chain returns the list of `CRYPTO_BUFFER`s that were set by
 // `SSL_CTX_set_chain_and_key`. Reference counts are not incremented by this
@@ -1360,11 +1361,11 @@ OPENSSL_EXPORT const STACK_OF(CRYPTO_BUFFER) *SSL_get0_chain(const SSL *ssl);
 
 // SSL_CTX_use_RSAPrivateKey sets `ctx`'s private key to `rsa`. It returns one
 // on success and zero on failure.
-OPENSSL_EXPORT int SSL_CTX_use_RSAPrivateKey(SSL_CTX *ctx, RSA *rsa);
+OPENSSL_EXPORT int SSL_CTX_use_RSAPrivateKey(SSL_CTX *ctx, const RSA *rsa);
 
 // SSL_use_RSAPrivateKey sets `ctx`'s private key to `rsa`. It returns one on
 // success and zero on failure.
-OPENSSL_EXPORT int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa);
+OPENSSL_EXPORT int SSL_use_RSAPrivateKey(SSL *ssl, const RSA *rsa);
 
 // The following functions configure certificates or private keys but take as
 // input DER-encoded structures. They return one on success and zero on
@@ -2350,7 +2351,7 @@ OPENSSL_EXPORT int SSL_CTX_get_session_cache_mode(const SSL_CTX *ctx);
 // `SSL_SESSION_get0_ocsp_response`.
 //
 // It is an error to call this function after the handshake has begun.
-OPENSSL_EXPORT int SSL_set_session(SSL *ssl, SSL_SESSION *session);
+OPENSSL_EXPORT int SSL_set_session(SSL *ssl, const SSL_SESSION *session);
 
 // SSL_DEFAULT_SESSION_TIMEOUT is the default lifetime, in seconds, of a
 // session in TLS 1.2 or earlier. This is how long we are willing to use the
@@ -3315,12 +3316,12 @@ OPENSSL_EXPORT STACK_OF(X509_NAME) *SSL_CTX_get_client_CA_list(
 // SSL_add_client_CA appends `x509`'s subject to the client certificate CA list.
 // It returns one on success or zero on error. The caller retains ownership of
 // `x509`.
-OPENSSL_EXPORT int SSL_add_client_CA(SSL *ssl, X509 *x509);
+OPENSSL_EXPORT int SSL_add_client_CA(SSL *ssl, const X509 *x509);
 
 // SSL_CTX_add_client_CA appends `x509`'s subject to the client certificate CA
 // list. It returns one on success or zero on error. The caller retains
 // ownership of `x509`.
-OPENSSL_EXPORT int SSL_CTX_add_client_CA(SSL_CTX *ctx, X509 *x509);
+OPENSSL_EXPORT int SSL_CTX_add_client_CA(SSL_CTX *ctx, const X509 *x509);
 
 // SSL_load_client_CA_file opens `file` and reads PEM-encoded certificates from
 // it. It returns a newly-allocated stack of the certificate subjects or NULL
@@ -3851,12 +3852,13 @@ OPENSSL_EXPORT void SSL_set_tls_channel_id_enabled(SSL *ssl, int enabled);
 // to compatible servers. `private_key` must be a P-256 EC key. It returns one
 // on success and zero on error.
 OPENSSL_EXPORT int SSL_CTX_set1_tls_channel_id(SSL_CTX *ctx,
-                                               EVP_PKEY *private_key);
+                                               const EVP_PKEY *private_key);
 
 // SSL_set1_tls_channel_id configures a TLS client to send a TLS Channel ID to
 // compatible servers. `private_key` must be a P-256 EC key. It returns one on
 // success and zero on error.
-OPENSSL_EXPORT int SSL_set1_tls_channel_id(SSL *ssl, EVP_PKEY *private_key);
+OPENSSL_EXPORT int SSL_set1_tls_channel_id(SSL *ssl,
+                                           const EVP_PKEY *private_key);
 
 // SSL_get_tls_channel_id gets the client's TLS Channel ID from a server `SSL`
 // and copies up to the first `max_out` bytes into `out`. The Channel ID
@@ -4093,7 +4095,7 @@ OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_delegated(void);
 // `dc` is malformed. This should be a DelegatedCredential structure, signed by
 // the end-entity certificate, as described in RFC 9345.
 OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
-    SSL_CREDENTIAL *cred, CRYPTO_BUFFER *dc);
+    SSL_CREDENTIAL *cred, const CRYPTO_BUFFER *dc);
 
 
 // Raw Public Keys (RFC 7250).
@@ -4133,7 +4135,7 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_delegated_credential(
 // early callback (see `SSL_CTX_set_select_certificate_cb`) and certificate
 // callback (see `SSL_CTX_set_cert_cb`).
 OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key(
-    EVP_PKEY *pkey);
+    const EVP_PKEY *pkey);
 
 // SSL_CREDENTIAL_new_raw_public_key_custom returns a new raw public key
 // credential using `pubkey` as the public key and `method` as the custom
@@ -4150,7 +4152,7 @@ OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key(
 // early callback (see `SSL_CTX_set_select_certificate_cb`) and certificate
 // callback (see `SSL_CTX_set_cert_cb`).
 OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_raw_public_key_custom(
-    EVP_PKEY *pubkey, const SSL_PRIVATE_KEY_METHOD *method);
+    const EVP_PKEY *pubkey, const SSL_PRIVATE_KEY_METHOD *method);
 
 // SSL_CTX_set1_accepted_peer_cert_types sets the types of certificates that the
 // caller wishes to accept from the peer, for `ctx`. `values` is a nonempty list
@@ -4630,7 +4632,7 @@ OPENSSL_EXPORT int SSL_SESSION_early_data_capable(const SSL_SESSION *session);
 // `SSL_R_WRONG_VERSION_ON_EARLY_DATA` requires a fresh connection to retry, and
 // the client would not want 0-RTT enabled for the next connection attempt.
 OPENSSL_EXPORT SSL_SESSION *SSL_SESSION_copy_without_early_data(
-    SSL_SESSION *session);
+    const SSL_SESSION *session);
 
 // SSL_early_data_accepted returns whether early data was accepted on the
 // handshake performed by `ssl`.
@@ -4881,7 +4883,8 @@ OPENSSL_EXPORT int SSL_ECH_KEYS_marshal_retry_configs(const SSL_ECH_KEYS *keys,
 // reported `SSL_CLIENT_HELLO` structure and `SSL_get_servername` function will
 // transparently reflect the inner ClientHello. Callers should select parameters
 // based on these values to correctly handle ECH as well as the recovery flow.
-OPENSSL_EXPORT int SSL_CTX_set1_ech_keys(SSL_CTX *ctx, SSL_ECH_KEYS *keys);
+OPENSSL_EXPORT int SSL_CTX_set1_ech_keys(SSL_CTX *ctx,
+                                         const SSL_ECH_KEYS *keys);
 
 // SSL_ech_accepted returns one if `ssl` negotiated ECH and zero otherwise.
 OPENSSL_EXPORT int SSL_ech_accepted(const SSL *ssl);

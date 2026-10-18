@@ -89,7 +89,7 @@ static void ssl_cert_set_cert_cb(
 
 static int cert_set_chain_and_key(
     CERT *cert, CRYPTO_BUFFER *const *certs, size_t num_certs,
-    EVP_PKEY *privkey, const SSL_PRIVATE_KEY_METHOD *privkey_method) {
+    const EVP_PKEY *privkey, const SSL_PRIVATE_KEY_METHOD *privkey_method) {
   if (num_certs == 0 ||  //
       (privkey == nullptr && privkey_method == nullptr)) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
@@ -546,7 +546,7 @@ BSSL_NAMESPACE_END
 using namespace bssl;
 
 int SSL_set_chain_and_key(SSL *ssl, CRYPTO_BUFFER *const *certs,
-                          size_t num_certs, EVP_PKEY *privkey,
+                          size_t num_certs, const EVP_PKEY *privkey,
                           const SSL_PRIVATE_KEY_METHOD *privkey_method) {
   auto *ssl_impl = FromOpaque(ssl);
   if (!ssl_impl->config) {
@@ -557,7 +557,7 @@ int SSL_set_chain_and_key(SSL *ssl, CRYPTO_BUFFER *const *certs,
 }
 
 int SSL_CTX_set_chain_and_key(SSL_CTX *ctx, CRYPTO_BUFFER *const *certs,
-                              size_t num_certs, EVP_PKEY *privkey,
+                              size_t num_certs, const EVP_PKEY *privkey,
                               const SSL_PRIVATE_KEY_METHOD *privkey_method) {
   return cert_set_chain_and_key(FromOpaque(ctx)->cert.get(), certs, num_certs,
                                 privkey, privkey_method);

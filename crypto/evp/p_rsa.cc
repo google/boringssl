@@ -1042,12 +1042,8 @@ int EVP_PKEY_marshal_rsa_private_key(CBB *cbb, const EVP_PKEY *key) {
   return RSA_marshal_private_key(cbb, rsa);
 }
 
-int EVP_PKEY_set1_RSA(EVP_PKEY *pkey, RSA *key) {
-  if (EVP_PKEY_assign_RSA(pkey, key)) {
-    RSA_up_ref(key);
-    return 1;
-  }
-  return 0;
+int EVP_PKEY_set1_RSA(EVP_PKEY *pkey, const RSA *key) {
+  return EVP_PKEY_assign_RSA(pkey, RSA_dup_ref(key));
 }
 
 int EVP_PKEY_assign_RSA(EVP_PKEY *pkey, RSA *key) {

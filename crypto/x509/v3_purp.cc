@@ -505,7 +505,7 @@ int bssl::X509_check_akid(const X509 *issuer, const AUTHORITY_KEYID *akid) {
   return X509_V_OK;
 }
 
-uint32_t X509_get_extension_flags(X509 *x) {
+uint32_t X509_get_extension_flags(const X509 *x) {
   // Ignore the return value. On failure, `impl->ex_flags` will include
   // `EXFLAG_INVALID`.
   x509v3_cache_extensions(x);
@@ -513,7 +513,7 @@ uint32_t X509_get_extension_flags(X509 *x) {
   return impl->ex_flags;
 }
 
-uint32_t X509_get_key_usage(X509 *x) {
+uint32_t X509_get_key_usage(const X509 *x) {
   if (!x509v3_cache_extensions(x)) {
     return 0;
   }
@@ -527,7 +527,7 @@ uint32_t X509_get_key_usage(X509 *x) {
   return UINT32_MAX;
 }
 
-uint32_t X509_get_extended_key_usage(X509 *x) {
+uint32_t X509_get_extended_key_usage(const X509 *x) {
   if (!x509v3_cache_extensions(x)) {
     return 0;
   }
@@ -540,7 +540,7 @@ uint32_t X509_get_extended_key_usage(X509 *x) {
   return UINT32_MAX;
 }
 
-const ASN1_OCTET_STRING *X509_get0_subject_key_id(X509 *x509) {
+const ASN1_OCTET_STRING *X509_get0_subject_key_id(const X509 *x509) {
   if (!x509v3_cache_extensions(x509)) {
     return nullptr;
   }
@@ -548,7 +548,7 @@ const ASN1_OCTET_STRING *X509_get0_subject_key_id(X509 *x509) {
   return impl->skid.get();
 }
 
-const ASN1_OCTET_STRING *X509_get0_authority_key_id(X509 *x509) {
+const ASN1_OCTET_STRING *X509_get0_authority_key_id(const X509 *x509) {
   if (!x509v3_cache_extensions(x509)) {
     return nullptr;
   }
@@ -556,7 +556,7 @@ const ASN1_OCTET_STRING *X509_get0_authority_key_id(X509 *x509) {
   return impl->akid != nullptr ? impl->akid->keyid : nullptr;
 }
 
-const GENERAL_NAMES *X509_get0_authority_issuer(X509 *x509) {
+const GENERAL_NAMES *X509_get0_authority_issuer(const X509 *x509) {
   if (!x509v3_cache_extensions(x509)) {
     return nullptr;
   }
@@ -564,7 +564,7 @@ const GENERAL_NAMES *X509_get0_authority_issuer(X509 *x509) {
   return impl->akid != nullptr ? impl->akid->issuer : nullptr;
 }
 
-const ASN1_INTEGER *X509_get0_authority_serial(X509 *x509) {
+const ASN1_INTEGER *X509_get0_authority_serial(const X509 *x509) {
   auto *impl = FromOpaque(x509);
   if (!x509v3_cache_extensions(impl)) {
     return nullptr;
@@ -572,7 +572,7 @@ const ASN1_INTEGER *X509_get0_authority_serial(X509 *x509) {
   return impl->akid != nullptr ? impl->akid->serial : nullptr;
 }
 
-long X509_get_pathlen(X509 *x509) {
+long X509_get_pathlen(const X509 *x509) {
   auto *impl = FromOpaque(x509);
   if (!x509v3_cache_extensions(x509) || (impl->ex_flags & EXFLAG_BCONS) == 0) {
     return -1;

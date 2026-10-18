@@ -238,6 +238,6 @@ int X509_check_private_key(const X509 *x, const EVP_PKEY *k) {
 // Not strictly speaking an "up_ref" as a STACK doesn't have a reference
 // count but it has the same effect by duping the STACK and upping the ref of
 // each X509 structure.
-STACK_OF(X509) *X509_chain_up_ref(STACK_OF(X509) *chain) {
+STACK_OF(X509) *X509_chain_up_ref(const STACK_OF(X509) *chain) {
   return sk_X509_deep_copy(chain, X509_dup_ref, X509_free);
 }

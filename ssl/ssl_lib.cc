@@ -2615,7 +2615,7 @@ int SSL_enable_tls_channel_id(SSL *ssl) {
   return 1;
 }
 
-int SSL_CTX_set1_tls_channel_id(SSL_CTX *ctx, EVP_PKEY *private_key) {
+int SSL_CTX_set1_tls_channel_id(SSL_CTX *ctx, const EVP_PKEY *private_key) {
   if (EVP_PKEY_get_ec_curve_nid(private_key) != NID_X9_62_prime256v1) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_CHANNEL_ID_NOT_P256);
     return 0;
@@ -2625,7 +2625,7 @@ int SSL_CTX_set1_tls_channel_id(SSL_CTX *ctx, EVP_PKEY *private_key) {
   return 1;
 }
 
-int SSL_set1_tls_channel_id(SSL *ssl, EVP_PKEY *private_key) {
+int SSL_set1_tls_channel_id(SSL *ssl, const EVP_PKEY *private_key) {
   auto *ssl_impl = FromOpaque(ssl);
   if (!ssl_impl->config) {
     return 0;

@@ -133,7 +133,7 @@ int bssl::x509_pubkey_set1(X509_PUBKEY *key, const EVP_PKEY *pkey) {
   return x509_parse_public_key(&cbs, key, GetDefaultEVPAlgorithms());
 }
 
-int X509_PUBKEY_set(X509_PUBKEY **x, EVP_PKEY *pkey) {
+int X509_PUBKEY_set(X509_PUBKEY **x, const EVP_PKEY *pkey) {
   UniquePtr<X509_PUBKEY> new_key(X509_PUBKEY_new());
   if (new_key == nullptr ||
       !x509_pubkey_set1(FromOpaque(new_key.get()), pkey)) {

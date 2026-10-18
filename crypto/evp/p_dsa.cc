@@ -300,12 +300,8 @@ int EVP_PKEY_CTX_set_dsa_paramgen_q_bits(EVP_PKEY_CTX *ctx, int qbits) {
   return 0;
 }
 
-int EVP_PKEY_set1_DSA(EVP_PKEY *pkey, DSA *key) {
-  if (EVP_PKEY_assign_DSA(pkey, key)) {
-    DSA_up_ref(key);
-    return 1;
-  }
-  return 0;
+int EVP_PKEY_set1_DSA(EVP_PKEY *pkey, const DSA *key) {
+  return EVP_PKEY_assign_DSA(pkey, DSA_dup_ref(key));
 }
 
 int EVP_PKEY_assign_DSA(EVP_PKEY *pkey, DSA *key) {
