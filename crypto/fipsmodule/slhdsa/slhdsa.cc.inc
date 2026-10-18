@@ -313,11 +313,14 @@ bcm_infallible bssl::BCM_slhdsa_sha2_128s_generate_key_from_seed(
       &kSLHDSAConfigSHA2_128s, out_public_key, out_secret_key, seed);
 }
 
+// The `BCM_slhdsa_shake_256f_*` functions in this file are not FIPS approved
+// because the module's CASTs only cover SLH-DSA-SHA2-128s. Thus they report
+// `not_approved` and do not run the SHA2-128s self-tests.
+
 bcm_infallible bssl::BCM_slhdsa_shake_256f_generate_key_from_seed(
     uint8_t out_public_key[BCM_SLHDSA_SHAKE_256F_PUBLIC_KEY_BYTES],
     uint8_t out_secret_key[BCM_SLHDSA_SHAKE_256F_PRIVATE_KEY_BYTES],
     const uint8_t seed[3 * BCM_SLHDSA_SHAKE_256F_N]) {
-  fips::ensure_keygen_self_test();
   return generate_key_from_seed_no_self_test(
       &kSLHDSAConfigSHAKE_256f, out_public_key, out_secret_key, seed);
 }
@@ -343,7 +346,7 @@ bcm_status bssl::BCM_slhdsa_shake_256f_generate_key_from_seed_fips(
   }
   BCM_slhdsa_shake_256f_generate_key_from_seed(out_public_key, out_secret_key,
                                                seed);
-  return bcm_status::approved;
+  return bcm_status::not_approved;
 }
 
 bcm_infallible bssl::BCM_slhdsa_sha2_128s_generate_key(
@@ -381,7 +384,7 @@ bcm_status bssl::BCM_slhdsa_shake_256f_generate_key_fips(
     return bcm_status::failure;
   }
   BCM_slhdsa_shake_256f_generate_key(out_public_key, out_private_key);
-  return bcm_status::approved;
+  return bcm_status::not_approved;
 }
 
 bcm_infallible bssl::BCM_slhdsa_sha2_128s_public_from_private(
@@ -397,7 +400,7 @@ bcm_infallible bssl::BCM_slhdsa_shake_256f_public_from_private(
     const uint8_t private_key[BCM_SLHDSA_SHAKE_256F_PRIVATE_KEY_BYTES]) {
   OPENSSL_memcpy(out_public_key, private_key + 2 * BCM_SLHDSA_SHAKE_256F_N,
                  BCM_SLHDSA_SHAKE_256F_N * 2);
-  return bcm_infallible::approved;
+  return bcm_infallible::not_approved;
 }
 
 bcm_status bssl::BCM_slhdsa_sha2_128s_sign(
@@ -440,7 +443,7 @@ bcm_status bssl::BCM_slhdsa_shake_256f_sign(
   BCM_slhdsa_shake_256f_sign_internal(out_signature, private_key,
                                       M_prime_header, context, context_len, msg,
                                       msg_len, entropy);
-  return bcm_status::approved;
+  return bcm_status::not_approved;
 }
 
 static int slhdsa_get_context_and_oid(uint8_t *out_context_and_oid,
@@ -508,10 +511,10 @@ bcm_infallible bssl::BCM_slhdsa_shake_256f_sign_internal(
     const uint8_t header[BCM_SLHDSA_M_PRIME_HEADER_LEN], const uint8_t *context,
     size_t context_len, const uint8_t *msg, size_t msg_len,
     const uint8_t entropy[BCM_SLHDSA_SHAKE_256F_N]) {
-  fips::ensure_sign_self_test();
-  return sign_internal_no_self_test(&kSLHDSAConfigSHAKE_256f, out_signature,
-                                    secret_key, header, context, context_len,
-                                    msg, msg_len, entropy);
+  sign_internal_no_self_test(&kSLHDSAConfigSHAKE_256f, out_signature,
+                             secret_key, header, context, context_len, msg,
+                             msg_len, entropy);
+  return bcm_infallible::not_approved;
 }
 
 bcm_status bssl::BCM_slhdsa_sha2_128s_prehash_sign(
@@ -569,7 +572,7 @@ bcm_status bssl::BCM_slhdsa_shake_256f_prehash_sign(
   BCM_slhdsa_shake_256f_sign_internal(
       out_signature, private_key, M_prime_header, context_and_oid,
       context_and_oid_len, hashed_msg, hashed_msg_len, entropy);
-  return bcm_status::approved;
+  return bcm_status::not_approved;
 }
 
 // Implements Algorithm 24: slh_verify function (Section 10.3, page 41)
@@ -678,10 +681,9 @@ bcm_status bssl::BCM_slhdsa_shake_256f_verify_internal(
     const uint8_t public_key[BCM_SLHDSA_SHAKE_256F_PUBLIC_KEY_BYTES],
     const uint8_t header[BCM_SLHDSA_M_PRIME_HEADER_LEN], const uint8_t *context,
     size_t context_len, const uint8_t *msg, size_t msg_len) {
-  fips::ensure_verify_self_test();
-  return verify_internal(&kSLHDSAConfigSHAKE_256f, signature, signature_len,
-                         public_key, header, context, context_len, msg,
-                         msg_len);
+  return bcm_as_not_approved_status(bcm_success(
+      verify_internal(&kSLHDSAConfigSHAKE_256f, signature, signature_len,
+                      public_key, header, context, context_len, msg, msg_len)));
 }
 
 int bssl::boringssl_self_test_slhdsa() {
