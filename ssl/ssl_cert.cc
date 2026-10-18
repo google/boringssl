@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include <utility>
+#include <variant>
 
 #include <openssl/bn.h>
 #include <openssl/bytestring.h>
@@ -77,14 +78,24 @@ UniquePtr<CERT> ssl_cert_dup(CERT *cert) {
 
 static void ssl_cert_set_cert_cb(CERT *cert, int (*cb)(SSL *ssl, void *arg),
                                  void *arg) {
-  cert->cert_cb.cb = cb;
-  cert->cert_cb_arg = arg;
+  if (cb == nullptr) {
+    cert->cert_cb.cb = std::monostate();
+    cert->cert_cb_arg = nullptr;
+  } else {
+    cert->cert_cb.cb = cb;
+    cert->cert_cb_arg = arg;
+  }
 }
 
 static void ssl_cert_set_cert_cb(
     CERT *cert, int (*cb)(SSL *ssl, void *arg, uint8_t *out_alert), void *arg) {
-  cert->cert_cb.cb = cb;
-  cert->cert_cb_arg = arg;
+  if (cb == nullptr) {
+    cert->cert_cb.cb = std::monostate();
+    cert->cert_cb_arg = nullptr;
+  } else {
+    cert->cert_cb.cb = cb;
+    cert->cert_cb_arg = arg;
+  }
 }
 
 static int cert_set_chain_and_key(

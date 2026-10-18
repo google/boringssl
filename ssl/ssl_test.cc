@@ -6391,6 +6391,35 @@ TEST(SSLTest, CertCallbackExPauseAndResume) {
   ASSERT_TRUE(CompleteHandshakes(client.get(), server.get()));
 }
 
+TEST(SSLTest, CertCallbackClear) {
+  bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
+  bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
+  ASSERT_TRUE(client_ctx && server_ctx);
+  SSL_CTX_set_custom_verify(client_ctx.get(), SSL_VERIFY_PEER,
+                            AcceptAnyCertificate);
+  SSL_CTX_set_cert_cb(
+      server_ctx.get(), [](SSL *ssl, void *arg) -> int { return -1; },
+      nullptr);
+
+  bssl::UniquePtr<SSL> client, server;
+  ASSERT_TRUE(CreateClientAndServer(&client, &server, client_ctx.get(),
+                                    server_ctx.get()));
+  SSL *ssl = server.get();
+
+  EXPECT_EQ(SSL_do_handshake(client.get()), -1);
+  int rv = SSL_do_handshake(ssl);
+  EXPECT_EQ(SSL_get_error(ssl, rv), SSL_ERROR_WANT_X509_LOOKUP);
+
+  bssl::UniquePtr<X509> cert = GetTestCertificate();
+  bssl::UniquePtr<EVP_PKEY> key = GetTestKey();
+  ASSERT_TRUE(SSL_use_certificate(ssl, cert.get()));
+  ASSERT_TRUE(SSL_use_PrivateKey(ssl, key.get()));
+  SSL_set_cert_cb(ssl, nullptr, nullptr);
+
+  EXPECT_EQ(SSL_do_handshake(ssl), -1);
+  EXPECT_TRUE(CompleteHandshakes(client.get(), ssl));
+}
+
 TEST(SSLTest, CertCallbackExSSLOverride) {
   bssl::UniquePtr<SSL_CTX> client_ctx(SSL_CTX_new(TLS_method()));
   bssl::UniquePtr<SSL_CTX> server_ctx(SSL_CTX_new(TLS_method()));
