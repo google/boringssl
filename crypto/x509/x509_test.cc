@@ -7380,6 +7380,21 @@ TEST_P(X509VerifyTest, Policy) {
                      set_policies(ctx, {oid1.get(), oid3.get()});
                    }));
 
+  // If the intermediate is the trust anchor, policy validation applies
+  // analogously.
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(leaf.get(), {intermediate.get()}, /*intermediates=*/{},
+             /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(leaf.get(), {intermediate.get()}, /*intermediates=*/{},
+             /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
   // The policy extension cannot be parsed.
   EXPECT_EQ(
       X509_V_ERR_INVALID_POLICY_EXTENSION,
@@ -7409,6 +7424,14 @@ TEST_P(X509VerifyTest, Policy) {
              /*crls=*/{}, X509_V_FLAG_EXPLICIT_POLICY,
              [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
 
+  // The policy extension in the trust anchor cannot be parsed.
+  EXPECT_EQ(
+      X509_V_ERR_INVALID_POLICY_EXTENSION,
+      Verify(leaf.get(), {intermediate_invalid.get()}, /*intermediates=*/{},
+             /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+
   // Without `X509_V_FLAG_EXPLICIT_POLICY`, the policy tree is built and
   // intersected with user-specified policies, but it is not required to result
   // in any valid policies.
@@ -7436,12 +7459,28 @@ TEST_P(X509VerifyTest, Policy) {
                      set_policies(ctx, {oid3.get()});
                    }));
 
+  // So can a trust anchor.
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(leaf.get(), {intermediate_require.get()}, /*intermediates=*/{},
+             /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(leaf.get(), {intermediate_require.get()}, /*intermediates=*/{},
+             /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
   // requireExplicitPolicy applies even if the application does not configure a
   // user-initial-policy-set. If the validation results in no policies, the
   // chain is invalid.
   EXPECT_EQ(X509_V_ERR_NO_EXPLICIT_POLICY,
             Verify(leaf_none.get(), {root.get()}, {intermediate_require.get()},
                    /*crls=*/{}));
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(leaf_none.get(), {intermediate_require.get()},
+             /*intermediates=*/{}, /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN));
 
   // A leaf can also set requireExplicitPolicy.
   EXPECT_EQ(X509_V_OK,
@@ -7479,6 +7518,24 @@ TEST_P(X509VerifyTest, Policy) {
                    /*flags=*/0, [&](X509_STORE_CTX *ctx) {
                      set_policies(ctx, {oid3.get()});
                    }));
+
+  // The value in the trust anchor is also treated as a count of certificate.
+  // This differs from RFC 5937.
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(leaf.get(), {intermediate_require1.get()}, /*intermediates=*/{},
+             /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(leaf.get(), {intermediate_require2.get()}, /*intermediates=*/{},
+             /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(leaf_require1.get(), {intermediate.get()}, /*intermediates=*/{},
+             /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
 
   // If multiple certificates specify the constraint, the more constrained value
   // wins.
@@ -7580,6 +7637,13 @@ TEST_P(X509VerifyTest, Policy) {
                                   set_policies(ctx, {oid3.get()});
                                 }));
 
+    // Mappings in the trust anchor are also honored.
+    EXPECT_EQ(
+        X509_V_OK,
+        Verify(leaf_oid1.get(), {cert}, /*intermediates=*/{}, /*crls=*/{},
+               X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+               [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
     // If the intermediate's policies were anyPolicy, OID3 at the leaf, despite
     // being mapped, is still acceptable as OID3 at the root. Despite the OID3
     // having expected_policy_set = {OID1, OID2}, it can match the anyPolicy
@@ -7605,6 +7669,21 @@ TEST_P(X509VerifyTest, Policy) {
         use_any ? X509_V_ERR_NO_EXPLICIT_POLICY : X509_V_OK,
         Verify(leaf_oid1.get(), {root.get()}, {cert},
                /*crls=*/{}, X509_V_FLAG_EXPLICIT_POLICY,
+               [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+
+    // The above is also true at the trust anchor. We evaluate policies in the
+    // trust anchor as in an intermediate, not at user-initial-policy-set.
+    EXPECT_EQ(
+        use_any ? X509_V_OK : X509_V_ERR_NO_EXPLICIT_POLICY,
+        Verify(leaf_oid3.get(), {cert}, /*intermediates=*/{},
+               /*crls=*/{},
+               X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+               [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+    EXPECT_EQ(
+        use_any ? X509_V_ERR_NO_EXPLICIT_POLICY : X509_V_OK,
+        Verify(leaf_oid1.get(), {cert}, /*intermediates=*/{},
+               /*crls=*/{},
+               X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
                [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
 
     // All pairs of OID4 and OID5 are mapped together, so either can stand for
@@ -7663,6 +7742,62 @@ TEST_P(X509VerifyTest, Policy) {
       Verify(leaf_oid1.get(), {root2.get()},
              {intermediate_mapped_oid3.get(), root_cross_inhibit_mapping.get()},
              /*crls=*/{}, X509_V_FLAG_EXPLICIT_POLICY,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
+  // In a single-certificate "chain" where the target certificate is directly
+  // trusted, the certificatePolicies extension determines the final policy set.
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(leaf_oid1.get(), {leaf_oid1.get()}, /*intermediates=*/{},
+             /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(leaf_oid1.get(), {leaf_oid1.get()}, /*intermediates=*/{},
+             /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
+  // Policy mappings in trusted leafs are ignored. user-initial-policy-set is
+  // evaluated in issuer space, not subject space, so the mapppings do not
+  // apply.
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(intermediate_mapped_oid3.get(), {intermediate_mapped_oid3.get()},
+             /*intermediates=*/{}, /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(intermediate_mapped_oid3.get(), {intermediate_mapped_oid3.get()},
+             /*intermediates=*/{}, /*crls=*/{},
+             X509_V_FLAG_EXPLICIT_POLICY | X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
+  // requireExplicitPolicy still applies. Here, the intermediate specifies OID1
+  // and OID2.
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(intermediate_require.get(), {intermediate_require.get()},
+             /*intermediates=*/{}, /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+  EXPECT_EQ(
+      X509_V_ERR_NO_EXPLICIT_POLICY,
+      Verify(intermediate_require.get(), {intermediate_require.get()},
+             /*intermediates=*/{}, /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
+
+  // requireExplicitPolicy continues to be treated as a counter.
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(intermediate_require1.get(), {intermediate_require1.get()},
+             /*intermediates=*/{}, /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
+             [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid1.get()}); }));
+  EXPECT_EQ(
+      X509_V_OK,
+      Verify(intermediate_require1.get(), {intermediate_require1.get()},
+             /*intermediates=*/{}, /*crls=*/{}, X509_V_FLAG_PARTIAL_CHAIN,
              [&](X509_STORE_CTX *ctx) { set_policies(ctx, {oid3.get()}); }));
 }
 

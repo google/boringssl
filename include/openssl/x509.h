@@ -2787,6 +2787,10 @@ OPENSSL_EXPORT ASN1_TYPE *X509_ATTRIBUTE_get0_type(X509_ATTRIBUTE *attr,
 // trusted certificate as a trust anchor. See `X509_VERIFY_PARAM_set_trust` for
 // details.
 //
+// When this library uses a certificate as a trust anchor, the certificate's
+// fields are applied as constraints on the path, similar to RFC 5937. Expiry of
+// the trust anchor, via the notBefore and notAfter fields, is also applied.
+//
 // WARNING: Although a trusted certificate which fails the
 // `X509_VERIFY_PARAM_set_trust` check is functionally an untrusted
 // intermediate certificate, callers should not rely on this to configure

@@ -178,7 +178,8 @@ int policyinfo_cmp(const POLICYINFO *const *a, const POLICYINFO *const *b) {
 // whether anyPolicy is allowed or inhibited, taking into account the exception
 // for self-issued certificates.
 bool process_certificate_policies(const X509 *x509, X509PolicyLevel *level,
-                                  int any_policy_allowed) {
+                                  bool any_policy_allowed,
+                                  bool is_trust_anchor) {
   int critical;
   UniquePtr<CERTIFICATEPOLICIES> policies(
       reinterpret_cast<CERTIFICATEPOLICIES *>(X509_get_ext_d2i(
@@ -189,7 +190,20 @@ bool process_certificate_policies(const X509 *x509, X509PolicyLevel *level,
     }
 
     // RFC 5280, section 6.1.3, step (e).
-    level->Clear();
+    //
+    // We skip this step for the trust anchor. Lack of certificatePolicies on
+    // the trust anchor is treated as anyPolicy rather than no policy. This is
+    // neither supported nor contradicted by RFC 5280, which does not consider
+    // the trust anchor to be path of the certification path. However, RFC 5937
+    // considers this case to not constrain the path, so we align with that.
+    //
+    // Additionally, practically speaking, if we applied RFC 5280's intermediate
+    // processing to trust anchors here, we would likely break some
+    // applications. certificatePolicies is the only case where a missing
+    // extension applies a constraint instead of leaving things unconstrained.
+    if (!is_trust_anchor) {
+      level->Clear();
+    }
     return true;
   }
 
@@ -574,25 +588,34 @@ int X509_policy_check(const STACK_OF(X509) *certs,
                       unsigned long flags, int *out_error_depth) {
   *out_error_depth = 0;
 
-  // Skip policy checking if the chain is just the trust anchor.
-  //
-  // TODO(crbug.com/525688038): Apply trust anchor constraints. See RFC 5937 and
-  // ApplyTrustAnchorConstraints from verify_certificate_chain.cc.
+  // See RFC 5280, section 6.1.2, steps (d) through (f). Note that `n` in RFC
+  // 5280 is `num_certs - 1` because RFC 5280 paths do not include the trust
+  // anchor. However, we use `num_certs + 1`, not `num_certs` because, unlike
+  // RFC 5280, we include an extra loop iteration for the trust anchor.
   const size_t num_certs = sk_X509_num(certs);
-  if (num_certs <= 1) {
-    return X509_V_OK;
-  }
-
-  // See RFC 5280, section 6.1.2, steps (d) through (f).
   size_t explicit_policy =
       (flags & X509_V_FLAG_EXPLICIT_POLICY) ? 0 : num_certs + 1;
   size_t inhibit_any_policy =
       (flags & X509_V_FLAG_INHIBIT_ANY) ? 0 : num_certs + 1;
   size_t policy_mapping = (flags & X509_V_FLAG_INHIBIT_MAP) ? 0 : num_certs + 1;
 
+  // Start at `num_certs - 1`, i.e. including the trust anchor. This applies
+  // constraints from the trust anchor, analogously to RFC 5937, but we
+  // implement it with intermediate processing. This differs from RFC 5937:
+  //
+  // 1. RFC 5937 specifies no handling for policyMappings in the trust anchor.
+  //    We apply them, rather than silently ignore them.
+  //
+  // 2. RFC 5937 applies certificatePolicies to user-initial-policy-set. This
+  //    gives subtly different semantics from chain processing. See
+  //    https://crbug.com/1403258.
+  //
+  // 3. RFC 5937 ignores the numerical value of policyConstraints and
+  //    inhibitAnyPolicy, treating their presence as a boolean. We apply them in
+  //    full.
   Vector<X509PolicyLevel> levels;
   std::optional<X509PolicyLevel> level;
-  for (size_t i = num_certs - 2; i < num_certs; i--) {
+  for (size_t i = num_certs - 1; i < num_certs; i--) {
     X509 *cert = sk_X509_value(certs, i);
     uint32_t ex_flags = X509_get_extension_flags(cert);
     if (ex_flags & EXFLAG_INVALID) {
@@ -600,20 +623,22 @@ int X509_policy_check(const STACK_OF(X509) *certs,
       return X509_V_ERR_OUT_OF_MEM;
     }
     const bool is_self_issued = (ex_flags & EXFLAG_SI) != 0;
+    const bool is_trust_anchor = i == num_certs - 1;
 
     // In all but the first iteration, the previous iteration will have prepared
     // "expected_policy_set" for us as a staging level.
     if (!level.has_value()) {
-      assert(i == num_certs - 2);
+      assert(is_trust_anchor);
       level.emplace();
       level->set_has_any_policy(true);
     }
 
     // RFC 5280, section 6.1.3, steps (d) and (e). `any_policy_allowed` is
     // computed as in step (d.2).
-    const int any_policy_allowed =
+    const bool any_policy_allowed =
         inhibit_any_policy > 0 || (i > 0 && is_self_issued);
-    if (!process_certificate_policies(cert, &*level, any_policy_allowed)) {
+    if (!process_certificate_policies(cert, &*level, any_policy_allowed,
+                                      is_trust_anchor)) {
       *out_error_depth = static_cast<int>(i);
       return X509_V_ERR_INVALID_POLICY_EXTENSION;
     }
