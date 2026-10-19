@@ -37,15 +37,15 @@ var resetFlag = flag.Bool("reset", false, "if set, regenerates certificates that
 
 var (
 	// https://davidben.net/oid
-	testOID1 = asn1.ObjectIdentifier([]int{1, 2, 840, 113554, 4, 1, 72585, 2, 1})
-	testOID2 = asn1.ObjectIdentifier([]int{1, 2, 840, 113554, 4, 1, 72585, 2, 2})
-	testOID3 = asn1.ObjectIdentifier([]int{1, 2, 840, 113554, 4, 1, 72585, 2, 3})
-	testOID4 = asn1.ObjectIdentifier([]int{1, 2, 840, 113554, 4, 1, 72585, 2, 4})
-	testOID5 = asn1.ObjectIdentifier([]int{1, 2, 840, 113554, 4, 1, 72585, 2, 5})
+	testOID1 = must(x509.OIDFromInts([]uint64{1, 2, 840, 113554, 4, 1, 72585, 2, 1}))
+	testOID2 = must(x509.OIDFromInts([]uint64{1, 2, 840, 113554, 4, 1, 72585, 2, 2}))
+	testOID3 = must(x509.OIDFromInts([]uint64{1, 2, 840, 113554, 4, 1, 72585, 2, 3}))
+	testOID4 = must(x509.OIDFromInts([]uint64{1, 2, 840, 113554, 4, 1, 72585, 2, 4}))
+	testOID5 = must(x509.OIDFromInts([]uint64{1, 2, 840, 113554, 4, 1, 72585, 2, 5}))
 
 	// https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.4
 	certificatePoliciesOID = asn1.ObjectIdentifier([]int{2, 5, 29, 32})
-	anyPolicyOID           = asn1.ObjectIdentifier([]int{2, 5, 29, 32, 0})
+	anyPolicyOID           = must(x509.OIDFromInts([]uint64{2, 5, 29, 32, 0}))
 
 	// https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.5
 	policyMappingsOID = asn1.ObjectIdentifier([]int{2, 5, 29, 33})
@@ -60,6 +60,19 @@ func init() {
 	leafKey = mustParseECDSAKey(leafKeyPEM)
 	intermediateKey = mustParseECDSAKey(intermediateKeyPEM)
 	rootKey = mustParseECDSAKey(rootKeyPEM)
+}
+
+func must[T any](t T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+func addOID(b *cryptobyte.Builder, oid x509.OID) {
+	b.AddASN1(cbasn1.OBJECT_IDENTIFIER, func(child *cryptobyte.Builder) {
+		child.AddBytes(must(oid.MarshalBinary()))
+	})
 }
 
 type templateAndKey struct {
@@ -78,16 +91,10 @@ func mustGenerateCertificate(path string, subject, issuer *templateAndKey) {
 			panic(err)
 		}
 	}
-	cert, err := x509.CreateCertificate(rand.Reader, &subject.template, &issuer.template, &subject.key.PublicKey, issuer.key)
-	if err != nil {
-		panic(err)
-	}
-	file, err := os.Create(path)
-	if err != nil {
-		panic(err)
-	}
+	cert := must(x509.CreateCertificate(rand.Reader, &subject.template, &issuer.template, &subject.key.PublicKey, issuer.key))
+	file := must(os.Create(path))
 	defer file.Close()
-	err = pem.Encode(file, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	err := pem.Encode(file, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
 	if err != nil {
 		panic(err)
 	}
@@ -96,14 +103,8 @@ func mustGenerateCertificate(path string, subject, issuer *templateAndKey) {
 func main() {
 	flag.Parse()
 
-	notBefore, err := time.Parse(time.RFC3339, "2000-01-01T00:00:00Z")
-	if err != nil {
-		panic(err)
-	}
-	notAfter, err := time.Parse(time.RFC3339, "2100-01-01T00:00:00Z")
-	if err != nil {
-		panic(err)
-	}
+	notBefore := must(time.Parse(time.RFC3339, "2000-01-01T00:00:00Z"))
+	notAfter := must(time.Parse(time.RFC3339, "2100-01-01T00:00:00Z"))
 
 	root2 := templateAndKey{
 		template: x509.Certificate{
@@ -144,7 +145,7 @@ func main() {
 			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 			KeyUsage:              x509.KeyUsageCertSign,
 			SignatureAlgorithm:    x509.ECDSAWithSHA256,
-			PolicyIdentifiers:     []asn1.ObjectIdentifier{testOID1, testOID2},
+			Policies:              []x509.OID{testOID1, testOID2},
 		},
 		key: intermediateKey,
 	}
@@ -160,7 +161,7 @@ func main() {
 			KeyUsage:              x509.KeyUsageCertSign,
 			SignatureAlgorithm:    x509.ECDSAWithSHA256,
 			DNSNames:              []string{"www.example.com"},
-			PolicyIdentifiers:     []asn1.ObjectIdentifier{testOID1, testOID2},
+			Policies:              []x509.OID{testOID1, testOID2},
 		},
 		key: leafKey,
 	}
@@ -176,25 +177,27 @@ func main() {
 
 	// Introduce syntax errors in the leaf and intermediate.
 	leafInvalid := leaf
-	leafInvalid.template.PolicyIdentifiers = nil
+	leafInvalid.template.Policies = nil
 	leafInvalid.template.ExtraExtensions = []pkix.Extension{{Id: certificatePoliciesOID, Value: []byte("INVALID")}}
 	mustGenerateCertificate("policy_leaf_invalid.pem", &leafInvalid, &root)
 
 	intermediateInvalid := intermediate
-	intermediateInvalid.template.PolicyIdentifiers = nil
+	intermediateInvalid.template.Policies = nil
 	intermediateInvalid.template.ExtraExtensions = []pkix.Extension{{Id: certificatePoliciesOID, Value: []byte("INVALID")}}
 	mustGenerateCertificate("policy_intermediate_invalid.pem", &intermediateInvalid, &root)
 
 	// Duplicates are not allowed in certificatePolicies.
 	leafDuplicate := leaf
-	leafDuplicate.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID1, testOID2, testOID2}
+	leafDuplicate.template.Policies = []x509.OID{testOID1, testOID2, testOID2}
 	mustGenerateCertificate("policy_leaf_duplicate.pem", &leafDuplicate, &root)
 
 	intermediateDuplicate := intermediate
-	intermediateDuplicate.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID1, testOID2, testOID2}
+	intermediateDuplicate.template.Policies = []x509.OID{testOID1, testOID2, testOID2}
 	mustGenerateCertificate("policy_intermediate_duplicate.pem", &intermediateDuplicate, &root)
 
-	// Various policy constraints with requireExplicitPolicy values.
+	// Various policy constraints with requireExplicitPolicy values. Although
+	// Go supports this extension, CreateCertificate cannot serialize it. See
+	// http://go.dev/issue/82347
 	b := cryptobyte.NewBuilder(nil)
 	b.AddASN1(cbasn1.SEQUENCE, func(seq *cryptobyte.Builder) {
 		seq.AddASN1Int64WithTag(0, cbasn1.Tag(0).ContextSpecific())
@@ -220,16 +223,16 @@ func main() {
 	mustGenerateCertificate("policy_intermediate_require.pem", &intermediateRequire, &root)
 
 	// Same as above, but there are no policies on the intermediate.
-	intermediateRequire.template.PolicyIdentifiers = nil
+	intermediateRequire.template.Policies = nil
 	mustGenerateCertificate("policy_intermediate_require_no_policies.pem", &intermediateRequire, &root)
 
 	// Same as above, but the policy list has duplicates.
-	intermediateRequire.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID1, testOID2, testOID2}
+	intermediateRequire.template.Policies = []x509.OID{testOID1, testOID2, testOID2}
 	mustGenerateCertificate("policy_intermediate_require_duplicate.pem", &intermediateRequire, &root)
 
 	// Corresponding certificates that instead assert the anyPolicy OID.
 	intermediateAny := intermediate
-	intermediateAny.template.PolicyIdentifiers = []asn1.ObjectIdentifier{anyPolicyOID}
+	intermediateAny.template.Policies = []x509.OID{anyPolicyOID}
 	mustGenerateCertificate("policy_intermediate_any.pem", &intermediateAny, &root)
 
 	// Other requireExplicitPolicy values, on the leaf and intermediate.
@@ -245,71 +248,75 @@ func main() {
 	mustGenerateCertificate("policy_leaf_require1.pem", &leafRequire, &intermediate)
 
 	leafAny := leaf
-	leafAny.template.PolicyIdentifiers = []asn1.ObjectIdentifier{anyPolicyOID}
+	leafAny.template.Policies = []x509.OID{anyPolicyOID}
 	mustGenerateCertificate("policy_leaf_any.pem", &leafAny, &intermediate)
 
 	// An intermediate which maps OID1 to (OID2, OID3), and which asserts the
-	// input OIDs either all at once, or as anyPolicy.
+	// input OIDs either all at once, or as anyPolicy. Although Go supports
+	// this extension, CreateCertificate cannot serialize it. See
+	// http://go.dev/issue/82347
 	b = cryptobyte.NewBuilder(nil)
 	b.AddASN1(cbasn1.SEQUENCE, func(seq *cryptobyte.Builder) {
 		// Map OID3 to (OID1, OID2).
 		seq.AddASN1(cbasn1.SEQUENCE, func(mapping *cryptobyte.Builder) {
-			mapping.AddASN1ObjectIdentifier(testOID3)
-			mapping.AddASN1ObjectIdentifier(testOID1)
+			addOID(mapping, testOID3)
+			addOID(mapping, testOID1)
 		})
 		seq.AddASN1(cbasn1.SEQUENCE, func(mapping *cryptobyte.Builder) {
-			mapping.AddASN1ObjectIdentifier(testOID3)
-			mapping.AddASN1ObjectIdentifier(testOID2)
+			addOID(mapping, testOID3)
+			addOID(mapping, testOID2)
 		})
 
 		// Map all pairs of OID4 and OID5 to each other.
 		seq.AddASN1(cbasn1.SEQUENCE, func(mapping *cryptobyte.Builder) {
-			mapping.AddASN1ObjectIdentifier(testOID4)
-			mapping.AddASN1ObjectIdentifier(testOID4)
+			addOID(mapping, testOID4)
+			addOID(mapping, testOID4)
 		})
 		seq.AddASN1(cbasn1.SEQUENCE, func(mapping *cryptobyte.Builder) {
-			mapping.AddASN1ObjectIdentifier(testOID4)
-			mapping.AddASN1ObjectIdentifier(testOID5)
+			addOID(mapping, testOID4)
+			addOID(mapping, testOID5)
 		})
 		seq.AddASN1(cbasn1.SEQUENCE, func(mapping *cryptobyte.Builder) {
-			mapping.AddASN1ObjectIdentifier(testOID5)
-			mapping.AddASN1ObjectIdentifier(testOID4)
+			addOID(mapping, testOID5)
+			addOID(mapping, testOID4)
 		})
 		seq.AddASN1(cbasn1.SEQUENCE, func(mapping *cryptobyte.Builder) {
-			mapping.AddASN1ObjectIdentifier(testOID5)
-			mapping.AddASN1ObjectIdentifier(testOID5)
+			addOID(mapping, testOID5)
+			addOID(mapping, testOID5)
 		})
 	})
 	intermediateMapped := intermediate
-	intermediateMapped.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID1, testOID2, testOID3, testOID4, testOID5}
+	intermediateMapped.template.Policies = []x509.OID{testOID1, testOID2, testOID3, testOID4, testOID5}
 	intermediateMapped.template.ExtraExtensions = []pkix.Extension{{Id: policyMappingsOID, Value: b.BytesOrPanic()}}
 	mustGenerateCertificate("policy_intermediate_mapped.pem", &intermediateMapped, &root)
 
-	intermediateMapped.template.PolicyIdentifiers = []asn1.ObjectIdentifier{anyPolicyOID}
+	intermediateMapped.template.Policies = []x509.OID{anyPolicyOID}
 	mustGenerateCertificate("policy_intermediate_mapped_any.pem", &intermediateMapped, &root)
 
-	intermediateMapped.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID3}
+	intermediateMapped.template.Policies = []x509.OID{testOID3}
 	mustGenerateCertificate("policy_intermediate_mapped_oid3.pem", &intermediateMapped, &root)
 
 	// Leaves which assert more specific OIDs, to test intermediate_mapped.
 	leafSingle := leaf
-	leafSingle.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID1}
+	leafSingle.template.Policies = []x509.OID{testOID1}
 	mustGenerateCertificate("policy_leaf_oid1.pem", &leafSingle, &intermediate)
-	leafSingle.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID2}
+	leafSingle.template.Policies = []x509.OID{testOID2}
 	mustGenerateCertificate("policy_leaf_oid2.pem", &leafSingle, &intermediate)
-	leafSingle.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID3}
+	leafSingle.template.Policies = []x509.OID{testOID3}
 	mustGenerateCertificate("policy_leaf_oid3.pem", &leafSingle, &intermediate)
-	leafSingle.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID4}
+	leafSingle.template.Policies = []x509.OID{testOID4}
 	mustGenerateCertificate("policy_leaf_oid4.pem", &leafSingle, &intermediate)
-	leafSingle.template.PolicyIdentifiers = []asn1.ObjectIdentifier{testOID5}
+	leafSingle.template.Policies = []x509.OID{testOID5}
 	mustGenerateCertificate("policy_leaf_oid5.pem", &leafSingle, &intermediate)
 
 	leafNone := leaf
-	leafNone.template.PolicyIdentifiers = nil
+	leafNone.template.Policies = nil
 	mustGenerateCertificate("policy_leaf_none.pem", &leafNone, &intermediate)
 
 	// Make version of Root, signed by Root 2, with policy mapping inhibited.
 	// This can be combined with intermediateMapped to test the combination.
+	// Although Go supports this extension, CreateCertificate cannot
+	// serialize it. See http://go.dev/issue/82347
 	b = cryptobyte.NewBuilder(nil)
 	b.AddASN1(cbasn1.SEQUENCE, func(seq *cryptobyte.Builder) {
 		seq.AddASN1Int64WithTag(0, cbasn1.Tag(1).ContextSpecific())
@@ -317,7 +324,7 @@ func main() {
 	inhibitPolicyMapping0 := b.BytesOrPanic()
 
 	inhibitMapping := root
-	inhibitMapping.template.PolicyIdentifiers = []asn1.ObjectIdentifier{anyPolicyOID}
+	inhibitMapping.template.Policies = []x509.OID{anyPolicyOID}
 	inhibitMapping.template.ExtraExtensions = []pkix.Extension{{Id: policyConstraintsOID, Value: inhibitPolicyMapping0}}
 	mustGenerateCertificate("policy_root_cross_inhibit_mapping.pem", &inhibitMapping, &root2)
 }
@@ -345,9 +352,6 @@ func mustParseECDSAKey(in string) *ecdsa.PrivateKey {
 	if keyBlock == nil || keyBlock.Type != "PRIVATE KEY" {
 		panic("could not decode private key")
 	}
-	key, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
-	if err != nil {
-		panic(err)
-	}
+	key := must(x509.ParsePKCS8PrivateKey(keyBlock.Bytes))
 	return key.(*ecdsa.PrivateKey)
 }
