@@ -61,7 +61,7 @@
 BSSL_NAMESPACE_BEGIN
 namespace {
 
-static const char kCrossSigningRootPEM[] = R"(
+const char kCrossSigningRootPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICcTCCAdqgAwIBAgIIagJHiPvE0MowDQYJKoZIhvcNAQELBQAwPDEaMBgGA1UE
 ChMRQm9yaW5nU1NMIFRFU1RJTkcxHjAcBgNVBAMTFUNyb3NzLXNpZ25pbmcgUm9v
@@ -80,7 +80,7 @@ YFXvkME=
 -----END CERTIFICATE-----
 )";
 
-static const char kRootCAPEM[] = R"(
+const char kRootCAPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICVTCCAb6gAwIBAgIIAj5CwoHlWuYwDQYJKoZIhvcNAQELBQAwLjEaMBgGA1UE
 ChMRQm9yaW5nU1NMIFRFU1RJTkcxEDAOBgNVBAMTB1Jvb3QgQ0EwIBcNMTUwMTAx
@@ -98,7 +98,7 @@ kfGIBAYhzGZWhY3JbhIfTEfY1PNM1pWChQ==
 -----END CERTIFICATE-----
 )";
 
-static const char kRootCrossSignedPEM[] = R"(
+const char kRootCrossSignedPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICYzCCAcygAwIBAgIIAj5CwoHlWuYwDQYJKoZIhvcNAQELBQAwPDEaMBgGA1UE
 ChMRQm9yaW5nU1NMIFRFU1RJTkcxHjAcBgNVBAMTFUNyb3NzLXNpZ25pbmcgUm9v
@@ -116,7 +116,7 @@ CwUAA4GBAErTxYJ0en9HVRHAAr5OO5wuk5Iq3VMc79TMyQLCXVL8YH8Uk7KEwv+q
 -----END CERTIFICATE-----
 )";
 
-static const char kIntermediatePEM[] = R"(
+const char kIntermediatePEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICXjCCAcegAwIBAgIJAKJMH+7rscPcMA0GCSqGSIb3DQEBCwUAMC4xGjAYBgNV
 BAoTEUJvcmluZ1NTTCBURVNUSU5HMRAwDgYDVQQDEwdSb290IENBMCAXDTE1MDEw
@@ -134,7 +134,7 @@ aGSh09eQRvAVmbVCviDK2ipkWNegdyI19jFfNP5uIkGlYg==
 -----END CERTIFICATE-----
 )";
 
-static const char kIntermediateSelfSignedPEM[] = R"(
+const char kIntermediateSelfSignedPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICZjCCAc+gAwIBAgIJAKJMH+7rscPcMA0GCSqGSIb3DQEBCwUAMDYxGjAYBgNV
 BAoTEUJvcmluZ1NTTCBURVNUSU5HMRgwFgYDVQQDEw9JbnRlcm1lZGlhdGUgQ0Ew
@@ -152,7 +152,7 @@ E4Vs6ZLU+fra1WAuIj6qFiigRja+3YkZArG8tMA9vtlhTX/g7YBZIkqH
 -----END CERTIFICATE-----
 )";
 
-static const char kLeafPEM[] = R"(
+const char kLeafPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICXjCCAcegAwIBAgIIWjO48ufpunYwDQYJKoZIhvcNAQELBQAwNjEaMBgGA1UE
 ChMRQm9yaW5nU1NMIFRFU1RJTkcxGDAWBgNVBAMTD0ludGVybWVkaWF0ZSBDQTAg
@@ -170,7 +170,7 @@ xNCwyMX9mtdXdQicOfNjIGUCD5OLV5PgHFPRKiHHioBAhg==
 -----END CERTIFICATE-----
 )";
 
-static const char kLeafNoKeyUsagePEM[] = R"(
+const char kLeafNoKeyUsagePEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICNTCCAZ6gAwIBAgIJAIFQGaLQ0G2mMA0GCSqGSIb3DQEBCwUAMDYxGjAYBgNV
 BAoTEUJvcmluZ1NTTCBURVNUSU5HMRgwFgYDVQQDEw9JbnRlcm1lZGlhdGUgQ0Ew
@@ -187,7 +187,7 @@ uwBqh4Y3Eto+Zn4pMVsxGEfUpjzjZDel7bN1/oU/9KWPpDfywfUmjgk=
 -----END CERTIFICATE-----
 )";
 
-static const char kForgeryPEM[] = R"(
+const char kForgeryPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICZzCCAdCgAwIBAgIIdTlMzQoKkeMwDQYJKoZIhvcNAQELBQAwNzEaMBgGA1UE
 ChMRQm9yaW5nU1NMIFRFU1RJTkcxGTAXBgNVBAMTEGV2aWwuZXhhbXBsZS5jb20w
@@ -206,7 +206,7 @@ DSLfRgaQwcb2gg2xpDFoG+W0vc6O651uF23WGt5JaFFJJxqjII05IexfCNhuPmp4
 )";
 
 // kBadPSSCertPEM is a self-signed RSA-PSS certificate with bad parameters.
-static const char kBadPSSCertPEM[] = R"(
+const char kBadPSSCertPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIDdjCCAjqgAwIBAgIJANcwZLyfEv7DMD4GCSqGSIb3DQEBCjAxoA0wCwYJYIZI
 AWUDBAIBoRowGAYJKoZIhvcNAQEIMAsGCWCGSAFlAwQCAaIEAgIA3jAnMSUwIwYD
@@ -230,7 +230,7 @@ lC9+9hPHIoc9UMmAQNo1vGIW3NWVoeGbaJ8=
 -----END CERTIFICATE-----
 )";
 
-static const char kRSAKey[] = R"(
+const char kRSAKey[] = R"(
 -----BEGIN RSA PRIVATE KEY-----
 MIICXgIBAAKBgQDYK8imMuRi/03z0K1Zi0WnvfFHvwlYeyK9Na6XJYaUoIDAtB92
 kWdGMdAQhLciHnAjkXLI6W15OoV3gA/ElRZ1xUpxTMhjP6PyY5wqT5r6y8FxbiiF
@@ -248,7 +248,7 @@ moZWgjHvB2W9Ckn7sDqsPB+U2tyX0joDdQEyuiMECDY8oQ==
 -----END RSA PRIVATE KEY-----
 )";
 
-static const char kP256Key[] = R"(
+const char kP256Key[] = R"(
 -----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgBw8IcnrUoEqc3VnJ
 TYlodwi1b8ldMHcO6NHJzgqLtGqhRANCAATmK2niv2Wfl74vHg2UikzVl2u3qR4N
@@ -285,7 +285,7 @@ Rvvdqakendy6WgHn1peoChj5w8SjHlbifINI2xYaHPUdfvGULUvPciLB
 //     Lbf3v2dvxOpTNTONWjp2c+iUQo8QxJCZr5Sfb21oQ9Ktcrmc/CY7LeBVDibXwxdM
 //     vRG8kBzvslFWh7REzC3u06GSVhyKDfW93kN2cKVwGoahRlhj7oHuZQ==
 //     -----END RSA PRIVATE KEY-----
-static const char kCRLTestRoot[] = R"(
+const char kCRLTestRoot[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIDbzCCAlegAwIBAgIJAODri7v0dDUFMA0GCSqGSIb3DQEBCwUAME4xCzAJBgNV
 BAYTAlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMRYwFAYDVQQHDA1Nb3VudGFpbiBW
@@ -309,7 +309,7 @@ amd8GKMZQvP0ufGnUn7D7uartA==
 -----END CERTIFICATE-----
 )";
 
-static const char kCRLTestLeaf[] = R"(
+const char kCRLTestLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIDkDCCAnigAwIBAgICEAAwDQYJKoZIhvcNAQELBQAwTjELMAkGA1UEBhMCVVMx
 EzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcMDU1vdW50YWluIFZpZXcxEjAQ
@@ -334,7 +334,7 @@ tjJMFw==
 -----END CERTIFICATE-----
 )";
 
-static const char kBasicCRL[] = R"(
+const char kBasicCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIBpzCBkAIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -348,7 +348,7 @@ diyu0fZ/bPAM3VAGawatf/SyWfBMyKpoPXEG39oAzmjjOj8en82psn7m474IGaho
 -----END X509 CRL-----
 )";
 
-static const char kRevokedCRL[] = R"(
+const char kRevokedCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIB6DCB0QIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -364,7 +364,7 @@ WXdfcGJRL1D3xRXk
 -----END X509 CRL-----
 )";
 
-static const char kBadIssuerCRL[] = R"(
+const char kBadIssuerCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIBwjCBqwIBATANBgkqhkiG9w0BAQsFADBSMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzEWMBQGA1UECgwN
@@ -381,7 +381,7 @@ Od4cjsc3ymNk88S4jpnLRtIVxZB+SQ==
 
 // kKnownCriticalCRL is kBasicCRL but with a critical issuing distribution point
 // extension.
-static const char kKnownCriticalCRL[] = R"(
+const char kKnownCriticalCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIBuDCBoQIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -397,7 +397,7 @@ xDx+GDWVVXccehcwAu983kAqP+JDaVQPBVksLuBXz2adrEWwvbLCnZeL3zH1IY9h
 )";
 
 // kUnknownCriticalCRL is kBasicCRL but with an unknown critical extension.
-static const char kUnknownCriticalCRL[] = R"(
+const char kUnknownCriticalCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIBvDCBpQIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -414,7 +414,7 @@ kwzzU2rL3G65CrZ7H0SZsQ==
 
 // kUnknownCriticalCRL2 is kBasicCRL but with a critical issuing distribution
 // point extension followed by an unknown critical extension
-static const char kUnknownCriticalCRL2[] = R"(
+const char kUnknownCriticalCRL2[] = R"(
 -----BEGIN X509 CRL-----
 MIIBzTCBtgIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -431,7 +431,7 @@ YjqkkSVIcr87u+8AznwdstnQzsyD27Jt7SjVORkYRywi
 
 // kBadExtensionCRL is kBasicCRL but with an incorrectly-encoded issuing
 // distribution point extension.
-static const char kBadExtensionCRL[] = R"(
+const char kBadExtensionCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIBujCBowIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -449,7 +449,7 @@ o/1TpfOMSGhMyMoyPrk=
 // kAlgorithmMismatchCRL is kBasicCRL but with mismatched AlgorithmIdentifiers
 // in the outer structure and signed portion. The signature reflects the signed
 // portion.
-static const char kAlgorithmMismatchCRL[] = R"(
+const char kAlgorithmMismatchCRL[] = R"(
 -----BEGIN X509 CRL-----
 MIIBpzCBkAIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -466,7 +466,7 @@ diyu0fZ/bPAM3VAGawatf/SyWfBMyKpoPXEG39oAzmjjOj8en82psn7m474IGaho
 // kAlgorithmMismatchCRL2 is kBasicCRL but with mismatched AlgorithmIdentifiers
 // in the outer structure and signed portion. The signature reflects the outer
 // structure.
-static const char kAlgorithmMismatchCRL2[] = R"(
+const char kAlgorithmMismatchCRL2[] = R"(
 -----BEGIN X509 CRL-----
 MIIBpzCBkAIBATANBgkqhkiG9w0BAQwFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -481,7 +481,7 @@ SrkFz8Se3F6mCHnbDzYElbmA46iKU2J12LTrso3Ewq/qHq0mebfp2z0y6g==
 )";
 
 // kEd25519Cert is a self-signed Ed25519 certificate.
-static const char kEd25519Cert[] = R"(
+const char kEd25519Cert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBkTCCAUOgAwIBAgIJAJwooam0UCDmMAUGAytlcDBFMQswCQYDVQQGEwJBVTET
 MBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50ZXJuZXQgV2lkZ2l0cyBQ
@@ -497,7 +497,7 @@ r+VHVKUhsrvcdCelnXRrrSD7xWAL
 
 // kEd25519CertNull is an invalid self-signed Ed25519 with an explicit NULL in
 // the signature algorithm.
-static const char kEd25519CertNull[] = R"(
+const char kEd25519CertNull[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBlTCCAUWgAwIBAgIJAJwooam0UCDmMAcGAytlcAUAMEUxCzAJBgNVBAYTAkFV
 MRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRz
@@ -513,7 +513,7 @@ recgVPpVS7B+d9g4EwtZXIh4lodTBDHBBw==
 
 // kX25519 is the example X25519 certificate from
 // https://tools.ietf.org/html/rfc8410#section-10.2
-static const char kX25519Cert[] = R"(
+const char kX25519Cert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBLDCB36ADAgECAghWAUdKKo3DMDAFBgMrZXAwGTEXMBUGA1UEAwwOSUVURiBUZX
 N0IERlbW8wHhcNMTYwODAxMTIxOTI0WhcNNDAxMjMxMjM1OTU5WjAZMRcwFQYDVQQD
@@ -527,7 +527,7 @@ w1AH9efZBw==
 
 // kMLDSA65Cert is the example ML-DSA-65 certificate from
 // https://tools.ietf.org/html/rfc9881#name-example-certificates
-static const char kMLDSA65Cert[] = R"(
+const char kMLDSA65Cert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIVjTCCCIqgAwIBAgIUFZ/+byL9XMQsUk32/V4o0N44804wCwYJYIZIAWUDBAMS
 MCIxDTALBgNVBAoTBElFVEYxETAPBgNVBAMTCExBTVBTIFdHMB4XDTIwMDIwMzA0
@@ -650,7 +650,7 @@ IA==
 
 // kMLDSA65CertNull is an invalid self-signed ML-DSA-65 certificate with an
 // explicit NULL in the signature algorithm.
-static const char kMLDSA65CertNull[] = R"(
+const char kMLDSA65CertNull[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIVSjCCCEWgAwIBAgIBATANBglghkgBZQMEAxIFADAfMR0wGwYDVQQDDBRtYWxm
 b3JtZWQgTUwtRFNBIGtleTAgFw03MDAxMDEwMDAwMDBaGA85OTk5MTIzMTIzNTk1
@@ -773,7 +773,7 @@ P0BTpwAAAAAAAAAAAAAAAAAAAAAAAAAABw0RFx8j
 // contains SANS for example.com, test@example.com, 127.0.0.1, and
 // https://example.com/. (The latter is useless for now since crypto/x509
 // doesn't deal with URI SANs directly.)
-static const char kSANTypesLeaf[] = R"(
+const char kSANTypesLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIClzCCAgCgAwIBAgIJAOjwnT/iW+qmMA0GCSqGSIb3DQEBCwUAMCsxFzAVBgNV
 BAoTDkJvcmluZ1NTTCBUZXN0MRAwDgYDVQQDEwdSb290IENBMB4XDTE1MDEwMTAw
@@ -808,7 +808,7 @@ jusJ2PqSmtKNU1Zcaba4d29oFejmOAfeguhR8AHpsc/zHEaS5Q9cJsuJcw==
 // YvJUG1zoHwUVrxxbR3DbpTODlktLcl/0b97D0IkH3w==
 // -----END RSA PRIVATE KEY-----
 
-static const char kSANTypesRoot[] = R"(
+const char kSANTypesRoot[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICTTCCAbagAwIBAgIIAj5CwoHlWuYwDQYJKoZIhvcNAQELBQAwKzEXMBUGA1UE
 ChMOQm9yaW5nU1NMIFRlc3QxEDAOBgNVBAMTB1Jvb3QgQ0EwHhcNMTUwMTAxMDAw
@@ -925,7 +925,7 @@ d5YVX0c90VMnUhF/dlrqS9U=
 
 // kNoBasicConstraintsCertSignIntermediate doesn't have isCA set, but contains
 // certSign in the keyUsage.
-static const char kNoBasicConstraintsCertSignIntermediate[] = R"(
+const char kNoBasicConstraintsCertSignIntermediate[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBqjCCAROgAwIBAgIBAjANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -939,7 +939,7 @@ xKt/6oif1ci/KCKqKNXJAIFbc4e+IiBpenwpxHk3If4NM+Ek0nKoO8Uj0NkgTQ==
 -----END CERTIFICATE-----
 )";
 
-static const char kNoBasicConstraintsCertSignLeaf[] = R"(
+const char kNoBasicConstraintsCertSignLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBUDCB96ADAgECAgEDMAoGCCqGSM49BAMCMB8xHTAbBgNVBAMTFE5vIEJhc2lj
 IENvbnN0cmFpbnRzMCAXDTAwMDEwMTAwMDAwMFoYDzIwOTkwMTAxMDAwMDAwWjAx
@@ -954,7 +954,7 @@ Djy3Zw==
 
 // kNoBasicConstraintsNetscapeCAIntermediate doesn't have isCA set, but contains
 // a Netscape certificate-type extension that asserts a type of "SSL CA".
-static const char kNoBasicConstraintsNetscapeCAIntermediate[] = R"(
+const char kNoBasicConstraintsNetscapeCAIntermediate[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBuDCCASGgAwIBAgIBAjANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -969,7 +969,7 @@ P9p6HuyLrmn0c/F0
 -----END CERTIFICATE-----
 )";
 
-static const char kNoBasicConstraintsNetscapeCALeaf[] = R"(
+const char kNoBasicConstraintsNetscapeCALeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBXDCCAQKgAwIBAgIBAzAKBggqhkjOPQQDAjAqMSgwJgYDVQQDEx9ObyBCYXNp
 YyBDb25zdHJhaW50cyAoTmV0c2NhcGUpMCAXDTAwMDEwMTAwMDAwMFoYDzIwOTkw
@@ -982,7 +982,7 @@ XyPwWPbymSTpzKhB4xB7qQ==
 -----END CERTIFICATE-----
 )";
 
-static const char kSelfSignedMismatchAlgorithms[] = R"(
+const char kSelfSignedMismatchAlgorithms[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIFMjCCAxqgAwIBAgIJAL0mG5fOeJ7xMA0GCSqGSIb3DQEBDQUAMC0xCzAJBgNV
 BAYTAkdCMQ8wDQYDVQQHDAZMb25kb24xDTALBgNVBAoMBFRlc3QwIBcNMTgwOTE3
@@ -1018,7 +1018,7 @@ KStYq7X9PKseN+PvmfeoffIKc5R/Ha39oi7cGMVHCr8aiEhsf94=
 // kCommonNameWithSANs is a leaf certificate signed by kSANTypesRoot, with
 // *.host1.test as the common name and a SAN list of *.host2.test and
 // foo.host3.test.
-static const char kCommonNameWithSANs[] = R"(
+const char kCommonNameWithSANs[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIB2zCCAUSgAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1035,7 +1035,7 @@ enm/h1zOfJ7wXLyscD4kU29Wc/zxBd70thIgLYn16CC1S9NtXKsXXDXv5VVH/bg=
 
 // kCommonNameWithSANs is a leaf certificate signed by kSANTypesRoot, with
 // *.host1.test as the common name and no SAN list.
-static const char kCommonNameWithoutSANs[] = R"(
+const char kCommonNameWithoutSANs[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBtTCCAR6gAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1053,7 +1053,7 @@ pFFXI2B5usgI
 // kCommonNameWithEmailSAN is a leaf certificate signed by kSANTypesRoot, with
 // *.host1.test as the common name and the email address test@host2.test in the
 // SAN list.
-static const char kCommonNameWithEmailSAN[] = R"(
+const char kCommonNameWithEmailSAN[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBvDCCASWgAwIBAgIBAjANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1071,7 +1071,7 @@ aet/mER21Z/9ZsTUoJQPJw==
 // kCommonNameWithIPSAN is a leaf certificate signed by kSANTypesRoot, with
 // *.host1.test as the common name and the IP address 127.0.0.1 in the
 // SAN list.
-static const char kCommonNameWithIPSAN[] = R"(
+const char kCommonNameWithIPSAN[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBsTCCARqgAwIBAgIBAjANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1095,7 +1095,7 @@ D0+O6KI=
 // JhNOfIv/d8heWFBeKOfMR+RfaROhRANCAASbbbWYiN6mn+BCpg4XNpibOH0D/DN4
 // kZ5C/Ml2YVomC9T83OKk2CzB8fPAabPb4P4Vv+fIabpEfjWS5nzKLY1y
 // -----END PRIVATE KEY-----
-static const char kConstrainedIntermediate[] = R"(
+const char kConstrainedIntermediate[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICDjCCAXegAwIBAgIBAjANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1115,7 +1115,7 @@ UyM=
 // kCommonNamePermittedLeaf is a leaf certificate signed by
 // kConstrainedIntermediate. Its common name is permitted by the name
 // constraints.
-static const char kCommonNamePermittedLeaf[] = R"(
+const char kCommonNamePermittedLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBaDCCAQ2gAwIBAgIBAzAKBggqhkjOPQQDAjAoMSYwJAYDVQQDEx1OYW1lIENv
 bnN0cmFpbnRzIEludGVybWVkaWF0ZTAgFw0wMDAxMDEwMDAwMDBaGA8yMDk5MDEw
@@ -1127,12 +1127,12 @@ AgNJADBGAiEAtsnWuRQXtw2xbieC78Y8SVEtTjcZUx8uZyQe1GPLfGICIQDR4fNY
 yg3PC94ydPNQZVsFxAne32CbonWWsokalTFpUQ==
 -----END CERTIFICATE-----
 )";
-static const char kCommonNamePermitted[] = "foo.permitted1.test";
+const char kCommonNamePermitted[] = "foo.permitted1.test";
 
 // kCommonNameNotPermittedLeaf is a leaf certificate signed by
 // kConstrainedIntermediate. Its common name is not permitted by the name
 // constraints.
-static const char kCommonNameNotPermittedLeaf[] = R"(
+const char kCommonNameNotPermittedLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBazCCARCgAwIBAgIBBDAKBggqhkjOPQQDAjAoMSYwJAYDVQQDEx1OYW1lIENv
 bnN0cmFpbnRzIEludGVybWVkaWF0ZTAgFw0wMDAxMDEwMDAwMDBaGA8yMDk5MDEw
@@ -1144,12 +1144,12 @@ PQQDAgNJADBGAiEAxaUslxmoWL1tIvnDz7gDkto/HcmdU0jHVuUQLXcCG8wCIQCN
 5xZjitlCQU8UB5qSu9wH4B+0JcVO3Ss4Az76HEJWMw==
 -----END CERTIFICATE-----
 )";
-static const char kCommonNameNotPermitted[] = "not-permitted.test";
+const char kCommonNameNotPermitted[] = "not-permitted.test";
 
 // kCommonNameNotPermittedWithSANsLeaf is a leaf certificate signed by
 // kConstrainedIntermediate. Its common name is not permitted by the name
 // constraints but it has a SAN list.
-static const char kCommonNameNotPermittedWithSANsLeaf[] = R"(
+const char kCommonNameNotPermittedWithSANsLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBqTCCAU+gAwIBAgIBBjAKBggqhkjOPQQDAjAoMSYwJAYDVQQDEx1OYW1lIENv
 bnN0cmFpbnRzIEludGVybWVkaWF0ZTAgFw0wMDAxMDEwMDAwMDBaGA8yMDk5MDEw
@@ -1162,11 +1162,11 @@ ZDIudGVzdDAKBggqhkjOPQQDAgNIADBFAiACk+1f184KkKAXuntmrz+Ygcq8MiZl
 4delx44FtcNaegIhAIA5nYfzxNcTXxDo3U+x1vSLH6Y7faLvHiFySp7O//q+
 -----END CERTIFICATE-----
 )";
-static const char kCommonNameNotPermittedWithSANs[] = "not-permitted.test";
+const char kCommonNameNotPermittedWithSANs[] = "not-permitted.test";
 
 // kCommonNameNotDNSLeaf is a leaf certificate signed by
 // kConstrainedIntermediate. Its common name is not a DNS name.
-static const char kCommonNameNotDNSLeaf[] = R"(
+const char kCommonNameNotDNSLeaf[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBYTCCAQagAwIBAgIBCDAKBggqhkjOPQQDAjAoMSYwJAYDVQQDEx1OYW1lIENv
 bnN0cmFpbnRzIEludGVybWVkaWF0ZTAgFw0wMDAxMDEwMDAwMDBaGA8yMDk5MDEw
@@ -1178,7 +1178,7 @@ IQChUAmVNI39VHe0zemRE09VDcSEgOxr1nTvjLcg/Q8pVQIhAJYZnJI0YZAi05QH
 RHNlAkTK2TnUaVn3fGSylaLiFS1r
 -----END CERTIFICATE-----
 )";
-static const char kCommonNameNotDNS[] = "Not a DNS name";
+const char kCommonNameNotDNS[] = "Not a DNS name";
 
 // The following six certificates are issued by `kSANTypesRoot` and have
 // different extended key usage values. They were created with the following
@@ -1208,7 +1208,7 @@ static const char kCommonNameNotDNS[] = "Not a DNS name";
 //     pem.Encode(os.Stdout, &pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
 // }
 
-static const char kMicrosoftSGCCert[] = R"(
+const char kMicrosoftSGCCert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBtDCCAR2gAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1223,7 +1223,7 @@ cC4l0r/6jik=
 -----END CERTIFICATE-----
 )";
 
-static const char kNetscapeSGCCert[] = R"(
+const char kNetscapeSGCCert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBszCCARygAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1238,7 +1238,7 @@ RQHX6HQJJg==
 -----END CERTIFICATE-----
 )";
 
-static const char kServerEKUCert[] = R"(
+const char kServerEKUCert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBsjCCARugAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1253,7 +1253,7 @@ iatNW3x1wg0645aNYOktW/iQ7mAAiziTY73GFyfiJDWqnY+CwA94ZWyQidjHdN/I
 -----END CERTIFICATE-----
 )";
 
-static const char kServerEKUPlusMicrosoftSGCCert[] = R"(
+const char kServerEKUPlusMicrosoftSGCCert[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBvjCCASegAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1268,7 +1268,7 @@ KHpwoNFU3zA99iQzVJgbUyN0PbKwHEanLyKDJZyFk71R39ToxhSNQgaQYjZYCy1H
 -----END CERTIFICATE-----
 )";
 
-static const char kAnyEKU[] = R"(
+const char kAnyEKU[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBrjCCARegAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1283,7 +1283,7 @@ L6A=
 -----END CERTIFICATE-----
 )";
 
-static const char kNoEKU[] = R"(
+const char kNoEKU[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBnTCCAQagAwIBAgIBAzANBgkqhkiG9w0BAQsFADArMRcwFQYDVQQKEw5Cb3Jp
 bmdTU0wgVGVzdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0wMDAxMDEwMDAwMDBaGA8y
@@ -1298,28 +1298,28 @@ TXHOSQQD8Dl4BK0wOet+TP6LBEjHlRFjAqK4bu9xpxV2
 )";
 
 // CertFromPEM parses the given PEM block and returns an `X509`.
-static bssl::UniquePtr<X509> CertFromPEM(std::string_view pem) {
+bssl::UniquePtr<X509> CertFromPEM(std::string_view pem) {
   UniquePtr<BIO> bio(BIO_new_mem_buf(pem.data(), pem.size()));
   return UniquePtr<X509>(
       PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr));
 }
 
 // CRLFromPEM parses the given PEM block and returns an `X509_CRL`.
-static bssl::UniquePtr<X509_CRL> CRLFromPEM(std::string_view pem) {
+bssl::UniquePtr<X509_CRL> CRLFromPEM(std::string_view pem) {
   UniquePtr<BIO> bio(BIO_new_mem_buf(pem.data(), pem.size()));
   return UniquePtr<X509_CRL>(
       PEM_read_bio_X509_CRL(bio.get(), nullptr, nullptr, nullptr));
 }
 
 // CSRFromPEM parses the given PEM block and returns an `X509_REQ`.
-static bssl::UniquePtr<X509_REQ> CSRFromPEM(std::string_view pem) {
+bssl::UniquePtr<X509_REQ> CSRFromPEM(std::string_view pem) {
   UniquePtr<BIO> bio(BIO_new_mem_buf(pem.data(), pem.size()));
   return UniquePtr<X509_REQ>(
       PEM_read_bio_X509_REQ(bio.get(), nullptr, nullptr, nullptr));
 }
 
 // PrivateKeyFromPEM parses the given PEM block and returns an `EVP_PKEY`.
-static bssl::UniquePtr<EVP_PKEY> PrivateKeyFromPEM(std::string_view pem) {
+bssl::UniquePtr<EVP_PKEY> PrivateKeyFromPEM(std::string_view pem) {
   UniquePtr<BIO> bio(BIO_new_mem_buf(pem.data(), pem.size()));
   return UniquePtr<EVP_PKEY>(
       PEM_read_bio_PrivateKey(bio.get(), nullptr, nullptr, nullptr));
@@ -1327,8 +1327,7 @@ static bssl::UniquePtr<EVP_PKEY> PrivateKeyFromPEM(std::string_view pem) {
 
 // CertsToStack converts a vector of `X509*` to an OpenSSL STACK_OF(X509),
 // bumping the reference counts for each certificate in question.
-static bssl::UniquePtr<STACK_OF(X509)> CertsToStack(
-    const std::vector<X509 *> &certs) {
+bssl::UniquePtr<STACK_OF(X509)> CertsToStack(const std::vector<X509 *> &certs) {
   UniquePtr<STACK_OF(X509)> stack(sk_X509_new_null());
   if (!stack) {
     return nullptr;
@@ -1342,11 +1341,11 @@ static bssl::UniquePtr<STACK_OF(X509)> CertsToStack(
   return stack;
 }
 
-static bssl::Span<const uint8_t> ASN1StringAsBytes(const ASN1_STRING *str) {
+bssl::Span<const uint8_t> ASN1StringAsBytes(const ASN1_STRING *str) {
   return Span(ASN1_STRING_get0_data(str), ASN1_STRING_length(str));
 }
 
-static std::string_view ASN1StringAsView(const ASN1_STRING *str) {
+std::string_view ASN1StringAsView(const ASN1_STRING *str) {
   return BytesAsStringView(ASN1StringAsBytes(str));
 }
 
@@ -1360,7 +1359,7 @@ static UniquePtr<ASN1_INTEGER> ASN1IntegerFromU64(uint64_t v) {
 
 // CRLsToStack converts a vector of `X509_CRL*` to an OpenSSL
 // STACK_OF(X509_CRL), bumping the reference counts for each CRL in question.
-static bssl::UniquePtr<STACK_OF(X509_CRL)> CRLsToStack(
+bssl::UniquePtr<STACK_OF(X509_CRL)> CRLsToStack(
     const std::vector<X509_CRL *> &crls) {
   UniquePtr<STACK_OF(X509_CRL)> stack(sk_X509_CRL_new_null());
   if (!stack) {
@@ -1376,9 +1375,9 @@ static bssl::UniquePtr<STACK_OF(X509_CRL)> CRLsToStack(
 }
 
 // Timestamp to use with X509VerifyMTCTest.
-static const int64_t kVerifyMtcReferenceTime = 1735689600 /* Jan 1st, 2025 */;
+const int64_t kVerifyMtcReferenceTime = 1735689600 /* Jan 1st, 2025 */;
 // Timestamp that works with the rest of the tests.
-static const int64_t kReferenceTime = 1474934400 /* Sep 27th, 2016 */;
+const int64_t kReferenceTime = 1474934400 /* Sep 27th, 2016 */;
 
 class X509VerifyTest : public testing::TestWithParam<bool> {
  public:
@@ -1797,14 +1796,14 @@ TEST(X509Test, SerializeModifiedCertThreads) {
 }
 #endif  // OPENSSL_THREADS
 
-static const char kHostname[] = "example.com";
-static const char kWrongHostname[] = "example2.com";
-static const char kEmail[] = "test@example.com";
-static const char kWrongEmail[] = "test2@example.com";
-static const uint8_t kIP[4] = {127, 0, 0, 1};
-static const uint8_t kWrongIP[4] = {127, 0, 0, 2};
-static const char kIPString[] = "127.0.0.1";
-static const char kWrongIPString[] = "127.0.0.2";
+const char kHostname[] = "example.com";
+const char kWrongHostname[] = "example2.com";
+const char kEmail[] = "test@example.com";
+const char kWrongEmail[] = "test2@example.com";
+const uint8_t kIP[4] = {127, 0, 0, 1};
+const uint8_t kWrongIP[4] = {127, 0, 0, 2};
+const char kIPString[] = "127.0.0.1";
+const char kWrongIPString[] = "127.0.0.2";
 
 TEST_P(X509VerifyTest, ZeroLengthsWithX509PARAM) {
   UniquePtr<X509> leaf(CertFromPEM(kSANTypesLeaf));
@@ -2092,8 +2091,8 @@ TEST_P(X509VerifyTest, ManyNamesAndConstraints) {
                               {many_constraints.get()}, {}));
 }
 
-static bssl::UniquePtr<GENERAL_NAME> MakeGeneralName(int type,
-                                                     std::string_view value) {
+bssl::UniquePtr<GENERAL_NAME> MakeGeneralName(int type,
+                                              std::string_view value) {
   if (type != GEN_EMAIL && type != GEN_DNS && type != GEN_URI) {
     // This function only supports the IA5String types.
     return nullptr;
@@ -2110,7 +2109,7 @@ static bssl::UniquePtr<GENERAL_NAME> MakeGeneralName(int type,
   return name;
 }
 
-static bssl::UniquePtr<X509_NAME> MakeTestName(std::string_view common_name) {
+bssl::UniquePtr<X509_NAME> MakeTestName(std::string_view common_name) {
   auto bytes = StringAsBytes(common_name);
   UniquePtr<X509_NAME> name(X509_NAME_new());
   if (name == nullptr ||
@@ -2122,9 +2121,9 @@ static bssl::UniquePtr<X509_NAME> MakeTestName(std::string_view common_name) {
 }
 
 // kTestCertSerial is the serial number of certificates made by `MakeTestCert`.
-static const uint64_t kTestCertSerial = 42;
+const uint64_t kTestCertSerial = 42;
 
-static bssl::UniquePtr<X509> MakeTestCert(
+bssl::UniquePtr<X509> MakeTestCert(
     std::string_view issuer, std::string_view subject, const EVP_PKEY *key,
     bool is_ca, std::optional<int64_t> pathlen = std::nullopt) {
   UniquePtr<X509_NAME> issuer_name = MakeTestName(issuer);
@@ -2161,7 +2160,7 @@ static bssl::UniquePtr<X509> MakeTestCert(
   return cert;
 }
 
-static bool AddExtendedKeyUsage(X509 *x509, const std::vector<int> &eku_nids) {
+bool AddExtendedKeyUsage(X509 *x509, const std::vector<int> &eku_nids) {
   UniquePtr<STACK_OF(ASN1_OBJECT)> objs(sk_ASN1_OBJECT_new_null());
   if (objs == nullptr) {
     return false;
@@ -2187,7 +2186,7 @@ enum class KeyUsage : int {
   kDecipherOnly = 8,
 };
 
-static bool AddKeyUsage(X509 *x509, const std::vector<KeyUsage> usages) {
+bool AddKeyUsage(X509 *x509, const std::vector<KeyUsage> usages) {
   UniquePtr<ASN1_BIT_STRING> str(ASN1_BIT_STRING_new());
   if (str == nullptr) {
     return false;
@@ -2201,7 +2200,7 @@ static bool AddKeyUsage(X509 *x509, const std::vector<KeyUsage> usages) {
                            /*flags=*/0);
 }
 
-static bool AddSubjectKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
+bool AddSubjectKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
   UniquePtr<ASN1_OCTET_STRING> oct(ASN1_OCTET_STRING_new());
   return oct != nullptr &&
          ASN1_STRING_set(oct.get(), key_id.data(), key_id.size()) &&
@@ -2209,7 +2208,7 @@ static bool AddSubjectKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
                            /*crit=*/0, /*flags=*/0);
 }
 
-static bool AddAuthorityKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
+bool AddAuthorityKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
   UniquePtr<AUTHORITY_KEYID> akid(AUTHORITY_KEYID_new());
   if (akid == nullptr) {
     return false;
@@ -2226,7 +2225,7 @@ static bool AddAuthorityKeyIdentifier(X509 *x509, Span<const uint8_t> key_id) {
 
 // MakeFullDistPointName returns a `DIST_POINT_NAME` with a fullName of `uris`,
 // or nullptr on error.
-static UniquePtr<DIST_POINT_NAME> MakeFullDistPointName(
+UniquePtr<DIST_POINT_NAME> MakeFullDistPointName(
     const std::vector<std::string_view> &uris) {
   UniquePtr<DIST_POINT_NAME> dpn(DIST_POINT_NAME_new());
   UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
@@ -2246,7 +2245,7 @@ static UniquePtr<DIST_POINT_NAME> MakeFullDistPointName(
 
 // MakeFullDistPointNameDirectory returns a `DIST_POINT_NAME` with a fullName of
 // a single directoryName, `name`, or nullptr on error.
-static UniquePtr<DIST_POINT_NAME> MakeFullDistPointNameDirectory(
+UniquePtr<DIST_POINT_NAME> MakeFullDistPointNameDirectory(
     const X509_NAME *name) {
   UniquePtr<DIST_POINT_NAME> dpn(DIST_POINT_NAME_new());
   UniquePtr<GENERAL_NAMES> names(GENERAL_NAMES_new());
@@ -2268,7 +2267,7 @@ static UniquePtr<DIST_POINT_NAME> MakeFullDistPointNameDirectory(
 // MakeRelativeDistPointName returns a `DIST_POINT_NAME` with a
 // nameRelativeToCRLIssuer of a single commonName attribute with value
 // `common_name`, or nullptr on error.
-static UniquePtr<DIST_POINT_NAME> MakeRelativeDistPointName(
+UniquePtr<DIST_POINT_NAME> MakeRelativeDistPointName(
     std::string_view common_name) {
   auto bytes = StringAsBytes(common_name);
   UniquePtr<DIST_POINT_NAME> dpn(DIST_POINT_NAME_new());
@@ -2306,7 +2305,7 @@ struct DistributionPoint {
 // MakeDistributionPoint returns a `DIST_POINT` with distributionPoint
 // `distpoint`, or nullptr on error. If `reasons` is non-empty, the
 // DistributionPoint is additionally scoped to those reason codes.
-static UniquePtr<DIST_POINT> MakeDistributionPoint(
+UniquePtr<DIST_POINT> MakeDistributionPoint(
     UniquePtr<DIST_POINT_NAME> distpoint,
     const std::vector<ReasonFlag> &reasons = {}) {
   UniquePtr<DIST_POINT> dp(DIST_POINT_new());
@@ -2328,8 +2327,7 @@ static UniquePtr<DIST_POINT> MakeDistributionPoint(
   return dp;
 }
 
-static bool AddCRLDistributionPoints(X509 *x509,
-                                     Span<UniquePtr<DIST_POINT>> dps) {
+bool AddCRLDistributionPoints(X509 *x509, Span<UniquePtr<DIST_POINT>> dps) {
   UniquePtr<CRL_DIST_POINTS> crldp(CRL_DIST_POINTS_new());
   if (crldp == nullptr) {
     return false;
@@ -2343,9 +2341,9 @@ static bool AddCRLDistributionPoints(X509 *x509,
                            /*crit=*/0, /*flags=*/0);
 }
 
-static bssl::UniquePtr<X509_CRL> MakeTestCRL(std::string_view issuer,
-                                             int this_update_offset_day,
-                                             int next_update_offset_day) {
+bssl::UniquePtr<X509_CRL> MakeTestCRL(std::string_view issuer,
+                                      int this_update_offset_day,
+                                      int next_update_offset_day) {
   UniquePtr<X509_NAME> issuer_name = MakeTestName(issuer);
   UniquePtr<X509_CRL> crl(X509_CRL_new());
   UniquePtr<ASN1_TIME> this_update(ASN1_TIME_adj(
@@ -2365,8 +2363,7 @@ static bssl::UniquePtr<X509_CRL> MakeTestCRL(std::string_view issuer,
   return crl;
 }
 
-static bool AddRevokedSerialU64(X509_CRL *crl, uint64_t serial,
-                                int offset_day) {
+bool AddRevokedSerialU64(X509_CRL *crl, uint64_t serial, int offset_day) {
   UniquePtr<X509_REVOKED> rev(X509_REVOKED_new());
   UniquePtr<ASN1_INTEGER> serial_asn1 = ASN1IntegerFromU64(serial);
   UniquePtr<ASN1_TIME> rev_date(
@@ -2381,8 +2378,7 @@ static bool AddRevokedSerialU64(X509_CRL *crl, uint64_t serial,
   return true;
 }
 
-static bool AddAuthorityKeyIdentifier(X509_CRL *crl,
-                                      Span<const uint8_t> key_id) {
+bool AddAuthorityKeyIdentifier(X509_CRL *crl, Span<const uint8_t> key_id) {
   UniquePtr<AUTHORITY_KEYID> akid(AUTHORITY_KEYID_new());
   if (akid == nullptr) {
     return false;
@@ -2397,10 +2393,9 @@ static bool AddAuthorityKeyIdentifier(X509_CRL *crl,
   return true;
 }
 
-static bool AddIssuingDistributionPoint(X509_CRL *crl,
-                                        UniquePtr<DIST_POINT_NAME> distpoint,
-                                        bool only_user = false,
-                                        bool only_ca = false) {
+bool AddIssuingDistributionPoint(X509_CRL *crl,
+                                 UniquePtr<DIST_POINT_NAME> distpoint,
+                                 bool only_user = false, bool only_ca = false) {
   UniquePtr<ISSUING_DIST_POINT> idp(ISSUING_DIST_POINT_new());
   if (idp == nullptr) {
     return false;
@@ -2880,7 +2875,7 @@ TEST(X509Test, TestMLDSA65BadParameters) {
   ERR_clear_error();
 }
 
-static bssl::UniquePtr<X509> ReencodeCertificate(X509 *cert) {
+bssl::UniquePtr<X509> ReencodeCertificate(X509 *cert) {
   uint8_t *der = nullptr;
   int len = i2d_X509(cert, &der);
   UniquePtr<uint8_t> free_der(der);
@@ -2892,7 +2887,7 @@ static bssl::UniquePtr<X509> ReencodeCertificate(X509 *cert) {
   return UniquePtr<X509>(d2i_X509(nullptr, &inp, len));
 }
 
-static bssl::UniquePtr<X509> ReencodeCertificateWithAlgorithms(
+bssl::UniquePtr<X509> ReencodeCertificateWithAlgorithms(
     X509 *cert, Span<const EVP_PKEY_ALG *const> algs) {
   uint8_t *der = nullptr;
   int len = i2d_X509(cert, &der);
@@ -2909,7 +2904,7 @@ static bssl::UniquePtr<X509> ReencodeCertificateWithAlgorithms(
       X509_parse_with_algorithms(buf.get(), algs.data(), algs.size()));
 }
 
-static bssl::UniquePtr<X509_CRL> ReencodeCRL(X509_CRL *crl) {
+bssl::UniquePtr<X509_CRL> ReencodeCRL(X509_CRL *crl) {
   uint8_t *der = nullptr;
   int len = i2d_X509_CRL(crl, &der);
   UniquePtr<uint8_t> free_der(der);
@@ -2927,16 +2922,15 @@ static bssl::UniquePtr<X509_CRL> ReencodeCRL(X509_CRL *crl) {
 // TODO(crbug.com/443261873): Some state in CRLs does not get correctly set up
 // unless it is parsed from data. `X509_CRL_sign` should reset it internally,
 // after which callers can sign the CRL in place.
-static bssl::UniquePtr<X509_CRL> SignAndReencodeCRL(X509_CRL *crl,
-                                                    EVP_PKEY *key,
-                                                    const EVP_MD *md) {
+bssl::UniquePtr<X509_CRL> SignAndReencodeCRL(X509_CRL *crl, EVP_PKEY *key,
+                                             const EVP_MD *md) {
   if (!X509_CRL_sign(crl, key, md)) {
     return nullptr;
   }
   return ReencodeCRL(crl);
 }
 
-static bssl::UniquePtr<X509_REQ> ReencodeCSR(X509_REQ *req) {
+bssl::UniquePtr<X509_REQ> ReencodeCSR(X509_REQ *req) {
   uint8_t *der = nullptr;
   int len = i2d_X509_REQ(req, &der);
   UniquePtr<uint8_t> free_der(der);
@@ -2948,7 +2942,7 @@ static bssl::UniquePtr<X509_REQ> ReencodeCSR(X509_REQ *req) {
   return UniquePtr<X509_REQ>(d2i_X509_REQ(nullptr, &inp, len));
 }
 
-static bool SignatureRoundTrips(EVP_MD_CTX *md_ctx, EVP_PKEY *pkey) {
+bool SignatureRoundTrips(EVP_MD_CTX *md_ctx, EVP_PKEY *pkey) {
   // Make a certificate like signed with `md_ctx`'s settings.'
   UniquePtr<X509> cert(CertFromPEM(kLeafPEM));
   if (!cert || !X509_sign_ctx(cert.get(), md_ctx)) {
@@ -3219,7 +3213,7 @@ TEST(X509Test, SignCRL) {
   }
 }
 
-static const char kTestCSR[] = R"(
+const char kTestCSR[] = R"(
 -----BEGIN CERTIFICATE REQUEST-----
 MIICVDCCATwCAQAwDzENMAsGA1UEAwwEVGVzdDCCASIwDQYJKoZIhvcNAQEBBQAD
 ggEPADCCAQoCggEBAK+UkwcNJfRhg5MzIQzxDdrqF9a76jNoK/BwCflKYFX7QEqf
@@ -3481,8 +3475,7 @@ TEST(X509Test, MLDSA87Sign) {
   ASSERT_TRUE(SignatureRoundTrips(md_ctx.get(), pub.get()));
 }
 
-static bool PEMToDER(UniquePtr<uint8_t> *out, size_t *out_len,
-                     const char *pem) {
+bool PEMToDER(UniquePtr<uint8_t> *out, size_t *out_len, const char *pem) {
   UniquePtr<BIO> bio(BIO_new_mem_buf(pem, strlen(pem)));
   if (!bio) {
     return false;
@@ -4595,7 +4588,7 @@ TEST_P(X509VerifyTest, AKIDAndSKIDMatch) {
 
 // kExplicitDefaultVersionPEM is an X.509v1 certificate with the version number
 // encoded explicitly, rather than omitted as required by DER.
-static const char kExplicitDefaultVersionPEM[] = R"(
+const char kExplicitDefaultVersionPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBfTCCASSgAwIBAAIJANlMBNpJfb/rMAkGByqGSM49BAEwRTELMAkGA1UEBhMC
 QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
@@ -4610,7 +4603,7 @@ FA==
 )";
 
 // kNegativeVersionPEM is an X.509 certificate with a negative version number.
-static const char kNegativeVersionPEM[] = R"(
+const char kNegativeVersionPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBfTCCASSgAwIB/wIJANlMBNpJfb/rMAkGByqGSM49BAEwRTELMAkGA1UEBhMC
 QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
@@ -4626,7 +4619,7 @@ FA==
 
 // kFutureVersionPEM is an X.509 certificate with a version number value of
 // three, which is not defined. (v3 has value two).
-static const char kFutureVersionPEM[] = R"(
+const char kFutureVersionPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBfTCCASSgAwIBAwIJANlMBNpJfb/rMAkGByqGSM49BAEwRTELMAkGA1UEBhMC
 QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
@@ -4642,7 +4635,7 @@ FA==
 
 // kOverflowVersionPEM is an X.509 certificate with a version field which
 // overflows `uint64_t`.
-static const char kOverflowVersionPEM[] = R"(
+const char kOverflowVersionPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBoDCCAUegJgIkAP//////////////////////////////////////////////
 AgkA2UwE2kl9v+swCQYHKoZIzj0EATBFMQswCQYDVQQGEwJBVTETMBEGA1UECAwK
@@ -4657,7 +4650,7 @@ xAcCIHweeRRqIYPwenRoeV8UmZpotPHLnhVe5h8yUmFedckU
 )";
 
 // kV1WithExtensionsPEM is an X.509v1 certificate with extensions.
-static const char kV1WithExtensionsPEM[] = R"(
+const char kV1WithExtensionsPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIByjCCAXECCQDZTATaSX2/6zAJBgcqhkjOPQQBMEUxCzAJBgNVBAYTAkFVMRMw
 EQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0
@@ -4673,7 +4666,7 @@ eRRqIYPwenRoeV8UmZpotPHLnhVe5h8yUmFedckU
 )";
 
 // kV2WithExtensionsPEM is an X.509v2 certificate with extensions.
-static const char kV2WithExtensionsPEM[] = R"(
+const char kV2WithExtensionsPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBzzCCAXagAwIBAQIJANlMBNpJfb/rMAkGByqGSM49BAEwRTELMAkGA1UEBhMC
 QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
@@ -4689,7 +4682,7 @@ BwIgfB55FGohg/B6dGh5XxSZmmi08cueFV7mHzJSYV51yRQ=
 )";
 
 // kV1WithIssuerUniqueIDPEM is an X.509v1 certificate with an issuerUniqueID.
-static const char kV1WithIssuerUniqueIDPEM[] = R"(
+const char kV1WithIssuerUniqueIDPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBgzCCASoCCQDZTATaSX2/6zAJBgcqhkjOPQQBMEUxCzAJBgNVBAYTAkFVMRMw
 EQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0
@@ -4704,7 +4697,7 @@ MlJhXnXJFA==
 )";
 
 // kV1WithSubjectUniqueIDPEM is an X.509v1 certificate with an issuerUniqueID.
-static const char kV1WithSubjectUniqueIDPEM[] = R"(
+const char kV1WithSubjectUniqueIDPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBgzCCASoCCQDZTATaSX2/6zAJBgcqhkjOPQQBMEUxCzAJBgNVBAYTAkFVMRMw
 EQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0
@@ -4719,7 +4712,7 @@ MlJhXnXJFA==
 )";
 
 // kV1CRLWithExtensionsPEM is a v1 CRL with extensions.
-static const char kV1CRLWithExtensionsPEM[] = R"(
+const char kV1CRLWithExtensionsPEM[] = R"(
 -----BEGIN X509 CRL-----
 MIIBpDCBjTANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UECAwK
 Q2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJQm9y
@@ -4734,7 +4727,7 @@ hl1ms5qQiLYPjm4YELtnXQoFyC72tBjbdFd/ZE9k4CNKDbxFUXFbkw==
 )";
 
 // kV1CRLWithEntryExtensionsPEM is a v1 CRL with entry extensions.
-static const char kV1CRLWithEntryExtensionsPEM[] = R"(
+const char kV1CRLWithEntryExtensionsPEM[] = R"(
 -----BEGIN X509 CRL-----
 MIIB7DCB1TANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UECAwK
 Q2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJQm9y
@@ -4752,7 +4745,7 @@ Jf1k00LEKjpUSQRtnIu6btX8zspWN+WBRAAKZDQ/zJEI0H8pTTYAsw1lgD0MdKQ7
 
 // kExplicitDefaultVersionCRLPEM is a v1 CRL with an explicitly-encoded version
 // field.
-static const char kExplicitDefaultVersionCRLPEM[] = R"(
+const char kExplicitDefaultVersionCRLPEM[] = R"(
 -----BEGIN X509 CRL-----
 MIIBlzCBgAIBADANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -4767,7 +4760,7 @@ u2ddCgXILva0GNt0V39kT2TgI0oNvEVRcVuT
 )";
 
 // kV3CRLPEM is a v3 CRL. CRL versions only go up to v2.
-static const char kV3CRLPEM[] = R"(
+const char kV3CRLPEM[] = R"(
 -----BEGIN X509 CRL-----
 MIIBpzCBkAIBAjANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -4782,7 +4775,7 @@ diyu0fZ/bPAM3VAGawatf/SyWfBMyKpoPXEG39oAzmjjOj8en82psn7m474IGaho
 )";
 
 // kV2CSRPEM is a v2 CSR. CSR versions only go up to v1.
-static const char kV2CSRPEM[] = R"(
+const char kV2CSRPEM[] = R"(
 -----BEGIN CERTIFICATE REQUEST-----
 MIHJMHECAQEwDzENMAsGA1UEAwwEVGVzdDBZMBMGByqGSM49AgEGCCqGSM49AwEH
 A0IABJjsayyAQod1J7UJYNT8AH4WWxLdKV0ozhrIz6hCzBAze7AqXWOSH8G+1EWC
@@ -4793,7 +4786,7 @@ rsn4lSYsqI4OI4ei
 )";
 
 // kV3CSRPEM is a v3 CSR. CSR versions only go up to v1.
-static const char kV3CSRPEM[] = R"(
+const char kV3CSRPEM[] = R"(
 -----BEGIN CERTIFICATE REQUEST-----
 MIHJMHECAQIwDzENMAsGA1UEAwwEVGVzdDBZMBMGByqGSM49AgEGCCqGSM49AwEH
 A0IABJjsayyAQod1J7UJYNT8AH4WWxLdKV0ozhrIz6hCzBAze7AqXWOSH8G+1EWC
@@ -4868,7 +4861,7 @@ TEST(X509Test, InvalidVersion) {
 }
 
 // kCRLEmptyExtension is a CRL with an empty extension list.
-static const char kCRLEmptyExtensionPEM[] = R"(
+const char kCRLEmptyExtensionPEM[] = R"(
 -----BEGIN X509 CRL-----
 MIIB3DCBxQIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -4884,7 +4877,7 @@ hGj8t1MUZdVY4UPtQ8oltSHkFEvH4PxOW/xKpHT4QQMl/WTTQsQqOlRJBG2ci7pu
 )";
 
 // kCRLEmptyEntryExtension is a CRL with an entry with an empty extension list.
-static const char kCRLEmptyEntryExtensionPEM[] = R"(
+const char kCRLEmptyEntryExtensionPEM[] = R"(
 -----BEGIN X509 CRL-----
 MIIB2jCBwwIBATANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJVUzETMBEGA1UE
 CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzESMBAGA1UECgwJ
@@ -4960,7 +4953,7 @@ TEST(X509Test, BasicConstraints) {
 
 // The following strings are test certificates signed by kP256Key and kRSAKey,
 // with missing, NULL, or invalid algorithm parameters.
-static const char kP256NoParam[] = R"(
+const char kP256NoParam[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBIDCBxqADAgECAgIE0jAKBggqhkjOPQQDAjAPMQ0wCwYDVQQDEwRUZXN0MCAX
 DTAwMDEwMTAwMDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAPMQ0wCwYDVQQDEwRUZXN0
@@ -4971,7 +4964,7 @@ aXd7HqhpVUaglYKw9ChmNUACIQCpMdL0fNkFNDbRww9dSl/y7kBdk/tp16HiqeSy
 gGzFYg==
 -----END CERTIFICATE-----
 )";
-static const char kP256NullParam[] = R"(
+const char kP256NullParam[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBJDCByKADAgECAgIE0jAMBggqhkjOPQQDAgUAMA8xDTALBgNVBAMTBFRlc3Qw
 IBcNMDAwMTAxMDAwMDAwWhgPMjEwMDAxMDEwMDAwMDBaMA8xDTALBgNVBAMTBFRl
@@ -4982,7 +4975,7 @@ UUeSXOQQKX5aLzsQitwwmNF3ZgH3AiEAsYHcrVj/ftmoQIORARkQ/+PrqntXev8r
 t6uPxHrmpUY=
 -----END CERTIFICATE-----
 )";
-static const char kP256InvalidParam[] = R"(
+const char kP256InvalidParam[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBMTCBz6ADAgECAgIE0jATBggqhkjOPQQDAgQHZ2FyYmFnZTAPMQ0wCwYDVQQD
 EwRUZXN0MCAXDTAwMDEwMTAwMDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAPMQ0wCwYD
@@ -4993,7 +4986,7 @@ AiAglpDf/YhN89LeJ2WAs/F0SJIrsuhS4uoInIz6WXUiuQIhAIu5Pwhp5E3Pbo8y
 fLULTZnynuQUULQkRcF7S7T2WpIL
 -----END CERTIFICATE-----
 )";
-static const char kRSANoParam[] = R"(
+const char kRSANoParam[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBWzCBx6ADAgECAgIE0jALBgkqhkiG9w0BAQswDzENMAsGA1UEAxMEVGVzdDAg
 Fw0wMDAxMDEwMDAwMDBaGA8yMTAwMDEwMTAwMDAwMFowDzENMAsGA1UEAxMEVGVz
@@ -5005,7 +4998,7 @@ l9kIeZ6FVPmC30d3sXx70Jjs+ZX9yt7kD1gLyNAQQfeYfa4rORAZT1n2YitD74NY
 TWUH2ieFP3l+ecj1SeQR
 -----END CERTIFICATE-----
 )";
-static const char kRSANullParam[] = R"(
+const char kRSANullParam[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBXzCByaADAgECAgIE0jANBgkqhkiG9w0BAQsFADAPMQ0wCwYDVQQDEwRUZXN0
 MCAXDTAwMDEwMTAwMDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAPMQ0wCwYDVQQDEwRU
@@ -5017,7 +5010,7 @@ seZfvtBDR0TwJm0S/pQl8prKB4wgALcwe3bmi56Rq85nzY5ZLNcP16LQxL+jAAua
 SwmQUz4bRpckRBj+sIyp1We+pg==
 -----END CERTIFICATE-----
 )";
-static const char kRSAInvalidParam[] = R"(
+const char kRSAInvalidParam[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBbTCB0KADAgECAgIE0jAUBgkqhkiG9w0BAQsEB2dhcmJhZ2UwDzENMAsGA1UE
 AxMEVGVzdDAgFw0wMDAxMDEwMDAwMDBaGA8yMTAwMDEwMTAwMDAwMFowDzENMAsG
@@ -5813,7 +5806,7 @@ TEST_P(X509VerifyTest, SignatureVerification) {
 // kConstructedBitString is an X.509 certificate where the signature is encoded
 // as a BER constructed BIT STRING. Note that, while OpenSSL's parser accepts
 // this input, it interprets the value incorrectly.
-static const char kConstructedBitString[] = R"(
+const char kConstructedBitString[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBJTCBxqADAgECAgIE0jAKBggqhkjOPQQDAjAPMQ0wCwYDVQQDEwRUZXN0MCAX
 DTAwMDEwMTAwMDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAPMQ0wCwYDVQQDEwRUZXN0
@@ -5827,7 +5820,7 @@ oeKp5LKAbMVi
 
 // kConstructedOctetString is an X.509 certificate where an extension is encoded
 // as a BER constructed OCTET STRING.
-static const char kConstructedOctetString[] = R"(
+const char kConstructedOctetString[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBJDCByqADAgECAgIE0jAKBggqhkjOPQQDAjAPMQ0wCwYDVQQDEwRUZXN0MCAX
 DTAwMDEwMTAwMDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAPMQ0wCwYDVQQDEwRUZXN0
@@ -5841,7 +5834,7 @@ HiAqcml3ex6oaVVGoJWCsPQoZjVAAiEAqTHS9HzZBTQ20cMPXUpf8u5AXZP7adeh
 
 // kIndefiniteLength is an X.509 certificate where the outermost SEQUENCE uses
 // BER indefinite-length encoding.
-static const char kIndefiniteLength[] = R"(
+const char kIndefiniteLength[] = R"(
 -----BEGIN CERTIFICATE-----
 MIAwgcagAwIBAgICBNIwCgYIKoZIzj0EAwIwDzENMAsGA1UEAxMEVGVzdDAgFw0w
 MDAxMDEwMDAwMDBaGA8yMTAwMDEwMTAwMDAwMFowDzENMAsGA1UEAxMEVGVzdDBZ
@@ -5855,7 +5848,7 @@ xWIAAA==
 
 // kNonZeroPadding is an X.09 certificate where the BIT STRING signature field
 // has non-zero padding values.
-static const char kNonZeroPadding[] = R"(
+const char kNonZeroPadding[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIB0DCCAXagAwIBAgIJANlMBNpJfb/rMAkGByqGSM49BAEwRTELMAkGA1UEBhMC
 QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
@@ -5872,7 +5865,7 @@ BwIgfB55FGohg/B6dGh5XxSZmmi08cueFV7mHzJSYV51yRQB
 
 // kHighTagNumber is an X.509 certificate where the outermost SEQUENCE tag uses
 // high tag number form.
-static const char kHighTagNumber[] = R"(
+const char kHighTagNumber[] = R"(
 -----BEGIN CERTIFICATE-----
 PxCCASAwgcagAwIBAgICBNIwCgYIKoZIzj0EAwIwDzENMAsGA1UEAxMEVGVzdDAg
 Fw0wMDAxMDEwMDAwMDBaGA8yMTAwMDEwMTAwMDAwMFowDzENMAsGA1UEAxMEVGVz
@@ -5886,7 +5879,7 @@ soBsxWI=
 
 // kNonMinimalLengthOuter is an X.509 certificate where the outermost SEQUENCE
 // has a non-minimal length.
-static const char kNonMinimalLengthOuter[] = R"(
+const char kNonMinimalLengthOuter[] = R"(
 -----BEGIN CERTIFICATE-----
 MIMAASAwgcagAwIBAgICBNIwCgYIKoZIzj0EAwIwDzENMAsGA1UEAxMEVGVzdDAg
 Fw0wMDAxMDEwMDAwMDBaGA8yMTAwMDEwMTAwMDAwMFowDzENMAsGA1UEAxMEVGVz
@@ -5900,7 +5893,7 @@ soBsxWI=
 
 // kNonMinimalLengthSignature is an X.509 certificate where the signature has a
 // non-minimal length.
-static const char kNonMinimalLengthSignature[] = R"(
+const char kNonMinimalLengthSignature[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBITCBxqADAgECAgIE0jAKBggqhkjOPQQDAjAPMQ0wCwYDVQQDEwRUZXN0MCAX
 DTAwMDEwMTAwMDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAPMQ0wCwYDVQQDEwRUZXN0
@@ -5914,7 +5907,7 @@ soBsxWI=
 
 // kNonMinimalLengthSerial is an X.509 certificate where the serial number has a
 // non-minimal length.
-static const char kNonMinimalLengthSerial[] = R"(
+const char kNonMinimalLengthSerial[] = R"(
 -----BEGIN CERTIFICATE-----
 MIIBITCBx6ADAgECAoECBNIwCgYIKoZIzj0EAwIwDzENMAsGA1UEAxMEVGVzdDAg
 Fw0wMDAxMDEwMDAwMDBaGA8yMTAwMDEwMTAwMDAwMFowDzENMAsGA1UEAxMEVGVz
@@ -6662,7 +6655,7 @@ TEST(X509Test, NamePrint) {
 }
 
 // kLargeSerialPEM is a certificate with a large serial number.
-static const char kLargeSerialPEM[] = R"(
+const char kLargeSerialPEM[] = R"(
 -----BEGIN CERTIFICATE-----
 MIICZjCCAc+gAwIBAgIQASNFZ4mrze8BI0VniavN7zANBgkqhkiG9w0BAQsFADA2
 MRowGAYDVQQKExFCb3JpbmdTU0wgVEVTVElORzEYMBYGA1UEAxMPSW50ZXJtZWRp
@@ -10253,9 +10246,9 @@ TEST(X509Test, DuplicateName) {
   }
 }
 
-static const char kCRLURI1[] = "http://crl.example.com/shard1.crl";
-static const char kCRLURI2[] = "http://crl.example.com/shard2.crl";
-static const char kCRLURI3[] = "http://crl.example.com/shard3.crl";
+const char kCRLURI1[] = "http://crl.example.com/shard1.crl";
+const char kCRLURI2[] = "http://crl.example.com/shard2.crl";
+const char kCRLURI3[] = "http://crl.example.com/shard3.crl";
 
 // Test that we check the scope of the CRL.
 TEST_P(X509VerifyTest, CRLScope) {

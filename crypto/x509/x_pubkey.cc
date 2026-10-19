@@ -37,12 +37,10 @@
 
 using namespace bssl;
 
-X509_PUBKEY *X509_PUBKEY_new() { return New<X509Pubkey>(); }
+namespace {
 
-void X509_PUBKEY_free(X509_PUBKEY *key) { Delete(FromOpaque(key)); }
-
-static void x509_pubkey_changed(X509Pubkey *pub,
-                                Span<const EVP_PKEY_ALG *const> algs) {
+void x509_pubkey_changed(X509Pubkey *pub,
+                         Span<const EVP_PKEY_ALG *const> algs) {
   pub->pkey = nullptr;
 
   // Re-encode the `X509_PUBKEY` to DER and parse it with EVP's APIs. If the
@@ -63,6 +61,16 @@ static void x509_pubkey_changed(X509Pubkey *pub,
   pub->pkey = std::move(pkey);
 }
 
+int x509_parse_public_key_default(CBS *cbs, X509_PUBKEY *out) {
+  return x509_parse_public_key(cbs, FromOpaque(out), GetDefaultEVPAlgorithms());
+}
+
+}  // namespace
+
+X509_PUBKEY *X509_PUBKEY_new() { return New<X509Pubkey>(); }
+
+void X509_PUBKEY_free(X509_PUBKEY *key) { Delete(FromOpaque(key)); }
+
 int bssl::x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
                                 Span<const EVP_PKEY_ALG *const> algs) {
   auto *out_impl = FromOpaque(out);
@@ -76,10 +84,6 @@ int bssl::x509_parse_public_key(CBS *cbs, X509_PUBKEY *out,
   }
   x509_pubkey_changed(out_impl, algs);
   return 1;
-}
-
-static int x509_parse_public_key_default(CBS *cbs, X509_PUBKEY *out) {
-  return x509_parse_public_key(cbs, FromOpaque(out), GetDefaultEVPAlgorithms());
 }
 
 int bssl::x509_marshal_public_key(CBB *cbb, const X509_PUBKEY *in) {
