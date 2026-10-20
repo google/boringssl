@@ -30,7 +30,8 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::{
     debug_assert,
-    ffi::c_void, //
+    ffi::c_void,
+    mem::MaybeUninit, //
 };
 
 #[macro_use]
@@ -111,13 +112,13 @@ impl<T, const N: usize> FfiSlice<T> for [T; N] {
 }
 
 /// See the comment [`FfiSlice`].
-pub trait FfiMutSlice {
+pub trait FfiMutSlice<T> {
     /// Cast the mutable slice as a valid `uint8_t*` pointer for FFI.
-    fn as_mut_ffi_ptr(&mut self) -> *mut u8;
+    fn as_mut_ffi_ptr(&mut self) -> *mut T;
 }
 
-impl FfiMutSlice for [u8] {
-    fn as_mut_ffi_ptr(&mut self) -> *mut u8 {
+impl<T> FfiMutSlice<T> for [T] {
+    fn as_mut_ffi_ptr(&mut self) -> *mut T {
         if self.is_empty() {
             core::ptr::null_mut()
         } else {
@@ -126,12 +127,32 @@ impl FfiMutSlice for [u8] {
     }
 }
 
-impl<const N: usize> FfiMutSlice for [u8; N] {
-    fn as_mut_ffi_ptr(&mut self) -> *mut u8 {
+impl<const N: usize, T> FfiMutSlice<T> for [T; N] {
+    fn as_mut_ffi_ptr(&mut self) -> *mut T {
         if N == 0 {
             core::ptr::null_mut()
         } else {
             self.as_mut_ptr()
+        }
+    }
+}
+
+impl<T> FfiMutSlice<T> for [MaybeUninit<T>] {
+    fn as_mut_ffi_ptr(&mut self) -> *mut T {
+        if self.is_empty() {
+            core::ptr::null_mut()
+        } else {
+            self.as_mut_ptr() as *mut T
+        }
+    }
+}
+
+impl<const N: usize, T> FfiMutSlice<T> for [MaybeUninit<T>; N] {
+    fn as_mut_ffi_ptr(&mut self) -> *mut T {
+        if N == 0 {
+            core::ptr::null_mut()
+        } else {
+            self.as_mut_ptr() as *mut T
         }
     }
 }
@@ -312,7 +333,7 @@ unsafe fn initialized_struct<T, F>(init: F) -> T
 where
     F: FnOnce(*mut T),
 {
-    let mut out_uninit = core::mem::MaybeUninit::<T>::uninit();
+    let mut out_uninit = MaybeUninit::<T>::uninit();
     init(out_uninit.as_mut_ptr());
     unsafe { out_uninit.assume_init() }
 }
@@ -327,7 +348,7 @@ unsafe fn initialized_struct_fallible<T, F>(init: F) -> Option<T>
 where
     F: FnOnce(*mut T) -> bool,
 {
-    let mut out_uninit = core::mem::MaybeUninit::<T>::uninit();
+    let mut out_uninit = MaybeUninit::<T>::uninit();
     if init(out_uninit.as_mut_ptr()) {
         Some(unsafe { out_uninit.assume_init() })
     } else {
@@ -343,7 +364,7 @@ unsafe fn initialized_boxed_struct<T, F>(init: F) -> Box<T>
 where
     F: FnOnce(*mut T),
 {
-    let mut out_uninit = Box::new(core::mem::MaybeUninit::<T>::uninit());
+    let mut out_uninit = Box::new(MaybeUninit::<T>::uninit());
     init(out_uninit.as_mut_ptr());
     unsafe { out_uninit.assume_init() }
 }
@@ -358,7 +379,7 @@ unsafe fn initialized_boxed_struct_fallible<T, F>(init: F) -> Option<Box<T>>
 where
     F: FnOnce(*mut T) -> bool,
 {
-    let mut out_uninit = Box::new(core::mem::MaybeUninit::<T>::uninit());
+    let mut out_uninit = Box::new(MaybeUninit::<T>::uninit());
     if init(out_uninit.as_mut_ptr()) {
         Some(unsafe { out_uninit.assume_init() })
     } else {
@@ -374,7 +395,7 @@ unsafe fn with_output_array<const N: usize, F>(func: F) -> [u8; N]
 where
     F: FnOnce(*mut u8, usize),
 {
-    let mut out_uninit = core::mem::MaybeUninit::<[u8; N]>::uninit();
+    let mut out_uninit = MaybeUninit::<[u8; N]>::uninit();
     let out_ptr = if N != 0 {
         out_uninit.as_mut_ptr() as *mut u8
     } else {
@@ -396,7 +417,7 @@ unsafe fn with_output_array_fallible<const N: usize, F>(func: F) -> Option<[u8; 
 where
     F: FnOnce(*mut u8, usize) -> bool,
 {
-    let mut out_uninit = core::mem::MaybeUninit::<[u8; N]>::uninit();
+    let mut out_uninit = MaybeUninit::<[u8; N]>::uninit();
     let out_ptr = if N != 0 {
         out_uninit.as_mut_ptr() as *mut u8
     } else {
@@ -694,5 +715,26 @@ bssl_enum! {
         Cms = bssl_sys::ERR_LIB_CMS as i32,
         /// User sourced
         User = bssl_sys::ERR_LIB_USER as i32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ffi_slice_contract() {
+        let x: &mut [MaybeUninit<u8>] = &mut [];
+        let ptr: *mut u8 = x.as_mut_ffi_ptr();
+        assert!(ptr.is_null());
+
+        let x: &mut [MaybeUninit<u8>; 1] = &mut [MaybeUninit::uninit()];
+        let ptr: *mut u8 = x.as_mut_ffi_ptr();
+        assert!(!ptr.is_null());
+
+        let x: &[u8] = &[];
+        assert!(x.as_ffi_ptr().is_null());
+        let x: &[u8] = &[0];
+        assert!(!x.as_ffi_ptr().is_null());
     }
 }
