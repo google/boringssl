@@ -382,6 +382,7 @@
             "crypto/evp/p_mldsa.cc",
             "crypto/evp/p_mlkem.cc",
             "crypto/evp/p_rsa.cc",
+            "crypto/evp/p_slhdsa.cc",
             "crypto/evp/p_x25519.cc",
             "crypto/evp/p_xwing.cc",
             "crypto/evp/pbkdf.cc",

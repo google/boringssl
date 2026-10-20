@@ -35,6 +35,8 @@
 #include <openssl/params.h>
 #include <openssl/pkcs8.h>
 #include <openssl/rsa.h>
+#include <openssl/sha.h>
+#include <openssl/slhdsa.h>
 #include <openssl/span.h>
 
 #include "../internal.h"
@@ -1353,6 +1355,244 @@ TEST(EVPExtraTest, MLDSAKeyGen) {
     CheckSignAndVerify(pkey3.get());
     EXPECT_EQ(EVP_PKEY_eq(pkey.get(), pkey3.get()), 0);
   }
+}
+
+TEST(EVPExtraTest, SLHDSA) {
+  // Key generation for pure SLH-DSA via single-shot and `EVP_PKEY_CTX_new_id`.
+  UniquePtr<EVP_PKEY> pkey(
+      EVP_PKEY_generate_from_alg(EVP_pkey_slh_dsa_sha2_128s()));
+  ASSERT_TRUE(pkey);
+  EXPECT_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_SLH_DSA_SHA2_128S);
+
+  UniquePtr<EVP_PKEY_CTX> keygen_ctx(
+      EVP_PKEY_CTX_new_id(EVP_PKEY_SLH_DSA_SHA2_128S, nullptr));
+  ASSERT_TRUE(keygen_ctx);
+  ASSERT_TRUE(EVP_PKEY_keygen_init(keygen_ctx.get()));
+  EVP_PKEY *raw_new_key = nullptr;
+  ASSERT_TRUE(EVP_PKEY_keygen(keygen_ctx.get(), &raw_new_key));
+  UniquePtr<EVP_PKEY> keygen_pkey(raw_new_key);
+  EXPECT_EQ(EVP_PKEY_id(keygen_pkey.get()), EVP_PKEY_SLH_DSA_SHA2_128S);
+
+  // Key generation for pre-hashed SLH-DSA.
+  UniquePtr<EVP_PKEY> prehash_gen_pkey(
+      EVP_PKEY_generate_from_alg(EVP_pkey_slh_dsa_sha2_128s_with_sha256()));
+  ASSERT_TRUE(prehash_gen_pkey);
+  EXPECT_EQ(EVP_PKEY_id(prehash_gen_pkey.get()),
+            EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256);
+
+  UniquePtr<EVP_PKEY_CTX> prehash_keygen_ctx(
+      EVP_PKEY_CTX_new_id(EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256, nullptr));
+  ASSERT_TRUE(prehash_keygen_ctx);
+  ASSERT_TRUE(EVP_PKEY_keygen_init(prehash_keygen_ctx.get()));
+  raw_new_key = nullptr;
+  ASSERT_TRUE(EVP_PKEY_keygen(prehash_keygen_ctx.get(), &raw_new_key));
+  UniquePtr<EVP_PKEY> prehash_keygen_pkey(raw_new_key);
+  EXPECT_EQ(EVP_PKEY_id(prehash_keygen_pkey.get()),
+            EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256);
+
+  // Private seed APIs are not supported for SLH-DSA.
+  uint8_t dummy_seed[SLHDSA_SHA2_128S_SEED_BYTES] = {0};
+  EXPECT_FALSE(EVP_PKEY_from_private_seed(EVP_pkey_slh_dsa_sha2_128s(),
+                                          dummy_seed, sizeof(dummy_seed)));
+  EXPECT_TRUE(
+      ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_UNSUPPORTED_ALGORITHM}}));
+
+  const uint8_t msg[] = "Hello world, post-quantum SLH-DSA!";
+  const size_t msg_len = sizeof(msg) - 1;
+
+  // Pure SLH-DSA single-shot sign & verify.
+  ScopedEVP_MD_CTX sign_ctx;
+  ASSERT_TRUE(EVP_DigestSignInit(sign_ctx.get(), nullptr, nullptr, nullptr,
+                                 pkey.get()));
+  // Streaming updates are not supported for pure SLH-DSA.
+  EXPECT_FALSE(EVP_DigestSignUpdate(sign_ctx.get(), msg, msg_len));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
+
+  // Passing a non-null EVP_MD to pure SLH-DSA is rejected.
+  ScopedEVP_MD_CTX bad_md_ctx;
+  EXPECT_FALSE(EVP_DigestSignInit(bad_md_ctx.get(), nullptr, EVP_sha256(),
+                                  nullptr, pkey.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_COMMAND_NOT_SUPPORTED}}));
+
+  // Signing a pre-hash with `EVP_PKEY_sign` is rejected for pure SLH-DSA.
+  uint8_t digest[SHA256_DIGEST_LENGTH];
+  SHA256(msg, msg_len, digest);
+  UniquePtr<EVP_PKEY_CTX> pure_pctx(
+      EVP_PKEY_CTX_new(pkey.get(), nullptr));
+  ASSERT_TRUE(pure_pctx);
+  ASSERT_TRUE(EVP_PKEY_sign_init(pure_pctx.get()));
+  size_t dummy_sig_len = 0;
+  EXPECT_FALSE(EVP_PKEY_sign(pure_pctx.get(), nullptr, &dummy_sig_len, digest,
+                             sizeof(digest)));
+  EXPECT_TRUE(ErrorsAreAndClear(
+      {{ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE}}));
+
+  size_t sig_len = 0;
+  ASSERT_TRUE(
+      EVP_DigestSign(sign_ctx.get(), nullptr, &sig_len, msg, msg_len));
+  std::vector<uint8_t> sig(sig_len);
+  ASSERT_TRUE(
+      EVP_DigestSign(sign_ctx.get(), sig.data(), &sig_len, msg, msg_len));
+  sig.resize(sig_len);
+
+  ScopedEVP_MD_CTX verify_ctx;
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), nullptr, nullptr,
+                                   nullptr, pkey.get()));
+  EXPECT_TRUE(EVP_DigestVerify(verify_ctx.get(), sig.data(), sig.size(),
+                               msg, msg_len));
+
+  // Corrupted signature fails pure verification.
+  sig[0] ^= 0x01;
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), nullptr, nullptr,
+                                   nullptr, pkey.get()));
+  EXPECT_FALSE(EVP_DigestVerify(verify_ctx.get(), sig.data(), sig.size(),
+                                msg, msg_len));
+  ERR_clear_error();
+  sig[0] ^= 0x01;
+
+  // Context string support.
+  const uint8_t ctx_str[] = "my-application-context";
+  EVP_PKEY_CTX *pctx = nullptr;
+  ASSERT_TRUE(EVP_DigestSignInit(sign_ctx.get(), &pctx, nullptr, nullptr,
+                                 pkey.get()));
+  ASSERT_TRUE(pctx != nullptr);
+  ASSERT_TRUE(EVP_PKEY_CTX_set1_signature_context_string(
+      pctx, ctx_str, sizeof(ctx_str)));
+  std::vector<uint8_t> ctx_sig(sig_len);
+  size_t ctx_sig_len = ctx_sig.size();
+  ASSERT_TRUE(EVP_DigestSign(sign_ctx.get(), ctx_sig.data(), &ctx_sig_len, msg,
+                             msg_len));
+  ctx_sig.resize(ctx_sig_len);
+
+  // Verifying with same context string succeeds.
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), &pctx, nullptr,
+                                   nullptr, pkey.get()));
+  ASSERT_TRUE(pctx != nullptr);
+  ASSERT_TRUE(EVP_PKEY_CTX_set1_signature_context_string(
+      pctx, ctx_str, sizeof(ctx_str)));
+  EXPECT_TRUE(EVP_DigestVerify(verify_ctx.get(), ctx_sig.data(), ctx_sig.size(),
+                               msg, msg_len));
+
+  // Verifying with different context string fails.
+  const uint8_t wrong_ctx[] = "wrong-context";
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), &pctx, nullptr,
+                                   nullptr, pkey.get()));
+  ASSERT_TRUE(pctx != nullptr);
+  ASSERT_TRUE(EVP_PKEY_CTX_set1_signature_context_string(
+      pctx, wrong_ctx, sizeof(wrong_ctx)));
+  EXPECT_FALSE(EVP_DigestVerify(verify_ctx.get(), ctx_sig.data(),
+                                ctx_sig.size(), msg, msg_len));
+  ERR_clear_error();
+
+  // Context string > 255 bytes is rejected.
+  std::vector<uint8_t> long_ctx(256, 'A');
+  EXPECT_FALSE(EVP_PKEY_CTX_set1_signature_context_string(
+      pctx, long_ctx.data(), long_ctx.size()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_PARAMETERS}}));
+
+  // Pre-hashed HashSLH-DSA-SHA2-128s-with-SHA256 using the same raw key
+  // material imported as a distinct key type.
+  uint8_t raw_priv[SLHDSA_SHA2_128S_PRIVATE_KEY_BYTES];
+  size_t raw_priv_len = sizeof(raw_priv);
+  ASSERT_TRUE(
+      EVP_PKEY_get_raw_private_key(pkey.get(), raw_priv, &raw_priv_len));
+  ASSERT_EQ(raw_priv_len, sizeof(raw_priv));
+
+  UniquePtr<EVP_PKEY> prehash_pkey(EVP_PKEY_from_raw_private_key(
+      EVP_pkey_slh_dsa_sha2_128s_with_sha256(), raw_priv, sizeof(raw_priv)));
+  ASSERT_TRUE(prehash_pkey);
+  EXPECT_EQ(EVP_PKEY_id(prehash_pkey.get()),
+            EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256);
+
+  // Calling EVP_DigestSignInit with type = nullptr on pre-hashed key fails
+  // with EVP_R_NO_DEFAULT_DIGEST.
+  EXPECT_FALSE(EVP_DigestSignInit(sign_ctx.get(), nullptr, nullptr, nullptr,
+                                  prehash_pkey.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_NO_DEFAULT_DIGEST}}));
+
+  // Calling EVP_DigestSignInit with wrong digest (e.g. SHA-512) fails with
+  // EVP_R_INVALID_DIGEST_TYPE.
+  EXPECT_FALSE(EVP_DigestSignInit(sign_ctx.get(), nullptr, EVP_sha512(),
+                                  nullptr, prehash_pkey.get()));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_DIGEST_TYPE}}));
+
+  // Streaming sign & verify on pre-hashed key.
+  std::vector<uint8_t> hash_sig(EVP_PKEY_size(prehash_pkey.get()));
+  size_t hash_sig_len = hash_sig.size();
+  ASSERT_TRUE(EVP_DigestSignInit(sign_ctx.get(), nullptr, EVP_sha256(),
+                                 nullptr, prehash_pkey.get()));
+  ASSERT_TRUE(EVP_DigestSignUpdate(sign_ctx.get(), msg, 10));
+  ASSERT_TRUE(EVP_DigestSignUpdate(sign_ctx.get(), msg + 10, msg_len - 10));
+  ASSERT_TRUE(EVP_DigestSignFinal(sign_ctx.get(), hash_sig.data(),
+                                  &hash_sig_len));
+  hash_sig.resize(hash_sig_len);
+
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), nullptr, EVP_sha256(),
+                                   nullptr, prehash_pkey.get()));
+  ASSERT_TRUE(EVP_DigestVerifyUpdate(verify_ctx.get(), msg, 5));
+  ASSERT_TRUE(
+      EVP_DigestVerifyUpdate(verify_ctx.get(), msg + 5, msg_len - 5));
+  EXPECT_TRUE(EVP_DigestVerifyFinal(verify_ctx.get(), hash_sig.data(),
+                                    hash_sig.size()));
+
+  // Single-shot EVP_DigestSign & EVP_DigestVerify on pre-hashed key.
+  std::vector<uint8_t> single_shot_hash_sig(EVP_PKEY_size(prehash_pkey.get()));
+  size_t single_shot_hash_sig_len = single_shot_hash_sig.size();
+  ASSERT_TRUE(EVP_DigestSignInit(sign_ctx.get(), nullptr, EVP_sha256(),
+                                 nullptr, prehash_pkey.get()));
+  ASSERT_TRUE(EVP_DigestSign(sign_ctx.get(), single_shot_hash_sig.data(),
+                             &single_shot_hash_sig_len, msg, msg_len));
+  single_shot_hash_sig.resize(single_shot_hash_sig_len);
+
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), nullptr, EVP_sha256(),
+                                   nullptr, prehash_pkey.get()));
+  EXPECT_TRUE(EVP_DigestVerify(verify_ctx.get(),
+                               single_shot_hash_sig.data(),
+                               single_shot_hash_sig.size(), msg, msg_len));
+
+  // Cross-algorithm isolation (RFC 9909 Section 8.1):
+  // Pure signature fails verification under pre-hashed key, and vice-versa.
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), nullptr, EVP_sha256(),
+                                   nullptr, prehash_pkey.get()));
+  EXPECT_FALSE(EVP_DigestVerify(verify_ctx.get(), sig.data(), sig.size(), msg,
+                                msg_len));
+  ERR_clear_error();
+
+  ASSERT_TRUE(EVP_DigestVerifyInit(verify_ctx.get(), nullptr, nullptr,
+                                   nullptr, pkey.get()));
+  EXPECT_FALSE(EVP_DigestVerify(verify_ctx.get(), hash_sig.data(),
+                                hash_sig.size(), msg, msg_len));
+  ERR_clear_error();
+
+  // `EVP_PKEY_sign` and `EVP_PKEY_verify` can sign a pre-hashed digest, with or
+  // without `EVP_PKEY_CTX_set_signature_md`. (The default hash is correct.)
+  UniquePtr<EVP_PKEY_CTX> prehash_pctx(
+      EVP_PKEY_CTX_new(prehash_pkey.get(), nullptr));
+  ASSERT_TRUE(prehash_pctx);
+  ASSERT_TRUE(EVP_PKEY_sign_init(prehash_pctx.get()));
+
+  std::vector<uint8_t> prehash_sig(EVP_PKEY_size(prehash_pkey.get()));
+  size_t prehash_sig_len = prehash_sig.size();
+  ASSERT_TRUE(EVP_PKEY_sign(prehash_pctx.get(), prehash_sig.data(),
+                            &prehash_sig_len, digest, sizeof(digest)));
+  prehash_sig.resize(prehash_sig_len);
+
+  ASSERT_TRUE(EVP_PKEY_verify_init(prehash_pctx.get()));
+  ASSERT_TRUE(EVP_PKEY_CTX_set_signature_md(prehash_pctx.get(), EVP_sha256()));
+  EXPECT_TRUE(EVP_PKEY_verify(prehash_pctx.get(), prehash_sig.data(),
+                              prehash_sig.size(), digest, sizeof(digest)));
+
+  // Signing or verifying a pre-hash with the wrong digest size fails with
+  // `EVP_R_INVALID_DIGEST_LENGTH`.
+  EXPECT_FALSE(EVP_PKEY_verify(prehash_pctx.get(), prehash_sig.data(),
+                               prehash_sig.size(), digest, sizeof(digest) - 1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_DIGEST_LENGTH}}));
+
+  ASSERT_TRUE(EVP_PKEY_sign_init(prehash_pctx.get()));
+  EXPECT_FALSE(EVP_PKEY_sign(prehash_pctx.get(), prehash_sig.data(),
+                             &prehash_sig_len, digest, sizeof(digest) - 1));
+  EXPECT_TRUE(ErrorsAreAndClear({{ERR_LIB_EVP, EVP_R_INVALID_DIGEST_LENGTH}}));
 }
 
 // Test that OpenSSL's legacy TLS-specific APIs in EVP work correctly. When we

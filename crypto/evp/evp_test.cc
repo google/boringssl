@@ -150,6 +150,16 @@ const std::map<std::string, AlgorithmInfo> kAllAlgorithms = {
       true}},
 
     {"X-Wing", {EVP_pkey_xwing(), EVP_kem_xwing(), EVP_PKEY_XWING, false}},
+
+    {"SLH-DSA-SHA2-128s",
+     {EVP_pkey_slh_dsa_sha2_128s(), /*kem=*/nullptr,
+      EVP_PKEY_SLH_DSA_SHA2_128S, false}},
+    {"SLH-DSA-SHAKE-256f",
+     {EVP_pkey_slh_dsa_shake_256f(), /*kem=*/nullptr,
+      EVP_PKEY_SLH_DSA_SHAKE_256F, false}},
+    {"HashSLH-DSA-SHA2-128s-with-SHA256",
+     {EVP_pkey_slh_dsa_sha2_128s_with_sha256(), /*kem=*/nullptr,
+      EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256, false}},
 };
 
 enum class KeyRole { kPublic, kPrivate };
@@ -1507,6 +1517,10 @@ TEST(EVPTest, MLDSATestVectors) {
   RunEVPTests("crypto/evp/test/mldsa_tests.txt");
 }
 
+TEST(EVPTest, SLHDSATestVectors) {
+  RunEVPTests("crypto/evp/test/slhdsa_tests.txt");
+}
+
 TEST(EVPTest, MLKEMTestVectors) {
   RunEVPTests("crypto/evp/test/mlkem_tests.txt");
 }
@@ -1939,5 +1953,7 @@ TEST(EVPTest, WycheproofRSAPKCS1Decrypt) {
   RunWycheproofPKCS1DecryptTest(
       "third_party/wycheproof_testvectors/rsa_pkcs1_4096_test.txt");
 }
+
+
 }  // namespace
 BSSL_NAMESPACE_END

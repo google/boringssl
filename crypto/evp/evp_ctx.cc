@@ -107,6 +107,15 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e) {
     case EVP_PKEY_ML_KEM_1024:
       alg = EVP_pkey_ml_kem_1024();
       break;
+    case EVP_PKEY_SLH_DSA_SHA2_128S:
+      alg = EVP_pkey_slh_dsa_sha2_128s();
+      break;
+    case EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256:
+      alg = EVP_pkey_slh_dsa_sha2_128s_with_sha256();
+      break;
+    case EVP_PKEY_SLH_DSA_SHAKE_256F:
+      alg = EVP_pkey_slh_dsa_shake_256f();
+      break;
   }
   if (alg == nullptr || alg->pkey_method == nullptr) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);

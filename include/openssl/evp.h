@@ -128,6 +128,9 @@ OPENSSL_EXPORT EVP_PKEY *EVP_PKEY_copy_public(const EVP_PKEY *pkey);
 #define EVP_PKEY_ML_KEM_768 NID_ML_KEM_768
 #define EVP_PKEY_ML_KEM_1024 NID_ML_KEM_1024
 #define EVP_PKEY_XWING NID_X_Wing
+#define EVP_PKEY_SLH_DSA_SHA2_128S NID_SLH_DSA_SHA2_128s
+#define EVP_PKEY_SLH_DSA_SHAKE_256F NID_SLH_DSA_SHAKE_256f
+#define EVP_PKEY_SLH_DSA_SHA2_128S_WITH_SHA256 NID_SLH_DSA_SHA2_128s_WITH_SHA256
 
 // EVP_PKEY_id returns the type of `pkey`, which is one of the `EVP_PKEY_*`
 // values above. These type values generally correspond to the algorithm OID,
@@ -198,6 +201,12 @@ OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ed25519(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_44(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_65(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_87(void);
+
+// EVP_pkey_slh_dsa_* implement SLH-DSA and HashSLH-DSA keys, encoded as in
+// RFC 9909. The `EVP_PKEY_id` values are `EVP_PKEY_SLH_DSA_*`.
+OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_slh_dsa_sha2_128s(void);
+OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_slh_dsa_sha2_128s_with_sha256(void);
+OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_slh_dsa_shake_256f(void);
 
 // EVP_pkey_ml_kem_* implement ML-KEM keys, encoded as in RFC 9935. The
 // `EVP_PKEY_id` values are `EVP_PKEY_ML_KEM_*`. In the private key
@@ -422,6 +431,9 @@ OPENSSL_EXPORT int EVP_marshal_private_key(CBB *cbb, const EVP_PKEY *key);
 // - ML-KEM, using the formats in FIPS 203. The private key representation
 //   supported by BoringSSL is the 64-byte "seed" resulting from the
 //   concatenation of d||z, as each is defined in FIPS 203.
+//
+// - SLH-DSA, using the 2n-byte public key and 4n-byte private key formats in
+//   FIPS 205 and RFC 9909.
 //
 // These formats are suitable if serializing a key in a context where the
 // algorithm is already known and there is no need to encode it.
