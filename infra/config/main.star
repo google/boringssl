@@ -1585,6 +1585,26 @@ both_builders(
     }),
 )
 
+# clang-cl in shared library mode matches Chromium's Windows component build.
+# clang-cl does not treat cross-DLL function addresses as constant expressions,
+# so this catches constexpr initializers in tests that the MSVC shared builders
+# have missed.
+# TODO(chlily): Switch to both_builders and enable once verified.
+cq_builders(
+    "win64_clang_shared",
+    WIN_HOST,
+    cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
+    cq_enabled = False,
+    properties = {
+        "clang": True,
+        "msvc_target": "x64",
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
+    },
+)
+
 both_builders(
     "win64",
     WIN_HOST,
