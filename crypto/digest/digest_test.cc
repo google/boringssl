@@ -489,7 +489,7 @@ TEST_P(XOFSqueeze, Squeeze) {
   EXPECT_EQ(Bytes(out), Bytes(expected));
 }
 
-constexpr XOFTestVector kSqueezeVectors[] = {
+const XOFTestVector kSqueezeVectors[] = {
     {"SHAKE256_MSG", EVP_shake256,
      "e4baace59e93f0a59db1e7a9a3e6ba9de6be97e6ada3e8bc89e6a5b5e68192e6"
      "b2b3e6b299e998bfe583a7e7a587e982a3e794b1e4bb96e4b88de58fafe6809d"
