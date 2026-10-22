@@ -152,8 +152,8 @@ const std::map<std::string, AlgorithmInfo> kAllAlgorithms = {
     {"X-Wing", {EVP_pkey_xwing(), EVP_kem_xwing(), EVP_PKEY_XWING, false}},
 
     {"SLH-DSA-SHA2-128s",
-     {EVP_pkey_slh_dsa_sha2_128s(), /*kem=*/nullptr,
-      EVP_PKEY_SLH_DSA_SHA2_128S, false}},
+     {EVP_pkey_slh_dsa_sha2_128s(), /*kem=*/nullptr, EVP_PKEY_SLH_DSA_SHA2_128S,
+      false}},
     {"SLH-DSA-SHAKE-256f",
      {EVP_pkey_slh_dsa_shake_256f(), /*kem=*/nullptr,
       EVP_PKEY_SLH_DSA_SHAKE_256F, false}},
@@ -418,9 +418,10 @@ void CheckRSAParam(FileTest *t, std::string_view attr_name,
   // not currently assert that we omit them.
 }
 
+template <typename Marshal>
 bool CheckMarshalCBB(FileTest *t, std::string_view attr_name,
                      KeyRoleSelect role_select, const SourceAndKey &key,
-                     int (*marshal_func)(CBB *cbb, const EVP_PKEY *pkey)) {
+                     Marshal marshal_func) {
   SCOPED_TRACE(attr_name);
   ScopedCBB cbb;
   if (!CBB_init(cbb.get(), 0)) {
@@ -498,6 +499,7 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
   const std::pair<KeyRole, std::string_view> kSPKIOrPKCS8[] = {
       {KeyRole::kPublic, "SPKI"},
       {KeyRole::kPublic, "SPKINonCanonical"},
+      {KeyRole::kPublic, "ECCompressedSPKI"},
       {KeyRole::kPrivate, "PKCS8"},
       {KeyRole::kPrivate, "PKCS8NonCanonical"},
       // TODO(davidben): Give FileTest a better API for repeat attributes. For
@@ -639,6 +641,18 @@ bool ImportKey(FileTest *t, KeyMap *key_map) {
                          EVP_PKEY_marshal_ec_uncompressed_point) ||
         !CheckMarshalCBB(t, "ECCompressedPoint", KeyRoleSelect::kAny, key,
                          EVP_PKEY_marshal_ec_compressed_point) ||
+        !CheckMarshalCBB(t,
+                         t->HasAttribute("ECUncompressedPoint") ? "SPKI" : "",
+                         KeyRoleSelect::kAny, key,
+                         [](CBB *cbb, const EVP_PKEY *pkey) {
+                           return EVP_marshal_public_key_with_ec_point_format(
+                               cbb, pkey, POINT_CONVERSION_UNCOMPRESSED);
+                         }) ||
+        !CheckMarshalCBB(t, "ECCompressedSPKI", KeyRoleSelect::kAny, key,
+                         [](CBB *cbb, const EVP_PKEY *pkey) {
+                           return EVP_marshal_public_key_with_ec_point_format(
+                               cbb, pkey, POINT_CONVERSION_COMPRESSED);
+                         }) ||
         !CheckMarshalCBB(t, "ECPrivateScalar", KeyRoleSelect::kPrivate, key,
                          EVP_PKEY_marshal_ec_private_scalar) ||
         !CheckMarshalCBB(t, "RSAPublicKey", KeyRoleSelect::kAny, key,

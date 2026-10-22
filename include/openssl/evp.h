@@ -17,6 +17,7 @@
 
 #include <openssl/base.h>  // IWYU pragma: export
 
+#include <openssl/ec.h>
 #include <openssl/evp_errors.h>  // IWYU pragma: export
 
 // OpenSSL included digest and cipher functions in this header so we include
@@ -1227,6 +1228,13 @@ OPENSSL_EXPORT int EVP_PKEY_get_ec_point_conv_form(const EVP_PKEY *pkey);
 // on success and zero on error.
 OPENSSL_EXPORT int EVP_PKEY_CTX_set_ec_paramgen_curve_nid(EVP_PKEY_CTX *ctx,
                                                           int nid);
+
+// EVP_marshal_public_key_with_ec_point_format marshals key as a DER-encoded
+// `SubjectPublicKeyInfo` structure (RFC 5280) and appends the result to `cbb`.
+// `key` must be an EC key, and the EC point will be serialized in the format
+// specified by `format`. It returns one on success and zero on error.
+OPENSSL_EXPORT int EVP_marshal_public_key_with_ec_point_format(
+    CBB *cbb, const EVP_PKEY *key, point_conversion_form_t format);
 
 
 // Diffie-Hellman-specific control functions.
