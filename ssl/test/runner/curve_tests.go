@@ -693,7 +693,6 @@ func addCurveTests() {
 			DefaultCurves:    []CurveID{CurveX25519MLKEM768},
 		},
 		flags: []string{
-			"-server-preference",
 			"-expect-curve-id", strconv.Itoa(int(CurveX25519MLKEM768)),
 		},
 	})
@@ -777,8 +776,6 @@ func addCurveTests() {
 		},
 		flags: append(append(
 			[]string{
-				// Set the -cipher flag to force SSL_OP_CIPHER_SERVER_PREFERENCE.
-				"-cipher", "ALL:3DES",
 				"-expect-curve-id", strconv.Itoa(int(CurveMLKEM1024))},
 			flagInts("-curves", []CurveID{CurveX25519MLKEM768, CurveMLKEM1024, CurveX25519})...),
 			flagInts("-curves-flags", []int{curveEqualPreferenceWithNextFlag, 0, 0})...,

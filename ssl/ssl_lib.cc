@@ -3656,6 +3656,8 @@ static const uint32_t kGroupsFlags[] = {
 };
 
 // Prefer post-quantum groups equally if the client supports them.
+// TODO(crbug.com/550356540): This option is no longer needed for configuring
+// groups, but is retained here to avoid changing behavior for TLS 1.2 ciphers.
 static const uint32_t kOptions = SSL_OP_CIPHER_SERVER_PREFERENCE;
 
 static const uint16_t kSigAlgs[] = {
@@ -3817,6 +3819,8 @@ namespace cnsa1_202603 {
 static const uint16_t kGroups[] = {SSL_GROUP_MLKEM1024, SSL_GROUP_SECP384R1};
 
 // Prefer ML-KEM-1024 if the client supports it.
+// TODO(crbug.com/550356540): This option is no longer needed for configuring
+// groups, but is retained here to avoid changing behavior for TLS 1.2 ciphers.
 static const uint32_t kOptions = SSL_OP_CIPHER_SERVER_PREFERENCE;
 
 static const uint16_t kSigAlgs[] = {

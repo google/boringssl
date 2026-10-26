@@ -215,21 +215,13 @@ bool tls1_get_shared_group(SSL_HANDSHAKE *hs, uint16_t *out_group_id) {
   // `peer_supported_group_list`.
 
   Span<const uint16_t> groups = hs->config->supported_group_list;
-  Span<const uint16_t> pref, supp;
-  Span<const uint32_t> pref_flags;
-  if (ssl->options & SSL_OP_CIPHER_SERVER_PREFERENCE) {
-    pref = groups;
-    pref_flags = hs->config->supported_group_list_flags;
-    supp = hs->peer_supported_group_list;
-  } else {
-    pref = hs->peer_supported_group_list;
-    supp = groups;
-  }
+  Span<const uint32_t> groups_flags = hs->config->supported_group_list_flags;
+  Span<const uint16_t> supp = hs->peer_supported_group_list;
 
   // Index within `supp` of the best matching group so far.
   std::optional<size_t> best_match;
-  for (size_t i = 0u; i < pref.size(); ++i) {
-    uint16_t candidate_group = pref[i];
+  for (size_t i = 0u; i < groups.size(); ++i) {
+    uint16_t candidate_group = groups[i];
     auto match_it = std::find(supp.begin(), supp.end(), candidate_group);
     // Post-quantum key agreements don't fit in the u8-length-prefixed
     // ECPoint field in TLS 1.2 and below.
@@ -246,8 +238,8 @@ bool tls1_get_shared_group(SSL_HANDSHAKE *hs, uint16_t *out_group_id) {
 
     // If we found a match, stop at the current equipreference group.
     bool equal_with_next =
-        !pref_flags.empty() &&
-        (pref_flags[i] & SSL_GROUP_FLAG_EQUAL_PREFERENCE_WITH_NEXT);
+        !groups_flags.empty() &&
+        (groups_flags[i] & SSL_GROUP_FLAG_EQUAL_PREFERENCE_WITH_NEXT);
     if (!equal_with_next && best_match.has_value()) {
       break;
     }

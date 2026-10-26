@@ -549,7 +549,6 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         BoolFlag("-handshaker-resume", &TestConfig::handshaker_resume),
         StringFlag("-handshaker-path", &TestConfig::handshaker_path),
         BoolFlag("-jdk11-workaround", &TestConfig::jdk11_workaround),
-        BoolFlag("-server-preference", &TestConfig::server_preference),
         BoolFlag("-export-traffic-secrets",
                  &TestConfig::export_traffic_secrets),
         BoolFlag("-key-update", &TestConfig::key_update),
@@ -2257,10 +2256,6 @@ bssl::UniquePtr<SSL_CTX> TestConfig::SetupCtx(SSL_CTX *old_ctx) const {
           })) {
     fprintf(stderr, "SSL_CTX_add_cert_compression_alg failed.\n");
     abort();
-  }
-
-  if (server_preference) {
-    SSL_CTX_set_options(ssl_ctx.get(), SSL_OP_CIPHER_SERVER_PREFERENCE);
   }
 
   if (is_quic) {

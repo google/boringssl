@@ -235,7 +235,6 @@ struct TestConfig {
   bool handshaker_resume = false;
   std::string handshaker_path;
   bool jdk11_workaround = false;
-  bool server_preference = false;
   bool export_traffic_secrets = false;
   bool key_update = false;
   bool key_update_before_read = false;

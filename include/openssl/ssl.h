@@ -636,9 +636,8 @@ OPENSSL_EXPORT int SSL_version(const SSL *ssl);
 // SSL_OP_NO_TICKET disables session ticket support (RFC 5077).
 #define SSL_OP_NO_TICKET 0x00004000L
 
-// SSL_OP_CIPHER_SERVER_PREFERENCE configures servers to select ciphers and
-// ECDHE curves according to the server's preferences instead of the
-// client's.
+// SSL_OP_CIPHER_SERVER_PREFERENCE configures servers to select ciphers
+// according to the server's preferences instead of the client's.
 #define SSL_OP_CIPHER_SERVER_PREFERENCE 0x00400000L
 
 // SSL_OP_ALL is the set of options that are enabled by default. It is safe, but
@@ -2755,7 +2754,7 @@ OPENSSL_EXPORT int SSL_set1_group_ids(SSL *ssl, const uint16_t *group_ids,
 // that the corresponding group has equal preference with the next member of the
 // list of groups being configured. Assigning equal preference to a range of
 // consecutively listed groups allows a server to partially respect the
-// client's preferences when `SSL_OP_CIPHER_SERVER_PREFERENCE` is enabled.
+// client's preferences.
 #define SSL_GROUP_FLAG_EQUAL_PREFERENCE_WITH_NEXT 0x01
 
 // SSL_CTX_set1_group_ids_with_flags sets the preferred groups for `ctx` to
