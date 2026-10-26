@@ -420,14 +420,6 @@ struct evp_hpke_ctx_st {
 
 struct evp_hpke_key_st {
   const EVP_HPKE_KEM *kem;
-  uint8_t private_key[EVP_HPKE_MAX_PRIVATE_KEY_LENGTH];
-  uint8_t public_key[EVP_HPKE_MAX_PUBLIC_KEY_LENGTH];
-
-  // `pkey`, if non-null, takes precedence over `private_key` and `public_key`,
-  // which are left unused. Otherwise `private_key` and `public_key` are used
-  // instead.
-  // TODO(crbug.com/535883377): Unify EVP_HPKE_KEM and EVP_KEM for all supported
-  // HPKE KEMs.
   EVP_PKEY *pkey;
 };
 

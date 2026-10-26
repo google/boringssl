@@ -857,8 +857,6 @@ void EVP_HPKE_KEY_free(EVP_HPKE_KEY *key) {
 
 int EVP_HPKE_KEY_copy(EVP_HPKE_KEY *dst, const EVP_HPKE_KEY *src) {
   dst->kem = src->kem;
-  OPENSSL_memcpy(dst->private_key, src->private_key, sizeof(src->private_key));
-  OPENSSL_memcpy(dst->public_key, src->public_key, sizeof(src->public_key));
   dst->pkey = EVP_PKEY_dup_ref(src->pkey);
   return 1;
 }
