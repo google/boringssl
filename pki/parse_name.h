@@ -80,9 +80,15 @@ struct OPENSSL_EXPORT X509NameAttribute {
       : type(in_type), value_tag(in_value_tag), value(in_value) {}
 
   // Configures handling of PrintableString in the attribute value. Do
-  // not use non-default handling without consulting //net owners. With
-  // kAsUTF8Hack, PrintableStrings are interpreted as UTF-8 strings.
-  enum class PrintableStringHandling { kDefault, kAsUTF8Hack };
+  // not use non-default handling without consulting //net owners.
+  enum class PrintableStringHandling {
+    // Strict enforcement of PrintableString rules.
+    kDefault,
+    // PrintableStrings containing ASCII characters (0x00-0x7F) are allowed.
+    kAllowASCII,
+    // PrintableStrings are interpreted as UTF-8 strings.
+    kAsUTF8Hack,
+  };
 
   // Attempts to convert the value represented by this struct into a
   // UTF-8 string and store it in `out`, returning whether the conversion

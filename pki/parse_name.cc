@@ -62,10 +62,16 @@ bool X509NameAttribute::ValueAsString(std::string *out) const {
 
 bool X509NameAttribute::ValueAsStringWithUnsafeOptions(
     PrintableStringHandling printable_string_handling, std::string *out) const {
-  if (printable_string_handling == PrintableStringHandling::kAsUTF8Hack &&
-      value_tag == CBS_ASN1_PRINTABLESTRING) {
-    *out = BytesAsStringView(value);
-    return true;
+  if (value_tag == CBS_ASN1_PRINTABLESTRING) {
+    switch (printable_string_handling) {
+      case PrintableStringHandling::kDefault:
+        break;
+      case PrintableStringHandling::kAllowASCII:
+        return der::ParseIA5String(value, out);
+      case PrintableStringHandling::kAsUTF8Hack:
+        *out = BytesAsStringView(value);
+        return true;
+    }
   }
   return ValueAsString(out);
 }
