@@ -998,6 +998,50 @@ func addSignatureAlgorithmTests() {
 		expectedError:      ":WRONG_SIGNATURE_TYPE:",
 	})
 
+	// Test that ML-DSA is not advertised by clients below TLS 1.3, even
+	// when explicitly configured.
+	testCases = append(testCases, testCase{
+		testType: clientTest,
+		name:     "VerifyPreferences-MLDSANotAdvertised-TLS12",
+		config: Config{
+			Credential: &rsaCertificate,
+			Bugs: ProtocolBugs{
+				ExpectPeerSignatureAlgorithmPreferences: []signatureAlgorithm{signatureRSAPSSWithSHA256},
+			},
+		},
+		flags: []string{
+			// The client sends ClientHello before it learns the negotiated
+			// version, so filtering out ML-DSA depends on the shim's max
+			// version.
+			"-max-version", strconv.Itoa(VersionTLS12),
+			"-verify-prefs", strconv.Itoa(int(signatureMLDSA44)),
+			"-verify-prefs", strconv.Itoa(int(signatureRSAPSSWithSHA256)),
+		},
+	})
+
+	// Test that ML-DSA is not offered by a server in a CertificateVerify
+	// when explicitly configured with TLS 1.2.
+	testCases = append(testCases, testCase{
+		testType: serverTest,
+		name:     "VerifyPreferences-MLDSANotAdvertised-ClientAuth-TLS12",
+		config: Config{
+			// The server sends CertificateVerify after it negotiates a
+			// version, so filtering out ML-DSA should happen even if the
+			// shim supported TLS 1.3.
+			MaxVersion: VersionTLS12,
+			Credential: &rsaCertificate,
+			Bugs: ProtocolBugs{
+				ExpectPeerSignatureAlgorithmPreferences: []signatureAlgorithm{signatureRSAPSSWithSHA256},
+			},
+		},
+		shimCertificate: &rsaCertificate,
+		flags: []string{
+			"-verify-prefs", strconv.Itoa(int(signatureMLDSA44)),
+			"-verify-prefs", strconv.Itoa(int(signatureRSAPSSWithSHA256)),
+			"-require-any-client-certificate",
+		},
+	})
+
 	// Test that configuring verify preferences changes what the client
 	// advertises.
 	testCases = append(testCases, testCase{

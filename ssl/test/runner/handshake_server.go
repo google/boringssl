@@ -453,6 +453,12 @@ func (hs *serverHandshakeState) readClientHello() error {
 		}
 	}
 
+	if expected := c.config.Bugs.ExpectPeerSignatureAlgorithmPreferences; expected != nil {
+		if !slices.Equal(expected, hs.clientHello.signatureAlgorithms) {
+			return fmt.Errorf("tls: client offered signature algorithms %v, but expected %v", hs.clientHello.signatureAlgorithms, expected)
+		}
+	}
+
 	applyBugsToClientHello(hs.clientHello, config)
 
 	return nil

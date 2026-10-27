@@ -1507,6 +1507,10 @@ type ProtocolBugs struct {
 	// signature algorithm preferences to be ignored.
 	IgnorePeerSignatureAlgorithmPreferences bool
 
+	// ExpectPeerSignatureAlgorithmPreferences, if not nil, asserts that the
+	// peer's signature algorithm preferences were the specified list.
+	ExpectPeerSignatureAlgorithmPreferences []signatureAlgorithm
+
 	// IgnorePeerCurvePreferences, if true, causes the peer's curve
 	// preferences to be ignored.
 	IgnorePeerCurvePreferences bool

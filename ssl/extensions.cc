@@ -110,6 +110,11 @@ static bool is_post_quantum_group(uint16_t id) {
   return id == SSL_GROUP_X25519_MLKEM768 || id == SSL_GROUP_MLKEM1024;
 }
 
+static bool is_post_quantum_sigalg(uint16_t sigalg) {
+  return sigalg == SSL_SIGN_ML_DSA_44 || sigalg == SSL_SIGN_ML_DSA_65 ||
+         sigalg == SSL_SIGN_ML_DSA_87;
+}
+
 bool ssl_parse_client_hello_with_trailing_data(const SSLImpl *ssl, CBS *cbs,
                                                SSL_CLIENT_HELLO *out) {
   OPENSSL_memset(out, 0, sizeof(*out));
@@ -331,7 +336,12 @@ static Span<const uint16_t> tls12_get_verify_sigalgs(const SSL_HANDSHAKE *hs) {
 }
 
 bool tls12_add_verify_sigalgs(const SSL_HANDSHAKE *hs, CBB *out) {
+  uint16_t max_version =
+      hs->ssl->server ? ssl_protocol_version(hs->ssl) : hs->max_version;
   for (uint16_t sigalg : tls12_get_verify_sigalgs(hs)) {
+    if (is_post_quantum_sigalg(sigalg) && max_version < TLS1_3_VERSION) {
+      continue;
+    }
     if (!CBB_add_u16(out, sigalg)) {
       return false;
     }
