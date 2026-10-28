@@ -3526,7 +3526,7 @@ OPENSSL_EXPORT int SSL_CTX_set_tlsext_servername_arg(SSL_CTX *ctx, void *arg);
 // the session cache between different domains.
 //
 // TODO(davidben): Should other settings change after this call?
-OPENSSL_EXPORT SSL_CTX *SSL_set_SSL_CTX(SSL *ssl, SSL_CTX *ctx);
+OPENSSL_EXPORT SSL_CTX *SSL_set_SSL_CTX(SSL *ssl, const SSL_CTX *ctx);
 
 
 // Application-layer protocol negotiation.

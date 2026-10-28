@@ -380,6 +380,7 @@ typedef void *OPENSSL_BLOCK;
 #define BORINGSSL_NO_CXX
 #endif
 
+// clang-format off
 #if defined(BORINGSSL_PREFIX)
 #define BSSL_NAMESPACE_BEGIN \
   namespace bssl {           \
@@ -391,6 +392,7 @@ typedef void *OPENSSL_BLOCK;
 #define BSSL_NAMESPACE_BEGIN namespace bssl {
 #define BSSL_NAMESPACE_END }
 #endif
+// clang-format on
 
 #if defined(BORINGSSL_NO_CXX)
 
@@ -495,30 +497,36 @@ class StackAllocatedMovable {
 
 #define BORINGSSL_MAKE_DELETER(type, deleter)     \
   namespace internal {                            \
+                                                  \
   template <>                                     \
   struct DeleterImpl<type> {                      \
     static void Free(type *ptr) { deleter(ptr); } \
   };                                              \
+                                                  \
   }
 
 #define BORINGSSL_MAKE_STACK_TRAITS(type, init_func, cleanup_func) \
   namespace internal {                                             \
+                                                                   \
   template <>                                                      \
   struct StackAllocatedTraits<type> {                              \
     static void Init(type *ptr) { init_func(ptr); }                \
     static void Cleanup(type *ptr) { cleanup_func(ptr); }          \
   };                                                               \
+                                                                   \
   }
 
 #define BORINGSSL_MAKE_STACK_TRAITS_MOVABLE(type, init_func, cleanup_func, \
                                             move_func)                     \
   namespace internal {                                                     \
+                                                                           \
   template <>                                                              \
   struct StackAllocatedMovableTraits<type> {                               \
     static void Init(type *ptr) { init_func(ptr); }                        \
     static void Cleanup(type *ptr) { cleanup_func(ptr); }                  \
     static void Move(type *out, type *in) { move_func(out, in); }          \
   };                                                                       \
+                                                                           \
   }
 
 // Holds ownership of heap-allocated BoringSSL structures. Sample usage:

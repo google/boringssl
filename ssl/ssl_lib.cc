@@ -2760,7 +2760,7 @@ int SSL_get_shutdown(const SSL *ssl) {
 
 SSL_CTX *SSL_get_SSL_CTX(const SSL *ssl) { return FromOpaque(ssl)->ctx.get(); }
 
-SSL_CTX *SSL_set_SSL_CTX(SSL *ssl, SSL_CTX *ctx) {
+SSL_CTX *SSL_set_SSL_CTX(SSL *ssl, const SSL_CTX *ctx) {
   auto *ssl_impl = FromOpaque(ssl);
   if (!ssl_impl->config) {
     return nullptr;
