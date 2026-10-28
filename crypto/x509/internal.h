@@ -597,9 +597,12 @@ STACK_OF(CONF_VALUE) *X509V3_parse_list(const char *line);
   ERR_add_error_data(6, "section:", (val)->section, ",name:", (val)->name, \
                      ",value:", (val)->value);
 
-// GENERAL_NAME_cmp returns zero if `a` and `b` are equal and a non-zero
-// value otherwise. Note this function does not provide a comparison suitable
-// for sorting.
+// GENERAL_NAME_cmp compares `a` and `b`. It returns zero if they are equal, and
+// a negative or positive value if `a` sorts before or after `b`, respectively.
+// Names are ordered first by type, then by type-specific contents. The order
+// is arbitrary but suitable for sorting, with one exception: if a directoryName
+// cannot be serialized, `X509_NAME_cmp`, and thus this function, returns -2.
+// This cannot happen for parsed names that have not since been modified.
 int GENERAL_NAME_cmp(const GENERAL_NAME *a, const GENERAL_NAME *b);
 
 // X509_VERIFY_PARAM_lookup returns a pre-defined `X509_VERIFY_PARAM` named by

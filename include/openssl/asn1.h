@@ -1512,9 +1512,11 @@ OPENSSL_EXPORT void ASN1_TYPE_set(ASN1_TYPE *a, int type, void *value);
 // of `value`. It returns one on success and zero on error.
 OPENSSL_EXPORT int ASN1_TYPE_set1(ASN1_TYPE *a, int type, const void *value);
 
-// ASN1_TYPE_cmp returns zero if `a` and `b` are equal and some non-zero value
-// otherwise. Note this function can only be used for equality checks, not an
-// ordering.
+// ASN1_TYPE_cmp compares `a` and `b`. It returns zero if they are equal, and a
+// negative or positive value if `a` sorts before or after `b`, respectively.
+// NULL sorts before any non-NULL value. Otherwise, values are ordered first by
+// type, then by contents. The order is arbitrary but suitable for sorting.
+// Callers should not rely on the exact order.
 OPENSSL_EXPORT int ASN1_TYPE_cmp(const ASN1_TYPE *a, const ASN1_TYPE *b);
 
 typedef STACK_OF(ASN1_TYPE) ASN1_SEQUENCE_ANY;

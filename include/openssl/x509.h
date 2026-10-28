@@ -2631,9 +2631,11 @@ OPENSSL_EXPORT void X509_ALGOR_get0(const ASN1_OBJECT **out_obj,
 // constructing PSS and move on.
 OPENSSL_EXPORT int X509_ALGOR_set_md(X509_ALGOR *alg, const EVP_MD *md);
 
-// X509_ALGOR_cmp returns zero if `a` and `b` are equal, and some non-zero value
-// otherwise. Note this function can only be used for equality checks, not an
-// ordering.
+// X509_ALGOR_cmp compares `a` and `b`. It returns zero if they are equal, and a
+// negative or positive value if `a` sorts before or after `b`, respectively.
+// Values are ordered first by algorithm, then by parameter, with an absent
+// parameter sorting before a present one. The order is arbitrary but suitable
+// for sorting. Callers should not rely on the exact order.
 OPENSSL_EXPORT int X509_ALGOR_cmp(const X509_ALGOR *a, const X509_ALGOR *b);
 
 

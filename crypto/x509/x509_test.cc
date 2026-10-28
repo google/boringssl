@@ -5061,6 +5061,42 @@ TEST(X509Test, AlgorithmParameters) {
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_PARAMETER));
 }
 
+namespace {
+
+// ExpectTotalOrder checks that `cmp` is a three-way comparison consistent with
+// a total order. `a` and `b` must hold the same pairwise-distinct values,
+// parsed separately, so equality is not checked by pointer.
+template <typename T, typename Cmp>
+void ExpectTotalOrder(const std::vector<T> &a, const std::vector<T> &b,
+                      Cmp cmp) {
+  ASSERT_EQ(a.size(), b.size());
+  auto sign = [](int v) { return (v > 0) - (v < 0); };
+  for (size_t i = 0; i < a.size(); i++) {
+    SCOPED_TRACE(i);
+    for (size_t j = 0; j < a.size(); j++) {
+      SCOPED_TRACE(j);
+      int ij = cmp(a[i], b[j]);
+      if (i == j) {
+        EXPECT_EQ(ij, 0);
+      } else {
+        EXPECT_NE(ij, 0);
+      }
+      EXPECT_EQ(sign(ij), -sign(cmp(b[j], a[i])));
+      if (ij >= 0) {
+        continue;
+      }
+      for (size_t k = 0; k < a.size(); k++) {
+        if (cmp(b[j], a[k]) < 0) {
+          SCOPED_TRACE(k);
+          EXPECT_LT(cmp(a[i], b[k]), 0);
+        }
+      }
+    }
+  }
+}
+
+}  // namespace
+
 #if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(X509Test, GeneralName) {
   const std::vector<uint8_t> kNames[] = {
@@ -5249,8 +5285,61 @@ TEST(X509Test, GeneralName) {
       }
     }
   }
+
+  auto fill_names = [&](std::vector<UniquePtr<GENERAL_NAME>> &names) {
+    for (const auto &der : kNames) {
+      const uint8_t *ptr = der.data();
+      names.emplace_back(d2i_GENERAL_NAME(nullptr, &ptr, der.size()));
+      ASSERT_TRUE(names.back());
+    }
+  };
+  std::vector<UniquePtr<GENERAL_NAME>> a, b;
+  ASSERT_NO_FATAL_FAILURE(fill_names(a));
+  ASSERT_NO_FATAL_FAILURE(fill_names(b));
+  ExpectTotalOrder(a, b, [](const auto &x, const auto &y) {
+    return GENERAL_NAME_cmp(x.get(), y.get());
+  });
 }
+
 #endif  // !BORINGSSL_SHARED_LIBRARY
+
+TEST(X509Test, AlgorCmpTotalOrder) {
+  const std::vector<uint8_t> kAlgors[] = {
+      // SEQUENCE { sha256WithRSAEncryption }
+      {0x30, 0x0b, 0x06, 0x09, OBJ_ENC_sha256WithRSAEncryption},
+      // SEQUENCE { sha256WithRSAEncryption, NULL }
+      {0x30, 0x0d, 0x06, 0x09, OBJ_ENC_sha256WithRSAEncryption, 0x05, 0x00},
+      // SEQUENCE { sha256WithRSAEncryption, OCTET STRING {} }
+      {0x30, 0x0d, 0x06, 0x09, OBJ_ENC_sha256WithRSAEncryption, 0x04, 0x00},
+      // SEQUENCE { sha384WithRSAEncryption, NULL }
+      {0x30, 0x0d, 0x06, 0x09, OBJ_ENC_sha384WithRSAEncryption, 0x05, 0x00},
+      // SEQUENCE { id-ecPublicKey, prime256v1 }
+      {0x30, 0x13, 0x06, 0x07, OBJ_ENC_X9_62_id_ecPublicKey, 0x06, 0x08,
+       OBJ_ENC_X9_62_prime256v1},
+      // SEQUENCE { id-ecPublicKey, secp384r1 }
+      {0x30, 0x10, 0x06, 0x07, OBJ_ENC_X9_62_id_ecPublicKey, 0x06, 0x05,
+       OBJ_ENC_secp384r1},
+      // SEQUENCE { ecdsa-with-SHA256 }
+      {0x30, 0x0a, 0x06, 0x08, OBJ_ENC_ecdsa_with_SHA256},
+  };
+
+  auto parse_all = [&](std::vector<UniquePtr<X509_ALGOR>> &out) {
+    for (const auto &der : kAlgors) {
+      SCOPED_TRACE(Bytes(der));
+      const uint8_t *ptr = der.data();
+      UniquePtr<X509_ALGOR> algor(d2i_X509_ALGOR(nullptr, &ptr, der.size()));
+      ASSERT_TRUE(algor);
+      ASSERT_EQ(ptr, der.data() + der.size());
+      out.push_back(std::move(algor));
+    }
+  };
+  std::vector<UniquePtr<X509_ALGOR>> a, b;
+  ASSERT_NO_FATAL_FAILURE(parse_all(a));
+  ASSERT_NO_FATAL_FAILURE(parse_all(b));
+  ExpectTotalOrder(a, b, [](const auto &x, const auto &y) {
+    return X509_ALGOR_cmp(x.get(), y.get());
+  });
+}
 
 // Test that extracting fields of an `X509_ALGOR` works correctly.
 TEST(X509Test, X509AlgorExtract) {

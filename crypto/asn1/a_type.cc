@@ -147,24 +147,23 @@ int ASN1_TYPE_set1(ASN1_TYPE *a, int type, const void *value) {
   return 1;
 }
 
-// Returns 0 if they are equal, != 0 otherwise.
 int ASN1_TYPE_cmp(const ASN1_TYPE *a, const ASN1_TYPE *b) {
-  int result = -1;
+  if (a == nullptr || b == nullptr) {
+    // NULL sorts before any non-NULL value. Two NULLs are equal.
+    return (a != nullptr) - (b != nullptr);
+  }
 
-  if (!a || !b || a->type != b->type) {
-    return -1;
+  if (a->type != b->type) {
+    return a->type < b->type ? -1 : 1;
   }
 
   switch (a->type) {
     case V_ASN1_OBJECT:
-      result = OBJ_cmp(a->value.object, b->value.object);
-      break;
+      return OBJ_cmp(a->value.object, b->value.object);
     case V_ASN1_NULL:
-      result = 0;  // They do not have content.
-      break;
+      return 0;  // They do not have content.
     case V_ASN1_BOOLEAN:
-      result = a->value.boolean - b->value.boolean;
-      break;
+      return a->value.boolean - b->value.boolean;
     case V_ASN1_INTEGER:
     case V_ASN1_ENUMERATED:
     case V_ASN1_BIT_STRING:
@@ -186,11 +185,8 @@ int ASN1_TYPE_cmp(const ASN1_TYPE *a, const ASN1_TYPE *b) {
     case V_ASN1_UTF8STRING:
     case V_ASN1_OTHER:
     default:
-      result = ASN1_STRING_cmp(a->value.asn1_string, b->value.asn1_string);
-      break;
+      return ASN1_STRING_cmp(a->value.asn1_string, b->value.asn1_string);
   }
-
-  return result;
 }
 
 int bssl::asn1_parse_any(CBS *cbs, ASN1_TYPE *out) {
