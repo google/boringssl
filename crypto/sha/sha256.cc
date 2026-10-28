@@ -36,16 +36,6 @@ int SHA224_Final(uint8_t out[SHA224_DIGEST_LENGTH], SHA256_CTX *sha) {
   return 1;
 }
 
-uint8_t *SHA224(const uint8_t *data, size_t len,
-                uint8_t out[SHA224_DIGEST_LENGTH]) {
-  SHA256_CTX ctx;
-  BCM_sha224_init(&ctx);
-  BCM_sha224_update(&ctx, data, len);
-  BCM_sha224_final(out, &ctx);
-  OPENSSL_cleanse(&ctx, sizeof(ctx));
-  return out;
-}
-
 int SHA256_Init(SHA256_CTX *sha) {
   BCM_sha256_init(sha);
   return 1;
@@ -67,16 +57,6 @@ int SHA256_Final(uint8_t out[SHA256_DIGEST_LENGTH], SHA256_CTX *sha) {
   }
   BCM_sha256_final(out, sha);
   return 1;
-}
-
-uint8_t *SHA256(const uint8_t *data, size_t len,
-                uint8_t out[SHA256_DIGEST_LENGTH]) {
-  SHA256_CTX ctx;
-  BCM_sha256_init(&ctx);
-  BCM_sha256_update(&ctx, data, len);
-  BCM_sha256_final(out, &ctx);
-  OPENSSL_cleanse(&ctx, sizeof(ctx));
-  return out;
 }
 
 void SHA256_Transform(SHA256_CTX *sha, const uint8_t block[SHA256_CBLOCK]) {

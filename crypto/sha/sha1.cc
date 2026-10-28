@@ -36,15 +36,6 @@ int SHA1_Final(uint8_t out[SHA_DIGEST_LENGTH], SHA_CTX *sha) {
   return 1;
 }
 
-uint8_t *SHA1(const uint8_t *data, size_t len, uint8_t out[SHA_DIGEST_LENGTH]) {
-  SHA_CTX ctx;
-  BCM_sha1_init(&ctx);
-  BCM_sha1_update(&ctx, data, len);
-  BCM_sha1_final(out, &ctx);
-  OPENSSL_cleanse(&ctx, sizeof(ctx));
-  return out;
-}
-
 void SHA1_Transform(SHA_CTX *sha, const uint8_t block[SHA_CBLOCK]) {
   BCM_sha1_transform(sha, block);
 }

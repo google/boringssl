@@ -36,16 +36,6 @@ int SHA384_Final(uint8_t out[SHA384_DIGEST_LENGTH], SHA512_CTX *sha) {
   return 1;
 }
 
-uint8_t *SHA384(const uint8_t *data, size_t len,
-                uint8_t out[SHA384_DIGEST_LENGTH]) {
-  SHA512_CTX ctx;
-  BCM_sha384_init(&ctx);
-  BCM_sha384_update(&ctx, data, len);
-  BCM_sha384_final(out, &ctx);
-  OPENSSL_cleanse(&ctx, sizeof(ctx));
-  return out;
-}
-
 int SHA512_256_Init(SHA512_CTX *sha) {
   BCM_sha512_256_init(sha);
   return 1;
@@ -59,16 +49,6 @@ int SHA512_256_Update(SHA512_CTX *sha, const void *data, size_t len) {
 int SHA512_256_Final(uint8_t out[SHA512_256_DIGEST_LENGTH], SHA512_CTX *sha) {
   BCM_sha512_256_final(out, sha);
   return 1;
-}
-
-uint8_t *SHA512_256(const uint8_t *data, size_t len,
-                uint8_t out[SHA512_256_DIGEST_LENGTH]) {
-  SHA512_CTX ctx;
-  BCM_sha512_256_init(&ctx);
-  BCM_sha512_256_update(&ctx, data, len);
-  BCM_sha512_256_final(out, &ctx);
-  OPENSSL_cleanse(&ctx, sizeof(ctx));
-  return out;
 }
 
 int SHA512_Init(SHA512_CTX *sha) {
@@ -89,16 +69,6 @@ int SHA512_Final(uint8_t out[SHA512_DIGEST_LENGTH], SHA512_CTX *sha) {
   }
   BCM_sha512_final(out, sha);
   return 1;
-}
-
-uint8_t *SHA512(const uint8_t *data, size_t len,
-                uint8_t out[SHA512_DIGEST_LENGTH]) {
-  SHA512_CTX ctx;
-  BCM_sha512_init(&ctx);
-  BCM_sha512_update(&ctx, data, len);
-  BCM_sha512_final(out, &ctx);
-  OPENSSL_cleanse(&ctx, sizeof(ctx));
-  return out;
 }
 
 void SHA512_Transform(SHA512_CTX *sha, const uint8_t block[SHA512_CBLOCK]) {

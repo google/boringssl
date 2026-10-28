@@ -140,6 +140,12 @@ func CollectCSymbols(headers []string) (syms cSymbolData, err error) {
 		case "begin", "end":
 			// Template specializations for STL use, namespaced in template arguments.
 			return nil
+		case "SHA1", "SHA224", "SHA256", "SHA384", "SHA512", "SHA512_256":
+			// Explicitly `static inline` symbols (not just `OPENSSL_INLINE`). Do not rename.
+			//
+			// They are listed explicitly as they look the same as `OPENSSL_INLINE` when compiling as C,
+			// and to avoid outputting huge STL parse trees above, we compile as C.
+			return nil
 		case id.Identifier:
 			// So it's not namespaced. Proceed.
 		default:

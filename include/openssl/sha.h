@@ -16,6 +16,7 @@
 #define OPENSSL_HEADER_SHA_H
 
 #include <openssl/base.h>  // IWYU pragma: export
+#include <openssl/mem.h>
 
 // `sha.h` historically included SHA-1 and SHA-2 hash functions. So, for
 // backward compatibility `sha2.h` is included here. New uses of this header
@@ -27,7 +28,7 @@ extern "C" {
 #endif
 
 
-// The SHA family of hash functions (SHA-1 and SHA-2).
+// The SHA-1 hash function.
 
 
 // SHA-1.
@@ -37,29 +38,6 @@ extern "C" {
 
 // SHA_DIGEST_LENGTH is the length of a SHA-1 digest.
 #define SHA_DIGEST_LENGTH 20
-
-// SHA1_Init initialises `sha` and returns one.
-OPENSSL_EXPORT int SHA1_Init(SHA_CTX *sha);
-
-// SHA1_Update adds `len` bytes from `data` to `sha` and returns one.
-OPENSSL_EXPORT int SHA1_Update(SHA_CTX *sha, const void *data, size_t len);
-
-// SHA1_Final adds the final padding to `sha` and writes the resulting digest to
-// `out`, which must have at least `SHA_DIGEST_LENGTH` bytes of space. It
-// returns one.
-OPENSSL_EXPORT int SHA1_Final(uint8_t out[SHA_DIGEST_LENGTH], SHA_CTX *sha);
-
-// SHA1 writes the digest of `len` bytes from `data` to `out` and returns
-// `out`. There must be at least `SHA_DIGEST_LENGTH` bytes of space in
-// `out`.
-OPENSSL_EXPORT uint8_t *SHA1(const uint8_t *data, size_t len,
-                             uint8_t out[SHA_DIGEST_LENGTH]);
-
-// SHA1_Transform is a low-level function that performs a single, SHA-1 block
-// transformation using the state from `sha` and `SHA_CBLOCK` bytes from
-// `block`.
-OPENSSL_EXPORT void SHA1_Transform(SHA_CTX *sha,
-                                   const uint8_t block[SHA_CBLOCK]);
 
 struct sha_state_st {
 #if defined(__cplusplus) || defined(OPENSSL_WINDOWS)
@@ -84,6 +62,38 @@ struct sha_state_st {
   unsigned num;
 } /* SHA_CTX */;
 
+// SHA1_Init initialises `sha` and returns one.
+OPENSSL_EXPORT int SHA1_Init(SHA_CTX* sha);
+
+// SHA1_Update adds `len` bytes from `data` to `sha` and returns one.
+OPENSSL_EXPORT int SHA1_Update(SHA_CTX* sha, const void* data, size_t len);
+
+// SHA1_Final adds the final padding to `sha` and writes the resulting digest to
+// `out`, which must have at least `SHA_DIGEST_LENGTH` bytes of space. It
+// returns one.
+OPENSSL_EXPORT int SHA1_Final(uint8_t out[SHA_DIGEST_LENGTH], SHA_CTX* sha);
+
+// SHA1 writes the digest of `len` bytes from `data` to `out` and returns
+// `out`. There must be at least `SHA_DIGEST_LENGTH` bytes of space in
+// `out`.
+//
+// `static inline` to not generate such short-named linker symbols or macros.
+static inline OPENSSL_UNUSED uint8_t* SHA1(const uint8_t* data, size_t len,
+                                           uint8_t out[SHA_DIGEST_LENGTH]) {
+  SHA_CTX ctx;
+  SHA1_Init(&ctx);
+  SHA1_Update(&ctx, data, len);
+  SHA1_Final(out, &ctx);
+  OPENSSL_cleanse(&ctx, sizeof(ctx));
+  return out;
+}
+
+// SHA1_Transform is a low-level function that performs a single, SHA-1 block
+// transformation using the state from `sha` and `SHA_CBLOCK` bytes from
+// `block`.
+OPENSSL_EXPORT void SHA1_Transform(SHA_CTX* sha,
+                                   const uint8_t block[SHA_CBLOCK]);
+
 // CRYPTO_fips_186_2_prf derives `out_len` bytes from `xkey` using the PRF
 // defined in FIPS 186-2, Appendix 3.1, with change notice 1 applied. The b
 // parameter is 160 and seed, XKEY, is also 160 bits. The optional XSEED user
@@ -98,7 +108,7 @@ struct sha_state_st {
 // in new protocols. It is provided for compatibility with some legacy EAP
 // methods.
 OPENSSL_EXPORT void CRYPTO_fips_186_2_prf(
-    uint8_t *out, size_t out_len, const uint8_t xkey[SHA_DIGEST_LENGTH]);
+    uint8_t* out, size_t out_len, const uint8_t xkey[SHA_DIGEST_LENGTH]);
 
 
 #if defined(__cplusplus)
