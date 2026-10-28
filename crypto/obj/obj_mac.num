@@ -965,3 +965,5 @@ SLH_DSA_SHA2_128s_WITH_SHA256		975
 alg_mtcProof		976
 rdna_trustAnchorID		977
 pe_mtcCertificationAuthority_SHA256		978
+alg_unsigned		979
+rdna_unsigned		980

@@ -16,7 +16,7 @@
 
 
 BSSL_NAMESPACE_BEGIN
-#define NUM_NID 979
+#define NUM_NID 981
 
 static const uint8_t kObjectData[] = {
     /* NID_rsadsi */
@@ -7203,6 +7203,24 @@ static const uint8_t kObjectData[] = {
     0x07,
     0x01,
     0x26,
+    /* NID_alg_unsigned */
+    0x2b,
+    0x06,
+    0x01,
+    0x05,
+    0x05,
+    0x07,
+    0x06,
+    0x24,
+    /* NID_rdna_unsigned */
+    0x2b,
+    0x06,
+    0x01,
+    0x05,
+    0x05,
+    0x07,
+    0x19,
+    0x01,
 };
 
 static const ASN1_OBJECT kObjects[NUM_NID] = {
@@ -8872,6 +8890,10 @@ static const ASN1_OBJECT kObjects[NUM_NID] = {
     {"pe-mtcCertificationAuthority-SHA256",
      "pe-mtcCertificationAuthority-SHA256",
      NID_pe_mtcCertificationAuthority_SHA256, 8, &kObjectData[6284], 0},
+    {"alg-unsigned", "alg-unsigned", NID_alg_unsigned, 8, &kObjectData[6292],
+     0},
+    {"rdna-unsigned", "rdna-unsigned", NID_rdna_unsigned, 8, &kObjectData[6300],
+     0},
 };
 
 static const uint16_t kNIDsInShortNameOrder[] = {
@@ -9088,6 +9110,7 @@ static const uint16_t kNIDsInShortNameOrder[] = {
     446 /* account */,
     363 /* ad_timestamping */,
     976 /* alg-mtcProof */,
+    979 /* alg-unsigned */,
     376 /* algorithm */,
     405 /* ansi-X9-62 */,
     910 /* anyExtendedKeyUsage */,
@@ -9607,6 +9630,7 @@ static const uint16_t kNIDsInShortNameOrder[] = {
     457 /* qualityLabelledData */,
     450 /* rFC822localPart */,
     977 /* rdna-trustAnchorID */,
+    980 /* rdna-unsigned */,
     870 /* registeredAddress */,
     400 /* role */,
     877 /* roleOccupant */,
@@ -10034,6 +10058,7 @@ static const uint16_t kNIDsInLongNameOrder[] = {
     428 /* aes-256-ofb */,
     914 /* aes-256-xts */,
     976 /* alg-mtcProof */,
+    979 /* alg-unsigned */,
     376 /* algorithm */,
     484 /* associatedDomain */,
     485 /* associatedName */,
@@ -10573,6 +10598,7 @@ static const uint16_t kNIDsInLongNameOrder[] = {
     121 /* rc5-ecb */,
     123 /* rc5-ofb */,
     977 /* rdna-trustAnchorID */,
+    980 /* rdna-unsigned */,
     870 /* registeredAddress */,
     460 /* rfc822Mailbox */,
     117 /* ripemd160 */,
@@ -10815,8 +10841,8 @@ static const uint16_t kNIDsInLongNameOrder[] = {
 static const uint16_t kNIDsInOIDOrder[] = {
     434 /* 0.9 (OBJ_data) */,
     182 /* 1.2 (OBJ_member_body) */,
-    379 /* 1.3 (OBJ_org) */,
     676 /* 1.3 (OBJ_identified_organization) */,
+    379 /* 1.3 (OBJ_org) */,
     11 /* 2.5 (OBJ_X500) */,
     647 /* 2.23 (OBJ_international_organizations) */,
     380 /* 1.3.6 (OBJ_dod) */,
@@ -11350,6 +11376,7 @@ static const uint16_t kNIDsInOIDOrder[] = {
     324 /* 1.3.6.1.5.5.7.6.2 (OBJ_id_alg_noSignature) */,
     325 /* 1.3.6.1.5.5.7.6.3 (OBJ_id_alg_dh_sig_hmac_sha1) */,
     326 /* 1.3.6.1.5.5.7.6.4 (OBJ_id_alg_dh_pop) */,
+    979 /* 1.3.6.1.5.5.7.6.36 (OBJ_alg_unsigned) */,
     976 /* 1.3.6.1.5.5.7.6.67 (OBJ_alg_mtcProof) */,
     327 /* 1.3.6.1.5.5.7.7.1 (OBJ_id_cmc_statusInfo) */,
     328 /* 1.3.6.1.5.5.7.7.2 (OBJ_id_cmc_identification) */,
@@ -11391,6 +11418,7 @@ static const uint16_t kNIDsInOIDOrder[] = {
     664 /* 1.3.6.1.5.5.7.21.0 (OBJ_id_ppl_anyLanguage) */,
     665 /* 1.3.6.1.5.5.7.21.1 (OBJ_id_ppl_inheritAll) */,
     667 /* 1.3.6.1.5.5.7.21.2 (OBJ_Independent) */,
+    980 /* 1.3.6.1.5.5.7.25.1 (OBJ_rdna_unsigned) */,
     977 /* 1.3.6.1.5.5.7.25.3 (OBJ_rdna_trustAnchorID) */,
     178 /* 1.3.6.1.5.5.7.48.1 (OBJ_ad_OCSP) */,
     179 /* 1.3.6.1.5.5.7.48.2 (OBJ_ad_ca_issuers) */,

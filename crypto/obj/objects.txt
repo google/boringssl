@@ -1377,3 +1377,7 @@ secg-scheme 14 3 : dhSinglePass-cofactorDH-sha512kdf-scheme
 id-alg 67 : alg-mtcProof
 id-pkix 25 3 : rdna-trustAnchorID
 id-pe 38 : pe-mtcCertificationAuthority-SHA256
+
+# OIDs for Unsigned Certificate, RFC 9925
+id-alg 36 : alg-unsigned
+id-pkix 25 1 : rdna-unsigned

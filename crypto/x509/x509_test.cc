@@ -3123,6 +3123,30 @@ TEST(X509Test, SignCertificate) {
   }
 }
 
+TEST(X509Test, SetUnsigned) {
+  UniquePtr<X509> cert(X509_new());
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(X509_set_unsigned(cert.get()));
+  EXPECT_EQ(X509_get_signature_nid(cert.get()), NID_alg_unsigned);
+  EXPECT_EQ(X509_NAME_get_index_by_NID(X509_get_issuer_name(cert.get()),
+                                       NID_rdna_unsigned, -1),
+            0);
+  const ASN1_BIT_STRING *sig = nullptr;
+  X509_get0_signature(&sig, nullptr, cert.get());
+  EXPECT_EQ(ASN1_STRING_get_length(sig), 0u);
+
+  cert = CertFromPEM(kLeafPEM);
+  ASSERT_TRUE(cert);
+  UniquePtr<X509_NAME> issuer(X509_NAME_dup(X509_get_issuer_name(cert.get())));
+  ASSERT_TRUE(issuer);
+  ASSERT_TRUE(X509_set_unsigned(cert.get()));
+
+  X509_get0_signature(&sig, nullptr, cert.get());
+  EXPECT_EQ(ASN1_STRING_get_length(sig), 0u);
+  EXPECT_EQ(X509_get_signature_nid(cert.get()), NID_alg_unsigned);
+  EXPECT_EQ(X509_NAME_cmp(X509_get_issuer_name(cert.get()), issuer.get()), 0);
+}
+
 // Test the APIs for signing a CRL, particularly whether they correctly handle
 // the TBSCertList cache.
 TEST(X509Test, SignCRL) {

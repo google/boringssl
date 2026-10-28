@@ -5552,6 +5552,16 @@ extern "C" {
 #define OBJ_ENC_pe_mtcCertificationAuthority_SHA256 \
   0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x01, 0x26
 
+#define SN_alg_unsigned "alg-unsigned"
+#define NID_alg_unsigned 979
+#define OBJ_alg_unsigned 1L, 3L, 6L, 1L, 5L, 5L, 7L, 6L, 36L
+#define OBJ_ENC_alg_unsigned 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x06, 0x24
+
+#define SN_rdna_unsigned "rdna-unsigned"
+#define NID_rdna_unsigned 980
+#define OBJ_rdna_unsigned 1L, 3L, 6L, 1L, 5L, 5L, 7L, 25L, 1L
+#define OBJ_ENC_rdna_unsigned 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x19, 0x01
+
 
 #if defined(__cplusplus)
 } /* extern C */

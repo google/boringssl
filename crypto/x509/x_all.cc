@@ -64,6 +64,25 @@ int X509_sign(X509 *x, const EVP_PKEY *pkey, const EVP_MD *md) {
   return X509_sign_ctx(x, ctx.get());
 }
 
+int X509_set_unsigned(X509 *x509) {
+  if (ScopedX509Algor algor;
+      !X509_ALGOR_set0(algor.get(), OBJ_nid2obj(NID_alg_unsigned), V_ASN1_UNDEF,
+                       nullptr) ||
+      !X509_set1_signature_algo(x509, algor.get())) {
+    return 0;
+  }
+  if (X509_NAME_entry_count(X509_get_issuer_name(x509)) == 0) {
+    if (UniquePtr<X509_NAME> name(X509_NAME_new());
+        !name ||
+        !X509_NAME_add_entry_by_NID(name.get(), NID_rdna_unsigned,
+                                    V_ASN1_UTF8STRING, nullptr, 0, -1, 0) ||
+        !X509_set_issuer_name(x509, name.get())) {
+      return 0;
+    }
+  }
+  return X509_set1_signature_value(x509, nullptr, 0);
+}
+
 int X509_sign_ctx(X509 *x, EVP_MD_CTX *ctx) {
   // Historically, this function called `EVP_MD_CTX_cleanup` on return. Some
   // callers rely on this to avoid memory leaks.
