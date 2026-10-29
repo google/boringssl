@@ -53,6 +53,92 @@ constexpr char kRequireLeafSelfsigned[] = "require_leaf_selfsigned";
 
 }  // namespace
 
+TrustedSubtreeSet::TrustedSubtreeSet(
+    TrustedSubtreeSet::Token, std::vector<LogTrustedSubtrees> trusted_subtrees)
+    : trusted_subtrees_(std::move(trusted_subtrees)) {}
+
+// static
+std::shared_ptr<const TrustedSubtreeSet> TrustedSubtreeSet::Create(
+    std::vector<LogTrustedSubtrees> trusted_subtrees) {
+  if (!IsValid(trusted_subtrees)) {
+    return nullptr;
+  }
+  return std::make_shared<TrustedSubtreeSet>(Token(),
+                                             std::move(trusted_subtrees));
+}
+
+std::optional<TreeHashConstSpan> TrustedSubtreeSet::LookupSubtreeHash(
+    uint16_t log_number, Subtree target_range) const {
+  // The `trusted_subtrees_` is generally expected to have one, or rarely two,
+  // elements, so just using a simple find rather than a binary search.
+  auto subtrees_it =
+      std::find_if(trusted_subtrees_.begin(), trusted_subtrees_.end(),
+                   [log_number](const LogTrustedSubtrees &logsubtree) -> bool {
+                     return logsubtree.log_number == log_number;
+                   });
+  if (subtrees_it == trusted_subtrees_.end()) {
+    return std::nullopt;
+  }
+
+  const auto &subtrees = subtrees_it->trusted_subtrees;
+  auto it = std::lower_bound(
+      subtrees.begin(), subtrees.end(), target_range,
+      [](const TrustedSubtree &subtree, Subtree range) -> bool {
+        return subtree.range < range;
+      });
+  if (it == subtrees.end() || it->range != target_range) {
+    return std::nullopt;
+  }
+  return it->hash;
+}
+
+std::string TrustedSubtreeSet::DebugString() const {
+  if (trusted_subtrees_.empty()) {
+    return "none";
+  }
+  std::string result;
+
+  for (const auto &[log_number, subtrees] : trusted_subtrees_) {
+    if (!result.empty()) {
+      result += ", ";
+    }
+    result += "log " + std::to_string(log_number) + ":";
+    if (subtrees.empty()) {
+      result += "empty";
+    } else {
+      // Just showing the start of first range to end of last range is an
+      // oversimplification, but showing every single range is probably too
+      // verbose.
+      result += std::to_string(subtrees.size()) + " subtrees(" +
+                std::to_string(subtrees.front().range.start) + ".." +
+                std::to_string(subtrees.back().range.end) + ")";
+    }
+  }
+  return result;
+}
+
+// static
+bool TrustedSubtreeSet::IsValid(
+    const std::vector<LogTrustedSubtrees> &trusted_subtrees) {
+  uint16_t min_log_number = 0;
+  for (const auto &[log_number, subtrees] : trusted_subtrees) {
+    if (log_number <= min_log_number) {
+      // Log numbers must be greater than zero, and `trusted_subtrees` must be
+      // in sorted order without repeated log numbers.
+      return false;
+    }
+    min_log_number = log_number;
+    Subtree min_subtree;
+    for (const auto &subtree : subtrees) {
+      if (!subtree.range.IsValid() || subtree.range < min_subtree) {
+        return false;
+      }
+      min_subtree = subtree.range;
+    }
+  }
+  return true;
+}
+
 bool CertificateTrust::IsTrustAnchor() const {
   switch (type) {
     case CertificateTrustType::DISTRUSTED:
@@ -148,6 +234,11 @@ std::string CertificateTrust::ToDebugString() const {
     result += '+';
     result += kRequireLeafSelfsigned;
   }
+  if (trusted_subtrees != nullptr) {
+    result += "+trusted_subtrees(";
+    result += trusted_subtrees->DebugString();
+    result += ')';
+  }
   return result;
 }
 
@@ -223,31 +314,13 @@ MTCAnchor::MTCAnchor(Token, MtcSpecVersion spec_version,
       ca_id_(ca_id.begin(), ca_id.end()),
       ca_signature_algorithm_(ca_signature_algorithm),
       ca_key_(std::move(ca_key)),
-      trusted_subtrees_(std::move(log_trusted_subtrees)) {
+      trusted_subtrees_(
+          TrustedSubtreeSet::Create(std::move(log_trusted_subtrees))) {
   CreateSyntheticCert(ca_id);
 }
 
 bool MTCAnchor::IsValid() const {
-  if (!synthetic_cert_) {
-    return false;
-  }
-  uint16_t min_log_number = 0;
-  for (const auto &[log_number, subtrees] : trusted_subtrees_) {
-    if (log_number <= min_log_number) {
-      // Log numbers must be greater than zero, and `trusted_subtrees_` must be
-      // in sorted order without repeated log numbers.
-      return false;
-    }
-    min_log_number = log_number;
-    Subtree min_subtree;
-    for (const auto &subtree : subtrees) {
-      if (!subtree.range.IsValid() || subtree.range < min_subtree) {
-        return false;
-      }
-      min_subtree = subtree.range;
-    }
-  }
-  return true;
+  return synthetic_cert_ != nullptr && trusted_subtrees_ != nullptr;
 }
 
 der::Input MTCAnchor::NormalizedSubject() const {
@@ -257,6 +330,7 @@ der::Input MTCAnchor::NormalizedSubject() const {
 CertificateTrust MTCAnchor::CertTrust() const {
   CertificateTrust trust;
   trust.type = CertificateTrustType::TRUSTED_ANCHOR;
+  trust.trusted_subtrees = trusted_subtrees_;
   return trust;
 }
 
@@ -265,54 +339,18 @@ std::shared_ptr<const ParsedCertificate> MTCAnchor::AsCert() const {
 }
 
 std::optional<TreeHashConstSpan> MTCAnchor::SubtreeHash(
-    uint16_t log_number,
-    Subtree target_range) const {
-  // The `trusted_subtrees_` is generally expected to have one, or rarely two,
-  // elements, so just using a simple find rather than a binary search.
-  auto subtrees_it = std::find_if(
-      trusted_subtrees_.begin(), trusted_subtrees_.end(),
-      [log_number](const LogTrustedSubtrees &logsubtree) -> bool {
-        return logsubtree.log_number == log_number;
-      });
-  if (subtrees_it == trusted_subtrees_.end()) {
+    uint16_t log_number, Subtree target_range) const {
+  if (trusted_subtrees_ == nullptr) {
     return std::nullopt;
   }
-
-  const auto& subtrees = subtrees_it->trusted_subtrees;
-  auto it = std::lower_bound(
-      subtrees.begin(), subtrees.end(), target_range,
-      [](const TrustedSubtree &subtree, Subtree range) -> bool {
-        return subtree.range < range;
-      });
-  if (it == subtrees.end() || it->range != target_range) {
-    return std::nullopt;
-  }
-  return it->hash;
+  return trusted_subtrees_->LookupSubtreeHash(log_number, target_range);
 }
 
 std::string MTCAnchor::TrustedSubtreesDebugString() const {
-  if (trusted_subtrees_.empty()) {
-    return "none";
+  if (trusted_subtrees_ == nullptr) {
+    return "Invalid";
   }
-  std::string result;
-
-  for (const auto &[log_number, subtrees] : trusted_subtrees_) {
-    if (!result.empty()) {
-      result += ", ";
-    }
-    result += "log " + std::to_string(log_number) + ":";
-    if (subtrees.empty()) {
-      result += "empty";
-    } else {
-      // Just showing the start of first range to end of last range is an
-      // oversimplification, but showing every single range is probably too
-      // verbose.
-      result += std::to_string(subtrees.size()) + " subtrees(" +
-                std::to_string(subtrees.front().range.start) + ".." +
-                std::to_string(subtrees.back().range.end) + ")";
-    }
-  }
-  return result;
+  return trusted_subtrees_->DebugString();
 }
 
 void MTCAnchor::CreateSyntheticCert(bssl::Span<const uint8_t> ca_id) {
@@ -411,7 +449,7 @@ void TrustAnchor::OverrideCertTrust(CertificateTrust new_trust) {
   trust_ = new_trust;
 }
 
-CertificateTrust TrustAnchor::CertTrust() const { return trust_; }
+const CertificateTrust &TrustAnchor::CertTrust() const { return trust_; }
 
 std::shared_ptr<const MTCAnchor> TrustAnchor::MTCAnchor() const {
   return mtc_anchor_;

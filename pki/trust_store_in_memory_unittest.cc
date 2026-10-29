@@ -15,6 +15,8 @@
 #include "trust_store_in_memory.h"
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -278,6 +280,233 @@ TEST_F(TrustStoreInMemoryTest, ContainsMTCAnchor) {
   EXPECT_TRUE(in_memory2.ContainsMTCAnchor(anchor2.get()));
   EXPECT_TRUE(in_memory2.ContainsMTCAnchor(anchor2_dup.get()));
   EXPECT_FALSE(in_memory2.ContainsMTCAnchor(anchor1.get()));
+}
+
+class TrustedSubtreeSetTest : public testing::Test {
+ protected:
+  // Returns a TrustedSubtree for [start, end) whose hash is filled with
+  // `hash_byte`, so that lookup results can be told apart.
+  static TrustedSubtree MakeSubtree(uint64_t start, uint64_t end,
+                                    uint8_t hash_byte) {
+    TrustedSubtree subtree;
+    subtree.range = Subtree{start, end};
+    subtree.hash.fill(hash_byte);
+    return subtree;
+  }
+
+  // Returns the expected hash for a subtree made with MakeSubtree(...,
+  // `hash_byte`).
+  static std::vector<uint8_t> ExpectedHash(uint8_t hash_byte) {
+    return std::vector<uint8_t>(SHA256_DIGEST_LENGTH, hash_byte);
+  }
+
+  static std::optional<std::vector<uint8_t>> Lookup(
+      const TrustedSubtreeSet &set, uint16_t log_number, Subtree range) {
+    std::optional<TreeHashConstSpan> hash =
+        set.LookupSubtreeHash(log_number, range);
+    if (!hash) {
+      return std::nullopt;
+    }
+    return std::vector<uint8_t>(hash->begin(), hash->end());
+  }
+
+  static std::shared_ptr<const MTCAnchor> MakeMTCAnchor(
+      std::vector<LogTrustedSubtrees> subtrees) {
+    static const uint8_t kCaId[] = {42};  // relative OID of 42
+    // The ca_key doesn't need to be valid for these tests.
+    UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
+    return std::make_shared<MTCAnchor>(kCaId, SignatureAlgorithm::kMldsa44,
+                                       std::move(ca_spki), std::move(subtrees));
+  }
+};
+
+TEST_F(TrustedSubtreeSetTest, CreateValid) {
+  const TrustedSubtree a = MakeSubtree(0, 4, 1);
+  const TrustedSubtree b = MakeSubtree(0, 6, 2);
+  const TrustedSubtree c = MakeSubtree(8, 9, 3);
+
+  const struct {
+    const char *name;
+    std::vector<LogTrustedSubtrees> subtrees;
+  } kTests[] = {
+      {"Empty", {}},
+      {"OneLogNoSubtrees", {{1, {}}}},
+      {"OneLogOneSubtree", {{1, {a}}}},
+      {"OneLogSortedSubtrees", {{1, {a, b, c}}}},
+      {"MultipleSortedLogs", {{1, {a, c}}, {2, {b}}, {7, {a}}}},
+      {"MaxLogNumber", {{1, {a}}, {UINT16_MAX, {b}}}},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(t.name);
+    EXPECT_TRUE(TrustedSubtreeSet::Create(t.subtrees));
+  }
+}
+
+TEST_F(TrustedSubtreeSetTest, CreateInvalid) {
+  const TrustedSubtree a = MakeSubtree(0, 4, 1);
+  const TrustedSubtree b = MakeSubtree(0, 6, 2);
+  const TrustedSubtree c = MakeSubtree(8, 9, 3);
+  // Ragged left edge: 4 is only divisible by 4, but the subtree has 5 elements.
+  const TrustedSubtree ragged = MakeSubtree(4, 9, 4);
+  const TrustedSubtree backwards = MakeSubtree(9, 8, 5);
+
+  const struct {
+    const char *name;
+    std::vector<LogTrustedSubtrees> subtrees;
+  } kTests[] = {
+      {"LogNumberZero", {{0, {a}}}},
+      {"LogNumberZeroBeforeValid", {{0, {a}}, {1, {b}}}},
+      {"LogsOutOfOrder", {{2, {a}}, {1, {b}}}},
+      {"DuplicateLogNumber", {{1, {a}}, {1, {b}}}},
+      {"RaggedSubtree", {{1, {ragged}}}},
+      {"BackwardsSubtree", {{1, {backwards}}}},
+      {"InvalidSubtreeInSecondLog", {{1, {a}}, {2, {ragged}}}},
+      {"SubtreesOutOfOrder", {{1, {b, a, c}}}},
+      {"SubtreesOutOfOrderInSecondLog", {{1, {a}}, {2, {c, a}}}},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(t.name);
+    EXPECT_FALSE(TrustedSubtreeSet::Create(t.subtrees));
+  }
+}
+
+// Duplicate subtree ranges within a log are accepted as valid, because
+// validation only rejects ranges that sort strictly before their predecessor.
+TEST_F(TrustedSubtreeSetTest, CreateDuplicateRanges) {
+  std::vector<LogTrustedSubtrees> subtrees = {
+      {1, {MakeSubtree(0, 4, 1), MakeSubtree(0, 4, 2)}}};
+  EXPECT_TRUE(TrustedSubtreeSet::Create(subtrees));
+}
+
+TEST_F(TrustedSubtreeSetTest, LookupSubtreeHash) {
+  std::shared_ptr<const TrustedSubtreeSet> set = TrustedSubtreeSet::Create({
+      {1, {MakeSubtree(0, 4, 1), MakeSubtree(0, 8, 2), MakeSubtree(8, 12, 3)}},
+      {3, {MakeSubtree(0, 4, 4), MakeSubtree(16, 32, 5)}},
+  });
+  ASSERT_TRUE(set);
+
+  // First, middle and last subtree in the first log.
+  EXPECT_EQ(Lookup(*set, 1, Subtree{0, 4}), ExpectedHash(1));
+  EXPECT_EQ(Lookup(*set, 1, Subtree{0, 8}), ExpectedHash(2));
+  EXPECT_EQ(Lookup(*set, 1, Subtree{8, 12}), ExpectedHash(3));
+
+  // The same range in a different log has a different hash.
+  EXPECT_EQ(Lookup(*set, 3, Subtree{0, 4}), ExpectedHash(4));
+  EXPECT_EQ(Lookup(*set, 3, Subtree{16, 32}), ExpectedHash(5));
+
+  // Unknown log numbers, including one between two known logs.
+  EXPECT_FALSE(Lookup(*set, 0, Subtree{0, 4}));
+  EXPECT_FALSE(Lookup(*set, 2, Subtree{0, 4}));
+  EXPECT_FALSE(Lookup(*set, 4, Subtree{0, 4}));
+
+  // Ranges not in the log: before the first, between two existing ranges,
+  // sharing only a start or end with an existing range, after the last, and a
+  // range present only in the other log.
+  EXPECT_FALSE(Lookup(*set, 3, Subtree{0, 2}));
+  EXPECT_FALSE(Lookup(*set, 1, Subtree{0, 6}));
+  EXPECT_FALSE(Lookup(*set, 1, Subtree{4, 8}));
+  EXPECT_FALSE(Lookup(*set, 1, Subtree{8, 10}));
+  EXPECT_FALSE(Lookup(*set, 1, Subtree{12, 16}));
+  EXPECT_FALSE(Lookup(*set, 1, Subtree{16, 32}));
+}
+
+TEST_F(TrustedSubtreeSetTest, LookupSubtreeHashEmpty) {
+  std::shared_ptr<const TrustedSubtreeSet> empty =
+      TrustedSubtreeSet::Create({});
+  ASSERT_TRUE(empty);
+  EXPECT_FALSE(Lookup(*empty, 1, Subtree{0, 4}));
+
+  std::shared_ptr<const TrustedSubtreeSet> empty_log =
+      TrustedSubtreeSet::Create({{1, {}}});
+  ASSERT_TRUE(empty_log);
+  EXPECT_FALSE(Lookup(*empty_log, 1, Subtree{0, 4}));
+}
+
+TEST_F(TrustedSubtreeSetTest, DebugString) {
+  std::shared_ptr<const TrustedSubtreeSet> set = TrustedSubtreeSet::Create({});
+  ASSERT_TRUE(set);
+  EXPECT_EQ(set->DebugString(), "none");
+
+  set = TrustedSubtreeSet::Create({{1, {}}});
+  ASSERT_TRUE(set);
+  EXPECT_EQ(set->DebugString(), "log 1:empty");
+
+  set = TrustedSubtreeSet::Create({
+      {1, {MakeSubtree(0, 4, 1), MakeSubtree(8, 12, 2)}},
+      {2, {}},
+      {3, {MakeSubtree(16, 32, 3)}},
+  });
+  ASSERT_TRUE(set);
+  EXPECT_EQ(set->DebugString(),
+            "log 1:2 subtrees(0..12), log 2:empty, log 3:1 subtrees(16..32)");
+}
+
+TEST_F(TrustedSubtreeSetTest, MTCAnchorCertTrust) {
+  std::shared_ptr<const MTCAnchor> anchor =
+      MakeMTCAnchor({{1, {MakeSubtree(0, 4, 1), MakeSubtree(8, 12, 2)}}});
+  ASSERT_TRUE(anchor->IsValid());
+
+  CertificateTrust trust = anchor->CertTrust();
+  EXPECT_TRUE(trust.IsTrustAnchor());
+  ASSERT_TRUE(trust.trusted_subtrees);
+  // CertTrust() shares the MTCAnchor's TrustedSubtreeSet rather than copying.
+  EXPECT_EQ(trust.trusted_subtrees.get(),
+            anchor->CertTrust().trusted_subtrees.get());
+
+  // The CertificateTrust's subtrees agree with the MTCAnchor.
+  for (Subtree range : {Subtree{0, 4}, Subtree{8, 12}, Subtree{4, 8}}) {
+    SCOPED_TRACE(std::to_string(range.start) + ".." +
+                 std::to_string(range.end));
+    std::optional<std::vector<uint8_t>> from_trust =
+        Lookup(*trust.trusted_subtrees, 1, range);
+    std::optional<TreeHashConstSpan> from_anchor =
+        anchor->SubtreeHash(1, range);
+    ASSERT_EQ(from_trust.has_value(), from_anchor.has_value());
+    if (from_trust) {
+      EXPECT_EQ(*from_trust,
+                std::vector<uint8_t>(from_anchor->begin(), from_anchor->end()));
+    }
+  }
+
+  EXPECT_EQ(trust.ToDebugString(),
+            "TRUSTED_ANCHOR+trusted_subtrees(log 1:2 subtrees(0..12))");
+}
+
+TEST_F(TrustedSubtreeSetTest, MTCAnchorCertTrustNoSubtrees) {
+  std::shared_ptr<const MTCAnchor> anchor = MakeMTCAnchor({});
+  ASSERT_TRUE(anchor->IsValid());
+
+  CertificateTrust trust = anchor->CertTrust();
+  ASSERT_TRUE(trust.trusted_subtrees);
+  EXPECT_EQ(trust.ToDebugString(), "TRUSTED_ANCHOR+trusted_subtrees(none)");
+}
+
+TEST_F(TrustedSubtreeSetTest, NonMTCCertTrust) {
+  for (const CertificateTrust &trust :
+       {CertificateTrust::ForTrustAnchor(),
+        CertificateTrust::ForTrustAnchorOrLeaf(),
+        CertificateTrust::ForTrustedLeaf(), CertificateTrust::ForUnspecified(),
+        CertificateTrust::ForDistrusted()}) {
+    SCOPED_TRACE(trust.ToDebugString());
+    EXPECT_FALSE(trust.trusted_subtrees);
+    EXPECT_EQ(trust.ToDebugString().find("trusted_subtrees"),
+              std::string::npos);
+  }
+}
+
+// An MTCAnchor constructed directly with invalid subtrees reports itself as
+// invalid, and lookups through it fail rather than crashing.
+TEST_F(TrustedSubtreeSetTest, MTCAnchorInvalidSubtrees) {
+  std::shared_ptr<const MTCAnchor> anchor =
+      MakeMTCAnchor({{1, {MakeSubtree(8, 12, 1), MakeSubtree(0, 4, 2)}}});
+  EXPECT_FALSE(anchor->IsValid());
+  EXPECT_FALSE(anchor->SubtreeHash(1, Subtree{0, 4}));
+  EXPECT_FALSE(anchor->SubtreeHash(1, Subtree{8, 12}));
+  EXPECT_EQ(anchor->TrustedSubtreesDebugString(), "Invalid");
+
+  CertificateTrust trust = anchor->CertTrust();
+  EXPECT_FALSE(trust.trusted_subtrees);
+  EXPECT_EQ(trust.ToDebugString(), "TRUSTED_ANCHOR");
 }
 
 }  // namespace
