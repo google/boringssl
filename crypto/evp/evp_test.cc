@@ -1517,7 +1517,10 @@ TEST(EVPTest, MLDSATestVectors) {
   RunEVPTests("crypto/evp/test/mldsa_tests.txt");
 }
 
-TEST(EVPTest, SLHDSATestVectors) {
+// SLH-DSA is not fast. The combination of unoptimized builds and some Chromium
+// Windows 10 builder seems to cause the test to timeout. See
+// https://crbug.com/579259376.
+TEST(EVPTest, DISABLE_IF_NOT_OPTIMIZED(SLHDSATestVectors)) {
   RunEVPTests("crypto/evp/test/slhdsa_tests.txt");
 }
 

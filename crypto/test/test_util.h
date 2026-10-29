@@ -102,5 +102,13 @@ bssl::UniquePtr<BIGNUM> HexToBIGNUM(const char *hex);
 // BIGNUMToHex returns `bn` as a hexadecimal, big-endian, unsigned integer.
 std::string BIGNUMToHex(const BIGNUM *bn);
 
+// DISABLE_IF_NOT_OPTIMIZED disables a test in debug builds. Use by wrapping the
+// test case name, e.g. `TEST(TestSuite, DISABLE_IF_NOT_OPTIMIZED(TestName))`.
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(__OPTIMIZE__)
+#define DISABLE_IF_NOT_OPTIMIZED(t) DISABLED_##t
+#else
+#define DISABLE_IF_NOT_OPTIMIZED(t) t
+#endif
+
 
 #endif  // OPENSSL_HEADER_CRYPTO_TEST_TEST_UTIL_H

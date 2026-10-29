@@ -347,12 +347,6 @@ TEST(KeccakTest, CSHAKE) {
 // Unoptimized builds are much slower, and iterative tests run Keccak many
 // times. Disable them in unoptimized builds for now.
 // https://crbug.com/479850443
-#if (defined(__GNUC__) || defined(__clang__)) && !defined(__OPTIMIZE__)
-#define DISABLE_IF_NOT_OPTIMIZED(t) DISABLED_##t
-#else
-#define DISABLE_IF_NOT_OPTIMIZED(t) t
-#endif
-
 TEST(KeccakTest, DISABLE_IF_NOT_OPTIMIZED(MultiPass)) {
   // Example from keccak_tests.txt with an input long enough to be interesting.
   uint8_t input[500] = {

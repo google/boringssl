@@ -376,15 +376,6 @@ TEST(MLKEMTest, NistDecap1024TestVectors) {
                 MLKEMNistDecapFileTest<MLKEM1024Traits>);
 }
 
-// Unoptimized builds are much slower, and iterative tests run ML-KEM many
-// times. Disable them in unoptimized builds for now.
-// https://crbug.com/479850443
-#if (defined(__GNUC__) || defined(__clang__)) && !defined(__OPTIMIZE__)
-#define DISABLE_IF_NOT_OPTIMIZED(t) DISABLED_##t
-#else
-#define DISABLE_IF_NOT_OPTIMIZED(t) t
-#endif
-
 template <typename Traits>
 void IteratedTest(uint8_t out[32]) {
   BORINGSSL_keccak_st generate_st;
@@ -430,6 +421,9 @@ void IteratedTest(uint8_t out[32]) {
   BORINGSSL_keccak_squeeze(&results_st, out, 32);
 }
 
+// Unoptimized builds are much slower, and iterative tests run ML-KEM many
+// times. Disable them in unoptimized builds for now.
+// https://crbug.com/479850443
 TEST(MLKEMTest, DISABLE_IF_NOT_OPTIMIZED(Iterate768)) {
   // The structure of this test is taken from
   // https://github.com/C2SP/CCTV/blob/main/ML-KEM/README.md?ref=words.filippo.io#accumulated-pq-crystals-vectors
@@ -445,7 +439,9 @@ TEST(MLKEMTest, DISABLE_IF_NOT_OPTIMIZED(Iterate768)) {
   EXPECT_EQ(Bytes(result), Bytes(kExpected));
 }
 
-
+// Unoptimized builds are much slower, and iterative tests run ML-KEM many
+// times. Disable them in unoptimized builds for now.
+// https://crbug.com/479850443
 TEST(MLKEMTest, DISABLE_IF_NOT_OPTIMIZED(Iterate1024)) {
   // The structure of this test is taken from
   // https://github.com/C2SP/CCTV/blob/main/ML-KEM/README.md?ref=words.filippo.io#accumulated-pq-crystals-vectors
