@@ -169,7 +169,8 @@ OPENSSL_EXPORT int BN_bn2cbb_padded(CBB *out, size_t len, const BIGNUM *in);
 
 // BN_bn2hex returns an allocated string that contains a NUL-terminated, hex
 // representation of `bn`. If `bn` is negative, the first char in the resulting
-// string will be '-'. Returns NULL on allocation failure.
+// string will be '-'. Returns NULL on allocation failure. The resulting string
+// must be freed with `OPENSSL_free`.
 OPENSSL_EXPORT char *BN_bn2hex(const BIGNUM *bn);
 
 // BN_hex2bn parses the leading hex number from `in`, which may be proceeded by
@@ -182,7 +183,8 @@ OPENSSL_EXPORT int BN_hex2bn(BIGNUM **outp, const char *in);
 
 // BN_bn2dec returns an allocated string that contains a NUL-terminated,
 // decimal representation of `bn`. If `bn` is negative, the first char in the
-// resulting string will be '-'. Returns NULL on allocation failure.
+// resulting string will be '-'. Returns NULL on allocation failure. The
+// resulting string must be freed with `OPENSSL_free`.
 //
 // Converting an arbitrarily large integer to decimal is quadratic in the bit
 // length of `a`. This function assumes the caller has capped the input within
