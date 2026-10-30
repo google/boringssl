@@ -316,6 +316,25 @@ luci.cq_tryjob_verifier(
     ],
 )
 
+# Builds Chromium with the CL applied to third_party/boringssl/src (on top of
+# BoringSSL main, not the DEPS pin) to catch roll breakage before the
+# autoroller. Listed builders are ones that often break in BoringSSL Chromium
+# rolls. These are expected to take much longer to run than BoringSSL's own
+# builders, so use judiciously.
+[luci.cq_tryjob_verifier(
+    cq_group = "main-cq",
+    builder = "chromium:try/" + b,
+    owner_whitelist = ["project-boringssl-tryjob-access"],
+    includable_only = True,
+) for b in [
+    "android_compile_dbg",
+    "android-arm64-rel",
+    "linux-libfuzzer-asan-rel",
+    "linux-rel",
+    "mac_chromium_compile_dbg_ng",
+    "win_chromium_compile_dbg_ng",
+]]
+
 def compile_only(properties):
     compile_properties = dict(properties)
     compile_properties["run_unit_tests"] = False
