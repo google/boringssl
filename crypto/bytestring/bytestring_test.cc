@@ -1762,6 +1762,14 @@ TEST(CBBTest, FlushASN1SetOf) {
   for (const auto &t : kValidInputs) {
     SCOPED_TRACE(Bytes(t.in));
 
+    // The input passes the ordering check exactly when it is already sorted,
+    // and the output always passes.
+    CBS cbs;
+    CBS_init(&cbs, t.in.data(), t.in.size());
+    EXPECT_EQ(t.in == t.out, !!CBS_is_valid_asn1_set_of(&cbs));
+    CBS_init(&cbs, t.out.data(), t.out.size());
+    EXPECT_TRUE(CBS_is_valid_asn1_set_of(&cbs));
+
     ScopedCBB cbb;
     CBB child;
     ASSERT_TRUE(CBB_init(cbb.get(), 0));
@@ -1788,6 +1796,10 @@ TEST(CBBTest, FlushASN1SetOf) {
   for (const auto &t : kInvalidInputs) {
     SCOPED_TRACE(Bytes(t));
 
+    CBS cbs;
+    CBS_init(&cbs, t.data(), t.size());
+    EXPECT_FALSE(CBS_is_valid_asn1_set_of(&cbs));
+
     ScopedCBB cbb;
     CBB child;
     ASSERT_TRUE(CBB_init(cbb.get(), 0));
@@ -1796,6 +1808,51 @@ TEST(CBBTest, FlushASN1SetOf) {
     EXPECT_FALSE(CBB_flush_asn1_set_of(&child));
     EXPECT_TRUE(ErrorsAreAndClear(
         {{ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED}}));
+  }
+}
+
+TEST(CBSTest, IsValidASN1SetOf) {
+  const struct {
+    std::vector<uint8_t> in;
+    bool ok;
+  } kTests[] = {
+      // No elements.
+      {{}, true},
+      // One element.
+      {{0x30, 0x00}, true},
+      // Duplicates are allowed.
+      {{0x30, 0x00, 0x30, 0x00}, true},
+      // Elements are ordered by tag, then by contents.
+      {{0x01, 0x00, 0x30, 0x00}, true},
+      {{0x30, 0x00, 0x01, 0x00}, false},
+      {{0x30, 0x01, 0x00, 0x30, 0x01, 0x01}, true},
+      {{0x30, 0x01, 0x01, 0x30, 0x01, 0x00}, false},
+      // Comparison is over the whole encoding, so the length byte matters.
+      {{0x30, 0x00, 0x30, 0x01, 0x00}, true},
+      {{0x30, 0x01, 0x00, 0x30, 0x00}, false},
+      // Each adjacent pair must be ordered.
+      {{0x01, 0x00, 0x02, 0x00, 0x30, 0x00}, true},
+      {{0x02, 0x00, 0x01, 0x00, 0x30, 0x00}, false},
+      {{0x01, 0x00, 0x30, 0x00, 0x02, 0x00}, false},
+      // Element contents are not parsed, and types need not match.
+      {{0x04, 0x01, 0xff}, true},
+      {{0x02, 0x01, 0x00, 0x04, 0x00}, true},
+      // Truncated elements.
+      {{0x30}, false},
+      {{0x30, 0x01}, false},
+      {{0x30, 0x00, 0x30, 0x01}, false},
+      // Indefinite length.
+      {{0x30, 0x80, 0x00, 0x00}, false},
+      // Non-minimal length.
+      {{0x30, 0x81, 0x01, 0x00}, false},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(Bytes(t.in));
+    CBS cbs;
+    CBS_init(&cbs, t.in.data(), t.in.size());
+    EXPECT_EQ(t.ok, CBS_is_valid_asn1_set_of(&cbs) == 1);
+    // The input is not consumed.
+    EXPECT_EQ(t.in.size(), CBS_len(&cbs));
   }
 }
 

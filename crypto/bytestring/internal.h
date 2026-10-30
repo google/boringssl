@@ -129,6 +129,11 @@ inline int I2DFromCBB(size_t initial_capacity, uint8_t **outp, CBBFunc func) {
 // returns one on success and zero on error.
 int cbb_add_decimal_ascii(CBB *out, uint64_t v);
 
+// cbs_asn1_set_of_less returns true iff `a` should be sorted before `b`
+// according to the DER rules for encoding an ASN.1 SET OF, of which `a` and `b`
+// are members.
+bool cbs_asn1_set_of_less(CBS a, CBS b);
+
 BSSL_NAMESPACE_END
 
 #endif  // OPENSSL_HEADER_CRYPTO_BYTESTRING_INTERNAL_H

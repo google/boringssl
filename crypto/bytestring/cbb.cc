@@ -750,19 +750,7 @@ int CBB_flush_asn1_set_of(CBB *cbb) {
       return 0;
     }
   }
-  std::sort(children.begin(), children.end(), [](CBS a, CBS b) -> bool {
-    // See X.690, section 11.6 for the ordering. They are sorted in ascending
-    // order by their DER encoding. First compare the common prefix.
-    size_t a_len = CBS_len(&a), b_len = CBS_len(&b);
-    int cmp =
-        OPENSSL_memcmp(CBS_data(&a), CBS_data(&b), std::min(a_len, b_len));
-    if (cmp != 0) {
-      return cmp < 0;
-    }
-    // If one is a prefix of the other, the shorter one sorts first. (They're
-    // actually always equal length. DER encodings are prefix-free.)
-    return a_len < b_len;
-  });
+  std::sort(children.begin(), children.end(), bssl::cbs_asn1_set_of_less);
 
   // Write the contents back in the new order.
   uint8_t *out = const_cast<uint8_t *>(CBB_data(cbb));

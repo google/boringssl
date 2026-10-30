@@ -20,6 +20,8 @@
 #include <ctype.h>
 #include <string.h>
 
+#include <algorithm>
+
 #include "../asn1/internal.h"
 #include "../internal.h"
 #include "internal.h"
@@ -727,6 +729,40 @@ int CBS_is_valid_asn1_integer(const CBS *cbs, int *out_is_negative) {
 int CBS_is_unsigned_asn1_integer(const CBS *cbs) {
   int is_negative;
   return CBS_is_valid_asn1_integer(cbs, &is_negative) && !is_negative;
+}
+
+bool bssl::cbs_asn1_set_of_less(CBS a, CBS b) {
+  // See X.690, section 11.6 for the ordering. They are sorted in ascending
+  // order by their DER encoding. First compare the common prefix.
+  size_t a_len = CBS_len(&a), b_len = CBS_len(&b);
+  int cmp = OPENSSL_memcmp(CBS_data(&a), CBS_data(&b), std::min(a_len, b_len));
+  if (cmp != 0) {
+    return cmp < 0;
+  }
+  // If one is a prefix of the other, the shorter one sorts first. (They're
+  // actually always equal length. DER encodings are prefix-free.)
+  return a_len < b_len;
+}
+
+int CBS_is_valid_asn1_set_of(const CBS *cbs) {
+  CBS copy = *cbs;
+  if (CBS_len(&copy) == 0) {
+    return 1;
+  }
+  CBS prev, cur;
+  if (!CBS_get_any_asn1_element(&copy, &prev, nullptr, nullptr)) {
+    return 0;
+  }
+  while (CBS_len(&copy) != 0) {
+    if (!CBS_get_any_asn1_element(&copy, &cur, nullptr, nullptr) ||
+        // Allow duplicate entries; only reject if the current member should go
+        // strictly before the previous.
+        cbs_asn1_set_of_less(cur, prev)) {
+      return 0;
+    }
+    prev = cur;
+  }
+  return 1;
 }
 
 int CBS_is_valid_asn1_oid(const CBS *cbs) {
