@@ -189,7 +189,8 @@ int int_x509_param_set1(char **pdest, size_t *pdestlen, const char *src,
 
 const X509_VERIFY_PARAM kDefaultParam = {
     /*check_time=*/0,
-    /*flags=*/0,
+    /*flags=*/X509_V_FLAG_ALLOW_SHA1,  // TODO(crbug.com/461736992): remove once
+                                       // no longer needed.
     /*purpose=*/0,
     /*trust=*/0,
     /*depth=*/100,

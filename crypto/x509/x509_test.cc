@@ -4586,6 +4586,93 @@ TEST_P(X509VerifyTest, AKIDAndSKIDMatch) {
                    }));
 }
 
+TEST_P(X509VerifyTest, SHA1Signatures) {
+  // This is currently enabled by default, so we disable it to test the
+  // rejection cases.
+  auto disallow_sha1 = [](X509_STORE_CTX *ctx) {
+    X509_VERIFY_PARAM_clear_flags(X509_STORE_CTX_get0_param(ctx),
+                                  X509_V_FLAG_ALLOW_SHA1);
+  };
+
+  for (const char *key_pem : {kP256Key, kRSAKey}) {
+    SCOPED_TRACE(key_pem == kP256Key ? "P-256" : "RSA");
+    UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(key_pem);
+    ASSERT_TRUE(key);
+
+    auto make_cert = [&](const char *issuer, const char *subject, bool is_ca,
+                         const EVP_MD *md) -> UniquePtr<X509> {
+      UniquePtr<X509> cert = MakeTestCert(issuer, subject, key.get(), is_ca);
+      if (cert == nullptr || !X509_sign(cert.get(), key.get(), md)) {
+        return nullptr;
+      }
+      return cert;
+    };
+
+    UniquePtr<X509> root = make_cert("Root", "Root", true, EVP_sha256());
+    UniquePtr<X509> root_sha1 = make_cert("Root", "Root", true, EVP_sha1());
+    UniquePtr<X509> intermediate =
+        make_cert("Root", "Intermediate", true, EVP_sha256());
+    UniquePtr<X509> intermediate_sha1 =
+        make_cert("Root", "Intermediate", true, EVP_sha1());
+    UniquePtr<X509> leaf =
+        make_cert("Intermediate", "Leaf", false, EVP_sha256());
+    UniquePtr<X509> leaf_sha1 =
+        make_cert("Intermediate", "Leaf", false, EVP_sha1());
+
+    ASSERT_THAT(root, testing::NotNull());
+    ASSERT_THAT(root_sha1, testing::NotNull());
+    ASSERT_THAT(intermediate, testing::NotNull());
+    ASSERT_THAT(intermediate_sha1, testing::NotNull());
+    ASSERT_THAT(leaf, testing::NotNull());
+    ASSERT_THAT(leaf_sha1, testing::NotNull());
+
+    // Control: an all-SHA-256 chain is unaffected by the flag.
+    EXPECT_EQ(X509_V_OK,
+              Verify(leaf.get(), {root.get()}, {intermediate.get()}, {}));
+    EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {root.get()}, {intermediate.get()},
+                                {}, /*flags=*/0, disallow_sha1));
+
+    // By default, SHA-1 signatures are currently still accepted.
+    // TODO(crbug.com/461736992): Flip these when the default changes.
+    EXPECT_EQ(X509_V_OK,
+              Verify(leaf_sha1.get(), {root.get()}, {intermediate.get()}, {}));
+    EXPECT_EQ(X509_V_OK,
+              Verify(leaf.get(), {root.get()}, {intermediate_sha1.get()}, {}));
+
+    // Setting the flag explicitly accepts SHA-1.
+    EXPECT_EQ(X509_V_OK,
+              Verify(leaf_sha1.get(), {root.get()}, {intermediate.get()}, {},
+                     X509_V_FLAG_ALLOW_SHA1));
+
+    // Without the flag, SHA-1 in the leaf or intermediate is rejected.
+    EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+              Verify(leaf_sha1.get(), {root.get()}, {intermediate.get()}, {},
+                     /*flags=*/0, disallow_sha1));
+    EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+              Verify(leaf.get(), {root.get()}, {intermediate_sha1.get()}, {},
+                     /*flags=*/0, disallow_sha1));
+
+    // The self-signature on a trust anchor is never checked, so a SHA-1
+    // self-signed root is still accepted.
+    EXPECT_EQ(X509_V_OK,
+              Verify(leaf.get(), {root_sha1.get()}, {intermediate.get()}, {},
+                     /*flags=*/0, disallow_sha1));
+
+    // CRLs signed with SHA-1 follow the same rule.
+    UniquePtr<X509_CRL> crl_sha1 = MakeTestCRL("Intermediate", -1, 1);
+    ASSERT_THAT(crl_sha1, testing::NotNull());
+    crl_sha1 = SignAndReencodeCRL(crl_sha1.get(), key.get(), EVP_sha1());
+    ASSERT_THAT(crl_sha1, testing::NotNull());
+    EXPECT_EQ(
+        X509_V_OK,
+        Verify(leaf.get(), {root.get()}, {intermediate.get()}, {crl_sha1.get()},
+               X509_V_FLAG_CRL_CHECK | X509_V_FLAG_ALLOW_SHA1));
+    EXPECT_EQ(X509_V_ERR_CRL_SIGNATURE_FAILURE,
+              Verify(leaf.get(), {root.get()}, {intermediate.get()},
+                     {crl_sha1.get()}, X509_V_FLAG_CRL_CHECK, disallow_sha1));
+  }
+}
+
 // kExplicitDefaultVersionPEM is an X.509v1 certificate with the version number
 // encoded explicitly, rather than omitted as required by DER.
 const char kExplicitDefaultVersionPEM[] = R"(

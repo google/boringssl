@@ -101,6 +101,19 @@ int call_verify_cb_at_depth(int ok, X509_STORE_CTX *ctx, int depth) {
   return call_verify_cb(ok, ctx);
 }
 
+static bool sig_nid_allowed(const X509_STORE_CTX *ctx, int sig_nid) {
+  // TODO(crbug.com/579959247): This check duplicates some logic from
+  // `x509_digest_verify_init` and makes assumptions about what algorithms it
+  // supports. Unify this.
+  int digest_nid, pkey_nid;
+  if (OBJ_find_sigid_algs(sig_nid, &digest_nid, &pkey_nid) &&
+      digest_nid == NID_sha1 &&
+      (ctx->param->flags & X509_V_FLAG_ALLOW_SHA1) == 0) {
+    return false;
+  }
+  return true;
+}
+
 // Given a certificate try and find an exact match in the store
 UniquePtr<X509> lookup_cert_match(X509_STORE_CTX *ctx, const X509 *x) {
   if (ctx->trusted_stack != nullptr) {
@@ -726,7 +739,8 @@ int check_crl(X509_STORE_CTX *ctx, const CRLInfo &crl_info, int depth) {
     }
   } else {
     // Verify CRL signature
-    if (X509_CRL_verify(crl, ikey) <= 0) {
+    if (!sig_nid_allowed(ctx, X509_CRL_get_signature_nid(crl)) ||
+        X509_CRL_verify(crl, ikey) <= 0) {
       ctx->error = X509_V_ERR_CRL_SIGNATURE_FAILURE;
       if (!call_verify_cb_at_depth(0, ctx, depth)) {
         return 0;
@@ -873,7 +887,8 @@ int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
       x509_is_merkle_tree_ca(issuer)) {
     ret = x509_verify_mtc(x509, pkey, issuer);
   } else {
-    ret = X509_verify(x509, pkey);
+    ret = sig_nid_allowed(ctx, X509_get_signature_nid(x509)) &&
+          X509_verify(x509, pkey);
   }
   return ret ? X509_V_OK : X509_V_ERR_CERT_SIGNATURE_FAILURE;
 }
