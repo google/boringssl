@@ -8,11 +8,12 @@ This document collects links to useful references. It is currently incomplete, b
 
 * [AES (FIPS 197)](https://csrc.nist.gov/pubs/fips/197/final)
 * [GCM (SP 800-38D)](https://csrc.nist.gov/pubs/sp/800/38/d/final)
-* [ChaCha20-Poly1305 (RFC 8439)](https://www.rfc-editor.org/rfc/rfc8439.html)
-* [AES-GCM-SIV (RFC 8452)](https://www.rfc-editor.org/rfc/rfc8452.html)
-* [RSA (PKCS #1, RFC 8017)](https://www.rfc-editor.org/rfc/rfc8017.html)
-* [X25519 (RFC 7748)](https://www.rfc-editor.org/rfc/rfc7748.html)
-* [Ed25519 (RFC 8032)](https://www.rfc-editor.org/rfc/rfc8032.html)
+* [ChaCha20-Poly1305 (RFC 8439)](https://www.rfc-editor.org/info/rfc8439)
+* [AES-GCM-SIV (RFC 8452)](https://www.rfc-editor.org/info/rfc8452)
+* [SHA-1 and SHA-2 (FIPS 180-4)](https://csrc.nist.gov/pubs/fips/180-4/upd1/final)
+* [RSA (PKCS #1, RFC 8017)](https://www.rfc-editor.org/info/rfc8017)
+* [X25519 (RFC 7748)](https://www.rfc-editor.org/info/rfc7748)
+* [Ed25519 (RFC 8032)](https://www.rfc-editor.org/info/rfc8032)
 * [ML-KEM (FIPS 203)](https://csrc.nist.gov/pubs/fips/203/final)
 * [ML-DSA (FIPS 204)](https://csrc.nist.gov/pubs/fips/204/final)
 * [SLH-DSA (FIPS 205)](https://csrc.nist.gov/pubs/fips/205/final)
@@ -25,48 +26,49 @@ This document collects links to useful references. It is currently incomplete, b
 
 ## X.509 and Related Formats
 
-* [PKIX (RFC 5280)](https://www.rfc-editor.org/rfc/rfc5280.html)
-* [New ASN.1 Modules for PKIX (RFC 5912)](https://www.rfc-editor.org/rfc/rfc5912.html)
+* [PKIX (RFC 5280)](https://www.rfc-editor.org/info/rfc5280)
+* [New ASN.1 Modules for PKIX (RFC 5912)](https://www.rfc-editor.org/info/rfc5912)
 * [ITU X.509](https://www.itu.int/rec/t-rec-x.509)
-* [Service Identity in TLS (RFC 9525)](https://www.rfc-editor.org/rfc/rfc9525.html)
+* [Service Identity in TLS (RFC 9525)](https://www.rfc-editor.org/info/rfc9525)
    * Specifies how to match subject alternative names against reference identifiers
-* [PrivateKeyInfo (PKCS #8, RFC 5208)](https://www.rfc-editor.org/rfc/rfc5208.html)
-* [PKCS #7 (RFC 2315)](https://www.rfc-editor.org/rfc/rfc2315.html)
+* [PrivateKeyInfo (PKCS #8, RFC 5208)](https://www.rfc-editor.org/info/rfc5208)
+* [PKCS #7 (RFC 2315)](https://www.rfc-editor.org/info/rfc2315)
    * Called CMS 1.5, but this "CMS" now refers to the new version. PKCS #7 is the predecessor
-* [Cryptographic Message Syntax (RFC 5662)](https://www.rfc-editor.org/rfc/rfc5652.html)
-* [PKCS #12 (RFC 7292)](https://www.rfc-editor.org/rfc/rfc7292.html)
-* [Algorithm Identifiers (RFC 3279)](https://www.rfc-editor.org/rfc/rfc3279.html)
+* [Cryptographic Message Syntax (RFC 5662)](https://www.rfc-editor.org/info/rfc5652)
+* [PKCS #12 (RFC 7292)](https://www.rfc-editor.org/info/rfc7292)
+* [Algorithm Identifiers (RFC 3279)](https://www.rfc-editor.org/info/rfc3279)
    * AlgorithmIdentifiers for pre-SHA-2 hashes
    * SPKIs for dsa, rsaEncryption, ecPublicKey
    * Corresponding signature algorithms with pre-SHA-2 hashes
-* [Additional Algorithm Identifiers for RSA (RFC 4055)](https://www.rfc-editor.org/rfc/rfc4055.html)
+* [Additional Algorithm Identifiers for RSA (RFC 4055)](https://www.rfc-editor.org/info/rfc4055)
    * PKCS#1 v1.5 with SHA-2 in X.509
    * RSA-PSS in X.509
-* [Algorithm Identifiers for Ed25519 and X25519 (RFC 8410)](https://www.rfc-editor.org/rfc/rfc8410.html)
-* [Algorithm Identifiers for ML-DSA (RFC 9881)](https://www.rfc-editor.org/rfc/rfc9881.html)
-* [Algorithm Identifiers for ML-KEM (RFC 9935)](https://www.rfc-editor.org/rfc/rfc9935.html)
+* [Algorithm Identifiers for Ed25519 and X25519 (RFC 8410)](https://www.rfc-editor.org/info/rfc8410)
+* [Algorithm Identifiers for ML-DSA (RFC 9881)](https://www.rfc-editor.org/info/rfc9881)
+* [Algorithm Identifiers for ML-KEM (RFC 9935)](https://www.rfc-editor.org/info/rfc9935)
+* [Algorithm Identifiers for SLH-DSA (RFC 9909)](https://www.rfc-editor.org/info/rfc9909/)
 
 ## TLS
 
 ### Protocol Versions
 
-* [TLS 1.3 (RFC 8446)](https://www.rfc-editor.org/rfc/rfc8446)
-* [TLS 1.2 (RFC 5246)](https://www.rfc-editor.org/rfc/rfc5246)
-* [TLS 1.1 (RFC 4346)](https://www.rfc-editor.org/rfc/rfc4346)
-* [TLS 1.0 (RFC 2246)](https://www.rfc-editor.org/rfc/rfc2246)
-* [DTLS 1.3 (RFC 9147)](https://www.rfc-editor.org/rfc/rfc9147.html)
-* [DTLS 1.2 (RFC 6347)](https://www.rfc-editor.org/rfc/rfc6347)
-* [DTLS 1.0 (RFC 4347)](https://www.rfc-editor.org/rfc/rfc4347)
+* [TLS 1.3 (RFC 9846)](https://www.rfc-editor.org/info/rfc9846)
+* [TLS 1.2 (RFC 5246)](https://www.rfc-editor.org/info/rfc5246)
+* [TLS 1.1 (RFC 4346)](https://www.rfc-editor.org/info/rfc4346)
+* [TLS 1.0 (RFC 2246)](https://www.rfc-editor.org/info/rfc2246)
+* [DTLS 1.3 (RFC 9147)](https://www.rfc-editor.org/info/rfc9147)
+* [DTLS 1.2 (RFC 6347)](https://www.rfc-editor.org/info/rfc6347)
+* [DTLS 1.0 (RFC 4347)](https://www.rfc-editor.org/info/rfc4347)
 
 ### Cipher Suites and Extensions
 
-* [ECC for TLS 1.2 (RFC 8422)](https://www.rfc-editor.org/rfc/rfc8422.html)
-* [AES-GCM for TLS 1.2 (RFC 5288)](https://www.rfc-editor.org/rfc/rfc5288.html)
-* [Various Extensions (RFC 6066)](https://www.rfc-editor.org/rfc/rfc6066.html)
+* [ECC for TLS 1.2 (RFC 8422)](https://www.rfc-editor.org/info/rfc8422)
+* [AES-GCM for TLS 1.2 (RFC 5288)](https://www.rfc-editor.org/info/rfc5288)
+* [Various Extensions (RFC 6066)](https://www.rfc-editor.org/info/rfc6066)
   * `server_name` (aka SNI)
   * `certificate_status` (aka OCSP stapling)
-* [EMS Extension (RFC 7627)](https://www.rfc-editor.org/rfc/rfc7627.html)
-* [Renegotiation Indication Extension (RFC 5746)](https://www.rfc-editor.org/rfc/rfc5746.html)
+* [EMS Extension (RFC 7627)](https://www.rfc-editor.org/info/rfc7627)
+* [Renegotiation Indication Extension (RFC 5746)](https://www.rfc-editor.org/info/rfc5746)
 
 ## Languages and Toolchains
 
