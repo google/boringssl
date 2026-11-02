@@ -1383,6 +1383,18 @@ TEST(ASN1Test, UTCTimeZoneOffsets) {
   EXPECT_TRUE(ASN1_TIME_diff(&days, &secs, s.get(), g.get()));
   EXPECT_EQ(days, 0);
   EXPECT_EQ(secs, 0);
+
+  // `d2i_ASN1_UTCTIME` is strict and will not parse dates with timezone
+  // offsets. These are only reachable by creating UTCTimes by hand, or the
+  // `X509` parser.
+  static const uint8_t kUTCTimeWithOffset[] = {
+      0x17, 0x11, 0x37, 0x30, 0x30, 0x31, 0x30, 0x31, 0x30, 0x30,
+      0x30, 0x30, 0x30, 0x30, 0x2b, 0x30, 0x34, 0x30, 0x30};
+  const uint8_t *ptr = kUTCTimeWithOffset;
+  EXPECT_EQ(nullptr,
+            d2i_ASN1_UTCTIME(nullptr, &ptr, sizeof(kUTCTimeWithOffset)));
+  ptr = kUTCTimeWithOffset;
+  EXPECT_EQ(nullptr, d2i_ASN1_TIME(nullptr, &ptr, sizeof(kUTCTimeWithOffset)));
 }
 
 TEST(ASN1Test, ToGeneralizedTime) {
