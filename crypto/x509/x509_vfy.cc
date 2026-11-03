@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
+
 #include <limits.h>
 #include <string.h>
 #include <time.h>
@@ -548,13 +550,37 @@ int idp_check_dp(const DIST_POINT_NAME *dp_cert,
   // Check that the CRL's distributionPoint has some name in common with the
   // certificate's. A CA might shard across multiple CRLs. This check ensures we
   // are looking at the right shard.
-  //
-  // TODO(crbug.com/565047760): This should not be an O(N^2) comparison.
-  for (const GENERAL_NAME *gen_cert : dp_cert->name.fullname) {
-    for (const GENERAL_NAME *gen_crl : dp_crl->name.fullname) {
-      if (GENERAL_NAME_cmp(gen_cert, gen_crl) == 0) {
-        return 1;
-      }
+  const size_t crl_names_count = sk_GENERAL_NAME_num(dp_crl->name.fullname);
+  if (crl_names_count == 0) {
+    return 0;
+  }
+  const size_t cert_names_count = sk_GENERAL_NAME_num(dp_cert->name.fullname);
+  if (cert_names_count == 0) {
+    return 0;
+  }
+
+  const GENERAL_NAMES *longer = crl_names_count >= cert_names_count
+                              ? dp_crl->name.fullname
+                              : dp_cert->name.fullname;
+  const GENERAL_NAMES *shorter = crl_names_count < cert_names_count
+                               ? dp_crl->name.fullname
+                               : dp_cert->name.fullname;
+  bssl::Array<const GENERAL_NAME *> sorted;
+  if (!sorted.InitForOverwrite(sk_GENERAL_NAME_num(shorter))) {
+    return 0;
+  }
+  size_t i = 0;
+  for (const GENERAL_NAME *s : shorter) {
+    sorted[i++] = s;
+  }
+
+  auto cmp_func = [](const GENERAL_NAME *a, const GENERAL_NAME *b) {
+    return GENERAL_NAME_cmp(a, b) < 0;
+  };
+  std::sort(sorted.begin(), sorted.end(), cmp_func);
+  for (const GENERAL_NAME *name : longer) {
+    if (std::binary_search(sorted.begin(), sorted.end(), name, cmp_func)) {
+      return 1;
     }
   }
   return 0;

@@ -11983,6 +11983,68 @@ TEST(X509Test, CRLWithTimezoneOffset) {
   }
 }
 
+TEST_P(X509VerifyTest, CRLScopeLargeDistributionPoints) {
+  UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);
+  ASSERT_THAT(key, testing::NotNull());
+  UniquePtr<X509> ca = MakeTestCert("CA", "CA", key.get(), /*is_ca=*/true);
+  ASSERT_THAT(ca, testing::NotNull());
+  ASSERT_TRUE(X509_sign(ca.get(), key.get(), EVP_sha256()));
+
+  constexpr int kNumURIs = 50000;
+  std::vector<std::string> cert_storage, crl_storage;
+  cert_storage.reserve(kNumURIs);
+  crl_storage.reserve(kNumURIs);
+  for (int i = 0; i < kNumURIs; ++i) {
+    cert_storage.push_back("http://crl.example.com/cert-only-" +
+                           std::to_string(i));
+    crl_storage.push_back("http://crl.example.com/crl-only-" +
+                          std::to_string(i));
+  }
+  std::vector<std::string_view> cert_uris(cert_storage.begin(),
+                                          cert_storage.end());
+  std::vector<std::string_view> crl_uris_mismatch(crl_storage.begin(),
+                                                  crl_storage.end());
+  std::vector<std::string_view> crl_uris_match = crl_uris_mismatch;
+  cert_uris.push_back("http://crl.example.com/match");
+  crl_uris_match.push_back("http://crl.example.com/match");
+
+  // Create the leaf certificate with 10 Distribution Point names.
+  UniquePtr<X509> leaf = MakeTestCert("CA", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_THAT(leaf, testing::NotNull());
+  {
+    UniquePtr<DIST_POINT> dps[] = {
+        MakeDistributionPoint(MakeFullDistPointName(cert_uris))};
+    ASSERT_TRUE(AddCRLDistributionPoints(leaf.get(), dps));
+  }
+  ASSERT_TRUE(X509_sign(leaf.get(), key.get(), EVP_sha256()));
+
+  // Create a CRL that shares exactly one URI with the certificate.
+  UniquePtr<X509_CRL> crl_match = MakeTestCRL("CA", -1, 1);
+  ASSERT_THAT(crl_match, testing::NotNull());
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl_match.get(), MakeFullDistPointName(crl_uris_match)));
+  crl_match = SignAndReencodeCRL(crl_match.get(), key.get(), EVP_sha256());
+  ASSERT_THAT(crl_match, testing::NotNull());
+
+  // Create a CRL that shares zero URIs with the certificate.
+  UniquePtr<X509_CRL> crl_mismatch = MakeTestCRL("CA", -1, 1);
+  ASSERT_THAT(crl_mismatch, testing::NotNull());
+  ASSERT_TRUE(AddIssuingDistributionPoint(
+      crl_mismatch.get(), MakeFullDistPointName(crl_uris_mismatch)));
+  crl_mismatch =
+      SignAndReencodeCRL(crl_mismatch.get(), key.get(), EVP_sha256());
+  ASSERT_THAT(crl_mismatch, testing::NotNull());
+
+  // The matching CRL should safely pass verification via binary search.
+  EXPECT_EQ(X509_V_OK, Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                              {crl_match.get()}, X509_V_FLAG_CRL_CHECK));
+
+  // The mismatching CRL should correctly exhaust the binary search and fail.
+  EXPECT_EQ(X509_V_ERR_DIFFERENT_CRL_SCOPE,
+            Verify(leaf.get(), {ca.get()}, /*intermediates=*/{},
+                   {crl_mismatch.get()}, X509_V_FLAG_CRL_CHECK));
+}
+
 #if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(X509Test, MarshalTBSCertCached) {
   UniquePtr<X509> cert = CertFromPEM(kLeafPEM);
