@@ -82,56 +82,10 @@ post-conditions.
 
 ## Pointers and slices
 
-Unless otherwise specified, pointer parameters that refer to a single object,
-either as an input or output parameter, may not be `NULL`. In this case,
-BoringSSL often will not check for `NULL` before dereferencing, so passing
-`NULL` may crash or exhibit other undefined behavior. (Sometimes the function
-will check for `NULL` anyway, for OpenSSL compatibility, but we still consider
-passing `NULL` to be a caller error.)
-
-Pointer parameters may also refer to a contiguous sequence of objects, sometimes
-referred to as a *slice*. These will typically be a pair of pointer and length
-parameters named like `plaintext` and `plaintext_len`, or `objs` and `num_objs`.
-We prefer the former for byte buffers and the latter for sequences of other
-types. The documentation will usually refer to both parameters together, e.g.
-"`EVP_DigestUpdate` hashes `len` bytes from `data`."
-
-Parameters in C and C++ that use array syntax, such as
-`uint8_t out[SHA256_DIGEST_LENGTH]`, are really pointers. In BoringSSL's uses of
-this syntax, the pointer must point to the specified number of values.
-
-In other cases, the documentation will describe how the function parameters
-determine the slice's length. For example, a slice's length may be measured in
-units other than element count, multiple slice parameters may share a length, or
-a slice's length may be implicitly determined by other means like RSA key size.
-
-By default, BoringSSL follows C++'s
-[slice conventions](https://davidben.net/2024/01/15/empty-slices.html)
-for pointers. That is, unless otherwise specified, pointers for non-empty
-(non-zero length) slices must be represented by a valid pointer to that many
-objects in memory. Pointers for empty (zero length) slices must either be `NULL`
-or point within some sequence of objects of a compatible type.
-
-WARNING: The dangling, non-null pointer used by Rust empty slices may *not* be
-passed into BoringSSL. Rust FFIs must adjust such pointers to before passing to
-BoringSSL. For example, see the `FfiSlice` abstraction in `bssl-crypto`. (We may
-relax this if pointer arithmetic rules in C/C++ are adjusted to permit Rust's
-pointers. Until then, it is impractical for a C/C++ library to act on such a
-slice representation. See
-[this document](https://davidben.net/2024/01/15/empty-slices.html) for more
-discussion.)
-
-In some cases, OpenSSL compatibility requires that a function will treat `NULL`
-slice pointers differently from non-`NULL` pointers. Such behavior will be
-described in documentation. For examples, see `EVP_EncryptUpdate`,
-`EVP_DigestSignFinal`, and `HMAC_Init_ex`. Callers passing potentially empty
-slices into such functions should take care that the `NULL` case is either
-unreachable or still has the desired behavior.
-
-If a `const char *` parameter is described as a "NUL-terminated string" or a
-"C string", it must point to a sequence of `char` values containing a NUL (zero)
-value, which determines the length. Unless otherwise specified, the pointer may
-not be `NULL`, matching the C standard library.
+Pointer parameters and return values in BoringSSL may refer to a single object,
+or refer to a contiguous sequence of objects, sometimes referred to as a
+*slice*. The expectations between the two differ. It will generally be clear
+from the documentation and context which it is.
 
 For purposes of C and C++'s
 [strict aliasing](https://en.cppreference.com/w/c/language/object#Strict_aliasing)
@@ -145,7 +99,102 @@ aliasing, and BoringSSL itself has some
 recommend consumers build with `-fno-strict-aliasing`.
 
 Pointer parameters additionally have ownership and lifetime requirements,
-discussed in the section below.
+discussed in the following section.
+
+
+### Single objects
+
+Unless otherwise specified, pointers that refer to a single object, either as a
+parameter or return value, may not be `NULL`. BoringSSL generally will not check
+paramters for `NULL` before dereferencing, so passing `NULL` may crash or
+exhibit other undefined behavior. (Sometimes the function will check for `NULL`
+anyway, for OpenSSL compatibility, but we still consider passing `NULL` to be a
+caller error.)
+
+When a single-object pointer parameter may be `NULL`, BoringSSL's documentation
+will specify the semantics of passing in `NULL`. When a single-object pointer
+return value may be `NULL`, BoringSSL's documentation will specify the
+circumstances when it may be `NULL`.
+
+
+### Slices
+
+Slices have a number of representations. As mismatching pointers and lengths
+result in memory errors, the primary concern is determining the length of the
+slice:
+
+* In most cases, BoringSSL represents slices as a pair of pointer and length
+  values. As parameters, these typically have names like `plaintext` and
+  `plaintext_len`, or `objs` and `num_objs`. We prefer the former for byte
+  buffers and the latter for sequences of other types. The documentation will
+  usually refer to both parameters together, e.g. "`EVP_DigestUpdate` hashes
+  `len` bytes from `data`."
+
+* BoringSSL has a few different conventions for returning slices. Sometimes the
+  pointer and length are returned from separate functions, as in `CBS_data` and
+  `CBS_len`. Sometimes they are returned from output parameters, as in
+  `SSL_SESSION_get0_ticket`. Sometimes they are a mix of output parameters and
+  return value, as in `SSL_SESSION_get0_id_context`.
+
+* Parameters in C and C++ that use array syntax, such as
+  `uint8_t out[SHA256_DIGEST_LENGTH]`, are really pointers. In BoringSSL's uses
+  of this syntax, this is a slice with a compile-time length. That is, the
+  pointer must point to the specified number of values.
+
+* If a `const char *` parameter is described as a "NUL-terminated string" or a
+  "C string", it must point to a sequence of `char` values containing a NUL
+  (zero) value, which determines the length. Unless otherwise specified, the
+  pointer may not be `NULL`, matching the C standard library.
+
+* In other cases, the documentation will describe how the function parameters
+  determine the slice's length. For example, a slice's length may be measured in
+  units other than element count, multiple slice parameters may share a length,
+  or a slice's length may be implicitly determined by other means like RSA key
+  size.
+
+By default, BoringSSL follows C++'s
+[slice conventions](https://davidben.net/2024/01/15/empty-slices.html)
+for pointers. That is, unless otherwise specified, pointers for non-empty
+(non-zero length) slices must be represented by a valid pointer to that many
+objects in memory. Pointers for empty (zero length) slices must either be `NULL`
+or point within some sequence of objects of a compatible type.
+
+These conventions are set to match the conventions of C++ standard library
+types like `std::span`. They are also set so that the expected underlying
+pointer operations are valid, including:
+
+* `data + i` for all `0 <= i <= len`, including `data + len`
+* `data[i]` for all `0 <= i < len`
+* `(data + i) - (data + j)` for all `0 <= i <= len` and `0 <= j <= len`
+
+It is undefined behavior for a caller to pass an invalid slice to BoringSSL.
+Callers can assume that all slices returned from BoringSSL are valid.
+
+WARNING: The dangling, non-null pointer used by Rust empty slices may *not* be
+passed into BoringSSL. Rust FFIs must adjust such pointers to before passing to
+BoringSSL. For example, see the `FfiSlice` abstraction in `bssl-crypto`. (We may
+relax this if pointer arithmetic rules in C/C++ are adjusted to permit Rust's
+pointers. Until then, it is impractical for a C/C++ library to act on such a
+slice representation. See
+[this document](https://davidben.net/2024/01/15/empty-slices.html) for more
+discussion.)
+
+In general, callers should not attempt to special-case `NULL` pointers from
+BoringSSL. This is usually unreachable or buggy code, or both. BoringSSL will
+never return a slice with `NULL` pointer and non-zero length. BoringSSL may
+return a zero-length slice with `NULL` pointer, but this is not semantically
+different from a zero-length slice with non-`NULL` pointer. Callers that wish to
+check for zero-length slices should instead condition on the length. Callers
+that wish to accept zero-length slices should accept both `NULL` and non-`NULL`
+forms.
+
+Likewise, BoringSSL functions prefer to treat zero-length slices with `NULL` and
+non-`NULL` pointers equivalently. However, in some cases, OpenSSL compatibility
+requires that BoringSSL treat a `NULL` pointer differently. Such behavior is
+against our default conventions, so it will be described in documentation. For
+examples, see `EVP_EncryptUpdate`, `EVP_DigestSignFinal`, and `HMAC_Init_ex`.
+Callers passing potentially empty slices into such functions should take care
+that the `NULL` case is either unreachable or still has the desired behavior.
 
 
 ## Object initialization and cleanup
