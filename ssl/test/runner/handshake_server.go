@@ -714,7 +714,7 @@ func (hs *serverHandshakeState) doTLS13Handshake() error {
 	helloRetryRequest := &helloRetryRequestMsg{
 		isDTLS:              c.isDTLS,
 		vers:                c.vers.wire,
-		sessionID:           hs.clientHello.sessionID,
+		sessionID:           sessionID,
 		cipherSuite:         cipherSuite,
 		compressionMethod:   config.Bugs.SendCompressionMethod,
 		duplicateExtensions: config.Bugs.DuplicateHelloRetryRequestExtensions,

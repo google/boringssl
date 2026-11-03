@@ -1951,7 +1951,7 @@ read alert 1 0
 	})
 
 	// Clients should reject DTLS 1.3 ServerHellos that echo the legacy
-	// session ID.
+	// session ID, in both ServerHello and HelloRetryRequest.
 	testCases = append(testCases, testCase{
 		protocol:      dtls,
 		name:          "DTLS13CompatibilityMode-EchoSessionID",
@@ -1963,6 +1963,23 @@ read alert 1 0
 			MinVersion: VersionTLS13,
 			Bugs: ProtocolBugs{
 				DTLS13EchoSessionID: true,
+			},
+		},
+		shouldFail:    true,
+		expectedError: ":DECODE_ERROR:",
+	})
+	testCases = append(testCases, testCase{
+		protocol:      dtls,
+		name:          "DTLS13CompatibilityMode-EchoSessionID-HelloRetryRequest",
+		resumeSession: true,
+		config: Config{
+			MaxVersion: VersionTLS12,
+		},
+		resumeConfig: &Config{
+			MinVersion: VersionTLS13,
+			Bugs: ProtocolBugs{
+				SendHelloRetryRequestCookie: []byte("cookie"),
+				DTLS13EchoSessionID:         true,
 			},
 		},
 		shouldFail:    true,
