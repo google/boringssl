@@ -40,7 +40,7 @@ int CRYPTO_has_asm() {
 #endif
 }
 
-uint32_t FIPS_version() { return 0; }
+uint32_t FIPS_version() { return 20261103; }
 
 int FIPS_query_algorithm_status(const char *algorithm) {
 #if defined(BORINGSSL_FIPS)
