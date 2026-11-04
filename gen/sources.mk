@@ -1003,6 +1003,7 @@ boringssl_crypto_test_data := \
   crypto/x509/test/mtc/ca_id_too_long/cert_1_0.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/ca_cert.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_widest_validity/ca_cert.pem \
   crypto/x509/test/mtc/cert_10_0.pem \
   crypto/x509/test/mtc/cert_10_1.pem \
   crypto/x509/test/mtc/cert_2034_0.pem \
@@ -1300,6 +1301,7 @@ boringssl_pki_sources := \
   pki/certificate_policies.cc \
   pki/common_cert_errors.cc \
   pki/crl.cc \
+  pki/encode_certificate.cc \
   pki/encode_values.cc \
   pki/extended_key_usage.cc \
   pki/general_names.cc \
@@ -1345,6 +1347,7 @@ boringssl_pki_internal_headers := \
   pki/certificate_policies.h \
   pki/common_cert_errors.h \
   pki/crl.h \
+  pki/encode_certificate.h \
   pki/encode_values.h \
   pki/extended_key_usage.h \
   pki/general_names.h \
@@ -1382,6 +1385,7 @@ boringssl_pki_test_sources := \
   pki/certificate_policies_unittest.cc \
   pki/certificate_unittest.cc \
   pki/crl_unittest.cc \
+  pki/encode_certificate_unittest.cc \
   pki/encode_values_unittest.cc \
   pki/extended_key_usage_unittest.cc \
   pki/general_names_unittest.cc \
@@ -1424,6 +1428,7 @@ boringssl_pki_test_data := \
   crypto/x509/test/mtc/ca_id_too_long/cert_1_0.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/ca_cert.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_widest_validity/ca_cert.pem \
   crypto/x509/test/mtc/cert_10_0.pem \
   crypto/x509/test/mtc/cert_10_1.pem \
   crypto/x509/test/mtc/cert_2034_0.pem \

@@ -17,6 +17,12 @@
 #include <string_view>
 
 #include <gtest/gtest.h>
+
+#include <openssl/bytestring.h>
+#include <openssl/nid.h>
+#include <openssl/span.h>
+
+#include "../crypto/bytestring/internal.h"
 #include "parse_values.h"
 
 BSSL_NAMESPACE_BEGIN
@@ -166,6 +172,51 @@ TEST(EncodeValuesTest, EncodeUTCTime) {
   time.year = 2000;
   time.month = 100;
   EXPECT_FALSE(EncodeUTCTime(time, out));
+}
+
+TEST(EncodeValuesTest, EncodeUnsignedAlgorithmIdentifier) {
+  ScopedCBB cbb;
+  ASSERT_TRUE(CBB_init(cbb.get(), 0));
+  ASSERT_TRUE(EncodeUnsignedAlgorithmIdentifier(cbb.get()));
+  // SEQUENCE { OBJECT IDENTIFIER 1.3.6.1.5.5.7.6.36 }
+  static const uint8_t kExpected[] = {0x30, 0x0a, 0x06, 0x08,
+                                      OBJ_ENC_alg_unsigned};
+  EXPECT_EQ(CBBAsSpan(cbb.get()), Span(kExpected));
+}
+
+TEST(EncodeValuesTest, EncodeUnsignedIssuerName) {
+  ScopedCBB cbb;
+  ASSERT_TRUE(CBB_init(cbb.get(), 0));
+  ASSERT_TRUE(EncodeUnsignedIssuerName(cbb.get()));
+  // SEQUENCE { SET { SEQUENCE {
+  //   OBJECT IDENTIFIER 1.3.6.1.5.5.7.25.1, UTF8String "" } } }
+  static const uint8_t kExpected[] = {
+      0x30, 0x10, 0x31, 0x0e, 0x30, 0x0c, 0x06, 0x08, OBJ_ENC_rdna_unsigned,
+      0x0c, 0x00};
+  EXPECT_EQ(CBBAsSpan(cbb.get()), Span(kExpected));
+}
+
+TEST(EncodeValuesTest, EncodeExtension) {
+  static const uint8_t kOid[] = {OBJ_ENC_basic_constraints};
+  static const uint8_t kValue[] = {0x30, 0x00};
+
+  ScopedCBB cbb;
+  ASSERT_TRUE(CBB_init(cbb.get(), 0));
+  ASSERT_TRUE(EncodeExtension(cbb.get(), kOid, /*critical=*/false, kValue));
+  // SEQUENCE { OBJECT IDENTIFIER, OCTET STRING { SEQUENCE {} } }
+  static const uint8_t kNonCritical[] = {
+      0x30, 0x09, 0x06, 0x03, OBJ_ENC_basic_constraints,
+      0x04, 0x02, 0x30, 0x00};
+  EXPECT_EQ(CBBAsSpan(cbb.get()), Span(kNonCritical));
+
+  cbb.Reset();
+  ASSERT_TRUE(CBB_init(cbb.get(), 0));
+  ASSERT_TRUE(EncodeExtension(cbb.get(), kOid, /*critical=*/true, kValue));
+  // SEQUENCE { OBJECT IDENTIFIER, BOOLEAN TRUE, OCTET STRING { SEQUENCE {} } }
+  static const uint8_t kCritical[] = {
+      0x30, 0x0c, 0x06, 0x03, OBJ_ENC_basic_constraints, 0x01, 0x01, 0xff,
+      0x04, 0x02, 0x30, 0x00};
+  EXPECT_EQ(CBBAsSpan(cbb.get()), Span(kCritical));
 }
 
 }  // namespace der::test

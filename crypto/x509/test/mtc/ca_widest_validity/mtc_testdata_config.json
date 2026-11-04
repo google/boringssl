@@ -1,0 +1,30 @@
+{
+  "Version": "plants-07",
+  "ID": "32473.1",
+  "LogNumber": 1,
+  "Cosigners": [
+    {
+      "CosignerID": "32473.1",
+      "SignatureAlgorithm": "mldsa44",
+      "PrivateKey": "MDQCAQAwCwYJYIZIAWUDBAMRBCKAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
+    }
+  ],
+  "CACert": {
+    "//0": "The CA certificate has the widest validity period, so that it matches pki's EncodeMtcCaCertificate.",
+    "NotBefore": "0000-01-01T00:00:00Z",
+    "NotAfter": "9999-12-31T23:59:59Z",
+    "IsCA": true,
+    "KeyUsage": [
+      "CertSign",
+      "CRLSign"
+    ],
+    "MinSerial": {
+      "Log": 1,
+      "Index": 8
+    },
+    "MaxSerial": {
+      "Log": 1,
+      "Index": 4096
+    }
+  }
+}

@@ -242,8 +242,8 @@ class OPENSSL_EXPORT MTCAnchor {
   const CRYPTO_BUFFER *ca_key() const { return ca_key_.get(); }
   der::Input NormalizedSubject() const;
   CertificateTrust CertTrust() const;
-  // TODO(crbug.com/575507260): Replace synthesized certificate with a real MTC
-  // CA certificate.
+  // TODO(crbug.com/575507260): Replace synthesized certificate with an MTC CA
+  // certificate from EncodeMtcCaCertificate().
   std::shared_ptr<const ParsedCertificate> AsCert() const;
 
   std::optional<TreeHashConstSpan> SubtreeHash(uint16_t log_number,

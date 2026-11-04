@@ -198,7 +198,10 @@ bssl_cc_library(
     srcs = pki_sources,
     hdrs = pki_headers,
     copts = ["-DBORINGSSL_IMPLEMENTATION"],
+    # pki_sources also depend on :crypto's internal headers.
+    implementation_deps = [":crypto_internal"],
     internal_hdrs = pki_internal_headers,
+    # pki_headers depend on :crypto's exported headers.
     deps = [":crypto"],
 )
 

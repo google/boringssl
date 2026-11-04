@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include <openssl/base.h>
+#include <openssl/span.h>
 
 BSSL_NAMESPACE_BEGIN
 namespace der {
@@ -50,6 +51,22 @@ static const size_t kUTCTimeLength = 13;
 // false on error.
 OPENSSL_EXPORT bool EncodeUTCTime(const GeneralizedTime &time,
                                   uint8_t out[kUTCTimeLength]);
+
+// Writes the DER encoding of the id-alg-unsigned AlgorithmIdentifier (RFC 9925,
+// Section 3.1) to `cbb`, for the signature algorithm of an unsigned
+// certificate. Returns true on success and false on error.
+OPENSSL_EXPORT bool EncodeUnsignedAlgorithmIdentifier(CBB *cbb);
+
+// Writes the DER encoding of the placeholder issuer Name for an unsigned
+// certificate (RFC 9925, Section 3.2) to `cbb`. Returns true on success and
+// false on error.
+OPENSSL_EXPORT bool EncodeUnsignedIssuerName(CBB *cbb);
+
+// Writes the DER encoding of an X.509 Extension (RFC 5280, Section 4.2) with
+// OID `oid`, criticality `critical`, and DER-encoded extension value `value`
+// to `cbb`. Returns true on success and false on error.
+OPENSSL_EXPORT bool EncodeExtension(CBB *cbb, Span<const uint8_t> oid,
+                                    bool critical, Span<const uint8_t> value);
 
 }  // namespace der
 BSSL_NAMESPACE_END

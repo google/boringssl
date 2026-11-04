@@ -14,9 +14,11 @@
 
 #include "encode_values.h"
 
-#include "parse_values.h"
-
+#include <openssl/bytestring.h>
+#include <openssl/nid.h>
 #include <openssl/posix_time.h>
+
+#include "parse_values.h"
 
 BSSL_NAMESPACE_BEGIN
 namespace der {
@@ -113,6 +115,45 @@ bool EncodeUTCTime(const GeneralizedTime &time, uint8_t out[kUTCTimeLength]) {
   }
   out[12] = 'Z';
   return true;
+}
+
+bool EncodeUnsignedAlgorithmIdentifier(CBB *cbb) {
+  // RFC 9925, Section 3.1: The AlgorithmIdentifier for id-alg-unsigned
+  // (1.3.6.1.5.5.7.6.36), with the parameters field omitted.
+  // clang-format off
+  static const uint8_t kUnsignedAlgorithmIdentifier[] = {
+      0x30, 10,                       // SEQUENCE (10 bytes)
+      0x06, 8, OBJ_ENC_alg_unsigned,  //   OBJECT IDENTIFIER (8 bytes)
+  };
+  // clang-format on
+  return CBB_add_bytes(cbb, kUnsignedAlgorithmIdentifier,
+                       sizeof(kUnsignedAlgorithmIdentifier));
+}
+
+bool EncodeUnsignedIssuerName(CBB *cbb) {
+  // RFC 9925, Section 3.2: A Name with a single attribute of type
+  // id-rdna-unsigned (1.3.6.1.5.5.7.25.1), whose value is an empty UTF8String.
+  // clang-format off
+  static const uint8_t kUnsignedIssuerName[] = {
+      0x30, 16,                        // SEQUENCE (16 bytes)
+      0x31, 14,                        //   SET (14 bytes)
+      0x30, 12,                        //     SEQUENCE (12 bytes)
+      0x06, 8, OBJ_ENC_rdna_unsigned,  //       OBJECT IDENTIFIER (8 bytes)
+      0x0c, 0,                         //       UTF8String (0 bytes)
+  };
+  // clang-format on
+  return CBB_add_bytes(cbb, kUnsignedIssuerName, sizeof(kUnsignedIssuerName));
+}
+
+bool EncodeExtension(CBB *cbb, Span<const uint8_t> oid, bool critical,
+                     Span<const uint8_t> value) {
+  CBB extension;
+  return CBB_add_asn1(cbb, &extension, CBS_ASN1_SEQUENCE) &&
+         CBB_add_asn1_element(&extension, CBS_ASN1_OBJECT, oid.data(),
+                              oid.size()) &&
+         (!critical || CBB_add_asn1_bool(&extension, 1)) &&
+         CBB_add_asn1_octet_string(&extension, value.data(), value.size()) &&
+         CBB_flush(cbb);
 }
 
 }  // namespace der
