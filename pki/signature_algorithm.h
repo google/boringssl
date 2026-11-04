@@ -91,6 +91,12 @@ enum class SignatureAlgorithm {
 OPENSSL_EXPORT std::optional<SignatureAlgorithm> ParseSignatureAlgorithm(
     der::Input algorithm_identifier);
 
+// Writes the DER encoding of an AlgorithmIdentifier for `alg` to `cbb`, in the
+// canonical form that `ParseSignatureAlgorithm` maps back to `alg`. Returns
+// true on success and false on error.
+[[nodiscard]] OPENSSL_EXPORT bool AddSignatureAlgorithmIdentifier(
+    CBB *cbb, SignatureAlgorithm alg);
+
 // Returns the hash to be used with the tls-server-end-point channel binding
 // (RFC 5929) or `std::nullopt`, if not supported for this signature algorithm.
 OPENSSL_EXPORT std::optional<DigestAlgorithm>

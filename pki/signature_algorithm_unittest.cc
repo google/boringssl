@@ -17,6 +17,10 @@
 #include <memory>
 
 #include <gtest/gtest.h>
+
+#include <openssl/bytestring.h>
+#include <openssl/nid.h>
+
 #include "input.h"
 #include "parser.h"
 
@@ -1454,6 +1458,75 @@ TEST(SignatureAlgorithmTest, ParseDerDsaWithSha256NoParams) {
   };
   // clang-format on
   EXPECT_FALSE(ParseSignatureAlgorithm(der::Input(kData)));
+}
+
+// Tests that every SignatureAlgorithm can be encoded, and that the encoding
+// parses back to the same SignatureAlgorithm.
+TEST(SignatureAlgorithmTest, EncodeRoundTrip) {
+  for (int i = 0; i <= static_cast<int>(SignatureAlgorithm::kMaxValue); i++) {
+    SignatureAlgorithm alg = static_cast<SignatureAlgorithm>(i);
+    SCOPED_TRACE(i);
+    ScopedCBB cbb;
+    ASSERT_TRUE(CBB_init(cbb.get(), 0));
+    ASSERT_TRUE(AddSignatureAlgorithmIdentifier(cbb.get(), alg));
+    EXPECT_EQ(ParseSignatureAlgorithm(
+                  der::Input(CBB_data(cbb.get()), CBB_len(cbb.get()))),
+              alg);
+  }
+}
+
+// Tests the encodings of each kind of AlgorithmIdentifier parameters.
+TEST(SignatureAlgorithmTest, Encode) {
+  // clang-format off
+  static const uint8_t kRsaPkcs1Sha256[] = {
+      0x30, 13,                         // SEQUENCE
+      0x06, 9,                          //   OBJECT IDENTIFIER
+      OBJ_ENC_sha256WithRSAEncryption,  //     sha256WithRSAEncryption
+      0x05, 0,                          //   NULL
+  };
+  static const uint8_t kEcdsaSha256[] = {
+      0x30, 10,                    // SEQUENCE
+      0x06, 8,                     //   OBJECT IDENTIFIER
+      OBJ_ENC_ecdsa_with_SHA256,   //     ecdsa-with-SHA256
+  };
+  static const uint8_t kRsaPssSha256[] = {
+      0x30, 65,                     // SEQUENCE
+      0x06, 9,                      //   OBJECT IDENTIFIER
+      OBJ_ENC_rsassaPss,            //     id-RSASSA-PSS
+      0x30, 52,                     //   SEQUENCE (RSASSA-PSS-params)
+      0xa0, 15,                     //     [0] (hashAlgorithm)
+      0x30, 13,                     //       SEQUENCE
+      0x06, 9,                      //         OBJECT IDENTIFIER
+      OBJ_ENC_sha256,               //           id-sha256
+      0x05, 0,                      //         NULL
+      0xa1, 28,                     //     [1] (maskGenAlgorithm)
+      0x30, 26,                     //       SEQUENCE
+      0x06, 9,                      //         OBJECT IDENTIFIER
+      OBJ_ENC_mgf1,                 //           id-mgf1
+      0x30, 13,                     //         SEQUENCE
+      0x06, 9,                      //           OBJECT IDENTIFIER
+      OBJ_ENC_sha256,               //             id-sha256
+      0x05, 0,                      //           NULL
+      0xa2, 3,                      //     [2] (saltLength)
+      0x02, 1,                      //       INTEGER
+      32,                           //         32
+  };
+  // clang-format on
+  const struct {
+    SignatureAlgorithm alg;
+    Span<const uint8_t> expected;
+  } kTests[] = {
+      {SignatureAlgorithm::kRsaPkcs1Sha256, kRsaPkcs1Sha256},
+      {SignatureAlgorithm::kEcdsaSha256, kEcdsaSha256},
+      {SignatureAlgorithm::kRsaPssSha256, kRsaPssSha256},
+  };
+  for (const auto &t : kTests) {
+    SCOPED_TRACE(static_cast<int>(t.alg));
+    ScopedCBB cbb;
+    ASSERT_TRUE(CBB_init(cbb.get(), 0));
+    ASSERT_TRUE(AddSignatureAlgorithmIdentifier(cbb.get(), t.alg));
+    EXPECT_EQ(Span(CBB_data(cbb.get()), CBB_len(cbb.get())), t.expected);
+  }
 }
 
 }  // namespace

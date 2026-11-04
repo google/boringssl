@@ -198,6 +198,68 @@ const uint8_t kOidAlgMtcProofDraftPlants04[] = {0x2b, 0x06, 0x01, 0x04, 0x01,
   return IsNull(input) || input.empty();
 }
 
+// The parameters of an AlgorithmIdentifier.
+enum class AlgorithmParams {
+  // The parameters are absent.
+  kAbsent,
+  // The parameters are NULL.
+  kNull,
+  // The parameters are encoded as NULL, but parsing also accepts absent
+  // parameters.
+  kNullOrAbsent,
+};
+
+struct SignatureAlgorithmOid {
+  SignatureAlgorithm algorithm;
+  Span<const uint8_t> oid;
+  AlgorithmParams params;
+};
+
+// Maps between SignatureAlgorithms and their AlgorithmIdentifiers, for all
+// algorithms except RSASSA-PSS, whose parameters are handled separately. This
+// is used for both parsing and encoding, so each SignatureAlgorithm must appear
+// at most once.
+//
+// TODO(eroman): Each OID is tested for equality in order, which is not
+// particularly efficient.
+constexpr SignatureAlgorithmOid kSignatureAlgorithmOids[] = {
+    // RFC 5912 requires that the parameters for RSA PKCS#1 v1.5 algorithms be
+    // NULL ("PARAMS TYPE NULL ARE required"), however an empty parameter is
+    // also allowed for compatibility with non-compliant OCSP responders.
+    //
+    // TODO(svaldez): Add warning about non-strict parsing.
+    {SignatureAlgorithm::kRsaPkcs1Sha1, kOidSha1WithRsaEncryption,
+     AlgorithmParams::kNullOrAbsent},
+    {SignatureAlgorithm::kRsaPkcs1Sha256, kOidSha256WithRsaEncryption,
+     AlgorithmParams::kNullOrAbsent},
+    {SignatureAlgorithm::kRsaPkcs1Sha384, kOidSha384WithRsaEncryption,
+     AlgorithmParams::kNullOrAbsent},
+    {SignatureAlgorithm::kRsaPkcs1Sha512, kOidSha512WithRsaEncryption,
+     AlgorithmParams::kNullOrAbsent},
+
+    // RFC 5912 requires that the parameters for ECDSA algorithms be absent
+    // ("PARAMS TYPE NULL ARE absent"):
+    {SignatureAlgorithm::kEcdsaSha1, kOidEcdsaWithSha1,
+     AlgorithmParams::kAbsent},
+    {SignatureAlgorithm::kEcdsaSha256, kOidEcdsaWithSha256,
+     AlgorithmParams::kAbsent},
+    {SignatureAlgorithm::kEcdsaSha384, kOidEcdsaWithSha384,
+     AlgorithmParams::kAbsent},
+    {SignatureAlgorithm::kEcdsaSha512, kOidEcdsaWithSha512,
+     AlgorithmParams::kAbsent},
+
+    // RFC 9881 requires that the parameters for ML-DSA algorithms be absent
+    // ("The contents of the parameters component for each algorithm MUST be
+    // absent.");
+    {SignatureAlgorithm::kMldsa44, kOidAlgMldsa44, AlgorithmParams::kAbsent},
+    {SignatureAlgorithm::kMldsa65, kOidAlgMldsa65, AlgorithmParams::kAbsent},
+    {SignatureAlgorithm::kMldsa87, kOidAlgMldsa87, AlgorithmParams::kAbsent},
+
+    {SignatureAlgorithm::kMtcProof, kOidAlgMtcProof, AlgorithmParams::kAbsent},
+    {SignatureAlgorithm::kMtcProofDraftPlants04, kOidAlgMtcProofDraftPlants04,
+     AlgorithmParams::kAbsent},
+};
+
 // Parses a MaskGenAlgorithm as defined by RFC 5912:
 //
 //     MaskGenAlgorithm ::= AlgorithmIdentifier{ALGORITHM,
@@ -324,6 +386,60 @@ std::optional<SignatureAlgorithm> ParseRsaPss(der::Input params) {
   return std::nullopt;
 }
 
+// Writes the RSASSA-PSS-params for `alg` to `cbb`, in the form that
+// `ParseRsaPss` maps back to `alg`: the same hash for the message digest and
+// MGF-1, with NULL parameters, and a salt length equal to the hash length.
+// Returns false if `alg` is not an RSA-PSS algorithm or on error.
+[[nodiscard]] bool EncodeRsaPss(CBB *cbb, SignatureAlgorithm alg) {
+  static const uint8_t kOidSha256[] = {OBJ_ENC_sha256};
+  static const uint8_t kOidSha384[] = {OBJ_ENC_sha384};
+  static const uint8_t kOidSha512[] = {OBJ_ENC_sha512};
+  Span<const uint8_t> hash_oid;
+  uint64_t salt_length;
+  switch (alg) {
+    case SignatureAlgorithm::kRsaPssSha256:
+      hash_oid = kOidSha256;
+      salt_length = 32;
+      break;
+    case SignatureAlgorithm::kRsaPssSha384:
+      hash_oid = kOidSha384;
+      salt_length = 48;
+      break;
+    case SignatureAlgorithm::kRsaPssSha512:
+      hash_oid = kOidSha512;
+      salt_length = 64;
+      break;
+    default:
+      return false;
+  }
+
+  //   RSASSA-PSS-params  ::=  SEQUENCE  {
+  //       hashAlgorithm     [0] HashAlgorithm,
+  //       maskGenAlgorithm  [1] MaskGenAlgorithm,
+  //       saltLength        [2] INTEGER,
+  //       trailerField      [3] TrailerField DEFAULT trailerFieldBC }
+  CBB params, hash_wrapper, hash, mgf_wrapper, mgf, mgf_hash, salt_wrapper;
+  return CBB_add_asn1(cbb, &params, CBS_ASN1_SEQUENCE) &&
+         CBB_add_asn1(&params, &hash_wrapper,
+                      CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 0) &&
+         CBB_add_asn1(&hash_wrapper, &hash, CBS_ASN1_SEQUENCE) &&
+         CBB_add_asn1_element(&hash, CBS_ASN1_OBJECT, hash_oid.data(),
+                              hash_oid.size()) &&
+         CBB_add_asn1_element(&hash, CBS_ASN1_NULL, nullptr, 0) &&
+         CBB_add_asn1(&params, &mgf_wrapper,
+                      CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 1) &&
+         CBB_add_asn1(&mgf_wrapper, &mgf, CBS_ASN1_SEQUENCE) &&
+         CBB_add_asn1_element(&mgf, CBS_ASN1_OBJECT, kOidMgf1,
+                              sizeof(kOidMgf1)) &&
+         CBB_add_asn1(&mgf, &mgf_hash, CBS_ASN1_SEQUENCE) &&
+         CBB_add_asn1_element(&mgf_hash, CBS_ASN1_OBJECT, hash_oid.data(),
+                              hash_oid.size()) &&
+         CBB_add_asn1_element(&mgf_hash, CBS_ASN1_NULL, nullptr, 0) &&
+         CBB_add_asn1(&params, &salt_wrapper,
+                      CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 2) &&
+         CBB_add_asn1_uint64(&salt_wrapper, salt_length) && CBB_flush(cbb);
+}
+
 }  // namespace
 
 [[nodiscard]] bool ParseAlgorithmIdentifier(der::Input input,
@@ -391,71 +507,64 @@ std::optional<SignatureAlgorithm> ParseSignatureAlgorithm(
     return std::nullopt;
   }
 
-  // TODO(eroman): Each OID is tested for equality in order, which is not
-  // particularly efficient.
+  for (const SignatureAlgorithmOid &entry : kSignatureAlgorithmOids) {
+    if (oid == der::Input(entry.oid)) {
+      bool params_ok = false;
+      switch (entry.params) {
+        case AlgorithmParams::kAbsent:
+          params_ok = params.empty();
+          break;
+        case AlgorithmParams::kNull:
+          params_ok = IsNull(params);
+          break;
+        case AlgorithmParams::kNullOrAbsent:
+          params_ok = IsNullOrEmpty(params);
+          break;
+      }
+      if (!params_ok) {
+        return std::nullopt;
+      }
+      return entry.algorithm;
+    }
+  }
 
-  // RFC 5912 requires that the parameters for RSA PKCS#1 v1.5 algorithms be
-  // NULL ("PARAMS TYPE NULL ARE required"), however an empty parameter is also
-  // allowed for compatibility with non-compliant OCSP responders.
-  //
-  // TODO(svaldez): Add warning about non-strict parsing.
-  if (oid == der::Input(kOidSha1WithRsaEncryption) && IsNullOrEmpty(params)) {
-    return SignatureAlgorithm::kRsaPkcs1Sha1;
-  }
-  if (oid == der::Input(kOidSha256WithRsaEncryption) && IsNullOrEmpty(params)) {
-    return SignatureAlgorithm::kRsaPkcs1Sha256;
-  }
-  if (oid == der::Input(kOidSha384WithRsaEncryption) && IsNullOrEmpty(params)) {
-    return SignatureAlgorithm::kRsaPkcs1Sha384;
-  }
-  if (oid == der::Input(kOidSha512WithRsaEncryption) && IsNullOrEmpty(params)) {
-    return SignatureAlgorithm::kRsaPkcs1Sha512;
-  }
+  // See comment on `kOidSha1WithRsaSignature`. sha1WithRSASignature is an
+  // alternate OID for `kRsaPkcs1Sha1`. It is accepted when parsing, but not
+  // used when encoding.
   if (oid == der::Input(kOidSha1WithRsaSignature) && IsNullOrEmpty(params)) {
     return SignatureAlgorithm::kRsaPkcs1Sha1;
-  }
-
-  // RFC 5912 requires that the parameters for ECDSA algorithms be absent
-  // ("PARAMS TYPE NULL ARE absent"):
-  if (oid == der::Input(kOidEcdsaWithSha1) && params.empty()) {
-    return SignatureAlgorithm::kEcdsaSha1;
-  }
-  if (oid == der::Input(kOidEcdsaWithSha256) && params.empty()) {
-    return SignatureAlgorithm::kEcdsaSha256;
-  }
-  if (oid == der::Input(kOidEcdsaWithSha384) && params.empty()) {
-    return SignatureAlgorithm::kEcdsaSha384;
-  }
-  if (oid == der::Input(kOidEcdsaWithSha512) && params.empty()) {
-    return SignatureAlgorithm::kEcdsaSha512;
-  }
-
-  // RFC 9881 requires that the parameters for ML-DSA algorithms be absent
-  // ("The contents of the parameters component for each algorithm MUST be
-  // absent.");
-  if (oid == der::Input(kOidAlgMldsa44) && params.empty()) {
-    return SignatureAlgorithm::kMldsa44;
-  }
-  if (oid == der::Input(kOidAlgMldsa65) && params.empty()) {
-    return SignatureAlgorithm::kMldsa65;
-  }
-  if (oid == der::Input(kOidAlgMldsa87) && params.empty()) {
-    return SignatureAlgorithm::kMldsa87;
   }
 
   if (oid == der::Input(kOidRsaSsaPss)) {
     return ParseRsaPss(params);
   }
 
-  if (oid == der::Input(kOidAlgMtcProof) && params.empty()) {
-    return SignatureAlgorithm::kMtcProof;
-  }
-  if (oid == der::Input(kOidAlgMtcProofDraftPlants04) && params.empty()) {
-    return SignatureAlgorithm::kMtcProofDraftPlants04;
-  }
-
   // Unknown signature algorithm.
   return std::nullopt;
+}
+
+bool AddSignatureAlgorithmIdentifier(CBB *cbb, SignatureAlgorithm alg) {
+  CBB seq;
+  if (!CBB_add_asn1(cbb, &seq, CBS_ASN1_SEQUENCE)) {
+    return false;
+  }
+
+  for (const SignatureAlgorithmOid &entry : kSignatureAlgorithmOids) {
+    if (entry.algorithm == alg) {
+      return CBB_add_asn1_element(&seq, CBS_ASN1_OBJECT, entry.oid.data(),
+                                  entry.oid.size()) &&
+             (entry.params == AlgorithmParams::kAbsent ||
+              CBB_add_asn1_element(&seq, CBS_ASN1_NULL, nullptr, 0)) &&
+             CBB_flush(cbb);
+    }
+  }
+
+  if (!CBB_add_asn1_element(&seq, CBS_ASN1_OBJECT, kOidRsaSsaPss,
+                            sizeof(kOidRsaSsaPss)) ||
+      !EncodeRsaPss(&seq, alg)) {
+    return false;
+  }
+  return CBB_flush(cbb);
 }
 
 std::optional<DigestAlgorithm> GetTlsServerEndpointDigestAlgorithm(
