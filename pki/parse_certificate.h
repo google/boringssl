@@ -651,6 +651,34 @@ struct OPENSSL_EXPORT ParsedAuthorityKeyIdentifier {
 [[nodiscard]] OPENSSL_EXPORT bool ParseSubjectKeyIdentifier(
     der::Input extension_value, der::Input *subject_key_identifier);
 
+// ParsedMtcCaInfo contains data from an MTC CA certificate, taken from its
+// subject and its id-pe-mtcCertificationAuthority-SHA256 extension
+// (draft-ietf-plants-merkle-tree-certs-07, Sections 5.1 and 5.5):
+//
+//     MTCCertificationAuthority ::= SEQUENCE {
+//         signature    AlgorithmIdentifier,
+//         minSerial    INTEGER (mtcMinSerial..mtcMaxSerial),
+//         maxSerial    INTEGER (mtcMinSerial..mtcMaxSerial) }
+struct OPENSSL_EXPORT ParsedMtcCaInfo {
+  // The CA ID, i.e. the contents of the RELATIVE-OID in the subject's single
+  // id-rdna-trustAnchorID attribute.
+  der::Input ca_id;
+
+  // The DER-encoded AlgorithmIdentifier for the CA cosigner.
+  der::Input ca_cosign_algorithm_tlv;
+
+  uint64_t min_serial = 0;
+  uint64_t max_serial = 0;
+};
+
+// Parses the id-pe-mtcCertificationAuthority-SHA256 `extension` of an MTC CA
+// certificate with subject `subject_tlv`. Returns true on successful parse of
+// MTC CA data consistent with draft-ietf-plants-merkle-tree-certs-07, and fills
+// `out` with values that reference data in `extension` and `subject_tlv`.
+[[nodiscard]] OPENSSL_EXPORT bool ParseMtcCaInfo(
+    const ParsedExtension &extension, der::Input subject_tlv,
+    ParsedMtcCaInfo *out);
+
 BSSL_NAMESPACE_END
 
 #endif  // BSSL_PKI_PARSE_CERTIFICATE_H_

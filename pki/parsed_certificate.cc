@@ -15,6 +15,7 @@
 #include "parsed_certificate.h"
 
 #include <openssl/bytestring.h>
+#include <openssl/nid.h>
 #include <openssl/pool.h>
 
 #include "cert_errors.h"
@@ -60,6 +61,17 @@ DEFINE_CERT_ERROR_ID(kFailedParsingAuthorityKeyIdentifier,
                      "Failed parsing authority key identifier");
 DEFINE_CERT_ERROR_ID(kFailedParsingSubjectKeyIdentifier,
                      "Failed parsing subject key identifier");
+DEFINE_CERT_ERROR_ID(kFailedParsingMtcCaInfo, "Failed parsing MTC CA info");
+
+// From draft-ietf-plants-merkle-tree-certs-07, Section 5.5:
+//
+//     id-pe-mtcCertificationAuthority-SHA256 OBJECT IDENTIFIER ::= {
+//         iso(1) identified-organization(3) dod(6) internet(1) security(5)
+//         mechanisms(5) pkix(7) id-pe(1) 38 }
+//
+// In dotted notation: 1.3.6.1.5.5.7.1.38
+inline constexpr uint8_t kMtcCertificationAuthoritySha256Oid[] = {
+    OBJ_ENC_pe_mtcCertificationAuthority_SHA256};
 
 [[nodiscard]] bool GetSequenceValue(der::Input tlv, der::Input *value) {
   der::Parser parser(tlv);
@@ -282,6 +294,17 @@ std::shared_ptr<const ParsedCertificate> ParsedCertificate::Create(
       if (!ParseAuthorityKeyIdentifier(
               extension.value, &result->authority_key_identifier_.value())) {
         errors->AddError(kFailedParsingAuthorityKeyIdentifier);
+        return nullptr;
+      }
+    }
+
+    // MTC CA extension (draft-ietf-plants-merkle-tree-certs-07).
+    if (result->GetExtension(der::Input(kMtcCertificationAuthoritySha256Oid),
+                             &extension)) {
+      result->mtc_ca_info_.emplace();
+      if (!ParseMtcCaInfo(extension, result->tbs_.subject_tlv,
+                          &result->mtc_ca_info_.value())) {
+        errors->AddError(kFailedParsingMtcCaInfo);
         return nullptr;
       }
     }

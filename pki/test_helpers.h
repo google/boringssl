@@ -146,6 +146,13 @@ std::shared_ptr<const ParsedCertificate> ReadCertFromFile(
 // Reads a data file relative to the src root directory.
 std::string ReadTestFileToString(const std::string &file_path_ascii);
 
+// Reads and parses a certificate from `file_name` (relative to
+// crypto/x509/test/mtc/) in the crypto/x509 MTC test data. Returns nullptr if
+// the certificate could not be read or parsed. Populates `errors`, if non-null,
+// with parse errrors.
+std::shared_ptr<const ParsedCertificate> ReadCryptoX509MTCTestCert(
+    const std::string &file_name, CertErrors *errors = nullptr);
+
 // Asserts that `actual_errors` matches `expected_errors_str`.
 //
 // This is a helper function to simplify rebasing the error expectations when

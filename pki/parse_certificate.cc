@@ -19,13 +19,16 @@
 
 #include <openssl/base.h>
 #include <openssl/bytestring.h>
+#include <openssl/nid.h>
 
 #include "cert_error_params.h"
 #include "cert_errors.h"
 #include "general_names.h"
 #include "input.h"
+#include "parse_name.h"
 #include "parse_values.h"
 #include "parser.h"
+#include "signature_algorithm.h"
 #include "string_util.h"
 
 BSSL_NAMESPACE_BEGIN
@@ -1009,6 +1012,88 @@ bool ParseSubjectKeyIdentifier(der::Input extension_value,
     return false;
   }
 
+  return true;
+}
+
+namespace {
+
+// draft-ietf-plants-merkle-tree-certs-07, Section 5.5:
+//
+//     mtcMinSerial INTEGER ::= 281474976710656 -- 2^48
+//     mtcMaxSerial INTEGER ::= 18446744073709551615 -- 2^64-1
+constexpr uint64_t kMtcMinSerial = uint64_t{1} << 48;
+
+// From draft-ietf-plants-merkle-tree-certs-07, Section 5.1:
+//
+//     id-rdna-trustAnchorID OBJECT IDENTIFIER ::= {
+//         iso(1) identified-organization(3) dod(6) internet(1) security(5)
+//         mechanisms(5) pkix(7) rdna(25) 3 }
+//
+// In dotted notation: 1.3.6.1.5.5.7.25.3
+inline constexpr uint8_t kRdnaTrustAnchorIdOid[] = {OBJ_ENC_rdna_trustAnchorID};
+
+// Reads the `signature`, `minSerial`, and `maxSerial` fields in an
+// MTCCertificationAuthority SEQUENCE from `parser`, per
+// draft-ietf-merkle-tree-certs-07, section 5.5.
+[[nodiscard]] bool ParseMtcCaExtensionFields(
+    der::Parser *parser, der::Input *ca_cosign_algorithm_tlv,
+    uint64_t *min_serial, uint64_t *max_serial) {
+  der::Input algorithm, parameters;
+  if (!parser->ReadRawTLV(ca_cosign_algorithm_tlv) ||
+      !ParseAlgorithmIdentifier(*ca_cosign_algorithm_tlv, &algorithm,
+                                &parameters) ||
+      !parser->ReadUint64(min_serial) ||  //
+      !parser->ReadUint64(max_serial) ||  //
+      parser->HasMore()) {
+    return false;
+  }
+  // ParseUint64 already enforces the upper bound of mtcMaxSerial.
+  return *min_serial >= kMtcMinSerial && *max_serial >= kMtcMinSerial;
+}
+
+// Parses `subject_tlv`, checking that it consists of a single
+// RelativeDistinguishedName with a single valid RELATIVE-OID attribute of type
+// id-rdna-trustAnchorID, per draft-ietf-plants-merkle-tree-certs-07, section
+// 5.1. On success, sets `*value` to that attribute's value.
+[[nodiscard]] bool ParseMtcCaSubject(der::Input subject_tlv,
+                                     der::Input *value) {
+  RDNSequence rdns;
+  if (!ParseName(subject_tlv, &rdns) || rdns.size() != 1 ||
+      rdns[0].size() != 1 ||
+      rdns[0][0].type != der::Input(kRdnaTrustAnchorIdOid) ||
+      rdns[0][0].value_tag != CBS_ASN1_RELATIVE_OID) {
+    return false;
+  }
+  CBS ca_id;
+  CBS_init(&ca_id, rdns[0][0].value.data(), rdns[0][0].value.size());
+  if (!CBS_is_valid_asn1_relative_oid(&ca_id)) {
+    return false;
+  }
+  *value = rdns[0][0].value;
+  return true;
+}
+
+}  // namespace
+
+bool ParseMtcCaInfo(const ParsedExtension &extension, der::Input subject_tlv,
+                    ParsedMtcCaInfo *out) {
+  if (!extension.critical) {
+    return false;
+  }
+
+  der::Parser extension_parser(extension.value);
+  der::Parser sequence_parser;
+  if (!extension_parser.ReadSequence(&sequence_parser) ||
+      extension_parser.HasMore() ||
+      !ParseMtcCaExtensionFields(&sequence_parser,
+                                 &out->ca_cosign_algorithm_tlv,
+                                 &out->min_serial, &out->max_serial)) {
+    return false;
+  }
+
+  if (!ParseMtcCaSubject(subject_tlv, &out->ca_id)) {
+    return false;
+  }
   return true;
 }
 

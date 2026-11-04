@@ -439,6 +439,21 @@ std::string ReadTestFileToString(const std::string &file_path_ascii) {
   return GetTestData(("pki/" + file_path_ascii).c_str());
 }
 
+std::shared_ptr<const ParsedCertificate> ReadCryptoX509MTCTestCert(
+    const std::string &file_name, CertErrors *errors) {
+  std::string pem = GetTestData(("crypto/x509/test/mtc/" + file_name).c_str());
+  PEMTokenizer tokenizer(pem, {"CERTIFICATE"});
+  if (!tokenizer.GetNext()) {
+    ADD_FAILURE() << "Could not read " << file_name;
+    return nullptr;
+  }
+  return ParsedCertificate::Create(
+      UniquePtr<CRYPTO_BUFFER>(CRYPTO_BUFFER_new(
+          reinterpret_cast<const uint8_t *>(tokenizer.data().data()),
+          tokenizer.data().size(), nullptr)),
+      {}, errors);
+}
+
 void VerifyCertPathErrors(const std::string &expected_errors_str,
                           const CertPathErrors &actual_errors,
                           const ParsedCertificateList &chain,

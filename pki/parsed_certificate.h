@@ -251,6 +251,13 @@ class OPENSSL_EXPORT ParsedCertificate {
     return subject_key_identifier_;
   }
 
+  // Returns the parsed draft-ietf-plants-merkle-tree-certs-07 MTC CA
+  // extension and CA ID, or nullopt if the certificate does not have an
+  // id-pe-mtcCertificationAuthority-SHA256 extension.
+  const std::optional<ParsedMtcCaInfo> &mtc_ca_info() const {
+    return mtc_ca_info_;
+  }
+
   // Returns a map of all the extensions in the certificate.
   const ExtensionsMap &extensions() const { return extensions_; }
 
@@ -329,6 +336,9 @@ class OPENSSL_EXPORT ParsedCertificate {
 
   // SubjectKeyIdentifier extension.
   std::optional<der::Input> subject_key_identifier_;
+
+  // Info parsed from MTC CA extension and CA ID.
+  std::optional<ParsedMtcCaInfo> mtc_ca_info_;
 
   // All of the extensions.
   ExtensionsMap extensions_;

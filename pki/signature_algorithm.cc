@@ -162,8 +162,7 @@ const uint8_t kOidAlgMldsa87[] = {OBJ_ENC_ML_DSA_87};
 //   id-alg-mtcProof OBJECT IDENTIFIER ::= {
 //       iso(1) identified-organization(3) dod(6) internet(1) security(5)
 //       mechanisms(5) pkix(7) algorithms(6) 67 }
-const uint8_t kOidAlgMtcProof[] = {0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x06,
-                                   0x43};
+const uint8_t kOidAlgMtcProof[] = {OBJ_ENC_alg_mtcProof};
 
 
 // Returns true if the entirety of the input is a NULL value.

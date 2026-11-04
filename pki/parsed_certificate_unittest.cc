@@ -15,7 +15,10 @@
 #include "parsed_certificate.h"
 
 #include <gtest/gtest.h>
+
+#include <openssl/nid.h>
 #include <openssl/pool.h>
+
 #include "cert_errors.h"
 #include "input.h"
 #include "parse_certificate.h"
@@ -600,6 +603,206 @@ TEST(ParsedCertificateTest, AuthorityKeyIdentifierNotSequence) {
   std::shared_ptr<const ParsedCertificate> cert =
       ParseCertificateFromFile("authority_key_identifier_not_sequence.pem", {});
   ASSERT_FALSE(cert);
+}
+
+// The CA ID 32473.1, used in the MTC test data.
+constexpr uint8_t kMTCTestCAId[] = {0x81, 0xfd, 0x59, 0x01};
+
+// DER encoding of the AlgorithmIdentifier for ML-DSA-44.
+// clang-format off
+constexpr uint8_t kMldsa44AlgorithmIdentifier[] = {
+    0x30, 11,           // SEQUENCE (AlgorithmIdentifier)
+    0x06, 9,            //   OBJECT IDENTIFIER
+    OBJ_ENC_ML_DSA_44,  //     id-ml-dsa-44
+};
+// clang-format on
+
+TEST(ParsedCertificateTest, NoMtcCaExtension) {
+  std::shared_ptr<const ParsedCertificate> cert =
+      ParseCertificateFromFile("cert_version3.pem", {});
+  ASSERT_TRUE(cert);
+  EXPECT_FALSE(cert->mtc_ca_info());
+}
+
+TEST(ParsedCertificateTest, MtcCaExtension) {
+  std::shared_ptr<const ParsedCertificate> cert =
+      ReadCryptoX509MTCTestCert("ca_cert.pem");
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(cert->mtc_ca_info());
+  const ParsedMtcCaInfo &mtc_ca = *cert->mtc_ca_info();
+  EXPECT_EQ(mtc_ca.ca_id, der::Input(kMTCTestCAId));
+  EXPECT_EQ(mtc_ca.ca_cosign_algorithm_tlv,
+            der::Input(kMldsa44AlgorithmIdentifier));
+  EXPECT_EQ(mtc_ca.min_serial, (uint64_t{1} << 48) + 8);
+  EXPECT_EQ(mtc_ca.max_serial, (uint64_t{1} << 48) + 4096);
+}
+
+// Unlike crypto/x509, libpki does not limit the length of the CA ID.
+TEST(ParsedCertificateTest, MtcCaExtensionLongCAId) {
+  std::shared_ptr<const ParsedCertificate> cert =
+      ReadCryptoX509MTCTestCert("ca_id_too_long/ca_cert.pem");
+  ASSERT_TRUE(cert);
+  ASSERT_TRUE(cert->mtc_ca_info());
+  EXPECT_EQ(cert->mtc_ca_info()->ca_id.size(), 36u);
+}
+
+TEST(ParsedCertificateTest, MtcCaExtensionTrailingData) {
+  CertErrors errors;
+  EXPECT_FALSE(
+      ReadCryptoX509MTCTestCert("ca_ext_trailing_data/ca_cert.pem", &errors));
+  EXPECT_EQ(errors.ToDebugString(), "ERROR: Failed parsing MTC CA info\n");
+}
+
+TEST(ParsedCertificateTest, MtcCaExtensionMinSerialTooLow) {
+  CertErrors errors;
+  EXPECT_FALSE(
+      ReadCryptoX509MTCTestCert("ca_min_serial_too_low/ca_cert.pem", &errors));
+  EXPECT_EQ(errors.ToDebugString(), "ERROR: Failed parsing MTC CA info\n");
+}
+
+// Certificates using MTC CA extension OIDs from earlier drafts are not
+// recognized as MTC CAs.
+TEST(ParsedCertificateTest, MtcCaExtensionUnrecognizedOid) {
+  for (const char *file_name : {
+           // A draft-05 MTC CA certificate.
+           "old_draft_version/ca_cert.pem",
+           // A draft-07 extension body and subject, but with the draft-05
+           // extension OID.
+           "ca_ext_oid_wrong/ca_cert.pem",
+       }) {
+    SCOPED_TRACE(file_name);
+    std::shared_ptr<const ParsedCertificate> cert =
+        ReadCryptoX509MTCTestCert(file_name);
+    ASSERT_TRUE(cert);
+    EXPECT_FALSE(cert->mtc_ca_info());
+  }
+}
+
+class ParseMtcCaExtensionTest : public testing::Test {
+ protected:
+  // clang-format off
+  // Name with a single id-rdna-trustAnchorID attribute with RELATIVE-OID 1.
+  static constexpr uint8_t kSubject[] = {
+      0x30, 17,                    // SEQUENCE (Name)
+      0x31, 15,                    //   SET (RelativeDistinguishedName)
+      0x30, 13,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0d, 1,                     //       RELATIVE-OID
+      0x01,                        //         1
+  };
+  // Same as above, but with an invalid RELATIVE-OID.
+  static constexpr uint8_t kSubjectInvalidRelativeOid[] = {
+      0x30, 18,                    // SEQUENCE (Name)
+      0x31, 16,                    //   SET (RelativeDistinguishedName)
+      0x30, 14,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0d, 2,                     //       RELATIVE-OID
+      0x80, 0x01,                  //         1, with a non-minimal encoding
+  };
+  // The CA ID as a UTF8String (the draft-05 encoding) instead of a
+  // RELATIVE-OID.
+  static constexpr uint8_t kSubjectUTF8String[] = {
+      0x30, 17,                    // SEQUENCE (Name)
+      0x31, 15,                    //   SET (RelativeDistinguishedName)
+      0x30, 13,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0c, 1,                     //       UTF8String
+      '1',                         //         "1"
+  };
+  // Two RDNs, each with one id-rdna-trustAnchorID attribute.
+  static constexpr uint8_t kSubjectTwoRDNs[] = {
+      0x30, 34,                    // SEQUENCE (Name)
+      0x31, 15,                    //   SET (RelativeDistinguishedName)
+      0x30, 13,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0d, 1,                     //       RELATIVE-OID
+      0x01,                        //         1
+      0x31, 15,                    //   SET (RelativeDistinguishedName)
+      0x30, 13,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0d, 1,                     //       RELATIVE-OID
+      0x02,                        //         2
+  };
+  // One RDN with two id-rdna-trustAnchorID attributes.
+  static constexpr uint8_t kSubjectTwoAttributes[] = {
+      0x30, 32,                    // SEQUENCE (Name)
+      0x31, 30,                    //   SET (RelativeDistinguishedName)
+      0x30, 13,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0d, 1,                     //       RELATIVE-OID
+      0x01,                        //         1
+      0x30, 13,                    //     SEQUENCE (AttributeTypeAndValue)
+      0x06, 8,                     //       OBJECT IDENTIFIER
+      OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
+      0x0d, 1,                     //       RELATIVE-OID
+      0x02,                        //         2
+  };
+
+  // MTCCertificationAuthority with an ML-DSA-44 CA cosigner and serial
+  // numbers [2^48, 2^48 + 1].
+  static constexpr uint8_t kExtensionValue[] = {
+      0x30, 31,           // SEQUENCE (MTCCertificationAuthority)
+      0x30, 11,           //   SEQUENCE (signature AlgorithmIdentifier)
+      0x06, 9,            //     OBJECT IDENTIFIER
+      OBJ_ENC_ML_DSA_44,  //       id-ml-dsa-44
+      0x02, 7,            //   INTEGER (minSerial)
+      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  //     2^48
+      0x02, 7,            //   INTEGER (maxSerial)
+      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,  //     2^48 + 1
+  };
+  // clang-format on
+
+  static constexpr uint8_t kMTCCertificationAuthoritySHA256Oid[] = {
+      OBJ_ENC_pe_mtcCertificationAuthority_SHA256};
+
+  static ParsedExtension MakeExtension(der::Input value, bool critical) {
+    ParsedExtension extension;
+    extension.oid = der::Input(kMTCCertificationAuthoritySHA256Oid);
+    extension.value = value;
+    extension.critical = critical;
+    return extension;
+  }
+};
+
+TEST_F(ParseMtcCaExtensionTest, Valid) {
+  ParsedMtcCaInfo out;
+  ASSERT_TRUE(ParseMtcCaInfo(
+      MakeExtension(der::Input(kExtensionValue), /*critical=*/true),
+      der::Input(kSubject), &out));
+  static constexpr uint8_t kExpectedCAId[] = {0x01};
+  EXPECT_EQ(out.ca_id, der::Input(kExpectedCAId));
+  EXPECT_EQ(out.ca_cosign_algorithm_tlv,
+            der::Input(kMldsa44AlgorithmIdentifier));
+  EXPECT_EQ(out.min_serial, uint64_t{1} << 48);
+  EXPECT_EQ(out.max_serial, (uint64_t{1} << 48) + 1);
+}
+
+TEST_F(ParseMtcCaExtensionTest, NotCritical) {
+  ParsedMtcCaInfo out;
+  EXPECT_FALSE(ParseMtcCaInfo(
+      MakeExtension(der::Input(kExtensionValue), /*critical=*/false),
+      der::Input(kSubject), &out));
+}
+
+TEST_F(ParseMtcCaExtensionTest, BadSubject) {
+  const ParsedExtension extension =
+      MakeExtension(der::Input(kExtensionValue), /*critical=*/true);
+  for (der::Input subject : {
+           der::Input(kSubjectInvalidRelativeOid),
+           der::Input(kSubjectUTF8String),
+           der::Input(kSubjectTwoRDNs),
+           der::Input(kSubjectTwoAttributes),
+       }) {
+    SCOPED_TRACE(testing::PrintToString(subject));
+    ParsedMtcCaInfo out;
+    EXPECT_FALSE(ParseMtcCaInfo(extension, subject, &out));
+  }
 }
 
 }  // namespace
