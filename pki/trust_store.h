@@ -226,8 +226,8 @@ class OPENSSL_EXPORT MTCAnchor {
             UniquePtr<CRYPTO_BUFFER> ca_key,
             std::vector<LogTrustedSubtrees> log_trusted_subtrees);
 
-  // Create an MTCAnchor with spec version kPlants07 for a trusted CA with
-  // `ca_id` containing the DER encoding of the relative OID of the CA's ID.
+  // Create an MTCAnchor with spec version kPlants07 for a trusted CA.
+  // `ca_id` is a valid DER-encoded relative OID specifying the CA's ID.
   // `ca_signature_algorithm` and `ca_key` configure the CA cosigner key.
   // `ca_key` should be a DER-encoded SubjectPublicKeyInfo.
   // The `log_trusted_subtrees` must be sorted by log number, and each

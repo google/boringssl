@@ -193,6 +193,9 @@ TEST_F(TrustStoreInMemoryTest, MTCAnchors) {
                                     UpRef(ca_spki), valid_subtrees);
     EXPECT_FALSE(invalid_anchor->IsValid());
     EXPECT_FALSE(in_memory.AddMTCTrustAnchor(invalid_anchor));
+    EXPECT_FALSE(MTCAnchor::CreatePlants07(kInvalidCaId,
+                                           SignatureAlgorithm::kMldsa44,
+                                           UpRef(ca_spki), valid_subtrees));
   }
 
   {

@@ -296,6 +296,10 @@ std::shared_ptr<const MTCAnchor> MTCAnchor::CreatePlants07(
     Span<const uint8_t> ca_id, SignatureAlgorithm ca_signature_algorithm,
     UniquePtr<CRYPTO_BUFFER> ca_key,
     std::vector<LogTrustedSubtrees> log_trusted_subtrees) {
+  CBS ca_id_cbs(ca_id);
+  if (!CBS_is_valid_asn1_relative_oid(&ca_id_cbs)) {
+    return nullptr;
+  }
   std::shared_ptr<const MTCAnchor> mtc_anchor = std::make_shared<MTCAnchor>(
       Token(), kPlants07, ca_id, ca_signature_algorithm, std::move(ca_key),
       std::move(log_trusted_subtrees));
