@@ -1003,6 +1003,8 @@ boringssl_crypto_test_data := \
   crypto/x509/test/mtc/ca_id_too_long/cert_1_0.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/ca_cert.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_unknown_sigalg/ca_cert.pem \
+  crypto/x509/test/mtc/ca_unknown_sigalg/cert_1_0.pem \
   crypto/x509/test/mtc/ca_widest_validity/ca_cert.pem \
   crypto/x509/test/mtc/cert_10_0.pem \
   crypto/x509/test/mtc/cert_10_1.pem \
@@ -1428,6 +1430,8 @@ boringssl_pki_test_data := \
   crypto/x509/test/mtc/ca_id_too_long/cert_1_0.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/ca_cert.pem \
   crypto/x509/test/mtc/ca_min_serial_too_low/cert_1_0.pem \
+  crypto/x509/test/mtc/ca_unknown_sigalg/ca_cert.pem \
+  crypto/x509/test/mtc/ca_unknown_sigalg/cert_1_0.pem \
   crypto/x509/test/mtc/ca_widest_validity/ca_cert.pem \
   crypto/x509/test/mtc/cert_10_0.pem \
   crypto/x509/test/mtc/cert_10_1.pem \

@@ -199,6 +199,15 @@ struct OPENSSL_EXPORT CertificateTrust {
   std::shared_ptr<const TrustedSubtreeSet> trusted_subtrees;
 };
 
+// MTCAnchor is an MTC CA (draft-ietf-plants-merkle-tree-certs) trust anchor:
+// an MTC CA certificate (a ParsedCertificate with an MTC CA extension) and the
+// CertificateTrust for it. It shares ownership of the certificate and the
+// CertificateTrust's trusted subtrees. The MTC CA fields are read from the
+// certificate's MTC CA extension.
+//
+// TODO(crbug.com/575507260): Remove this class. MTC CA trust anchors will be
+// represented by their MTC CA certificate and CertificateTrust, like any other
+// trust anchor.
 class OPENSSL_EXPORT MTCAnchor {
  public:
   enum MtcSpecVersion {
@@ -212,14 +221,30 @@ class OPENSSL_EXPORT MTCAnchor {
     friend MTCAnchor;
   };
 
-  // Create an MTCAnchor with spec version kPlants07 for a trusted CA.
+  // Returns an MTCAnchor for the MTC CA certificate `cert`, trusted with
+  // `trust`, or nullopt if `cert` does not have an MTC CA extension. `cert`
+  // must be non-null.
+  //
+  // TODO(crbug.com/575507260): Remove this compatibility shim once callers no
+  // longer use it.
+  static std::optional<MTCAnchor> Create(
+      std::shared_ptr<const ParsedCertificate> cert, CertificateTrust trust);
+
+  // Legacy code path for MTC CAs configured by individual fields rather than by
+  // a certificate. This builds an MTC CA certificate from the fields (see
+  // `EncodeMtcCaCertificate`), with the widest valid serial number range, and
+  // returns an MTCAnchor for it, trusted as a trust anchor with
+  // `log_trusted_subtrees`.
+  //
   // `ca_id` is a valid DER-encoded relative OID specifying the CA's ID.
   // `ca_signature_algorithm` and `ca_key` configure the CA cosigner key.
-  // `ca_key` should be a DER-encoded SubjectPublicKeyInfo.
+  // `ca_key` must be a DER-encoded SubjectPublicKeyInfo.
   // The `log_trusted_subtrees` must be sorted by log number, and each
   // `trusted_subtrees` within must be sorted by their subtree ranges.
-  // Returns nullptr on error. If an instance is returned, it is guaranteed
-  // to be valid.
+  // Returns nullptr on error.
+  //
+  // TODO(crbug.com/575507260): Remove this once callers configure MTC CAs by
+  // certificate.
   static std::shared_ptr<const MTCAnchor> CreatePlants07(
       Span<const uint8_t> ca_id, SignatureAlgorithm ca_signature_algorithm,
       UniquePtr<CRYPTO_BUFFER> ca_key,
@@ -229,42 +254,48 @@ class OPENSSL_EXPORT MTCAnchor {
   // make_shared to work. Uses the "passkey idiom" to prevent callers outside
   // of the class from calling it.
   // Outside callers should use the Create* static method(s).
-  MTCAnchor(Token, MtcSpecVersion spec_version, Span<const uint8_t> ca_id,
-            SignatureAlgorithm ca_signature_algorithm,
-            UniquePtr<CRYPTO_BUFFER> ca_key,
-            std::vector<LogTrustedSubtrees> log_trusted_subtrees);
+  MTCAnchor(Token, std::shared_ptr<const ParsedCertificate> cert,
+            CertificateTrust trust);
 
-  MtcSpecVersion spec_version() const { return spec_version_; }
-  Span<const uint8_t> ca_id() const { return ca_id_; }
-  SignatureAlgorithm ca_signature_algorithm() const {
-    return ca_signature_algorithm_;
+  // Accessors that return `Span` point into the certificate, so they are only
+  // valid while any copy of the certificate is alive. Note that this
+  // `MTCAnchor` may be the only owner of the certificate.
+
+  // Returns the spec version of the MTC CA. Only the draft-07 MTC CA extension
+  // is supported.
+  MtcSpecVersion spec_version() const { return kPlants07; }
+
+  // Returns the DER-encoded contents (without ASN.1 header bytes) of the CA's
+  // ID as a RELATIVE-OID.
+  Span<const uint8_t> ca_id() const;
+
+  // Returns the CA cosigner's signature algorithm, or nullopt if it is not
+  // supported.
+  std::optional<SignatureAlgorithm> ca_signature_algorithm() const;
+
+  // Returns the CA cosigner's DER-encoded SubjectPublicKeyInfo.
+  Span<const uint8_t> ca_key() const;
+
+  Span<const uint8_t> NormalizedSubject() const;
+
+  const CertificateTrust &CertTrust() const { return trust_; }
+
+  // Returns the MTC CA certificate. This is never null.
+  const std::shared_ptr<const ParsedCertificate> &AsCert() const {
+    return cert_;
   }
-  const CRYPTO_BUFFER *ca_key() const { return ca_key_.get(); }
-  der::Input NormalizedSubject() const;
-  CertificateTrust CertTrust() const;
-  // TODO(crbug.com/575507260): Replace synthesized certificate with an MTC CA
-  // certificate from EncodeMtcCaCertificate().
-  std::shared_ptr<const ParsedCertificate> AsCert() const;
 
+  // Looks up a `target_range`'s subtree hash within the trusted subtrees for
+  // `log_number`. Returns std::nullopt if not found, including if `CertTrust()`
+  // does not have trusted subtrees.
   std::optional<TreeHashConstSpan> SubtreeHash(uint16_t log_number,
                                                Subtree target_range) const;
   std::string TrustedSubtreesDebugString() const;
 
  private:
-  // Returns whether this MTCAnchor represents a valid anchor. This function
-  // exists because the c'tor inputs could be invalid.
-  bool IsValid() const;
-
-  void CreateSyntheticCert(Span<const uint8_t> ca_id);
-
-  MtcSpecVersion spec_version_;
-  std::vector<uint8_t> ca_id_;
-  SignatureAlgorithm ca_signature_algorithm_;
-  UniquePtr<CRYPTO_BUFFER> ca_key_;
-  std::shared_ptr<const ParsedCertificate> synthetic_cert_;
-  // If `trusted_subtrees_` is null, `Create*()` failed and `IsValid()` is
-  // false.
-  std::shared_ptr<const TrustedSubtreeSet> trusted_subtrees_;
+  // Non-null, and has an MTC CA extension.
+  std::shared_ptr<const ParsedCertificate> cert_;
+  CertificateTrust trust_;
 };
 
 // A TrustAnchor contains information about how a trust anchor is trusted and

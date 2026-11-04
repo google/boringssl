@@ -134,8 +134,7 @@ TEST_F(TrustStoreInMemoryTest, IsEmptyClear) {
 
   // After adding an MTC root, it is no longer empty:
   static const uint8_t kMtcCaId[] = {42};  // relative OID of 42
-  // The ca_key doesn't need to be valid for this test.
-  UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
+  UniquePtr<CRYPTO_BUFFER> ca_spki = ReadCryptoX509MtcTestCaKey();
   std::vector<LogTrustedSubtrees> trusted_subtrees;
   auto mtc_anchor = MTCAnchor::CreatePlants07(MakeSpan(kMtcCaId),
                                               SignatureAlgorithm::kMldsa44,
@@ -162,8 +161,7 @@ TEST_F(TrustStoreInMemoryTest, MTCAnchors) {
   TrustedSubtree c;
   c.range = Subtree{8, 9};
   std::vector<LogTrustedSubtrees> valid_subtrees = {{1, {a, b, c}}};
-  // The ca_key doesn't need to be valid for this test.
-  UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
+  UniquePtr<CRYPTO_BUFFER> ca_spki = ReadCryptoX509MtcTestCaKey();
   {
     std::shared_ptr<const MTCAnchor> valid_anchor =
         MTCAnchor::CreatePlants07(kValidCaId, SignatureAlgorithm::kMldsa44,
@@ -249,8 +247,7 @@ TEST_F(TrustStoreInMemoryTest, ContainsMTCAnchor) {
   static const uint8_t kValidCaId1[] = {42};  // relative OID of 42
   static const uint8_t kValidCaId2[] = {43};  // relative OID of 43
   std::vector<LogTrustedSubtrees> subtrees;
-  // The ca_key doesn't need to be valid for this test.
-  UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
+  UniquePtr<CRYPTO_BUFFER> ca_spki = ReadCryptoX509MtcTestCaKey();
 
   std::shared_ptr<const MTCAnchor> anchor1 = MTCAnchor::CreatePlants07(
       kValidCaId1, SignatureAlgorithm::kMldsa44, UpRef(ca_spki), subtrees);
@@ -303,8 +300,7 @@ class TrustedSubtreeSetTest : public testing::Test {
   static std::shared_ptr<const MTCAnchor> MakeMTCAnchor(
       std::vector<LogTrustedSubtrees> subtrees) {
     static const uint8_t kCaId[] = {42};  // relative OID of 42
-    // The ca_key doesn't need to be valid for these tests.
-    UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
+    UniquePtr<CRYPTO_BUFFER> ca_spki = ReadCryptoX509MtcTestCaKey();
     return MTCAnchor::CreatePlants07(kCaId, SignatureAlgorithm::kMldsa44,
                                      std::move(ca_spki), std::move(subtrees));
   }
@@ -487,6 +483,94 @@ TEST_F(TrustedSubtreeSetTest, NonMTCCertTrust) {
 TEST_F(TrustedSubtreeSetTest, MTCAnchorInvalidSubtrees) {
   EXPECT_FALSE(
       MakeMTCAnchor({{1, {MakeSubtree(8, 12, 1), MakeSubtree(0, 4, 2)}}}));
+}
+
+TEST(MTCAnchorTest, Create) {
+  std::shared_ptr<const ParsedCertificate> ca_cert =
+      ReadCryptoX509MTCTestCert("ca_cert.pem");
+  ASSERT_TRUE(ca_cert);
+  CertificateTrust trust = CertificateTrust::ForTrustAnchor();
+  trust.trusted_subtrees = TrustedSubtreeSet::Create({});
+  ASSERT_TRUE(trust.trusted_subtrees);
+
+  std::optional<MTCAnchor> anchor = MTCAnchor::Create(ca_cert, trust);
+  ASSERT_TRUE(anchor);
+  EXPECT_EQ(anchor->AsCert(), ca_cert);
+  EXPECT_TRUE(anchor->CertTrust().IsTrustAnchor());
+  EXPECT_EQ(anchor->CertTrust().trusted_subtrees, trust.trusted_subtrees);
+  static const uint8_t kExpectedCaId[] = {0x81, 0xfd, 0x59, 0x01};
+  EXPECT_EQ(Span(anchor->ca_id()), Span(kExpectedCaId));
+  EXPECT_EQ(anchor->ca_signature_algorithm(), SignatureAlgorithm::kMldsa44);
+  EXPECT_EQ(anchor->ca_key(), Span(ca_cert->tbs().spki_tlv));
+  EXPECT_EQ(anchor->NormalizedSubject(),
+            Span<const uint8_t>(ca_cert->normalized_subject()));
+
+  // The MTCAnchor shares ownership of the certificate, so it remains usable
+  // after the caller's reference is released.
+  der::Input spki = ca_cert->tbs().spki_tlv;
+  ca_cert = nullptr;
+  EXPECT_EQ(Span(anchor->ca_id()), Span(kExpectedCaId));
+  EXPECT_EQ(anchor->ca_key(), Span(spki));
+
+  TrustStoreInMemory store;
+  EXPECT_TRUE(store.AddMTCTrustAnchor(std::make_shared<MTCAnchor>(*anchor)));
+}
+
+TEST(MTCAnchorTest, CreateNotMtcCa) {
+  // A draft-05 MTC CA certificate is not recognized as an MTC CA.
+  std::shared_ptr<const ParsedCertificate> draft05_cert =
+      ReadCryptoX509MTCTestCert("old_draft_version/ca_cert.pem");
+  ASSERT_TRUE(draft05_cert);
+  CertificateTrust trust = CertificateTrust::ForTrustAnchor();
+  EXPECT_FALSE(MTCAnchor::Create(draft05_cert, trust));
+
+  ParsedCertificateList chain;
+  ASSERT_TRUE(ReadCertChainFromFile(
+      "testdata/verify_certificate_chain_unittest/key-rollover/oldchain.pem",
+      &chain));
+  ASSERT_FALSE(chain.empty());
+  EXPECT_FALSE(MTCAnchor::Create(chain.back(), trust));
+}
+
+// Tests that an MTCAnchor created from MTC CA fields is backed by an MTC CA
+// certificate, which copies of the MTCAnchor share ownership of.
+TEST(MTCAnchorTest, FromFields) {
+  static const uint8_t kCaId[] = {42};
+  UniquePtr<CRYPTO_BUFFER> ca_key = ReadCryptoX509MtcTestCaKey();
+  ASSERT_TRUE(ca_key);
+  Span<const uint8_t> ca_key_der(CRYPTO_BUFFER_data(ca_key.get()),
+                                 CRYPTO_BUFFER_len(ca_key.get()));
+
+  std::shared_ptr<const MTCAnchor> anchor = MTCAnchor::CreatePlants07(
+      kCaId, SignatureAlgorithm::kMldsa65, UpRef(ca_key),
+      std::vector<LogTrustedSubtrees>());
+  ASSERT_TRUE(anchor);
+  ASSERT_TRUE(anchor->AsCert());
+  EXPECT_EQ(Span(anchor->AsCert()->tbs().spki_tlv), ca_key_der);
+
+  MTCAnchor copy = *anchor;
+  anchor = nullptr;
+  EXPECT_EQ(copy.ca_id(), Span(kCaId));
+  EXPECT_EQ(copy.ca_signature_algorithm(), SignatureAlgorithm::kMldsa65);
+  EXPECT_EQ(copy.ca_key(), ca_key_der);
+  EXPECT_TRUE(copy.CertTrust().IsTrustAnchor());
+  EXPECT_TRUE(copy.CertTrust().trusted_subtrees);
+}
+
+TEST(MTCAnchorTest, FromInvalidFields) {
+  static const uint8_t kInvalidCaId[] = {0x80, 0x01};
+  UniquePtr<CRYPTO_BUFFER> ca_key = ReadCryptoX509MtcTestCaKey();
+  ASSERT_TRUE(ca_key);
+  EXPECT_FALSE(MTCAnchor::CreatePlants07(
+      kInvalidCaId, SignatureAlgorithm::kMldsa44, UpRef(ca_key),
+      std::vector<LogTrustedSubtrees>()));
+
+  // The CA key must be a SubjectPublicKeyInfo.
+  static const uint8_t kCaId[] = {42};
+  UniquePtr<CRYPTO_BUFFER> invalid_key(CRYPTO_BUFFER_new({}, 0, nullptr));
+  EXPECT_FALSE(MTCAnchor::CreatePlants07(kCaId, SignatureAlgorithm::kMldsa44,
+                                         UpRef(invalid_key),
+                                         std::vector<LogTrustedSubtrees>()));
 }
 
 }  // namespace

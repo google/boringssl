@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include <gmock/gmock.h>
@@ -3018,6 +3019,37 @@ TEST_F(PathBuilderMTCTest, PathLength) {
     EXPECT_EQ(mtc_anchor_->AsCert(), path.certs[2]);
     EXPECT_TRUE(path.errors.ContainsError(cert_errors::kMaxPathLengthViolated));
   }
+}
+
+// Tests that a standalone MTC is rejected if the MTC anchor's cosigner
+// algorithm is unsupported.
+TEST_F(PathBuilderMTCTest, UnsupportedCaSignatureAlgorithm) {
+  // The MTC CA cosigner key is Ed25519, which is unsupported.
+  std::shared_ptr<const ParsedCertificate> ca_cert =
+      ReadCryptoX509MTCTestCert("ca_unknown_sigalg/ca_cert.pem");
+  ASSERT_TRUE(ca_cert);
+  std::optional<MTCAnchor> anchor =
+      MTCAnchor::Create(ca_cert, CertificateTrust::ForTrustAnchor());
+  ASSERT_TRUE(anchor);
+  EXPECT_FALSE(anchor->ca_signature_algorithm());
+  std::shared_ptr<const ParsedCertificate> leaf =
+      ReadCryptoX509MTCTestCert("ca_unknown_sigalg/cert_1_0.pem");
+  ASSERT_TRUE(leaf);
+
+  TrustStoreInMemory in_memory;
+  ASSERT_TRUE(in_memory.AddMTCTrustAnchor(
+      std::make_shared<MTCAnchor>(*std::move(anchor))));
+  CertPathBuilder::Result result =
+      RunPathBuilder(leaf, &in_memory, nullptr, nullptr);
+  EXPECT_FALSE(result.HasValidPath());
+  const auto &path = *result.GetBestPathPossiblyInvalid();
+  ASSERT_EQ(2u, path.certs.size());
+  EXPECT_EQ(leaf, path.certs[0]);
+  EXPECT_EQ(ca_cert, path.certs[1]);
+  const CertErrors *leaf_errors = path.errors.GetErrorsForCert(0);
+  ASSERT_TRUE(leaf_errors) << path.errors.ToDebugString(path.certs);
+  EXPECT_TRUE(leaf_errors->ContainsError(cert_errors::kVerifySignedDataFailed))
+      << path.errors.ToDebugString(path.certs);
 }
 
 TEST(PathBuilderPrioritizationTest, DatePrioritization) {

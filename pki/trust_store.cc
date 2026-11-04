@@ -29,6 +29,7 @@
 #include <openssl/pool.h>
 #include <openssl/span.h>
 
+#include "encode_certificate.h"
 #include "merkle_tree.h"
 #include "parse_certificate.h"
 #include "parsed_certificate.h"
@@ -285,6 +286,17 @@ std::optional<CertificateTrust> CertificateTrust::FromDebugString(
   return trust;
 }
 
+// static
+std::optional<MTCAnchor> MTCAnchor::Create(
+    std::shared_ptr<const ParsedCertificate> cert, CertificateTrust trust) {
+  if (!cert->mtc_ca_info()) {
+    return std::nullopt;
+  }
+  return std::optional<MTCAnchor>(std::in_place, Token(), std::move(cert),
+                                  std::move(trust));
+}
+
+// static
 std::shared_ptr<const MTCAnchor> MTCAnchor::CreatePlants07(
     Span<const uint8_t> ca_id, SignatureAlgorithm ca_signature_algorithm,
     UniquePtr<CRYPTO_BUFFER> ca_key,
@@ -293,130 +305,63 @@ std::shared_ptr<const MTCAnchor> MTCAnchor::CreatePlants07(
   if (!CBS_is_valid_asn1_relative_oid(&ca_id_cbs)) {
     return nullptr;
   }
-  std::shared_ptr<const MTCAnchor> mtc_anchor = std::make_shared<MTCAnchor>(
-      Token(), kPlants07, ca_id, ca_signature_algorithm, std::move(ca_key),
-      std::move(log_trusted_subtrees));
-  if (!mtc_anchor->IsValid()) {
+  CertificateTrust trust = CertificateTrust::ForTrustAnchor();
+  trust.trusted_subtrees =
+      TrustedSubtreeSet::Create(std::move(log_trusted_subtrees));
+  if (!trust.trusted_subtrees) {
     return nullptr;
   }
-  return mtc_anchor;
+  // The fields do not include a serial number range, so allow all valid serial
+  // numbers (mtcMinSerial..mtcMaxSerial).
+  UniquePtr<CRYPTO_BUFFER> cert_der = EncodeMtcCaCertificate(
+      ca_id, ca_signature_algorithm,
+      Span(CRYPTO_BUFFER_data(ca_key.get()), CRYPTO_BUFFER_len(ca_key.get())),
+      /*min_serial=*/uint64_t{1} << 48, /*max_serial=*/UINT64_MAX,
+      /*pool=*/nullptr);
+  if (!cert_der) {
+    return nullptr;
+  }
+  std::shared_ptr<const ParsedCertificate> cert = ParsedCertificate::Create(
+      std::move(cert_der), ParseCertificateOptions{}, nullptr);
+  return std::make_shared<const MTCAnchor>(Token(), std::move(cert),
+                                           std::move(trust));
 }
 
-MTCAnchor::MTCAnchor(Token, MtcSpecVersion spec_version,
-                     Span<const uint8_t> ca_id,
-                     SignatureAlgorithm ca_signature_algorithm,
-                     UniquePtr<CRYPTO_BUFFER> ca_key,
-                     std::vector<LogTrustedSubtrees> log_trusted_subtrees)
-    : spec_version_(spec_version),
-      ca_id_(ca_id.begin(), ca_id.end()),
-      ca_signature_algorithm_(ca_signature_algorithm),
-      ca_key_(std::move(ca_key)),
-      trusted_subtrees_(
-          TrustedSubtreeSet::Create(std::move(log_trusted_subtrees))) {
-  CreateSyntheticCert(ca_id);
+MTCAnchor::MTCAnchor(Token, std::shared_ptr<const ParsedCertificate> cert,
+                     CertificateTrust trust)
+    : cert_(std::move(cert)), trust_(std::move(trust)) {
+  BSSL_CHECK(cert_ && cert_->mtc_ca_info());
 }
 
-bool MTCAnchor::IsValid() const {
-  return synthetic_cert_ != nullptr && trusted_subtrees_ != nullptr;
+Span<const uint8_t> MTCAnchor::ca_id() const {
+  return cert_->mtc_ca_info()->ca_id;
 }
 
-der::Input MTCAnchor::NormalizedSubject() const {
-  return synthetic_cert_->normalized_subject();
+std::optional<SignatureAlgorithm> MTCAnchor::ca_signature_algorithm() const {
+  return ParseSignatureAlgorithm(cert_->mtc_ca_info()->ca_cosign_algorithm_tlv);
 }
 
-CertificateTrust MTCAnchor::CertTrust() const {
-  CertificateTrust trust;
-  trust.type = CertificateTrustType::TRUSTED_ANCHOR;
-  trust.trusted_subtrees = trusted_subtrees_;
-  return trust;
+Span<const uint8_t> MTCAnchor::ca_key() const {
+  return cert_->tbs().spki_tlv;
 }
 
-std::shared_ptr<const ParsedCertificate> MTCAnchor::AsCert() const {
-  return synthetic_cert_;
+Span<const uint8_t> MTCAnchor::NormalizedSubject() const {
+  return cert_->normalized_subject();
 }
 
 std::optional<TreeHashConstSpan> MTCAnchor::SubtreeHash(
     uint16_t log_number, Subtree target_range) const {
-  if (trusted_subtrees_ == nullptr) {
+  if (trust_.trusted_subtrees == nullptr) {
     return std::nullopt;
   }
-  return trusted_subtrees_->LookupSubtreeHash(log_number, target_range);
+  return trust_.trusted_subtrees->LookupSubtreeHash(log_number, target_range);
 }
 
 std::string MTCAnchor::TrustedSubtreesDebugString() const {
-  if (trusted_subtrees_ == nullptr) {
+  if (trust_.trusted_subtrees == nullptr) {
     return "Invalid";
   }
-  return trusted_subtrees_->DebugString();
-}
-
-void MTCAnchor::CreateSyntheticCert(bssl::Span<const uint8_t> ca_id) {
-  bssl::ScopedCBB cbb;
-  CBB cert, tbs_cert, version, validity, subject_seq, subject_set, subject_log,
-      signature;
-  BSSL_CHECK(CBB_init(cbb.get(), 0));
-  BSSL_CHECK(CBB_add_asn1(cbb.get(), &cert, CBS_ASN1_SEQUENCE));
-  // Fill the TBSCertificate
-  BSSL_CHECK(CBB_add_asn1(&cert, &tbs_cert, CBS_ASN1_SEQUENCE));
-  // version
-  BSSL_CHECK(
-      CBB_add_asn1(&tbs_cert, &version,
-                   CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 0));
-  BSSL_CHECK(CBB_add_asn1_uint64(&version, 2));  // 2 is the enum value for v3
-  // serialNumber
-  BSSL_CHECK(CBB_add_asn1_uint64(&tbs_cert, 0));
-  // signature
-  BSSL_CHECK(CBB_add_asn1_element(&tbs_cert, CBS_ASN1_SEQUENCE, nullptr, 0));
-  // issuer
-  BSSL_CHECK(CBB_add_asn1_element(&tbs_cert, CBS_ASN1_SEQUENCE, nullptr, 0));
-  // validity
-  BSSL_CHECK(CBB_add_asn1(&tbs_cert, &validity, CBS_ASN1_SEQUENCE));
-  static const uint8_t notBefore[] = "00000101000000Z";
-  static const uint8_t notAfter[] = "99991231235960Z";
-  BSSL_CHECK(CBB_add_asn1_element(&validity, CBS_ASN1_GENERALIZEDTIME,
-                                  notBefore, sizeof(notBefore) - 1));
-  BSSL_CHECK(CBB_add_asn1_element(&validity, CBS_ASN1_GENERALIZEDTIME, notAfter,
-                                  sizeof(notAfter) - 1));
-
-  // subject
-  BSSL_CHECK(CBB_add_asn1(&tbs_cert, &subject_seq, CBS_ASN1_SEQUENCE));
-  BSSL_CHECK(CBB_add_asn1(&subject_seq, &subject_set, CBS_ASN1_SET));
-  BSSL_CHECK(CBB_add_asn1(&subject_set, &subject_log, CBS_ASN1_SEQUENCE));
-
-  BSSL_CHECK(spec_version() == kPlants07);
-  // A CA ID determines a PKIX distinguished name (Section 4.1.2.4 of
-  // [RFC5280]) that can be used in the issuer or subject field of an X.509
-  // TBSCertificate. This distinguished name has a single relative
-  // distinguished name, which has a single attribute. The attribute has type
-  // id-rdna-trustAnchorID, defined below:
-  //
-  // id-rdna-trustAnchorID OBJECT IDENTIFIER ::= {
-  //     iso(1) identified-organization(3) dod(6) internet(1) security(5)
-  //     mechanisms(5) pkix(7) rdna(25) 3 }
-  static const uint8_t tai_attr_oid[] = {0x2b, 0x06, 0x01, 0x05,
-                                         0x05, 0x07, 0x19, 0x03};
-  BSSL_CHECK(CBB_add_asn1_element(&subject_log, CBS_ASN1_OBJECT, tai_attr_oid,
-                                  sizeof(tai_attr_oid)));
-
-  // The attribute's value is a RELATIVE-OID containing the trust anchor ID's
-  // ASN.1 representation.
-  BSSL_CHECK(CBB_add_asn1_element(&subject_log, CBS_ASN1_RELATIVE_OID,
-                                  ca_id.data(), ca_id.size()));
-
-  // subjectPublicKeyInfo
-  BSSL_CHECK(CBB_add_asn1_element(&tbs_cert, CBS_ASN1_SEQUENCE, nullptr, 0));
-
-  // finish the outer Certificate with the signatureAlgorithm and signature.
-  BSSL_CHECK(CBB_add_asn1_element(&cert, CBS_ASN1_SEQUENCE, nullptr, 0));
-  BSSL_CHECK(CBB_add_asn1(&cert, &signature, CBS_ASN1_BITSTRING));
-  BSSL_CHECK(CBB_add_u8(&signature, 0));
-
-  BSSL_CHECK(CBB_flush(cbb.get()));
-
-  synthetic_cert_ = ParsedCertificate::Create(
-      bssl::UniquePtr<CRYPTO_BUFFER>(
-          CRYPTO_BUFFER_new(CBB_data(cbb.get()), CBB_len(cbb.get()), nullptr)),
-      ParseCertificateOptions{}, nullptr);
+  return trust_.trusted_subtrees->DebugString();
 }
 
 void TrustAnchor::OverrideCertTrust(CertificateTrust new_trust) {

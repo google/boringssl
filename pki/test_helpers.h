@@ -153,6 +153,11 @@ std::string ReadTestFileToString(const std::string &file_path_ascii);
 std::shared_ptr<const ParsedCertificate> ReadCryptoX509MTCTestCert(
     const std::string &file_name, CertErrors *errors = nullptr);
 
+// Returns the CA cosigner key (a DER-encoded SubjectPublicKeyInfo) from the
+// crypto/x509 MTC CA test certificate, for tests that need a well-formed key
+// but do not verify cosignatures with it.
+UniquePtr<CRYPTO_BUFFER> ReadCryptoX509MtcTestCaKey();
+
 // Asserts that `actual_errors` matches `expected_errors_str`.
 //
 // This is a helper function to simplify rebasing the error expectations when

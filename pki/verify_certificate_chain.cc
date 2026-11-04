@@ -28,6 +28,7 @@
 #include <openssl/sha2.h>
 #include <openssl/span.h>
 
+#include "../crypto/bytestring/internal.h"
 #include "cert_error_params.h"
 #include "cert_errors.h"
 #include "common_cert_errors.h"
@@ -1133,7 +1134,7 @@ static bool VerifyMTCProofSignature(
     const CBS *cosigner_id, Span<const uint8_t> log_id_text, uint64_t start,
     uint64_t end, const TreeHash &expected_subtree_hash,
     Span<const uint8_t> signature, SignatureAlgorithm signature_algorithm,
-    const CRYPTO_BUFFER *key_bytes, SignatureVerifyCache *cache) {
+    Span<const uint8_t> key_bytes, SignatureVerifyCache *cache) {
   ScopedCBB cosigned_subtree;
   // `cosigner_name` and `log_origin` are the only variable-length parts of
   // `CosignedSubtree`. Allocate the initial buffer size with 48 bytes for those
@@ -1212,12 +1213,9 @@ static bool VerifyMTCProofSignature(
     return false;
   }
 
-  return VerifySignedData(
-      signature_algorithm,
-      Span<const uint8_t>(CBB_data(cosigned_subtree.get()),
-                          CBB_len(cosigned_subtree.get())),
-      der::BitString(signature, 0),
-      Span(CRYPTO_BUFFER_data(key_bytes), CRYPTO_BUFFER_len(key_bytes)), cache);
+  return VerifySignedData(signature_algorithm,
+                          der::Input(CBBAsSpan(cosigned_subtree.get())),
+                          der::BitString(signature, 0), key_bytes, cache);
 }
 
 enum class VerifyMTCResult {
@@ -1243,6 +1241,7 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
                                  const MTCAnchor *mtc_anchor,
                                  VerifyCertificateChainDelegate *delegate) {
   BSSL_CHECK(mtc_anchor->spec_version() == MTCAnchor::kPlants07);
+  BSSL_CHECK(mtc_anchor->AsCert()->mtc_ca_info().has_value());
   // Step 1: Check that the TBSCertificate's signature field is
   // id-alg-mtcProof with omitted parameters.
   if (cert.signature_algorithm() != SignatureAlgorithm::kMtcProof) {
@@ -1270,6 +1269,10 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   if (!der::ParseUint64(cert.tbs().serial_number, &serial)) {
     return VerifyMTCResult::kFailed;
   }
+  // TODO(crbug.com/575507260): Check that `serial` is within the MTC CA
+  // certificate's serial number range (Section 5.5), as crypto/x509 does. This
+  // is not needed yet, but will be needed once arbitrary MTC CA certificates
+  // can be trust anchors.
 
   // Step 4's revocation check is not performed in this function. The caller is
   // responsible for performing revocation checks.
@@ -1495,11 +1498,14 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
     // could first find and verify the CA signature before bothering to check
     // any of the other ones.
     if (cosigner_id == mtc_anchor->ca_id()) {
-      found_valid_ca_signature = VerifyMTCProofSignature(
-          &cbs_cosigner_id, StringAsBytes(log_id_text), start, end,
-          expected_subtree_hash.value(), signature,
-          mtc_anchor->ca_signature_algorithm(), mtc_anchor->ca_key(),
-          delegate->GetVerifyCache());
+      std::optional<SignatureAlgorithm> ca_signature_algorithm =
+          mtc_anchor->ca_signature_algorithm();
+      found_valid_ca_signature =
+          ca_signature_algorithm.has_value() &&
+          VerifyMTCProofSignature(
+              &cbs_cosigner_id, StringAsBytes(log_id_text), start, end,
+              expected_subtree_hash.value(), signature, *ca_signature_algorithm,
+              mtc_anchor->ca_key(), delegate->GetVerifyCache());
 
       if (delegate->IsDebugLogEnabled()) {
         delegate->DebugLog(std::string("VerifyMTC: CA signature ") +
@@ -1508,11 +1514,13 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
     } else {
       auto cosigner = delegate->GetMTCCosigner(cosigner_id);
       bool this_cosignature_was_valid = false;
-      if (cosigner && VerifyMTCProofSignature(
-                          &cbs_cosigner_id, StringAsBytes(log_id_text), start,
-                          end, expected_subtree_hash.value(), signature,
-                          cosigner->signature_algorithm, cosigner->key.get(),
-                          delegate->GetVerifyCache())) {
+      if (cosigner &&
+          VerifyMTCProofSignature(&cbs_cosigner_id, StringAsBytes(log_id_text),
+                                  start, end, expected_subtree_hash.value(),
+                                  signature, cosigner->signature_algorithm,
+                                  Span(CRYPTO_BUFFER_data(cosigner->key.get()),
+                                       CRYPTO_BUFFER_len(cosigner->key.get())),
+                                  delegate->GetVerifyCache())) {
         valid_additional_cosigners.emplace_back(cosigner_id.begin(),
                                                 cosigner_id.end());
         this_cosignature_was_valid = true;

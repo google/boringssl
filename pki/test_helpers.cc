@@ -454,6 +454,17 @@ std::shared_ptr<const ParsedCertificate> ReadCryptoX509MTCTestCert(
       {}, errors);
 }
 
+UniquePtr<CRYPTO_BUFFER> ReadCryptoX509MtcTestCaKey() {
+  std::shared_ptr<const ParsedCertificate> cert =
+      ReadCryptoX509MTCTestCert("ca_cert.pem");
+  if (!cert) {
+    ADD_FAILURE() << "Could not parse ca_cert.pem";
+    return nullptr;
+  }
+  return UniquePtr<CRYPTO_BUFFER>(CRYPTO_BUFFER_new(
+      cert->tbs().spki_tlv.data(), cert->tbs().spki_tlv.size(), nullptr));
+}
+
 void VerifyCertPathErrors(const std::string &expected_errors_str,
                           const CertPathErrors &actual_errors,
                           const ParsedCertificateList &chain,
