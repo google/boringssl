@@ -100,7 +100,6 @@ bool SimplePathBuilderDelegate::IsSignatureAlgorithmAcceptable(
     case SignatureAlgorithm::kRsaPssSha256:
     case SignatureAlgorithm::kRsaPssSha384:
     case SignatureAlgorithm::kRsaPssSha512:
-    case SignatureAlgorithm::kMtcProofDraftPlants04:
     case SignatureAlgorithm::kMtcProof:
     case SignatureAlgorithm::kMldsa44:
     case SignatureAlgorithm::kMldsa65:

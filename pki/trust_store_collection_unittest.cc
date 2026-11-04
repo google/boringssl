@@ -215,32 +215,33 @@ class TrustStoreCollectionMtcTest : public testing::Test {
     // Create modified versions of `mtc_leaf_` with different issuers. These
     // don't need to be able to verify, we just need certs with different
     // issuers to test the issuer lookup in GetTrustedMTCIssuerOf.
-    constexpr char kCaId2Str[] = "32473.2";
-    mtc_leaf2_ = ModifyLeafWithIssuerCaId(kCaId2Str);
+    static constexpr uint8_t kCaId2[] = {0x81, 0xfd, 0x59, 0x02};  // 32473.2
+    mtc_leaf2_ = ModifyLeafWithIssuerCaId(kCaId2);
     ASSERT_TRUE(mtc_leaf2_);
 
-    constexpr char kCaId3Str[] = "32473.3";
-    mtc_leaf3_ = ModifyLeafWithIssuerCaId(kCaId3Str);
+    static constexpr uint8_t kCaId3[] = {0x81, 0xfd, 0x59, 0x03};  // 32473.3
+    mtc_leaf3_ = ModifyLeafWithIssuerCaId(kCaId3);
     ASSERT_TRUE(mtc_leaf3_);
   }
 
   std::shared_ptr<const ParsedCertificate> ModifyLeafWithIssuerCaId(
-      std::string_view new_ca_id) {
-    // The ca_id encoded in the issuer name of mtc-leaf.pem.
-    constexpr std::string_view ca_id_str = "32473.1";
+      Span<const uint8_t> new_ca_id) {
+    // The RELATIVE-OID encoding of the CA ID 32473.1 in the issuer name of
+    // mtc-leaf.pem.
+    static constexpr uint8_t kCaId[] = {0x81, 0xfd, 0x59, 0x01};
 
-    if (new_ca_id.size() != ca_id_str.size()) {
-      ADD_FAILURE() << "invalid replacement string";
+    if (new_ca_id.size() != sizeof(kCaId)) {
+      ADD_FAILURE() << "invalid replacement CA ID";
       return nullptr;
     }
 
     std::vector<uint8_t> leaf_der2(mtc_leaf_->der_cert().begin(),
                                    mtc_leaf_->der_cert().end());
 
-    // find the ca_id_str in leaf_der2 and replace the bytes with
+    // find the kCaId in leaf_der2 and replace the bytes with
     // new CA id.
-    auto it = std::search(leaf_der2.begin(), leaf_der2.end(), ca_id_str.begin(),
-                          ca_id_str.end());
+    auto it = std::search(leaf_der2.begin(), leaf_der2.end(), std::begin(kCaId),
+                          std::end(kCaId));
     if (it == leaf_der2.end()) {
       ADD_FAILURE() << "CA id not found";
       return nullptr;
@@ -276,15 +277,15 @@ TEST_F(TrustStoreCollectionMtcTest, MtcTwoStores) {
   std::vector<LogTrustedSubtrees> trusted_subtrees;
   // The ca_key doesn't need to be valid for this test.
   UniquePtr<CRYPTO_BUFFER> ca_spki(CRYPTO_BUFFER_new({}, 0, nullptr));
-  auto mtc_anchor1 = std::make_shared<MTCAnchor>(
-      MakeSpan(kCaId1), SignatureAlgorithm::kMldsa44, UpRef(ca_spki),
-      trusted_subtrees);
-  auto mtc_anchor2 = std::make_shared<MTCAnchor>(
-      MakeSpan(kCaId2), SignatureAlgorithm::kMldsa44, UpRef(ca_spki),
-      trusted_subtrees);
-  auto mtc_anchor3 = std::make_shared<MTCAnchor>(
-      MakeSpan(kCaId3), SignatureAlgorithm::kMldsa44, UpRef(ca_spki),
-      trusted_subtrees);
+  auto mtc_anchor1 =
+      MTCAnchor::CreatePlants07(MakeSpan(kCaId1), SignatureAlgorithm::kMldsa44,
+                                UpRef(ca_spki), trusted_subtrees);
+  auto mtc_anchor2 =
+      MTCAnchor::CreatePlants07(MakeSpan(kCaId2), SignatureAlgorithm::kMldsa44,
+                                UpRef(ca_spki), trusted_subtrees);
+  auto mtc_anchor3 =
+      MTCAnchor::CreatePlants07(MakeSpan(kCaId3), SignatureAlgorithm::kMldsa44,
+                                UpRef(ca_spki), trusted_subtrees);
 
   TrustStoreCollection collection;
   TrustStoreInMemory in_memory1;

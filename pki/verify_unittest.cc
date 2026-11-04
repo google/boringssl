@@ -221,13 +221,13 @@ class VerifyMTCTest : public ::testing::Test {
     ASSERT_TRUE(ReadTestCertPem("mtc-leaf-c.pem", &leaf_c_));
 
     ASSERT_TRUE(
-        CreateTrustedSubtree("+g71+77yhXVIT2NWwsHWnTz8TFyJ6yT9TLDGOW+Vi6k=", 8,
+        CreateTrustedSubtree("YhUsyJJBj7sv9of7o6OBRt+tERwGRoB9Uv3NuqqOIPg=", 8,
                              13, &generic_cert_subtree_));
     ASSERT_TRUE(
-        CreateTrustedSubtree("sj2WUzCsih+fREf46unoF/8kyGr6tEpL/hlzn9D9994=", 8,
+        CreateTrustedSubtree("eLNGWIQ7EJ2dN+jwBZADyrSomH6FjMNGtXGm0ECrXbM=", 8,
                              16, &leaf_b_subtree_));
     ASSERT_TRUE(
-        CreateTrustedSubtree("bGiRKKU8PI5RTxSYgzL2nGvnUE4d/l09y6JaLCbqgy8=", 16,
+        CreateTrustedSubtree("WfKyAqF/I+0HOocgwWu5yg9GklfAkziMQlh23M9b9wQ=", 16,
                              24, &leaf_c_subtree_));
   }
 
@@ -309,7 +309,7 @@ TEST_F(VerifyMTCTest, SignaturelessMTC) {
   std::vector<LogTrustedSubtrees> subtrees = {
       {kLogNumber, {generic_cert_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
@@ -340,7 +340,7 @@ TEST_F(VerifyMTCTest, ExplicitlyDistrustedLeaf) {
   std::vector<LogTrustedSubtrees> subtrees = {
       {kLogNumber, {generic_cert_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
@@ -356,7 +356,7 @@ TEST_F(VerifyMTCTest, WrongProof) {
   std::vector<LogTrustedSubtrees> subtrees = {
       {kLogNumber, {generic_cert_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
@@ -373,7 +373,7 @@ TEST_F(VerifyMTCTest, UnusedBit) {
   std::vector<LogTrustedSubtrees> subtrees = {
       {kLogNumber, {generic_cert_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
@@ -393,9 +393,9 @@ TEST_F(VerifyMTCTest, WrongCaId) {
   std::vector<LogTrustedSubtrees> subtrees = {
       {kLogNumber, {generic_cert_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(MakeSpan(kCaBitflipId),
-                                                SignatureAlgorithm::kMldsa44,
-                                                UpRef(ca_spki_), subtrees);
+  auto mtc_anchor = MTCAnchor::CreatePlants07(MakeSpan(kCaBitflipId),
+                                              SignatureAlgorithm::kMldsa44,
+                                              UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
   CertificateVerifyOptions opts;
@@ -412,7 +412,7 @@ TEST_F(VerifyMTCTest, ExpiredMTC) {
   std::vector<LogTrustedSubtrees> subtrees = {
       {kLogNumber, {generic_cert_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
@@ -453,7 +453,7 @@ TEST_F(VerifyMTCTest, BadMTCAnchorHash) {
       {kLogNumber, {generic_cert_subtree_}},
   };
   subtrees[0].trusted_subtrees[0].hash[0] ^= 1;
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));
 
@@ -477,11 +477,11 @@ TEST_F(VerifyMTCTest, SubtreeRangesMatch) {
   };
 
   auto mtc_anchor_a =
-      std::make_shared<MTCAnchor>(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
-                                  UpRef(ca_spki_), trusted_subtrees_a);
+      MTCAnchor::CreatePlants07(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
+                                UpRef(ca_spki_), trusted_subtrees_a);
   auto mtc_anchor_b =
-      std::make_shared<MTCAnchor>(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
-                                  UpRef(ca_spki_), trusted_subtrees_b);
+      MTCAnchor::CreatePlants07(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
+                                UpRef(ca_spki_), trusted_subtrees_b);
 
   std::unique_ptr<VerifyTrustStore> trust_store_a = EmptyTrustStore();
   ASSERT_TRUE(trust_store_a->trust_store->AddMTCTrustAnchor(mtc_anchor_a));
@@ -525,7 +525,7 @@ TEST_F(VerifyMTCTest, MultipleSubtrees) {
       {kLogNumber,
        {generic_cert_subtree_, leaf_b_subtree_, leaf_c_subtree_}},
   };
-  auto mtc_anchor = std::make_shared<MTCAnchor>(
+  auto mtc_anchor = MTCAnchor::CreatePlants07(
       MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(ca_spki_), subtrees);
   std::unique_ptr<VerifyTrustStore> trust_store = EmptyTrustStore();
   ASSERT_TRUE(trust_store->trust_store->AddMTCTrustAnchor(mtc_anchor));

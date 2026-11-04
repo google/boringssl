@@ -13,7 +13,7 @@ The following test certs are created according to these instructions.
 ## Instructions
 
 - Run
-  `go run github.com/ietf-plants-wg/merkle-tree-certs/demo@9029a99bcfa4e91b8b8e9ba646ac386a6e1c208f -config=mtc-config.json -out=out`
+  `go run github.com/ietf-plants-wg/merkle-tree-certs/demo@cc8797a94f4933e660f6ce369f3bfa5c6573db01 generate -config=mtc-config.json -out=out`
 - copy/move the following output files:
   - `out/cert_9_0.pem` to `mtc-leaf.pem`
   - `out/cert_9_1.pem` to `mtc-leaf-bitflip.pem`

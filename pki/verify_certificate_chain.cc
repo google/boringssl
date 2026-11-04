@@ -1242,23 +1242,13 @@ enum class VerifyMTCResult {
 static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
                                  const MTCAnchor *mtc_anchor,
                                  VerifyCertificateChainDelegate *delegate) {
-  if (mtc_anchor->spec_version() == MTCAnchor::kPlants04) {
-    // Step 1: Check that the TBSCertificate's signature field is
-    // id-alg-mtcProof (kMtcProofDraftPlants04) with omitted parameters.
-    if (cert.signature_algorithm() !=
-        SignatureAlgorithm::kMtcProofDraftPlants04) {
-      // When we parse the signature algorithm, we check that the parameters are
-      // omitted.
-      return VerifyMTCResult::kFailed;
-    }
-  } else {
-    // Step 1: Check that the TBSCertificate's signature field is
-    // id-alg-mtcProof with omitted parameters.
-    if (cert.signature_algorithm() != SignatureAlgorithm::kMtcProof) {
-      // When we parse the signature algorithm, we check that the parameters are
-      // omitted.
-      return VerifyMTCResult::kFailed;
-    }
+  BSSL_CHECK(mtc_anchor->spec_version() == MTCAnchor::kPlants07);
+  // Step 1: Check that the TBSCertificate's signature field is
+  // id-alg-mtcProof with omitted parameters.
+  if (cert.signature_algorithm() != SignatureAlgorithm::kMtcProof) {
+    // When we parse the signature algorithm, we check that the parameters are
+    // omitted.
+    return VerifyMTCResult::kFailed;
   }
 
   // Step 2: Decode the signatureValue as an MTCProof.
@@ -1268,21 +1258,9 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   if (cert.signature_value().unused_bits() != 0 ||
       !CBS_get_u16_length_prefixed(&mtc_proof, &extensions) ||
       !CBS_get_u48(&mtc_proof, &start) || !CBS_get_u48(&mtc_proof, &end) ||
-      !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof)) {
-    return VerifyMTCResult::kFailed;
-  }
-
-  if (mtc_anchor->spec_version() == MTCAnchor::kPlants04) {
-    if (!CBS_get_u16_length_prefixed(&mtc_proof, &signatures)) {
-      return VerifyMTCResult::kFailed;
-    }
-  } else {
-    if (!CBS_get_u24_length_prefixed(&mtc_proof, &signatures)) {
-      return VerifyMTCResult::kFailed;
-    }
-  }
-
-  if (CBS_len(&mtc_proof) != 0) {
+      !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof) ||
+      !CBS_get_u24_length_prefixed(&mtc_proof, &signatures) ||
+      CBS_len(&mtc_proof) != 0) {
     return VerifyMTCResult::kFailed;
   }
 
@@ -1319,7 +1297,6 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
 
   // Write the octet 0x00 to the hash. This is the domain separator for leaf
   // nodes.
-  // (Note: the procedure as defined in plants-04 is missing this step.)
   static constexpr uint8_t kDomainSeparator[] = {0x00};
   if (!EVP_DigestUpdate(entry_hash_ctx.get(), kDomainSeparator,
                         sizeof(kDomainSeparator))) {
@@ -1346,7 +1323,6 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
 
   // 4. Write the TBSCertificate's `version`, `issuer`, `validity`, and
   // `subject` fields to the hash.
-  // (Note that this is a correction to the instructions in plants-04.)
   if (cert.tbs().version != CertificateVersion::V1) {
     ScopedCBB version_outer;
     CBB version;

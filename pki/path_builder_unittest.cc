@@ -2523,50 +2523,24 @@ class MtcCosignersPathBuilderDelegate : public CertPathBuilderDelegateBase {
   std::map<std::vector<uint8_t>, MTCCosigner> cosigners_;
 };
 
-class PathBuilderMTCTest
-    : public PathBuilderSimpleChainTest,
-      public ::testing::WithParamInterface<MTCAnchor::MtcSpecVersion> {
+class PathBuilderMTCTest : public PathBuilderSimpleChainTest {
  public:
   PathBuilderMTCTest() = default;
 
  protected:
-  MTCAnchor::MtcSpecVersion spec_version() const { return GetParam(); }
-
-  std::string TestDataDir() const {
-    switch (spec_version()) {
-      case MTCAnchor::kPlants04:
-        return "mtc_plants04/";
-      case MTCAnchor::kPlants07:
-        return "mtc_plants07/";
-    }
-    abort();
-  }
+  std::string TestDataDir() const { return "mtc_plants07/"; }
 
   std::string_view ExpectedSubtreeHashBase64() const {
-    switch (spec_version()) {
-      case MTCAnchor::kPlants04:
-        return "ir6iVcgTrbuHdXB3lKGny6VKSlE1OB5Q+LrtdFH+qIE=";
-      case MTCAnchor::kPlants07:
-        return "K/o/0tKQMz/Qdk+F3U9ViXjhYBCgb675l9vH7atcQxQ=";
-    }
-    abort();
+    return "K/o/0tKQMz/Qdk+F3U9ViXjhYBCgb675l9vH7atcQxQ=";
   }
 
   std::shared_ptr<const MTCAnchor> CreateMTCAnchor(
       Span<const uint8_t> ca_id, SignatureAlgorithm ca_signature_algorithm,
       UniquePtr<CRYPTO_BUFFER> ca_key,
       std::vector<LogTrustedSubtrees> log_trusted_subtrees) const {
-    switch (spec_version()) {
-      case MTCAnchor::kPlants04:
-        return std::make_shared<MTCAnchor>(ca_id, ca_signature_algorithm,
-                                           std::move(ca_key),
-                                           std::move(log_trusted_subtrees));
-      case MTCAnchor::kPlants07:
-        return MTCAnchor::CreatePlants07(ca_id, ca_signature_algorithm,
-                                         std::move(ca_key),
-                                         std::move(log_trusted_subtrees));
-    }
-    abort();
+    return MTCAnchor::CreatePlants07(ca_id, ca_signature_algorithm,
+                                     std::move(ca_key),
+                                     std::move(log_trusted_subtrees));
   }
 
   ::testing::AssertionResult ReadMTCTestCert(
@@ -2614,30 +2588,24 @@ class PathBuilderMTCTest
     mtc_anchor_ = CreateMTCAnchor(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
                                   UpRef(spki), subtrees);
     ASSERT_TRUE(mtc_anchor_);
-    ASSERT_EQ(mtc_anchor_->spec_version(), spec_version());
 
     mtc_anchor_wrong_key_ = CreateMTCAnchor(
         MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(spki2), subtrees);
     ASSERT_TRUE(mtc_anchor_wrong_key_);
-    ASSERT_EQ(mtc_anchor_wrong_key_->spec_version(), spec_version());
 
     mtc_anchor_wrong_subtree_hash_ = CreateMTCAnchor(
         MakeSpan(kCaId), SignatureAlgorithm::kMldsa44, UpRef(spki), subtrees2);
     ASSERT_TRUE(mtc_anchor_wrong_subtree_hash_);
-    ASSERT_EQ(mtc_anchor_wrong_subtree_hash_->spec_version(), spec_version());
 
     mtc_anchor_no_subtrees_ =
         CreateMTCAnchor(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
                         UpRef(spki), std::vector<LogTrustedSubtrees>());
     ASSERT_TRUE(mtc_anchor_no_subtrees_);
-    ASSERT_EQ(mtc_anchor_no_subtrees_->spec_version(), spec_version());
 
     mtc_anchor_no_subtrees_wrong_key_ =
         CreateMTCAnchor(MakeSpan(kCaId), SignatureAlgorithm::kMldsa44,
                         UpRef(spki2), std::vector<LogTrustedSubtrees>());
     ASSERT_TRUE(mtc_anchor_no_subtrees_wrong_key_);
-    ASSERT_EQ(mtc_anchor_no_subtrees_wrong_key_->spec_version(),
-              spec_version());
   }
 
   CertPathBuilder::Result RunPathBuilder(
@@ -2668,20 +2636,7 @@ class PathBuilderMTCTest
   std::shared_ptr<const MTCAnchor> mtc_anchor_no_subtrees_wrong_key_;
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    All, PathBuilderMTCTest,
-    ::testing::Values(MTCAnchor::kPlants04, MTCAnchor::kPlants07),
-    [](const testing::TestParamInfo<MTCAnchor::MtcSpecVersion> &param_info) {
-      switch (param_info.param) {
-        case MTCAnchor::kPlants04:
-          return "Plants04";
-        case MTCAnchor::kPlants07:
-          return "Plants07";
-      }
-      abort();
-    });
-
-TEST_P(PathBuilderMTCTest, Verification) {
+TEST_F(PathBuilderMTCTest, Verification) {
   std::shared_ptr<const ParsedCertificate> signatureless_leaf;
   ASSERT_TRUE(ReadMTCTestCert("mtc-leaf.pem", &signatureless_leaf));
   std::shared_ptr<const ParsedCertificate> standalone_leaf;
@@ -2831,7 +2786,7 @@ TEST_P(PathBuilderMTCTest, Verification) {
       cert_errors::kVerifySignedDataFailed));
 }
 
-TEST_P(PathBuilderMTCTest, CosignatureVerification) {
+TEST_F(PathBuilderMTCTest, CosignatureVerification) {
   static constexpr uint8_t kCosignerId1[] = {0x81, 0xfd, 0x59, 0x00};
   static constexpr uint8_t kCosignerPrivateKeySeed1[] = {
       0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
@@ -2986,7 +2941,7 @@ TEST_P(PathBuilderMTCTest, CosignatureVerification) {
   }
 }
 
-TEST_P(PathBuilderMTCTest, CheckPathAfterVerification) {
+TEST_F(PathBuilderMTCTest, CheckPathAfterVerification) {
   // Set up MTC leaf and its trust anchor.
   std::shared_ptr<const ParsedCertificate> mtc_leaf;
   ASSERT_TRUE(ReadMTCTestCert("mtc-leaf.pem", &mtc_leaf));
@@ -3020,7 +2975,7 @@ TEST_P(PathBuilderMTCTest, CheckPathAfterVerification) {
       << error.DiagnosticString();
 }
 
-TEST_P(PathBuilderMTCTest, PathLength) {
+TEST_F(PathBuilderMTCTest, PathLength) {
   std::shared_ptr<const ParsedCertificate> leaf;
   ASSERT_TRUE(ReadMTCTestCert("leaf.pem", &leaf));
   std::shared_ptr<const ParsedCertificate> ica;

@@ -165,17 +165,6 @@ const uint8_t kOidAlgMldsa87[] = {OBJ_ENC_ML_DSA_87};
 const uint8_t kOidAlgMtcProof[] = {0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x06,
                                    0x43};
 
-// From draft-ietf-plants-merkle-tree-certs-04:
-//
-//   id-alg-mtcProof OBJECT IDENTIFIER ::= {
-//       iso(1) identified-organization(3) dod(6) internet(1) security(5)
-//       mechanisms(5) pkix(7) algorithms(6) TBD}
-//
-// Also from said draft:
-//   For initial experimentation, early implementations of this design will use
-//   the OID 1.3.6.1.4.1.44363.47.0 instead of id-alg-mtcProof.
-const uint8_t kOidAlgMtcProofDraftPlants04[] = {0x2b, 0x06, 0x01, 0x04, 0x01,
-                                                0x82, 0xda, 0x4b, 0x2f, 0x00};
 
 // Returns true if the entirety of the input is a NULL value.
 [[nodiscard]] bool IsNull(der::Input input) {
@@ -256,8 +245,6 @@ constexpr SignatureAlgorithmOid kSignatureAlgorithmOids[] = {
     {SignatureAlgorithm::kMldsa87, kOidAlgMldsa87, AlgorithmParams::kAbsent},
 
     {SignatureAlgorithm::kMtcProof, kOidAlgMtcProof, AlgorithmParams::kAbsent},
-    {SignatureAlgorithm::kMtcProofDraftPlants04, kOidAlgMtcProofDraftPlants04,
-     AlgorithmParams::kAbsent},
 };
 
 // Parses a MaskGenAlgorithm as defined by RFC 5912:
@@ -604,7 +591,6 @@ std::optional<DigestAlgorithm> GetTlsServerEndpointDigestAlgorithm(
 
     // RFC 5929 (nor other references) does not define digests to use for these
     // signature algorithms:
-    case SignatureAlgorithm::kMtcProofDraftPlants04:
     case SignatureAlgorithm::kMtcProof:
     case SignatureAlgorithm::kMldsa44:
     case SignatureAlgorithm::kMldsa65:

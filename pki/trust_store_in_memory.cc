@@ -60,9 +60,6 @@ void TrustStoreInMemory::AddCertificateWithUnspecifiedTrust(
 }
 bool TrustStoreInMemory::AddMTCTrustAnchor(
     std::shared_ptr<const MTCAnchor> mtc_anchor) {
-  if (!mtc_anchor->IsValid()) {
-    return false;
-  }
   std::string_view subject = BytesAsStringView(mtc_anchor->NormalizedSubject());
   if (trusted_mtc_anchors_.find(subject) != trusted_mtc_anchors_.end()) {
     return false;

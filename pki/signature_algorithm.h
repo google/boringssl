@@ -55,7 +55,6 @@ enum class SignatureAlgorithm {
   kRsaPssSha256,
   kRsaPssSha384,
   kRsaPssSha512,
-  kMtcProofDraftPlants04,
   kMtcProof,
   kMldsa44,
   kMldsa65,
