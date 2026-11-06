@@ -286,8 +286,8 @@ int CMAC_Final(CMAC_CTX *ctx, uint8_t *out, size_t *out_len) {
 
 out:
   FIPS_service_indicator_unlock_state();
-  if (ret) {
-    FIPS_service_indicator_update_state();
+  if (ret && out != nullptr) {
+    CMAC_verify_service_indicator(&ctx->cipher_ctx);
   }
   return ret;
 }

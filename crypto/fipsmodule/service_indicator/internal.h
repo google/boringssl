@@ -62,6 +62,7 @@ void FIPS_service_indicator_unlock_state();
 
 void AEAD_GCM_verify_service_indicator(const EVP_AEAD_CTX *ctx);
 void AEAD_CCM_verify_service_indicator(const EVP_AEAD_CTX *ctx);
+void CMAC_verify_service_indicator(const EVP_CIPHER_CTX *ctx);
 void EC_KEY_keygen_verify_service_indicator(const EC_KEY *eckey);
 void ECDH_verify_service_indicator(const EC_KEY *ec_key);
 void EVP_Cipher_verify_service_indicator(const EVP_CIPHER_CTX *ctx);
@@ -83,6 +84,9 @@ inline void AEAD_GCM_verify_service_indicator(
 
 inline void AEAD_CCM_verify_service_indicator(
     [[maybe_unused]] const EVP_AEAD_CTX *ctx) {}
+
+inline void CMAC_verify_service_indicator(
+    [[maybe_unused]] const EVP_CIPHER_CTX *ctx) {}
 
 inline void EC_KEY_keygen_verify_service_indicator(
     [[maybe_unused]] const EC_KEY *eckey) {}
