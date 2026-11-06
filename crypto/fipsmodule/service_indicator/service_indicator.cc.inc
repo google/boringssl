@@ -230,12 +230,11 @@ static void evp_md_ctx_verify_service_indicator(const EVP_MD_CTX *ctx,
     }
 
     // The approved RSA key sizes for signing are 2048, 3072 and 4096 bits.
-    // Note: `EVP_PKEY_size` returns the size in bytes.
-    size_t pkey_size = EVP_PKEY_size(FromOpaque(ctx->pctx)->pkey.get());
+    const int pkey_bits = EVP_PKEY_bits(pkey);
 
     // Check if the MD type and the RSA key size are approved.
     if (md_ok(md_type) &&
-        (pkey_size == 256 || pkey_size == 384 || pkey_size == 512)) {
+        (pkey_bits == 2048 || pkey_bits == 3072 || pkey_bits == 4096)) {
       FIPS_service_indicator_update_state();
     }
   } else if (pkey_type == EVP_PKEY_EC) {
