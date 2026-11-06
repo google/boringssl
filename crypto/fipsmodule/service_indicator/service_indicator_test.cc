@@ -1931,8 +1931,14 @@ TEST(ServiceIndicatorTest, CMAC) {
       approved, CMAC_Update(ctx.get(), kPlaintext, sizeof(kPlaintext))));
   EXPECT_EQ(approved, FIPSStatus::NOT_APPROVED);
 
+  // Querying the output length does not perform a CMAC operation.
   uint8_t mac[16];
   size_t out_len;
+  ASSERT_TRUE(CALL_SERVICE_AND_CHECK_APPROVED(
+      approved, CMAC_Final(ctx.get(), nullptr, &out_len)));
+  EXPECT_EQ(approved, FIPSStatus::NOT_APPROVED);
+  EXPECT_EQ(out_len, sizeof(mac));
+
   ASSERT_TRUE(CALL_SERVICE_AND_CHECK_APPROVED(
       approved, CMAC_Final(ctx.get(), mac, &out_len)));
   EXPECT_EQ(approved, FIPSStatus::APPROVED);
@@ -1944,6 +1950,26 @@ TEST(ServiceIndicatorTest, CMAC) {
       AES_CMAC(mac, kAESKey, sizeof(kAESKey), kPlaintext, sizeof(kPlaintext))));
   EXPECT_EQ(Bytes(kAESCMACOutput), Bytes(mac));
   EXPECT_EQ(approved, FIPSStatus::APPROVED);
+
+  // Only AES-128 and AES-256 CMAC are approved.
+  const struct {
+    const EVP_CIPHER *cipher;
+    Span<const uint8_t> key;
+    FIPSStatus expect_approved;
+  } kCiphers[] = {
+      {EVP_aes_256_cbc(), kAESKey_256, FIPSStatus::APPROVED},
+      {EVP_aes_192_cbc(), kAESKey_192, FIPSStatus::NOT_APPROVED},
+      {EVP_des_ede3_cbc(), kAESKey_192, FIPSStatus::NOT_APPROVED},
+  };
+  for (const auto &t : kCiphers) {
+    SCOPED_TRACE(EVP_CIPHER_nid(t.cipher));
+    ASSERT_TRUE(
+        CMAC_Init(ctx.get(), t.key.data(), t.key.size(), t.cipher, nullptr));
+    ASSERT_TRUE(CMAC_Update(ctx.get(), kPlaintext, sizeof(kPlaintext)));
+    ASSERT_TRUE(CALL_SERVICE_AND_CHECK_APPROVED(
+        approved, CMAC_Final(ctx.get(), mac, &out_len)));
+    EXPECT_EQ(approved, t.expect_approved);
+  }
 }
 
 TEST(ServiceIndicatorTest, BasicTest) {

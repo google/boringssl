@@ -251,6 +251,16 @@ err:
   ERR_clear_error();
 }
 
+void bssl::CMAC_verify_service_indicator(const EVP_CIPHER_CTX *ctx) {
+  // Only AES-128 and AES-256 are tested with ACVP for CMAC.
+  switch (EVP_CIPHER_CTX_nid(ctx)) {
+    case NID_aes_128_cbc:
+    case NID_aes_256_cbc:
+      FIPS_service_indicator_update_state();
+      break;
+  }
+}
+
 void bssl::EC_KEY_keygen_verify_service_indicator(const EC_KEY *eckey) {
   if (is_ec_fips_approved(EC_GROUP_get_curve_name(EC_KEY_get0_group(eckey)))) {
     FIPS_service_indicator_update_state();
