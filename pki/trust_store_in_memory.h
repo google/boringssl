@@ -74,7 +74,12 @@ class OPENSSL_EXPORT TrustStoreInMemory : public TrustStore {
   void AddCertificateWithUnspecifiedTrust(
       std::shared_ptr<const ParsedCertificate> cert);
 
-  // Adds a trusted MTC anchor to the store.
+  // Adds a trusted MTC anchor to the store, as its certificate with its trust.
+  // Returns false if the store already contains an MTC anchor with the same
+  // subject.
+  //
+  // TODO(crbug.com/575507260): Remove this once callers add MTC CA
+  // certificates with AddCertificate().
   [[nodiscard]] bool AddMTCTrustAnchor(
       std::shared_ptr<const MTCAnchor> mtc_anchor);
 
@@ -86,11 +91,11 @@ class OPENSSL_EXPORT TrustStoreInMemory : public TrustStore {
       const ParsedCertificate *cert) override;
 
   // Returns true if the trust store contains the given ParsedCertificate
-  // (matches by DER). Only works for traditional anchors; see ContainsMTCAnchor
-  // for MTC anchors.
+  // (matches by DER).
   bool Contains(const ParsedCertificate *cert) const;
 
-  // Returns true if the trust store contains the specified MTC anchor.
+  // Returns true if the trust store contains a trusted MTC CA certificate with
+  // the same subject as `anchor`.
   bool ContainsMTCAnchor(const MTCAnchor *anchor) const;
 
  private:
@@ -101,9 +106,6 @@ class OPENSSL_EXPORT TrustStoreInMemory : public TrustStore {
 
   // Multimap from normalized subject -> Entry.
   std::unordered_multimap<std::string_view, Entry> entries_;
-  // Map from normalized subject -> MTCAnchor.
-  std::unordered_map<std::string_view, std::shared_ptr<const MTCAnchor>>
-      trusted_mtc_anchors_;
 
   // Set of distrusted SPKIs.
   std::set<std::string, std::less<>> distrusted_spkis_;
@@ -111,6 +113,10 @@ class OPENSSL_EXPORT TrustStoreInMemory : public TrustStore {
   // Returns the `Entry` matching `cert`, or `nullptr` if not in the trust
   // store.
   const Entry *GetEntry(const ParsedCertificate *cert) const;
+
+  // Returns the trusted MTC CA `Entry` with normalized subject `subject`, or
+  // `nullptr` if there is none.
+  const Entry* GetMTCAnchorEntry(der::Input subject) const;
 };
 
 BSSL_NAMESPACE_END

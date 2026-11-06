@@ -191,6 +191,10 @@ OPENSSL_EXPORT extern const CertErrorId kMtcLandmarkNotRecognized;
 OPENSSL_EXPORT extern const CertErrorId
     kMtcUnacceptableCosignatureVerificationResult;
 
+// The certificate was issued by a certificate with an MTC CA extension that is
+// not a trust anchor. We currently only support MTC CAs as trust anchors.
+OPENSSL_EXPORT extern const CertErrorId kMtcCaIsNotTrustAnchor;
+
 }  // namespace cert_errors
 BSSL_NAMESPACE_END
 

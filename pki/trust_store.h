@@ -205,9 +205,10 @@ struct OPENSSL_EXPORT CertificateTrust {
 // CertificateTrust's trusted subtrees. The MTC CA fields are read from the
 // certificate's MTC CA extension.
 //
-// TODO(crbug.com/575507260): Remove this class. MTC CA trust anchors will be
-// represented by their MTC CA certificate and CertificateTrust, like any other
-// trust anchor.
+// This class is deprecated. An MTC CA trust anchor is represented by its MTC CA
+// certificate and CertificateTrust, like any other trust anchor.
+//
+// TODO(crbug.com/575507260): Remove this once callers no longer use it.
 class OPENSSL_EXPORT MTCAnchor {
  public:
   enum MtcSpecVersion {
@@ -333,12 +334,6 @@ class OPENSSL_EXPORT TrustAnchor {
   // - `der::Input NormalizedSubject() const;`
   // - `UniquePtr<EVP_PKEY> PublicKey() const;`
 
-  // Modifies the CertificateTrust for this TrustAnchor. Should only be called
-  // by path_builder.cc.
-  //
-  // TODO(nharper): Remove this function as part of the larger TrustAnchor
-  // refactor.
-  void OverrideCertTrust(CertificateTrust new_trust);
   const CertificateTrust &CertTrust() const;
   std::shared_ptr<const bssl::MTCAnchor> MTCAnchor() const;
 
@@ -359,10 +354,13 @@ class OPENSSL_EXPORT TrustStore : public CertIssuerSource {
   // Returns the trusted of `cert`, which must be non-null.
   virtual CertificateTrust GetTrust(const ParsedCertificate *cert) = 0;
 
-  // Returns the TrustAnchor that issued `cert`, if one exists.
+  // Returns the MTC anchor that issued `cert`, if one exists.
   //
-  // TODO(nharper): Make this a pure virtual function once all TrustStore
-  // implementations have implemented this.
+  // This is no longer used by the path builder, which finds MTC CA
+  // certificates through `SyncGetIssuersOf` and `GetTrust` like any other
+  // issuer.
+  //
+  // TODO(crbug.com/575507260): Remove this once callers no longer override it.
   virtual std::shared_ptr<const MTCAnchor> GetTrustedMTCIssuerOf(
       const ParsedCertificate *cert);
 

@@ -409,6 +409,16 @@ inline constexpr uint8_t kAuthorityInfoAccessOid[] = {0x2B, 0x06, 0x01, 0x05,
 inline constexpr uint8_t kAdCaIssuersOid[] = {0x2B, 0x06, 0x01, 0x05,
                                               0x05, 0x07, 0x30, 0x02};
 
+// From draft-ietf-plants-merkle-tree-certs-07, Section 5.5:
+//
+//     id-pe-mtcCertificationAuthority-SHA256 OBJECT IDENTIFIER ::= {
+//         iso(1) identified-organization(3) dod(6) internet(1) security(5)
+//         mechanisms(5) pkix(7) id-pe(1) 38 }
+//
+// In dotted notation: 1.3.6.1.5.5.7.1.38
+inline constexpr uint8_t kMtcCertificationAuthoritySha256Oid[] = {
+    0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x01, 0x26};
+
 // From RFC 5280:
 //
 //     id-ad-ocsp OBJECT IDENTIFIER ::= { id-ad 1 }

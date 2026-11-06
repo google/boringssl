@@ -292,9 +292,24 @@ TEST_F(TrustStoreCollectionMtcTest, MtcTwoStores) {
   collection.AddTrustStore(&in_memory1);
   collection.AddTrustStore(&in_memory2);
 
-  EXPECT_EQ(mtc_anchor1, collection.GetTrustedMTCIssuerOf(mtc_leaf_.get()));
-  EXPECT_EQ(mtc_anchor2, collection.GetTrustedMTCIssuerOf(mtc_leaf2_.get()));
+  // GetTrustedMTCIssuerOf returns an MTCAnchor for the stored certificate,
+  // rather than the MTCAnchor that was added.
+  std::shared_ptr<const MTCAnchor> issuer1 =
+      collection.GetTrustedMTCIssuerOf(mtc_leaf_.get());
+  ASSERT_TRUE(issuer1);
+  EXPECT_EQ(issuer1->AsCert()->der_cert(), mtc_anchor1->AsCert()->der_cert());
+  std::shared_ptr<const MTCAnchor> issuer2 =
+      collection.GetTrustedMTCIssuerOf(mtc_leaf2_.get());
+  ASSERT_TRUE(issuer2);
+  EXPECT_EQ(issuer2->AsCert()->der_cert(), mtc_anchor2->AsCert()->der_cert());
   EXPECT_EQ(nullptr, collection.GetTrustedMTCIssuerOf(mtc_leaf3_.get()));
+
+  // MTC CA certificates are also found as ordinary issuers.
+  ParsedCertificateList issuers;
+  collection.SyncGetIssuersOf(mtc_leaf_.get(), &issuers);
+  ASSERT_EQ(issuers.size(), 1u);
+  EXPECT_EQ(issuers[0], mtc_anchor1->AsCert());
+  EXPECT_TRUE(collection.GetTrust(issuers[0].get()).IsTrustAnchor());
 }
 
 }  // namespace

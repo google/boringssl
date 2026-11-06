@@ -16,15 +16,14 @@
 
 #include <openssl/span.h>
 
+#include <optional>
+
 BSSL_NAMESPACE_BEGIN
 
-bool TrustStoreInMemory::IsEmpty() const {
-  return entries_.empty() && trusted_mtc_anchors_.empty();
-}
+bool TrustStoreInMemory::IsEmpty() const { return entries_.empty(); }
 
 void TrustStoreInMemory::Clear() {
   entries_.clear();
-  trusted_mtc_anchors_.clear();
 }
 
 void TrustStoreInMemory::AddTrustAnchor(
@@ -60,11 +59,10 @@ void TrustStoreInMemory::AddCertificateWithUnspecifiedTrust(
 }
 bool TrustStoreInMemory::AddMTCTrustAnchor(
     std::shared_ptr<const MTCAnchor> mtc_anchor) {
-  std::string_view subject = BytesAsStringView(mtc_anchor->NormalizedSubject());
-  if (trusted_mtc_anchors_.find(subject) != trusted_mtc_anchors_.end()) {
+  if (GetMTCAnchorEntry(mtc_anchor->NormalizedSubject())) {
     return false;
   }
-  trusted_mtc_anchors_.emplace(subject, std::move(mtc_anchor));
+  AddCertificate(mtc_anchor->AsCert(), mtc_anchor->CertTrust());
   return true;
 }
 
@@ -90,12 +88,16 @@ CertificateTrust TrustStoreInMemory::GetTrust(const ParsedCertificate *cert) {
 
 std::shared_ptr<const MTCAnchor> TrustStoreInMemory::GetTrustedMTCIssuerOf(
     const ParsedCertificate *cert) {
-  auto entry =
-      trusted_mtc_anchors_.find(BytesAsStringView(cert->normalized_issuer()));
-  if (entry == trusted_mtc_anchors_.end()) {
+  const Entry* entry = GetMTCAnchorEntry(cert->normalized_issuer());
+  if (!entry) {
     return nullptr;
   }
-  return entry->second;
+  std::optional<MTCAnchor> anchor =
+      MTCAnchor::Create(entry->cert, entry->trust);
+  if (!anchor) {
+    return nullptr;
+  }
+  return std::make_shared<const MTCAnchor>(std::move(*anchor));
 }
 
 bool TrustStoreInMemory::Contains(const ParsedCertificate *cert) const {
@@ -103,9 +105,7 @@ bool TrustStoreInMemory::Contains(const ParsedCertificate *cert) const {
 }
 
 bool TrustStoreInMemory::ContainsMTCAnchor(const MTCAnchor *anchor) const {
-  auto entry =
-      trusted_mtc_anchors_.find(BytesAsStringView(anchor->NormalizedSubject()));
-  return entry != trusted_mtc_anchors_.end();
+  return GetMTCAnchorEntry(anchor->NormalizedSubject()) != nullptr;
 }
 
 void TrustStoreInMemory::AddCertificate(
@@ -127,6 +127,17 @@ const TrustStoreInMemory::Entry *TrustStoreInMemory::GetEntry(
     if (cert == it->second.cert.get() ||
         cert->der_cert() == it->second.cert->der_cert()) {
       // NOTE: ambiguity when there are duplicate entries.
+      return &it->second;
+    }
+  }
+  return nullptr;
+}
+
+const TrustStoreInMemory::Entry* TrustStoreInMemory::GetMTCAnchorEntry(
+    der::Input subject) const {
+  auto range = entries_.equal_range(BytesAsStringView(subject));
+  for (auto it = range.first; it != range.second; ++it) {
+    if (it->second.cert->mtc_ca_info() && it->second.trust.IsTrustAnchor()) {
       return &it->second;
     }
   }

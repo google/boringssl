@@ -364,10 +364,6 @@ std::string MTCAnchor::TrustedSubtreesDebugString() const {
   return trust_.trusted_subtrees->DebugString();
 }
 
-void TrustAnchor::OverrideCertTrust(CertificateTrust new_trust) {
-  trust_ = new_trust;
-}
-
 const CertificateTrust &TrustAnchor::CertTrust() const { return trust_; }
 
 std::shared_ptr<const MTCAnchor> TrustAnchor::MTCAnchor() const {

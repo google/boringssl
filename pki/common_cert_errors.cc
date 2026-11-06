@@ -106,6 +106,8 @@ DEFINE_CERT_ERROR_ID(kDepthLimitExceeded, "Depth limit exceeded");
 DEFINE_CERT_ERROR_ID(kMtcLandmarkNotRecognized, "Landmark not recognized");
 DEFINE_CERT_ERROR_ID(kMtcUnacceptableCosignatureVerificationResult,
                      "Unacceptable cosignature verification result");
+DEFINE_CERT_ERROR_ID(kMtcCaIsNotTrustAnchor,
+                     "Issued by an MTC CA that is not a trust anchor");
 
 }  // namespace cert_errors
 BSSL_NAMESPACE_END

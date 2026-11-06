@@ -146,6 +146,11 @@ std::shared_ptr<const ParsedCertificate> ReadCertFromFile(
 // Reads a data file relative to the src root directory.
 std::string ReadTestFileToString(const std::string &file_path_ascii);
 
+namespace test {
+// The time at which the crypto/x509 MTC test certificates are verified.
+constexpr int64_t kMtcTestTime = 1735689600;  // Jan 1st, 2025
+}  // namespace test
+
 // Reads and parses a certificate from `file_name` (relative to
 // crypto/x509/test/mtc/) in the crypto/x509 MTC test data. Returns nullptr if
 // the certificate could not be read or parsed. Populates `errors`, if non-null,

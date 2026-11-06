@@ -652,7 +652,7 @@ std::shared_ptr<const ParsedCertificate> OCSPParseCertificate(
     int64_t verify_time_epoch_seconds,
     VerifyCertificateChainDelegate *delegate) {
   CertPathErrors errors;
-  TrustAnchor issuer_trust(CertificateTrust::ForTrustAnchor());
+  CertificateTrust issuer_trust = CertificateTrust::ForTrustAnchor();
   der::GeneralizedTime verify_time;
   if (!der::EncodePosixTimeAsGeneralizedTime(verify_time_epoch_seconds,
                                              &verify_time)) {

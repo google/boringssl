@@ -14,12 +14,12 @@
 
 #include "verify_certificate_chain.h"
 
+#include <inttypes.h>
+
 #include <algorithm>
 #include <cassert>
 #include <optional>
 #include <string>
-
-#include <inttypes.h>
 
 #include <openssl/base.h>
 #include <openssl/bytestring.h>
@@ -39,6 +39,7 @@
 #include "name_constraints.h"
 #include "parse_certificate.h"
 #include "parse_values.h"
+#include "parsed_certificate.h"
 #include "signature_algorithm.h"
 #include "string_util.h"
 #include "trust_store.h"
@@ -92,6 +93,13 @@ bool IsHandledCriticalExtension(const ParsedExtension &extension) {
     return true;
   }
   if (extension.oid == der::Input(kInhibitAnyPolicyOid)) {
+    return true;
+  }
+  // The MTC CA extension is handled by treating the cert as an MTC issuer if
+  // it's a trust anchor, or by returning a failure and refusing to use it as an
+  // issuer (if not a trust anchor). On a target cert, it is vacuously handled
+  // because the target cert is not used as an issuer.
+  if (extension.oid == der::Input(kMtcCertificationAuthoritySha256Oid)) {
     return true;
   }
 
@@ -754,7 +762,7 @@ class PathVerifier {
  public:
   // Same parameters and meaning as VerifyCertificateChain().
   void Run(const ParsedCertificateList &certs,
-           const TrustAnchor &last_cert_trust,
+           const CertificateTrust &last_cert_trust,
            VerifyCertificateChainDelegate *delegate,
            const der::GeneralizedTime &time, KeyPurpose required_key_purpose,
            InitialExplicitPolicy initial_explicit_policy,
@@ -763,6 +771,11 @@ class PathVerifier {
            InitialAnyPolicyInhibit initial_any_policy_inhibit,
            std::set<der::Input> *user_constrained_policy_set,
            CertPathErrors *errors);
+
+  // See instance method ParseAndCheckPublicKey below.
+  static bssl::UniquePtr<EVP_PKEY> ParseAndCheckPublicKey(
+      der::Input spki, CertErrors *errors,
+      VerifyCertificateChainDelegate *delegate);
 
  private:
   // Verifies and updates the valid policies. This corresponds with RFC 5280
@@ -780,13 +793,21 @@ class PathVerifier {
 
   // This function corresponds to RFC 5280 section 6.1.3's "Basic Certificate
   // Processing" procedure.
-  void BasicCertificateProcessing(const ParsedCertificate &cert,
-                                  bool is_target_cert,
-                                  bool is_target_cert_issuer,
-                                  const der::GeneralizedTime &time,
-                                  KeyPurpose required_key_purpose,
-                                  CertErrors *errors,
-                                  bool *shortcircuit_chain_validation);
+  // `root_cert` is the last certificate in the chain, and `last_cert_trust` is
+  // its trust.
+  void BasicCertificateProcessing(
+      const ParsedCertificate &cert, const ParsedCertificate &root_cert,
+      const CertificateTrust &last_cert_trust, bool is_target_cert,
+      bool is_target_cert_issuer, const der::GeneralizedTime &time,
+      KeyPurpose required_key_purpose, CertErrors *errors,
+      bool *shortcircuit_chain_validation);
+
+  // Verifies `cert`, which was issued by an MTC CA, as an MTC.
+  // `last_cert_trust` is the trust for the last certificate in the chain.
+  // Returns the error to report, or nullptr on success.
+  CertErrorId VerifyMtcCaIssuedCertificate(
+      const ParsedCertificate &cert, const ParsedCertificate &root_cert,
+      const CertificateTrust &last_cert_trust, bool is_target_cert);
 
   // This function corresponds to RFC 5280 section 6.1.4's "Preparation for
   // Certificate i+1" procedure. `cert` is expected to be an intermediate.
@@ -810,7 +831,7 @@ class PathVerifier {
   // Initializes the path validation algorithm given anchor constraints. This
   // follows the description in RFC 5937
   void ProcessRootCertificate(const ParsedCertificate &cert,
-                              const TrustAnchor &trust_anchor,
+                              const CertificateTrust &trust,
                               const der::GeneralizedTime &time,
                               KeyPurpose required_key_purpose,
                               CertErrors *errors,
@@ -893,7 +914,7 @@ class PathVerifier {
   // the trust anchor is always a certificate, so we track that certificate and
   // read the issuer's subject (the working_issuer_name variable in RFC 5280)
   // from it directly.
-  const ParsedCertificate* working_issuer_cert_ = nullptr;
+  const ParsedCertificate *working_issuer_cert_ = nullptr;
 
   // `working_public_key_` is an amalgamation of 3 separate variables from RFC
   // 5280:
@@ -910,14 +931,10 @@ class PathVerifier {
   //
   //    working_public_key:  the public key used to verify the
   //    signature of a certificate.
+  //
+  // This is not populated if the issuer is an MTC CA, since the MTC CA
+  // cosigner's key is not directly used to verify the signature of an MTC.
   bssl::UniquePtr<EVP_PKEY> working_public_key_;
-
-  // `working_mtc_anchor_` is the trusted MTC Anchor that the chain-to-verify
-  // claims issued the next certificate in the chain, and should be used to
-  // verify that certificate.
-  // TODO(crbug.com/575507260): Remove this field and use `working_issuer_cert_`
-  // instead.
-  const MTCAnchor *working_mtc_anchor_ = nullptr;
 
   // `max_path_length_` corresponds with the same named variable in RFC 5280
   // section 6.1.2.
@@ -1136,11 +1153,40 @@ void PathVerifier::ApplyPolicyConstraints(const ParsedCertificate &cert) {
   }
 }
 
+// Parses the MTC CA cosigner's signature algorithm and public key, and checks
+// that both are acceptable. On error, populates `*errors` and returns
+// `std::nullopt`. Otherwise returns the CA cosigner's valid signature algorithm
+// and returns the valid parsed key via `*out_cosign_public_key`.
+static std::optional<SignatureAlgorithm> ParseAndCheckMtcCaCosigner(
+    const ParsedCertificate &mtc_ca_cert, CertErrors *errors,
+    VerifyCertificateChainDelegate *delegate,
+    UniquePtr<EVP_PKEY> *out_cosign_public_key) {
+  std::optional<SignatureAlgorithm> ca_signature_algorithm =
+      ParseSignatureAlgorithm(
+          mtc_ca_cert.mtc_ca_info()->ca_cosign_algorithm_tlv);
+  if (!ca_signature_algorithm.has_value() ||
+      !delegate->IsSignatureAlgorithmAcceptable(*ca_signature_algorithm,
+                                                errors)) {
+    errors->AddError(cert_errors::kUnacceptableSignatureAlgorithm);
+    return std::nullopt;
+  }
+
+  UniquePtr<EVP_PKEY> cosigner_key = PathVerifier::ParseAndCheckPublicKey(
+      mtc_ca_cert.tbs().spki_tlv, errors, delegate);
+  if (cosigner_key == nullptr ||
+      errors->ContainsAnyErrorWithSeverity(CertError::SEVERITY_HIGH)) {
+    return std::nullopt;
+  }
+
+  *out_cosign_public_key = std::move(cosigner_key);
+  return ca_signature_algorithm;
+}
+
 static bool VerifyMTCProofSignature(
     const CBS *cosigner_id, Span<const uint8_t> log_id_text, uint64_t start,
     uint64_t end, const TreeHash &expected_subtree_hash,
     Span<const uint8_t> signature, SignatureAlgorithm signature_algorithm,
-    Span<const uint8_t> key_bytes, SignatureVerifyCache *cache) {
+    const EVP_PKEY *key, SignatureVerifyCache *cache) {
   ScopedCBB cosigned_subtree;
   // `cosigner_name` and `log_origin` are the only variable-length parts of
   // `CosignedSubtree`. Allocate the initial buffer size with 48 bytes for those
@@ -1221,7 +1267,7 @@ static bool VerifyMTCProofSignature(
 
   return VerifySignedData(signature_algorithm,
                           der::Input(CBBAsSpan(cosigned_subtree.get())),
-                          der::BitString(signature, 0), key_bytes, cache);
+                          der::BitString(signature, 0), key, cache);
 }
 
 // CheckMTCLogEntryExtensions returns whether `extensions` is a well-formed list
@@ -1249,7 +1295,7 @@ enum class VerifyMTCResult {
   kFailed,
 
   // The MTC was landmark relative (had no signatures) but the subtree range
-  // was not present in `mtc_anchor`'s configured trusted subtrees.
+  // was not present in the MTC CA's configured trusted subtrees.
   // (Note that this does not include the case where the range was present in
   // the trusted subtrees but had the incorrect hash.)
   kLandmarkNotRecognized,
@@ -1264,10 +1310,10 @@ enum class VerifyMTCResult {
 // This function implements draft-ietf-plants-merkle-tree-certs-07 section 7.2:
 // Verifying Certificate Signatures.
 static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
-                                 const MTCAnchor *mtc_anchor,
+                                 const ParsedCertificate &mtc_ca_cert,
+                                 const CertificateTrust &mtc_ca_trust,
                                  VerifyCertificateChainDelegate *delegate) {
-  BSSL_CHECK(mtc_anchor->spec_version() == MTCAnchor::kPlants07);
-  BSSL_CHECK(mtc_anchor->AsCert()->mtc_ca_info().has_value());
+  BSSL_CHECK(mtc_ca_cert.mtc_ca_info().has_value());
   // Step 1: Check that the TBSCertificate's signature field is
   // id-alg-mtcProof with omitted parameters.
   if (cert.signature_algorithm() != SignatureAlgorithm::kMtcProof) {
@@ -1298,13 +1344,17 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   if (!der::ParseUint64(cert.tbs().serial_number, &serial)) {
     return VerifyMTCResult::kFailed;
   }
-  // TODO(crbug.com/575507260): Check that `serial` is within the MTC CA
-  // certificate's serial number range (Section 5.5), as crypto/x509 does. This
-  // is not needed yet, but will be needed once arbitrary MTC CA certificates
-  // can be trust anchors.
 
-  // Step 4's revocation check is not performed in this function. The caller is
-  // responsible for performing revocation checks.
+  // Step 4. If serial is contained in one of the relying party's revoked ranges
+  // (Section 7.5), abort this process and fail verification.
+  // Only the revoked ranges (..minSerial) and (maxSerial..) are checked here.
+  // Other revocation checks are not performed in this function. The caller is
+  // responsible for performing revocation checks based on out-of-band
+  // information.
+  const ParsedMtcCaInfo &mtc_ca_info = *mtc_ca_cert.mtc_ca_info();
+  if (serial < mtc_ca_info.min_serial || serial > mtc_ca_info.max_serial) {
+    return VerifyMTCResult::kFailed;
+  }
 
   // Step 5: Let index be the least significant 48 bits of serial and let
   // log_number be serial >> 48. If log_number is zero, abort this process and
@@ -1434,15 +1484,15 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   // Step 11. If log_number, start, and end matches a trusted subtree (Section
   // 7.4) for the CA, check that expected_subtree_hash is equal to the trusted
   // subtree's hash.
-  if (!mtc_anchor) {
-    return VerifyMTCResult::kFailed;
+  std::optional<TreeHashConstSpan> trusted_subtree_hash;
+  if (mtc_ca_trust.trusted_subtrees) {
+    trusted_subtree_hash =
+        mtc_ca_trust.trusted_subtrees->LookupSubtreeHash(log_number, range);
   }
-  std::optional<TreeHashConstSpan> trusted_subtree_hash =
-      mtc_anchor->SubtreeHash(log_number, range);
-  // Use the ca_id from mtc_anchor instead of parsing the id out of issuer. It
-  // should be guaranteed to be the same id, otherwise mtc_anchor would not
+  // Use the CA ID from `mtc_ca_cert` instead of parsing the id out of issuer.
+  // It should be guaranteed to be the same id, otherwise mtc_anchor would not
   // have been selected as the anchor for this cert.
-  CBS ca_id(mtc_anchor->ca_id());
+  CBS ca_id(mtc_ca_info.ca_id);
   UniquePtr<char> ca_id_text(CBS_asn1_relative_oid_to_text(&ca_id));
   if (!ca_id_text) {
     return VerifyMTCResult::kFailed;
@@ -1451,6 +1501,10 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
     std::string trusted_subtree_hash_string =
         trusted_subtree_hash ? string_util::HexEncode(*trusted_subtree_hash)
                              : "not found";
+    std::string known_trusted_subtrees_string =
+        mtc_ca_trust.trusted_subtrees
+            ? mtc_ca_trust.trusted_subtrees->DebugString()
+            : "none";
     delegate->DebugLog(
         // clang-format off
         "VerifyMTC:\n"
@@ -1462,8 +1516,7 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
         " expected_subtree_hash=" +
             string_util::HexEncode(*expected_subtree_hash) + "\n"
         " trusted_subtree_hash=" + trusted_subtree_hash_string + "\n"
-        " known_trusted_subtrees=" + mtc_anchor->TrustedSubtreesDebugString()
-            + "\n"
+        " known_trusted_subtrees=" + known_trusted_subtrees_string + "\n"
         // clang-format on
     );
   }
@@ -1526,29 +1579,42 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
     // are ignored if the CA signature didn't validate successfully, so we
     // could first find and verify the CA signature before bothering to check
     // any of the other ones.
-    if (cosigner_id == mtc_anchor->ca_id()) {
-      std::optional<SignatureAlgorithm> ca_signature_algorithm =
-          mtc_anchor->ca_signature_algorithm();
+    if (cosigner_id == Span(mtc_ca_info.ca_id)) {
+      CertErrors errors;
+      UniquePtr<EVP_PKEY> cosigner_key;
+      std::optional<SignatureAlgorithm> valid_ca_cosigner_algorithm =
+          ParseAndCheckMtcCaCosigner(mtc_ca_cert, &errors, delegate,
+                                     &cosigner_key);
       found_valid_ca_signature =
-          ca_signature_algorithm.has_value() &&
-          VerifyMTCProofSignature(
-              &cbs_cosigner_id, StringAsBytes(log_id_text), start, end,
-              expected_subtree_hash.value(), signature, *ca_signature_algorithm,
-              mtc_anchor->ca_key(), delegate->GetVerifyCache());
+          valid_ca_cosigner_algorithm.has_value() &&
+          VerifyMTCProofSignature(&cbs_cosigner_id, StringAsBytes(log_id_text),
+                                  start, end, expected_subtree_hash.value(),
+                                  signature, *valid_ca_cosigner_algorithm,
+                                  cosigner_key.get(),
+                                  delegate->GetVerifyCache());
 
       if (delegate->IsDebugLogEnabled()) {
-        delegate->DebugLog(std::string("VerifyMTC: CA signature ") +
-                           (found_valid_ca_signature ? "valid" : "invalid"));
+        std::string debug_log = found_valid_ca_signature
+                                    ? "VerifyMTC: CA signature valid"
+                                    : "VerifyMTC: CA signature invalid";
+        if (std::string error_str = errors.ToDebugString();
+            !error_str.empty()) {
+          debug_log += ":\n" + error_str;
+        }
+        delegate->DebugLog(debug_log);
       }
     } else {
       auto cosigner = delegate->GetMTCCosigner(cosigner_id);
       bool this_cosignature_was_valid = false;
+      UniquePtr<EVP_PKEY> cosigner_key;
       if (cosigner &&
+          ParsePublicKey(der::Input(CRYPTO_BUFFER_data(cosigner->key.get()),
+                                    CRYPTO_BUFFER_len(cosigner->key.get())),
+                         &cosigner_key) &&
           VerifyMTCProofSignature(&cbs_cosigner_id, StringAsBytes(log_id_text),
                                   start, end, expected_subtree_hash.value(),
                                   signature, cosigner->signature_algorithm,
-                                  Span(CRYPTO_BUFFER_data(cosigner->key.get()),
-                                       CRYPTO_BUFFER_len(cosigner->key.get())),
+                                  cosigner_key.get(),
                                   delegate->GetVerifyCache())) {
         valid_additional_cosigners.emplace_back(cosigner_id.begin(),
                                                 cosigner_id.end());
@@ -1572,19 +1638,41 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   }
 
   if (found_valid_ca_signature) {
-    // This calls the deprecated method, whose default implementation calls
-    // `IsMTCCosignatureVerificationResultAcceptable`, so that delegates that
-    // override either method work.
-    return delegate->IsCosignatureVerificationResultAcceptable(
-               mtc_anchor, std::move(valid_additional_cosigners))
+    return delegate->IsMTCCosignatureVerificationResultAcceptable(
+               mtc_ca_cert, std::move(valid_additional_cosigners))
                ? VerifyMTCResult::kSuccess
                : VerifyMTCResult::kUnacceptableCosignatureVerificationResult;
   }
   return VerifyMTCResult::kFailed;
 }
 
+CertErrorId PathVerifier::VerifyMtcCaIssuedCertificate(
+    const ParsedCertificate &cert, const ParsedCertificate &root_cert,
+    const CertificateTrust &last_cert_trust, bool is_target_cert) {
+  if (working_issuer_cert_ != &root_cert) {
+    return cert_errors::kMtcCaIsNotTrustAnchor;
+  }
+  if (!is_target_cert) {
+    return cert_errors::kMaxPathLengthViolated;
+  }
+  // `working_issuer_cert_`, the MTC CA certificate, must be the last
+  // certificate in the chain, so `last_cert_trust` is its trust.
+  switch (VerifyMTC(cert, *working_issuer_cert_, last_cert_trust, delegate_)) {
+    case VerifyMTCResult::kSuccess:
+      return nullptr;
+    case VerifyMTCResult::kLandmarkNotRecognized:
+      return cert_errors::kMtcLandmarkNotRecognized;
+    case VerifyMTCResult::kUnacceptableCosignatureVerificationResult:
+      return cert_errors::kMtcUnacceptableCosignatureVerificationResult;
+    case VerifyMTCResult::kFailed:
+      return cert_errors::kVerifySignedDataFailed;
+  }
+  return cert_errors::kVerifySignedDataFailed;
+}
+
 void PathVerifier::BasicCertificateProcessing(
-    const ParsedCertificate &cert, bool is_target_cert,
+    const ParsedCertificate &cert, const ParsedCertificate &root_cert,
+    const CertificateTrust &last_cert_trust, bool is_target_cert,
     bool is_target_cert_issuer, const der::GeneralizedTime &time,
     KeyPurpose required_key_purpose, CertErrors *errors,
     bool *shortcircuit_chain_validation) {
@@ -1606,7 +1694,13 @@ void PathVerifier::BasicCertificateProcessing(
     return;
   }
 
-  if (working_public_key_) {
+  if (working_issuer_cert_->mtc_ca_info()) {
+    if (CertErrorId error = VerifyMtcCaIssuedCertificate(
+            cert, root_cert, last_cert_trust, is_target_cert)) {
+      *shortcircuit_chain_validation = true;
+      errors->AddError(error);
+    }
+  } else if (working_public_key_) {
     // Verify the digital signature using the previous certificate's key (RFC
     // 5280 section 6.1.3 step a.1).
     if (!VerifySignedData(*cert.signature_algorithm(),
@@ -1615,26 +1709,6 @@ void PathVerifier::BasicCertificateProcessing(
                           delegate_->GetVerifyCache())) {
       *shortcircuit_chain_validation = true;
       errors->AddError(cert_errors::kVerifySignedDataFailed);
-    }
-  } else if (working_mtc_anchor_) {
-    if (!is_target_cert) {
-      *shortcircuit_chain_validation = true;
-      errors->AddError(cert_errors::kMaxPathLengthViolated);
-    } else if (VerifyMTCResult result =
-                   VerifyMTC(cert, working_mtc_anchor_, delegate_);
-               result != VerifyMTCResult::kSuccess) {
-      *shortcircuit_chain_validation = true;
-      switch (result) {
-        case VerifyMTCResult::kLandmarkNotRecognized:
-          errors->AddError(cert_errors::kMtcLandmarkNotRecognized);
-          break;
-        case VerifyMTCResult::kUnacceptableCosignatureVerificationResult:
-          errors->AddError(
-              cert_errors::kMtcUnacceptableCosignatureVerificationResult);
-          break;
-        default:
-          errors->AddError(cert_errors::kVerifySignedDataFailed);
-      }
     }
   } else {
     // If `working_public_key_` is null, that indicates the SPKI of the issuer
@@ -1703,8 +1777,13 @@ void PathVerifier::PrepareForNextCertificate(const ParsedCertificate &cert,
   // From RFC 5280 section 6.1.4 step d:
   //
   //    Assign the certificate subjectPublicKey to working_public_key.
-  working_public_key_ = ParseAndCheckPublicKey(cert.tbs().spki_tlv, errors);
-  working_mtc_anchor_ = nullptr;
+  //
+  // An MTC CA's cosigner key is not used to verify the certificate's signature
+  // field directly, so don't parse it here.
+  working_public_key_ =
+      working_issuer_cert_->mtc_ca_info()
+          ? nullptr
+          : ParseAndCheckPublicKey(cert.tbs().spki_tlv, errors);
 
   // Note that steps e and f are omitted as they are handled by
   // the assignment to `working_spki` above. See the definition
@@ -1832,8 +1911,7 @@ void VerifyTargetCertIsNotCA(const ParsedCertificate &cert,
 void PathVerifier::WrapUp(const ParsedCertificate &cert,
                           KeyPurpose required_key_purpose,
                           const std::set<der::Input> &user_initial_policy_set,
-                          bool allow_precertificate,
-                          CertErrors * errors) {
+                          bool allow_precertificate, CertErrors *errors) {
   // From RFC 5280 section 6.1.5:
   //      (a)  If explicit_policy is not 0, decrement explicit_policy by 1.
   if (explicit_policy_ > 0) {
@@ -1971,13 +2049,12 @@ void PathVerifier::ApplyTrustAnchorConstraints(const ParsedCertificate &cert,
 }
 
 void PathVerifier::ProcessRootCertificate(const ParsedCertificate &cert,
-                                          const TrustAnchor &trust_anchor,
+                                          const CertificateTrust &trust,
                                           const der::GeneralizedTime &time,
                                           KeyPurpose required_key_purpose,
                                           CertErrors *errors,
                                           bool *shortcircuit_chain_validation) {
   *shortcircuit_chain_validation = false;
-  const CertificateTrust &trust = trust_anchor.CertTrust();
   switch (trust.type) {
     case CertificateTrustType::UNSPECIFIED:
     case CertificateTrustType::TRUSTED_LEAF:
@@ -2017,13 +2094,12 @@ void PathVerifier::ProcessRootCertificate(const ParsedCertificate &cert,
   }
 
   // Use the certificate's SPKI and subject when verifying the next certificate.
-  const MTCAnchor *mtc_anchor = trust_anchor.MTCAnchor().get();
-  if (mtc_anchor) {
-    working_mtc_anchor_ = mtc_anchor;
-  } else {
-    working_public_key_ = ParseAndCheckPublicKey(cert.tbs().spki_tlv, errors);
-  }
+  // If the certificate is an MTC CA, the next certificate is verified as an MTC
+  // instead (see `VerifyMtcCaIssuedCertificate`), so the key is not parsed.
   working_issuer_cert_ = &cert;
+  working_public_key_ =
+      cert.mtc_ca_info() ? nullptr
+                         : ParseAndCheckPublicKey(cert.tbs().spki_tlv, errors);
 }
 
 void PathVerifier::ProcessSingleCertChain(const ParsedCertificate &cert,
@@ -2080,8 +2156,10 @@ void PathVerifier::ProcessSingleCertChain(const ParsedCertificate &cert,
                                        required_key_purpose);
 }
 
+// static
 bssl::UniquePtr<EVP_PKEY> PathVerifier::ParseAndCheckPublicKey(
-    der::Input spki, CertErrors *errors) {
+    der::Input spki, CertErrors *errors,
+    VerifyCertificateChainDelegate *delegate) {
   // Parse the public key.
   bssl::UniquePtr<EVP_PKEY> pkey;
   if (!ParsePublicKey(spki, &pkey)) {
@@ -2090,7 +2168,7 @@ bssl::UniquePtr<EVP_PKEY> PathVerifier::ParseAndCheckPublicKey(
   }
 
   // Check if the key is acceptable by the delegate.
-  if (!delegate_->IsPublicKeyAcceptable(pkey.get(), errors)) {
+  if (!delegate->IsPublicKeyAcceptable(pkey.get(), errors)) {
     errors->AddError(cert_errors::kUnacceptablePublicKey);
   }
 
@@ -2131,8 +2209,13 @@ bssl::UniquePtr<EVP_PKEY> PathVerifier::ParseAndCheckPublicKey(
   return pkey;
 }
 
+bssl::UniquePtr<EVP_PKEY> PathVerifier::ParseAndCheckPublicKey(
+    der::Input spki, CertErrors *errors) {
+  return ParseAndCheckPublicKey(spki, errors, delegate_);
+}
+
 void PathVerifier::Run(
-    const ParsedCertificateList &certs, const TrustAnchor &last_cert_trust,
+    const ParsedCertificateList &certs, const CertificateTrust &last_cert_trust,
     VerifyCertificateChainDelegate *delegate, const der::GeneralizedTime &time,
     KeyPurpose required_key_purpose,
     InitialExplicitPolicy initial_explicit_policy,
@@ -2156,7 +2239,7 @@ void PathVerifier::Run(
   // Verifying a trusted leaf certificate isn't a well-specified operation, so
   // it's handled separately from the RFC 5280 defined verification process.
   if (certs.size() == 1) {
-    ProcessSingleCertChain(*certs.front(), last_cert_trust.CertTrust(), time,
+    ProcessSingleCertChain(*certs.front(), last_cert_trust, time,
                            required_key_purpose, errors->GetErrorsForCert(0));
     return;
   }
@@ -2214,6 +2297,7 @@ void PathVerifier::Run(
     const bool is_root_cert = i == 0;
 
     const ParsedCertificate &cert = *certs[index_into_certs];
+    const ParsedCertificate &root_cert = *certs[certs.size() - 1];
 
     // Output errors for the current certificate into an error bucket that is
     // associated with that certificate.
@@ -2242,8 +2326,9 @@ void PathVerifier::Run(
     //  * If it is the last certificate in the path (target certificate)
     //     - Then run "Wrap up"
     //     - Otherwise run "Prepare for Next cert"
-    BasicCertificateProcessing(cert, is_target_cert, is_target_cert_issuer,
-                               time, required_key_purpose, cert_errors,
+    BasicCertificateProcessing(cert, root_cert, last_cert_trust, is_target_cert,
+                               is_target_cert_issuer, time,
+                               required_key_purpose, cert_errors,
                                &shortcircuit_chain_validation);
     if (shortcircuit_chain_validation) {
       // Signature errors or unparsable SPKIs should short-circuit the rest of
@@ -2275,20 +2360,20 @@ void PathVerifier::Run(
 
 bool VerifyCertificateChainDelegate::
     IsMTCCosignatureVerificationResultAcceptable(
-        const ParsedCertificate& mtc_ca_cert,
+        const ParsedCertificate &mtc_ca_cert,
         std::vector<std::vector<uint8_t>> valid_additional_cosigners) {
   return false;
 }
 
 bool VerifyCertificateChainDelegate::IsCosignatureVerificationResultAcceptable(
-    const MTCAnchor* mtc_anchor,
+    const MTCAnchor *mtc_anchor,
     std::vector<std::vector<uint8_t>> valid_additional_cosigners) {
   return IsMTCCosignatureVerificationResultAcceptable(
       *mtc_anchor->AsCert(), std::move(valid_additional_cosigners));
 }
 
 void VerifyCertificateChain(
-    const ParsedCertificateList &certs, const TrustAnchor &last_cert_trust,
+    const ParsedCertificateList &certs, const CertificateTrust &last_cert_trust,
     VerifyCertificateChainDelegate *delegate, const der::GeneralizedTime &time,
     KeyPurpose required_key_purpose,
     InitialExplicitPolicy initial_explicit_policy,
@@ -2301,6 +2386,22 @@ void VerifyCertificateChain(
                initial_explicit_policy, user_initial_policy_set,
                initial_policy_mapping_inhibit, initial_any_policy_inhibit,
                user_constrained_policy_set, errors);
+}
+
+void VerifyCertificateChain(
+    const ParsedCertificateList &certs, const TrustAnchor &trust_anchor,
+    VerifyCertificateChainDelegate *delegate, const der::GeneralizedTime &time,
+    KeyPurpose required_key_purpose,
+    InitialExplicitPolicy initial_explicit_policy,
+    const std::set<der::Input> &user_initial_policy_set,
+    InitialPolicyMappingInhibit initial_policy_mapping_inhibit,
+    InitialAnyPolicyInhibit initial_any_policy_inhibit,
+    std::set<der::Input> *user_constrained_policy_set, CertPathErrors *errors) {
+  VerifyCertificateChain(
+      certs, trust_anchor.CertTrust(), delegate, time, required_key_purpose,
+      initial_explicit_policy, user_initial_policy_set,
+      initial_policy_mapping_inhibit, initial_any_policy_inhibit,
+      user_constrained_policy_set, errors);
 }
 
 bool VerifyCertificateIsSelfSigned(const ParsedCertificate &cert,

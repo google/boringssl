@@ -767,6 +767,8 @@ target_link_libraries(bssl ssl crypto)
 if(BUILD_TESTING)
   add_executable(generate_mldsa_certs pki/testdata/verify_unittest/generate_mldsa_certs.cc)
   target_link_libraries(generate_mldsa_certs crypto)
+  add_executable(generate_mtc_ca_intermediate_certs pki/testdata/verify_unittest/generate_mtc_ca_intermediate_certs.cc)
+  target_link_libraries(generate_mtc_ca_intermediate_certs crypto)
 endif()
 
 if(FUZZ)

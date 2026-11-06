@@ -77,7 +77,7 @@ std::string PathDebugString(const ParsedCertificateList &certs) {
 // may be null to indicate an "empty" entry.
 struct IssuerEntry {
   std::shared_ptr<const ParsedCertificate> cert;
-  TrustAnchor trust;
+  CertificateTrust trust;
   int trust_and_key_id_match_ordering;
 };
 
@@ -207,7 +207,6 @@ class CertIssuersIter {
 
  private:
   void AddIssuers(ParsedCertificateList issuers);
-  void MaybeAddMTCIssuer();
   void DoAsyncIssuerQuery();
 
   // Returns true if `issuers_` contains unconsumed certificates.
@@ -269,7 +268,6 @@ void CertIssuersIter::GetNextIssuer(IssuerEntry *out) {
       cert_issuer_source->SyncGetIssuersOf(cert(), &new_issuers);
       AddIssuers(std::move(new_issuers));
     }
-    MaybeAddMTCIssuer();
   }
 
   // If there aren't any issuers, block until async results are ready.
@@ -320,31 +318,13 @@ void CertIssuersIter::AddIssuers(ParsedCertificateList new_issuers) {
     // Look up the trust for this issuer.
     IssuerEntry entry;
     entry.cert = std::move(issuer);
-    entry.trust = TrustAnchor(trust_store_->GetTrust(entry.cert.get()));
+    entry.trust = trust_store_->GetTrust(entry.cert.get());
     entry.trust_and_key_id_match_ordering = TrustAndKeyIdentifierMatchToOrder(
-        cert(), entry.cert.get(), entry.trust.CertTrust());
+        cert(), entry.cert.get(), entry.trust);
 
     issuers_.push_back(std::move(entry));
     issuers_needs_sort_ = true;
   }
-}
-
-void CertIssuersIter::MaybeAddMTCIssuer() {
-  std::shared_ptr<const MTCAnchor> mtc_trust_anchor =
-      trust_store_->GetTrustedMTCIssuerOf(cert_.get());
-  if (!mtc_trust_anchor) {
-    return;
-  }
-  std::shared_ptr<const ParsedCertificate> trust_anchor_cert =
-      mtc_trust_anchor->AsCert();
-  // Add one issuer for the mtc_trust_anchor.
-  present_issuers_.insert(BytesAsStringView(trust_anchor_cert->der_cert()));
-  IssuerEntry entry;
-  entry.cert = std::move(trust_anchor_cert);
-  entry.trust = TrustAnchor(mtc_trust_anchor->CertTrust(), mtc_trust_anchor);
-  entry.trust_and_key_id_match_ordering = 0; /* kTrustedAndKeyIdMatch */
-  issuers_.push_back(std::move(entry));
-  issuers_needs_sort_ = true;
 }
 
 void CertIssuersIter::DoAsyncIssuerQuery() {
@@ -516,7 +496,8 @@ class CertPathIter {
   // false. If deadline or iteration limit is exceeded, sets `out_certs` to the
   // current path being explored and returns false.
   bool GetNextPath(ParsedCertificateList *out_certs,
-                   TrustAnchor *out_last_cert_trust, CertPathErrors *out_errors,
+                   CertificateTrust *out_last_cert_trust,
+                   CertPathErrors *out_errors,
                    CertPathBuilderDelegate *delegate, uint32_t *iteration_count,
                    const uint32_t max_iteration_count,
                    const uint32_t max_path_building_depth);
@@ -540,8 +521,7 @@ CertPathIter::CertPathIter(std::shared_ptr<const ParsedCertificate> cert,
     : trust_store_(trust_store) {
   // Initialize `next_issuer_` to the target certificate.
   next_issuer_.cert = std::move(cert);
-  next_issuer_.trust =
-      TrustAnchor(trust_store_->GetTrust(next_issuer_.cert.get()));
+  next_issuer_.trust = trust_store_->GetTrust(next_issuer_.cert.get());
 }
 
 void CertPathIter::AddCertIssuerSource(CertIssuerSource *cert_issuer_source) {
@@ -549,14 +529,14 @@ void CertPathIter::AddCertIssuerSource(CertIssuerSource *cert_issuer_source) {
 }
 
 bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
-                               TrustAnchor *out_last_cert_trust,
+                               CertificateTrust *out_last_cert_trust,
                                CertPathErrors *out_errors,
                                CertPathBuilderDelegate *delegate,
                                uint32_t *iteration_count,
                                const uint32_t max_iteration_count,
                                const uint32_t max_path_building_depth) {
   out_certs->clear();
-  *out_last_cert_trust = TrustAnchor();
+  *out_last_cert_trust = CertificateTrust();
 
   while (true) {
     if (delegate->IsDeadlineExpired()) {
@@ -636,7 +616,7 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
     // Overrides for cert with trust appearing in the wrong place for the type
     // of trust (trusted leaf in non-leaf position, or trust anchor in leaf
     // position.)
-    switch (next_issuer_.trust.CertTrust().type) {
+    switch (next_issuer_.trust.type) {
       case CertificateTrustType::TRUSTED_ANCHOR:
         // If the leaf cert is trusted only as an anchor, treat it as having
         // unspecified trust. This may allow a successful path to be built to a
@@ -646,8 +626,7 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
             delegate->DebugLog(
                 "Leaf is a trust anchor, considering as UNSPECIFIED");
           }
-          next_issuer_.trust.OverrideCertTrust(
-              CertificateTrust::ForUnspecified());
+          next_issuer_.trust = CertificateTrust::ForUnspecified();
         }
         break;
       case CertificateTrustType::TRUSTED_LEAF:
@@ -659,8 +638,7 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
             delegate->DebugLog(
                 "Issuer is a trust leaf, considering as UNSPECIFIED");
           }
-          next_issuer_.trust.OverrideCertTrust(
-              CertificateTrust::ForUnspecified());
+          next_issuer_.trust = CertificateTrust::ForUnspecified();
         }
         break;
       case CertificateTrustType::DISTRUSTED:
@@ -672,11 +650,10 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
 
     // Overrides for trusted leaf cert with require_leaf_selfsigned. If the leaf
     // isn't actually self-signed, treat it as unspecified.
-    switch (next_issuer_.trust.CertTrust().type) {
+    switch (next_issuer_.trust.type) {
       case CertificateTrustType::TRUSTED_LEAF:
       case CertificateTrustType::TRUSTED_ANCHOR_OR_LEAF:
-        if (cur_path_.Empty() &&
-            next_issuer_.trust.CertTrust().require_leaf_selfsigned &&
+        if (cur_path_.Empty() && next_issuer_.trust.require_leaf_selfsigned &&
             !VerifyCertificateIsSelfSigned(*next_issuer_.cert,
                                            delegate->GetVerifyCache(),
                                            /*errors=*/nullptr)) {
@@ -685,8 +662,7 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
                 "Leaf is trusted with require_leaf_selfsigned but is "
                 "not self-signed, considering as UNSPECIFIED");
           }
-          next_issuer_.trust.OverrideCertTrust(
-              CertificateTrust::ForUnspecified());
+          next_issuer_.trust = CertificateTrust::ForUnspecified();
         }
         break;
       case CertificateTrustType::TRUSTED_ANCHOR:
@@ -696,7 +672,7 @@ bool CertPathIter::GetNextPath(ParsedCertificateList *out_certs,
         break;
     }
 
-    switch (next_issuer_.trust.CertTrust().type) {
+    switch (next_issuer_.trust.type) {
       // If the trust for this issuer is "known" (either because it is
       // distrusted, or because it is trusted) then stop building and return the
       // path.
@@ -811,6 +787,7 @@ VerifyError CertPathBuilderResultPath::GetVerifyError() const {
   }
   if (single_error.value() == cert_errors::kDistrustedByTrustStore ||
       single_error.value() == cert_errors::kCertIsNotTrustAnchor ||
+      single_error.value() == cert_errors::kMtcCaIsNotTrustAnchor ||
       single_error.value() == cert_errors::kMaxPathLengthViolated ||
       single_error.value() == cert_errors::kSubjectDoesNotMatchIssuer ||
       single_error.value() == cert_errors::kNoIssuersFound) {
@@ -985,10 +962,9 @@ CertPathBuilder::Result CertPathBuilder::Run() {
         std::make_unique<CertPathBuilderResultPath>();
 
     if (!cert_path_iter_->GetNextPath(
-            &result_path->certs, &result_path->trust_anchor,
+            &result_path->certs, &result_path->last_cert_trust,
             &result_path->errors, delegate_, &iteration_count,
             max_iteration_count_, max_path_building_depth_)) {
-      result_path->last_cert_trust = result_path->trust_anchor.CertTrust();
       // There are no more paths to check or limits were exceeded.
       if (result_path->errors.ContainsError(
               cert_errors::kIterationLimitExceeded)) {
@@ -1016,8 +992,6 @@ CertPathBuilder::Result CertPathBuilder::Run() {
       out_result_.iteration_count = iteration_count;
       return std::move(out_result_);
     }
-    result_path->last_cert_trust = result_path->trust_anchor.CertTrust();
-
     if (result_path->last_cert_trust.HasUnspecifiedTrust()) {
       // Partial path, don't attempt to verify. Just double check that it is
       // marked with an error, and move on.
@@ -1028,7 +1002,7 @@ CertPathBuilder::Result CertPathBuilder::Run() {
     } else {
       // Verify the entire certificate chain.
       VerifyCertificateChain(
-          result_path->certs, result_path->trust_anchor, delegate_, time_,
+          result_path->certs, result_path->last_cert_trust, delegate_, time_,
           key_purpose_, initial_explicit_policy_, user_initial_policy_set_,
           initial_policy_mapping_inhibit_, initial_any_policy_inhibit_,
           &result_path->user_constrained_policy_set, &result_path->errors);

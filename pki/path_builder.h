@@ -77,13 +77,7 @@ struct OPENSSL_EXPORT CertPathBuilderResultPath {
   // For result paths where `IsValid()`, the final certificate is trusted.
   // However for failed or partially constructed paths the final certificate may
   // not be a trust anchor.
-  //
-  // This field is deprecated, use `trust_anchor.CertTrust()` instead.
   CertificateTrust last_cert_trust;
-
-  // Contains information about the trust anchor of the certificate chain,
-  // including whether or not it is trusted.
-  TrustAnchor trust_anchor;
 
   // The set of policies that the certificate is valid for (of the
   // subset of policies user requested during verification).

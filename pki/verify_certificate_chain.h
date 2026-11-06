@@ -313,7 +313,21 @@ class OPENSSL_EXPORT VerifyCertificateChainDelegate {
 // The presence of any other unrecognized extension marked as critical fails
 // validation.
 OPENSSL_EXPORT void VerifyCertificateChain(
-    const ParsedCertificateList &certs, const TrustAnchor &last_cert_trust,
+    const ParsedCertificateList &certs, const CertificateTrust &last_cert_trust,
+    VerifyCertificateChainDelegate *delegate, const der::GeneralizedTime &time,
+    KeyPurpose required_key_purpose,
+    InitialExplicitPolicy initial_explicit_policy,
+    const std::set<der::Input> &user_initial_policy_set,
+    InitialPolicyMappingInhibit initial_policy_mapping_inhibit,
+    InitialAnyPolicyInhibit initial_any_policy_inhibit,
+    std::set<der::Input> *user_constrained_policy_set, CertPathErrors *errors);
+
+// Same as above, but takes the trust as a TrustAnchor rather than
+// CertificateTrust.
+//
+// TODO(crbug.com/575507260): Remove this once callers use CertificateTrust.
+OPENSSL_EXPORT void VerifyCertificateChain(
+    const ParsedCertificateList &certs, const TrustAnchor &trust_anchor,
     VerifyCertificateChainDelegate *delegate, const der::GeneralizedTime &time,
     KeyPurpose required_key_purpose,
     InitialExplicitPolicy initial_explicit_policy,
