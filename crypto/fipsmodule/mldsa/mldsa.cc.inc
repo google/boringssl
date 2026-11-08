@@ -43,9 +43,11 @@ namespace mldsa {
 namespace {
 
 namespace fips {
+
 void ensure_keygen_self_test();
 void ensure_sign_self_test();
 void ensure_verify_self_test();
+
 }  // namespace fips
 
 constexpr int kDegree = 256;
@@ -305,7 +307,7 @@ inline uint32_t reduce_once(uint32_t x) {
   // selects with the same condition into a branch instead of CMOV/CSEL. This
   // condition does not occur in ML-DSA, so omitting it seems to be generally
   // safe. However, see `coefficient_from_nibble`.
-  return (mask & x) | (~mask & subtracted);
+  return subtracted + (mask & kPrime);
 }
 
 // reduce_from_u32 returns `x mod kPrime`. `x` can be any `uint32_t`.
@@ -359,7 +361,7 @@ inline uint32_t mod_sub(uint32_t a, uint32_t b) {
   // return r < 0 ? r + kPrime : r;
   uint32_t mask = 0u - (r >> 31);
   // See `reduce_once` for why this does not have a value barrier.
-  return (mask & (r + kPrime)) | (~mask & r);
+  return r + (mask & kPrime);
 }
 
 inline void scalar_add(scalar *out, const scalar *lhs, const scalar *rhs) {
@@ -624,7 +626,7 @@ inline uint32_t high_bits(uint32_t x) {
     r1 = (r1 * 11275 + (1 << 23)) >> 24;
 
     // For corner-case r1 = (Q-1)/(2 gamma2) = 44, we have to set r1=0.
-    r1 ^= ((uint32_t)(((int32_t)(43 - r1)) >> 31)) & r1;
+    r1 ^= ((uint32_t)(((int32_t)(43 - r1)) >> 31)) & 44u;
   }
   return r1;
 }
