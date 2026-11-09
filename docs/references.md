@@ -78,6 +78,7 @@ This document collects links to useful references. It is currently incomplete, b
 * [GNU Linker Manual](https://sourceware.org/binutils/docs/ld/)
 * [MASM](https://learn.microsoft.com/en-us/cpp/assembler/masm/microsoft-macro-assembler-reference)
 * [NASM](https://www.nasm.us/docs/3.01/)
+* [Apple Clang vs LLVM Clang version numbers](https://en.wikipedia.org/wiki/Xcode#Toolchain_versions)
 
 ## CPU Architectures
 
