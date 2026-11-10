@@ -364,9 +364,10 @@ void CRYPTO_ghash_init(gmult_func *out_mult, ghash_func *out_hash,
 void CRYPTO_gcm128_init_aes_key(GCM128_KEY *gcm_key, const uint8_t *key,
                                 size_t key_bytes);
 
-// CRYPTO_gcm128_init_ctx initializes `ctx` to encrypt with `key` and `iv`.
-void CRYPTO_gcm128_init_ctx(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
-                            const uint8_t *iv, size_t iv_len);
+// CRYPTO_gcm128_init_ctx initializes `ctx` to encrypt with `key` and `iv`. It
+// returns one on success and zero if `iv_len` is invalid.
+int CRYPTO_gcm128_init_ctx(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
+                           const uint8_t *iv, size_t iv_len);
 
 // CRYPTO_gcm128_aad adds to the authenticated data for an instance of GCM.
 // This must be called before and data is encrypted. `key` must be the same

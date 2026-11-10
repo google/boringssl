@@ -295,8 +295,12 @@ void bssl::CRYPTO_gcm128_init_aes_key(GCM128_KEY *gcm_key, const uint8_t *key,
 #endif
 }
 
-void bssl::CRYPTO_gcm128_init_ctx(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
-                                  const uint8_t *iv, size_t iv_len) {
+int bssl::CRYPTO_gcm128_init_ctx(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
+                                 const uint8_t *iv, size_t iv_len) {
+  if (iv_len == 0 || uint64_t{iv_len} >= uint64_t{1} << 61) {
+    return 0;
+  }
+
 #ifdef GCM_FUNCREF
   void (*gcm_gmult_p)(uint8_t Xi[16], const u128 Htable[16]) = key->gmult;
 #endif
@@ -341,6 +345,7 @@ void bssl::CRYPTO_gcm128_init_ctx(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
   key->block(ctx->Yi, ctx->EK0, &key->aes);
   ++ctr;
   CRYPTO_store_u32_be(ctx->Yi + 12, ctr);
+  return 1;
 }
 
 int bssl::CRYPTO_gcm128_aad(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
