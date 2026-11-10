@@ -357,7 +357,7 @@ int bssl::CRYPTO_gcm128_aad(const GCM128_KEY *key, GCM128_CONTEXT *ctx,
   }
 
   uint64_t alen = ctx->len.aad + aad_len;
-  if (alen > (UINT64_C(1) << 61) || (sizeof(aad_len) == 8 && alen < aad_len)) {
+  if (alen >= (UINT64_C(1) << 61) || (sizeof(aad_len) == 8 && alen < aad_len)) {
     return 0;
   }
   ctx->len.aad = alen;
