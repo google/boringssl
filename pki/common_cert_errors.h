@@ -186,7 +186,7 @@ OPENSSL_EXPORT extern const CertErrorId kDepthLimitExceeded;
 OPENSSL_EXPORT extern const CertErrorId kMtcLandmarkNotRecognized;
 
 // The certificate is an MTC which was verified as a standalone and had a valid
-// CA signature, but `delegate->IsCosignatureVerificationResultAcceptable`
+// CA signature, but `delegate->IsMTCCosignatureVerificationResultAcceptable`
 // returned false.
 OPENSSL_EXPORT extern const CertErrorId
     kMtcUnacceptableCosignatureVerificationResult;

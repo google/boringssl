@@ -72,8 +72,8 @@ SimplePathBuilderDelegate::GetMTCCosigner(Span<const uint8_t> cosigner_id) {
   return std::nullopt;
 }
 
-bool SimplePathBuilderDelegate::IsCosignatureVerificationResultAcceptable(
-    const MTCAnchor *mtc_anchor,
+bool SimplePathBuilderDelegate::IsMTCCosignatureVerificationResultAcceptable(
+    const ParsedCertificate& mtc_ca_cert,
     std::vector<std::vector<uint8_t>> valid_additional_cosigners) {
   return true;
 }

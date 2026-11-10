@@ -89,8 +89,8 @@ class OPENSSL_EXPORT SimplePathBuilderDelegate
       Span<const uint8_t> cosigner_id) override;
 
   // No-op implementation (does not require any valid additional cosigners).
-  bool IsCosignatureVerificationResultAcceptable(
-      const MTCAnchor *mtc_anchor,
+  bool IsMTCCosignatureVerificationResultAcceptable(
+      const ParsedCertificate& mtc_ca_cert,
       std::vector<std::vector<uint8_t>> valid_additional_cosigners) override;
 
  private:

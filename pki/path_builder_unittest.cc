@@ -55,6 +55,7 @@ using ::testing::ContainerEq;
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::Invoke;
+using ::testing::Ref;
 using ::testing::Return;
 using ::testing::StrictMock;
 
@@ -2485,11 +2486,10 @@ class MTCCosignerNotCalledPathBuilderDelegate
     return std::nullopt;
   }
 
-  MOCK_METHOD(bool,
-      IsCosignatureVerificationResultAcceptable,
-      (const MTCAnchor* mtc_anchor,
-           std::vector<std::vector<uint8_t>> valid_additional_cosigners),
-      (override));
+  MOCK_METHOD(bool, IsMTCCosignatureVerificationResultAcceptable,
+              (const ParsedCertificate& mtc_ca_cert,
+               std::vector<std::vector<uint8_t>> valid_additional_cosigners),
+              (override));
 };
 
 class MtcCosignersPathBuilderDelegate : public CertPathBuilderDelegateBase {
@@ -2514,15 +2514,39 @@ class MtcCosignersPathBuilderDelegate : public CertPathBuilderDelegateBase {
     return std::nullopt;
   }
 
-  MOCK_METHOD(bool,
-      IsCosignatureVerificationResultAcceptable,
-      (const MTCAnchor* mtc_anchor,
-           std::vector<std::vector<uint8_t>> valid_additional_cosigners),
-      (override));
+  MOCK_METHOD(bool, IsMTCCosignatureVerificationResultAcceptable,
+              (const ParsedCertificate& mtc_ca_cert,
+               std::vector<std::vector<uint8_t>> valid_additional_cosigners),
+              (override));
 
  private:
   std::map<std::vector<uint8_t>, MTCCosigner> cosigners_;
 };
+
+// A delegate that overrides the deprecated
+// `IsCosignatureVerificationResultAcceptable` instead of
+// `IsMTCCosignatureVerificationResultAcceptable`.
+class DeprecatedMtcCosignersPathBuilderDelegate
+    : public CertPathBuilderDelegateBase {
+ public:
+  void CheckPathAfterVerification(const CertPathBuilder& path_builder,
+                                  CertPathBuilderResultPath* path) override {}
+
+  std::optional<MTCCosigner> GetMTCCosigner(
+      Span<const uint8_t> cosigner_id) override {
+    return std::nullopt;
+  }
+
+  MOCK_METHOD(bool, IsCosignatureVerificationResultAcceptable,
+              (const MTCAnchor* mtc_anchor,
+               std::vector<std::vector<uint8_t>> valid_additional_cosigners),
+              (override));
+};
+
+// Matches a `const MTCAnchor*` for the MTC CA certificate `expected_cert`.
+MATCHER_P(IsMTCAnchorFor, expected_cert, "") {
+  return arg != nullptr && arg->AsCert().get() == expected_cert;
+}
 
 class PathBuilderMTCTest : public PathBuilderSimpleChainTest {
  public:
@@ -2662,8 +2686,8 @@ TEST_F(PathBuilderMTCTest, Verification) {
   MTCCosignerNotCalledPathBuilderDelegate mtc_cosigner_not_called_delegate;
   StrictMock<MtcCosignersPathBuilderDelegate> no_cosigners_delegate;
   EXPECT_CALL(no_cosigners_delegate,
-              IsCosignatureVerificationResultAcceptable(
-                  mtc_anchor_no_subtrees_.get(), ElementsAre()))
+              IsMTCCosignatureVerificationResultAcceptable(
+                  Ref(*mtc_anchor_no_subtrees_->AsCert()), ElementsAre()))
       .WillRepeatedly(Return(true));
 
   // Signatureless cert should be valid when verified against the anchor
@@ -2831,8 +2855,8 @@ TEST_F(PathBuilderMTCTest, CosignatureVerification) {
     // Cert with multiple valid cosigners should validate successfully, and
     // return the valid cosigner ids.
     EXPECT_CALL(cosigners_delegate,
-                IsCosignatureVerificationResultAcceptable(
-                    mtc_anchor_no_subtrees_.get(),
+                IsMTCCosignatureVerificationResultAcceptable(
+                    Ref(*mtc_anchor_no_subtrees_->AsCert()),
                     ElementsAre(cosigner_id_1, cosigner_id_2)))
         .WillOnce(Return(true));
     result =
@@ -2854,7 +2878,7 @@ TEST_F(PathBuilderMTCTest, CosignatureVerification) {
         std::move(cosigners));
 
     // If the CA key is wrong it should fail and
-    // IsCosignatureVerificationResultAcceptable should not be called.
+    // IsMTCCosignatureVerificationResultAcceptable should not be called.
     result = RunPathBuilder(standalone_leaf_3_cosigners,
                             &trust_store_no_subtrees_wrong_key, nullptr,
                             &cosigners_delegate);
@@ -2879,8 +2903,8 @@ TEST_F(PathBuilderMTCTest, CosignatureVerification) {
     // If the CA key is correct but the cosigners fail to validate, it should
     // be called with empty valid cosigners list:
     EXPECT_CALL(wrong_cosigner_keys_delegate,
-                IsCosignatureVerificationResultAcceptable(
-                    mtc_anchor_no_subtrees_.get(), ElementsAre()))
+                IsMTCCosignatureVerificationResultAcceptable(
+                    Ref(*mtc_anchor_no_subtrees_->AsCert()), ElementsAre()))
         .WillOnce(Return(true));
     result =
         RunPathBuilder(standalone_leaf_3_cosigners, &trust_store_no_subtrees,
@@ -2904,8 +2928,9 @@ TEST_F(PathBuilderMTCTest, CosignatureVerification) {
     // one succeeded, it should be called with the valid one in the cosigners
     // list:
     EXPECT_CALL(wrong_ca1_cosigner_key_delegate,
-                IsCosignatureVerificationResultAcceptable(
-                    mtc_anchor_no_subtrees_.get(), ElementsAre(cosigner_id_2)))
+                IsMTCCosignatureVerificationResultAcceptable(
+                    Ref(*mtc_anchor_no_subtrees_->AsCert()),
+                    ElementsAre(cosigner_id_2)))
         .WillOnce(Return(true));
     result =
         RunPathBuilder(standalone_leaf_3_cosigners, &trust_store_no_subtrees,
@@ -2928,8 +2953,8 @@ TEST_F(PathBuilderMTCTest, CosignatureVerification) {
     // Even with valid cosigners, if the delegate rejects the result, it should
     // fail.
     EXPECT_CALL(rejecting_delegate,
-                IsCosignatureVerificationResultAcceptable(
-                    mtc_anchor_no_subtrees_.get(),
+                IsMTCCosignatureVerificationResultAcceptable(
+                    Ref(*mtc_anchor_no_subtrees_->AsCert()),
                     ElementsAre(cosigner_id_1, cosigner_id_2)))
         .WillOnce(Return(false));
     result =
@@ -2939,6 +2964,28 @@ TEST_F(PathBuilderMTCTest, CosignatureVerification) {
     ASSERT_TRUE(result.GetBestPathPossiblyInvalid());
     EXPECT_TRUE(result.GetBestPathPossiblyInvalid()->errors.ContainsError(
         cert_errors::kMtcUnacceptableCosignatureVerificationResult));
+  }
+}
+
+// Tests that a delegate that overrides the deprecated
+// `IsCosignatureVerificationResultAcceptable` is still called.
+TEST_F(PathBuilderMTCTest, DeprecatedCosignatureVerificationResultAcceptable) {
+  TrustStoreInMemory trust_store;
+  ASSERT_TRUE(trust_store.AddMTCTrustAnchor(mtc_anchor_no_subtrees_));
+  std::shared_ptr<const ParsedCertificate> standalone_leaf;
+  ASSERT_TRUE(ReadMTCTestCert("mtc-leaf-standalone.pem", &standalone_leaf));
+
+  for (bool acceptable : {true, false}) {
+    SCOPED_TRACE(acceptable);
+    StrictMock<DeprecatedMtcCosignersPathBuilderDelegate> delegate;
+    EXPECT_CALL(delegate,
+                IsCosignatureVerificationResultAcceptable(
+                    IsMTCAnchorFor(mtc_anchor_no_subtrees_->AsCert().get()),
+                    ElementsAre()))
+        .WillOnce(Return(acceptable));
+    CertPathBuilder::Result result =
+        RunPathBuilder(standalone_leaf, &trust_store, nullptr, &delegate);
+    EXPECT_EQ(result.HasValidPath(), acceptable);
   }
 }
 

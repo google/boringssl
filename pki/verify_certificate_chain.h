@@ -104,8 +104,8 @@ class OPENSSL_EXPORT VerifyCertificateChainDelegate {
 
   // Returns a cosigner key that matches `cosigner_id`, if one exists. Will
   // only be called for additional cosignatures, is not called for the CA
-  // cosignature (which uses the key from the MTCAnchor).
-  // The `IsCosignatureVerificationResultAcceptable` method should also be
+  // cosignature (which uses the key from the MTC CA certificate).
+  // The `IsMTCCosignatureVerificationResultAcceptable` method should also be
   // implemented to evaluate if the cosignatures meet the delegate's policy.
   struct MTCCosigner {
     SignatureAlgorithm signature_algorithm;
@@ -114,15 +114,29 @@ class OPENSSL_EXPORT VerifyCertificateChainDelegate {
   virtual std::optional<MTCCosigner> GetMTCCosigner(
       Span<const uint8_t> cosigner_id) = 0;
 
-  // Called after standalone MTC verification, the delegate should return true
-  // if the combination of `mtc_anchor` and `valid_additional_cosigners` meets
-  // the delegate's cosigner policy. Only called if the MTC had a valid
-  // CA cosignature for `mtc_anchor`. `valid_additional_cosigners` will contain
-  // the cosigner_ids of the additional valid cosigners, if any, and will not
-  // contain the `ca_id` of `mtc_anchor`.
+  // Called after standalone MTC verification. The delegate should return true
+  // if the combination of the MTC CA certificate `mtc_ca_cert` and
+  // `valid_additional_cosigners` meets the delegate's cosigner policy. Only
+  // called if the MTC had a valid CA cosignature from the MTC CA described by
+  // `mtc_ca_cert`. `valid_additional_cosigners` will contain the cosigner_ids
+  // of the additional valid cosigners, if any, and will not contain the MTC
+  // CA's ID.
+  //
+  // TODO(crbug.com/575507260): Make this pure virtual once callers no longer
+  // override `IsCosignatureVerificationResultAcceptable`. Until then, the
+  // default implementation returns false.
+  virtual bool IsMTCCosignatureVerificationResultAcceptable(
+      const ParsedCertificate& mtc_ca_cert,
+      std::vector<std::vector<uint8_t>> valid_additional_cosigners);
+
+  // Deprecated version of `IsMTCCosignatureVerificationResultAcceptable` that
+  // takes an MTCAnchor.
+  //
+  // TODO(crbug.com/575507260): Remove this once callers override
+  // `IsMTCCosignatureVerificationResultAcceptable` instead.
   virtual bool IsCosignatureVerificationResultAcceptable(
-      const MTCAnchor *mtc_anchor,
-      std::vector<std::vector<uint8_t>> valid_additional_cosigners) = 0;
+      const MTCAnchor* mtc_anchor,
+      std::vector<std::vector<uint8_t>> valid_additional_cosigners);
 
   // This is called during verification or path building to decide if debug
   // logs will be sent to the delegate. No calls to DebugLog (below) will be

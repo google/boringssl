@@ -1229,7 +1229,7 @@ enum class VerifyMTCResult {
   kLandmarkNotRecognized,
 
   // The MTC was verified as a standalone MTC and had a valid CA signature, but
-  // `delegate->IsCosignatureVerificationResultAcceptable` returned false.
+  // `delegate->IsMTCCosignatureVerificationResultAcceptable` returned false.
   kUnacceptableCosignatureVerificationResult,
 
   // The MTC verified successfully.
@@ -1543,6 +1543,9 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
   }
 
   if (found_valid_ca_signature) {
+    // This calls the deprecated method, whose default implementation calls
+    // `IsMTCCosignatureVerificationResultAcceptable`, so that delegates that
+    // override either method work.
     return delegate->IsCosignatureVerificationResultAcceptable(
                mtc_anchor, std::move(valid_additional_cosigners))
                ? VerifyMTCResult::kSuccess
@@ -2236,6 +2239,20 @@ void PathVerifier::Run(
 }
 
 }  // namespace
+
+bool VerifyCertificateChainDelegate::
+    IsMTCCosignatureVerificationResultAcceptable(
+        const ParsedCertificate& mtc_ca_cert,
+        std::vector<std::vector<uint8_t>> valid_additional_cosigners) {
+  return false;
+}
+
+bool VerifyCertificateChainDelegate::IsCosignatureVerificationResultAcceptable(
+    const MTCAnchor* mtc_anchor,
+    std::vector<std::vector<uint8_t>> valid_additional_cosigners) {
+  return IsMTCCosignatureVerificationResultAcceptable(
+      *mtc_anchor->AsCert(), std::move(valid_additional_cosigners));
+}
 
 void VerifyCertificateChain(
     const ParsedCertificateList &certs, const TrustAnchor &last_cert_trust,
