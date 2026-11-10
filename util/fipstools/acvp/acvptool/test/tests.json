@@ -22,6 +22,7 @@
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-512-256.bz2", "Out": "expected/HMAC-SHA2-512-256.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HKDF.bz2", "Out": "expected/HKDF.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HKDF-hybrid.bz2", "Out": "expected/HKDF-hybrid.bz2"},
+{"Wrapper": "testmodulewrapper", "In": "vectors/HKDF-multi-expansion.bz2", "Out": "expected/HKDF-multi-expansion.bz2"},
 {"Wrapper": "testmodulewrapper", "In": "vectors/hmacDRBG.bz2", "Out": "expected/hmacDRBG.bz2"},
 {"Wrapper": "testmodulewrapper", "In": "vectors/KDA.bz2", "Out": "expected/KDA.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/KAS-ECC-SSC.bz2"},

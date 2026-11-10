@@ -55,6 +55,8 @@ var handlers = map[string]func([][]byte) error{
 	"AES-XTS/encrypt":          xtsEncrypt,
 	"AES-XTS/decrypt":          xtsDecrypt,
 	"HKDF/SHA2-256":            hkdfMAC,
+	"HKDFExtract/SHA2-256":     hkdfExtract,
+	"HKDFExpand/SHA2-256":      hkdfExpand,
 	"hmacDRBG-reseed/SHA2-256": hmacDRBGReseed,
 	"hmacDRBG-pr/SHA2-256":     hmacDRBGPredictionResistance,
 	"AES-CBC-CS3/encrypt":      ctsEncrypt,
@@ -433,6 +435,32 @@ func hkdfMAC(args [][]byte) error {
 		return err
 	}
 
+	return reply(ret)
+}
+
+func hkdfExtract(args [][]byte) error {
+	if len(args) != 2 {
+		return fmt.Errorf("HKDFExtract received %d args, wanted 2", len(args))
+	}
+	ret, err := hkdf.Extract(sha256.New, args[0], args[1])
+	if err != nil {
+		return err
+	}
+	return reply(ret)
+}
+
+func hkdfExpand(args [][]byte) error {
+	if len(args) != 3 {
+		return fmt.Errorf("HKDFExpand received %d args, wanted 3", len(args))
+	}
+	if len(args[2]) != 4 {
+		return fmt.Errorf("uint32 length was %d bytes long", len(args[2]))
+	}
+	length := binary.LittleEndian.Uint32(args[2])
+	ret, err := hkdf.Expand(sha256.New, args[0], string(args[1]), int(length))
+	if err != nil {
+		return err
+	}
 	return reply(ret)
 }
 

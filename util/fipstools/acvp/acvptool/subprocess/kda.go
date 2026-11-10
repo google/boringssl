@@ -69,18 +69,22 @@ type hkdfTestVectorSet struct {
 }
 
 type hkdfTestGroup struct {
-	ID     uint64            `json:"tgId"`
-	Type   string            `json:"testType"` // AFT or VAL
-	Config hkdfConfiguration `json:"kdfConfiguration"`
-	Tests  []hkdfTest        `json:"tests"`
+	ID             uint64            `json:"tgId"`
+	Type           string            `json:"testType"` // AFT or VAL
+	Config         hkdfConfiguration `json:"kdfConfiguration"`
+	MultiExpansion bool              `json:"multiExpansion"`
+	MultiConfig    hkdfConfiguration `json:"kdfMultiExpansionConfiguration"`
+	Tests          []hkdfTest        `json:"tests"`
 }
 
 type hkdfTest struct {
-	ID          uint64         `json:"tcId"`
-	Params      hkdfParameters `json:"kdfParameter"`
-	PartyU      kdaPartyInfo   `json:"fixedInfoPartyU"`
-	PartyV      kdaPartyInfo   `json:"fixedInfoPartyV"`
-	ExpectedHex string         `json:"dkm"`
+	ID            uint64                       `json:"tcId"`
+	Params        hkdfParameters               `json:"kdfParameter"`
+	PartyU        kdaPartyInfo                 `json:"fixedInfoPartyU"`
+	PartyV        kdaPartyInfo                 `json:"fixedInfoPartyV"`
+	ExpectedHex   string                       `json:"dkm"`
+	MultiParams   hkdfMultiExpansionParameters `json:"kdfMultiExpansionParameter"`
+	ExpectedHexes []string                     `json:"dkms"`
 }
 
 type hkdfConfiguration struct {
@@ -129,15 +133,24 @@ func (p *hkdfParameters) extract() (key, salt []byte, err error) {
 	return key, salt, nil
 }
 
+type hkdfMultiExpansionParameters struct {
+	hkdfParameters
+	Iterations []struct {
+		OutputBits uint32 `json:"l"`
+		InfoHex    string `json:"fixedInfo"`
+	} `json:"iterationParameters"`
+}
+
 type hkdfTestGroupResponse struct {
 	ID    uint64             `json:"tgId"`
 	Tests []hkdfTestResponse `json:"tests"`
 }
 
 type hkdfTestResponse struct {
-	ID     uint64 `json:"tcId"`
-	KeyOut string `json:"dkm,omitempty"`
-	Passed *bool  `json:"testPassed,omitempty"`
+	ID      uint64   `json:"tcId"`
+	KeyOut  string   `json:"dkm,omitempty"`
+	KeysOut []string `json:"dkms,omitempty"`
+	Passed  *bool    `json:"testPassed,omitempty"`
 }
 
 type hkdf struct{}
@@ -165,6 +178,23 @@ func (k *hkdf) Process(vectorSet []byte, m Transactable) (any, error) {
 			isValidationTest = false
 		default:
 			return nil, fmt.Errorf("unknown test type %q", group.Type)
+		}
+
+		if group.MultiExpansion {
+			if group.MultiConfig.Type != "hkdf" {
+				return nil, fmt.Errorf("KDA not configured for HKDF: %#v", group.MultiConfig)
+			}
+			for _, test := range group.Tests {
+				response, err := test.processMultiExpansion(group.MultiConfig.HashName, isValidationTest, m)
+				if err != nil {
+					return nil, err
+				}
+				groupResp.Tests = append(groupResp.Tests, response)
+			}
+			m.Barrier(func() {
+				respGroups = append(respGroups, groupResp)
+			})
+			continue
 		}
 
 		outBytes, hashName, err := group.Config.extract()
@@ -227,6 +257,58 @@ func (k *hkdf) Process(vectorSet []byte, m Transactable) (any, error) {
 	}
 
 	return respGroups, nil
+}
+
+func (t *hkdfTest) processMultiExpansion(hashName string, isValidationTest bool, m Transactable) (hkdfTestResponse, error) {
+	response := hkdfTestResponse{ID: t.ID}
+	if len(t.MultiParams.Iterations) == 0 {
+		return response, fmt.Errorf("HKDF multi-expansion test %d has no iterations", t.ID)
+	}
+	if isValidationTest && len(t.ExpectedHexes) != len(t.MultiParams.Iterations) {
+		return response, fmt.Errorf("HKDF multi-expansion test %d has %d expected keys for %d iterations", t.ID, len(t.ExpectedHexes), len(t.MultiParams.Iterations))
+	}
+	key, salt, err := t.MultiParams.extract()
+	if err != nil {
+		return response, err
+	}
+	// Extract once and reuse the resulting key for each expansion.
+	prk, err := m.Transact("HKDFExtract/"+hashName, 1, key, salt)
+	if err != nil {
+		return response, err
+	}
+	passed := true
+	for i, iteration := range t.MultiParams.Iterations {
+		if iteration.OutputBits%8 != 0 {
+			return response, fmt.Errorf("HKDF output length %d is not a multiple of 8", iteration.OutputBits)
+		}
+		info, err := hex.DecodeString(iteration.InfoHex)
+		if err != nil {
+			return response, err
+		}
+		outBytes := iteration.OutputBits / 8
+		result, err := m.Transact("HKDFExpand/"+hashName, 1, prk[0], info, uint32le(outBytes))
+		if err != nil {
+			return response, err
+		}
+		if len(result[0]) != int(outBytes) {
+			return response, fmt.Errorf("HKDF operation resulted in %d bytes but wanted %d", len(result[0]), outBytes)
+		}
+		if isValidationTest {
+			expected, err := hex.DecodeString(t.ExpectedHexes[i])
+			if err != nil {
+				return response, err
+			}
+			if !bytes.Equal(expected, result[0]) {
+				passed = false
+			}
+		} else {
+			response.KeysOut = append(response.KeysOut, hex.EncodeToString(result[0]))
+		}
+	}
+	if isValidationTest {
+		response.Passed = &passed
+	}
+	return response, nil
 }
 
 type oneStepTestVectorSet struct {
