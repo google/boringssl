@@ -16,6 +16,7 @@
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA-1.bz2", "Out": "expected/HMAC-SHA-1.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-224.bz2", "Out": "expected/HMAC-SHA2-224.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-256.bz2", "Out": "expected/HMAC-SHA2-256.bz2"},
+{"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-256-2.0.bz2", "Out": "expected/HMAC-SHA2-256-2.0.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-384.bz2", "Out": "expected/HMAC-SHA2-384.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-512.bz2", "Out": "expected/HMAC-SHA2-512.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/HMAC-SHA2-512-256.bz2", "Out": "expected/HMAC-SHA2-512-256.bz2"},

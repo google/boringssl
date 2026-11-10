@@ -25,7 +25,8 @@ import (
 // https://pages.nist.gov/ACVP/draft-fussell-acvp-mac.html#name-test-vectors
 
 type hmacTestVectorSet struct {
-	Groups []hmacTestGroup `json:"testGroups"`
+	Revision string          `json:"revision"`
+	Groups   []hmacTestGroup `json:"testGroups"`
 }
 
 type hmacTestGroup struct {
@@ -35,9 +36,12 @@ type hmacTestGroup struct {
 	KeyBits int    `json:"keyLen"` // maximum possible value is 524288
 	MACBits int    `json:"macLen"` // maximum possible value is 512
 	Tests   []struct {
-		ID     uint64 `json:"tcId"`
-		KeyHex string `json:"key"`
-		MsgHex string `json:"msg"`
+		ID      uint64 `json:"tcId"`
+		MsgBits int    `json:"msgLen"`
+		KeyBits int    `json:"keyLen"`
+		MACBits int    `json:"macLen"`
+		KeyHex  string `json:"key"`
+		MsgHex  string `json:"msg"`
 	} `json:"tests"`
 }
 
@@ -91,27 +95,32 @@ func (h *hmacPrimitive) Process(vectorSet []byte, m Transactable) (any, error) {
 		response := hmacTestGroupResponse{
 			ID: group.ID,
 		}
-		if group.MACBits > h.mdLen*8 {
-			return nil, fmt.Errorf("test group %d specifies MAC length should be %d, but maximum possible length is %d", group.ID, group.MACBits, h.mdLen*8)
-		}
-		if group.MACBits%8 != 0 {
-			return nil, fmt.Errorf("fractional-byte HMAC output length requested: %d", group.MACBits)
-		}
-		outBytes := group.MACBits / 8
-
 		for _, test := range group.Tests {
 			test := test
 
-			if len(test.MsgHex)*4 != group.MsgBits {
-				return nil, fmt.Errorf("test case %d/%d contains hex message of length %d but specifies a bit length of %d", group.ID, test.ID, len(test.MsgHex), group.MsgBits)
+			// Revision 2.0 specifies lengths per test, rather than per group.
+			msgBits, keyBits, macBits := group.MsgBits, group.KeyBits, group.MACBits
+			if parsed.Revision == "2.0" {
+				msgBits, keyBits, macBits = test.MsgBits, test.KeyBits, test.MACBits
+			}
+			if macBits > h.mdLen*8 {
+				return nil, fmt.Errorf("test case %d/%d specifies MAC length should be %d, but maximum possible length is %d", group.ID, test.ID, macBits, h.mdLen*8)
+			}
+			if macBits%8 != 0 {
+				return nil, fmt.Errorf("fractional-byte HMAC output length requested: %d", macBits)
+			}
+			outBytes := macBits / 8
+
+			if len(test.MsgHex)*4 != msgBits {
+				return nil, fmt.Errorf("test case %d/%d contains hex message of length %d but specifies a bit length of %d", group.ID, test.ID, len(test.MsgHex), msgBits)
 			}
 			msg, err := hex.DecodeString(test.MsgHex)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode hex in test case %d/%d: %s", group.ID, test.ID, err)
 			}
 
-			if len(test.KeyHex)*4 != group.KeyBits {
-				return nil, fmt.Errorf("test case %d/%d contains hex key of length %d but specifies a bit length of %d", group.ID, test.ID, len(test.KeyHex), group.KeyBits)
+			if len(test.KeyHex)*4 != keyBits {
+				return nil, fmt.Errorf("test case %d/%d contains hex key of length %d but specifies a bit length of %d", group.ID, test.ID, len(test.KeyHex), keyBits)
 			}
 			key, err := hex.DecodeString(test.KeyHex)
 			if err != nil {
