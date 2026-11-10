@@ -103,8 +103,9 @@ func (c *hkdfConfiguration) extract() (outBytes uint32, hashName string, err err
 }
 
 type hkdfParameters struct {
-	SaltHex string `json:"salt"`
-	KeyHex  string `json:"z"`
+	SaltHex   string `json:"salt"`
+	KeyHex    string `json:"z"`
+	AuxKeyHex string `json:"t"`
 }
 
 func (p *hkdfParameters) extract() (key, salt []byte, err error) {
@@ -117,6 +118,13 @@ func (p *hkdfParameters) extract() (key, salt []byte, err error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// For a hybrid shared secret, the input is Z || T (SP 800-56C Rev. 2).
+	auxKey, err := hex.DecodeString(p.AuxKeyHex)
+	if err != nil {
+		return nil, nil, err
+	}
+	key = append(key, auxKey...)
 
 	return key, salt, nil
 }
