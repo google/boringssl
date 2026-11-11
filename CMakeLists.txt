@@ -110,7 +110,7 @@ elseif(MSVC)
   # __cplusplus. See https://devblogs.microsoft.com/cppblog/msvc-now-correctly-reports-__cplusplus/
   # If this becomes too problematic for downstream code, we can look at
   # _MSVC_LANG.
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -utf-8 -Zc:__cplusplus")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -utf-8 -Zc:__cplusplus -Zc:preprocessor")
 endif()
 
 if(WIN32)

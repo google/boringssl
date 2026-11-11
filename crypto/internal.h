@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include <type_traits>
+#include <utility>
 
 #if defined(BORINGSSL_CONSTANT_TIME_VALIDATION)
 #include <valgrind/memcheck.h>
@@ -48,8 +49,6 @@
 
 #if defined(OPENSSL_THREADS)
 #include <atomic>
-#else
-#include <utility>
 #endif
 
 #if defined(OPENSSL_WINDOWS_THREADS)
@@ -1760,6 +1759,34 @@ template <typename Public>
 inline const typename Public::ImplType *FromOpaque(const Public *p) {
   return static_cast<const typename Public::ImplType *>(p);
 }
+
+template <auto F, typename... Args>
+inline constexpr decltype(auto) AsmThunk(Args... args) noexcept(
+    noexcept(F(std::forward<Args>(args)...))) {
+  return F(std::forward<Args>(args)...);
+}
+
+template <auto Item>
+struct AsmRaw {
+  static inline constexpr auto kRaw = Item;
+};
+
+// TODO(crbug.com/585160970): We should replace this with a more long term
+// solution. A better design is possible.
+#define DECLARE_ASM_FUNCTION(ret, name, params)                             \
+  namespace asm_raw {                                                       \
+                                                                            \
+  extern "C" ret name params noexcept;                                      \
+                                                                            \
+  }                                                                         \
+                                                                            \
+  inline constexpr decltype(asm_raw::name) &name = AsmThunk<asm_raw::name>; \
+                                                                            \
+  template <>                                                               \
+  struct AsmRaw<name> {                                                     \
+    static inline constexpr auto kRaw = asm_raw::name;                      \
+  };
+
 
 BSSL_NAMESPACE_END
 
