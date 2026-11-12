@@ -85,6 +85,37 @@ See [depot_tools
 documentation](https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools.html)
 for more info.
 
+# Commit messages
+
+Both of the above workflows take the change description from your git commit
+message. Follow the [Chromium guidelines](https://chromium.googlesource.com/chromium/src/+/main/docs/contributing.md#Uploading-a-change-for-review)
+on formatting commit messages. In particular:
+
+* The first line should be a one-line summary of the change, separated by a
+  blank line.
+
+* The description should be line-wrapped, for better display in tools like
+  `git log`.
+
+* If addressing a bug, use `Bug: 12345` or `Fixed: 12345` to reference it by
+  bug number.
+
+Treat commit messages as comparable to release notes in other projects.
+BoringSSL is a open source project with many consumers, so commit messages
+should be written to be useful for several audiences:
+
+* Your code reviewer, who needs to understand what your change does, the
+  motivation, and context behind any tricky decisions you made.
+
+* Our future selves, who need to understand the history of some code.
+
+* External readers, who need to understand the implications of some change, such
+  as whether it impacts their project or fixes an issue that affects them.
+
+If the change impacts external behavior and might impact existing callers, the
+commit message should include an `Update-Note:` line. See
+[this document](./BREAKING-CHANGES.md) for details.
+
 # Copyright headers
 New files contributed directly to BoringSSL should use the following copyright
 header, where `YEAR` is the year the file was added:
