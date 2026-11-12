@@ -11,8 +11,6 @@ reference.
 | FEAT_SHA256 | Cryptography Extension | SHA-1 and SHA-256 functionality | none / SHA256 / SHA256+SHA512 | __ARM_FEATURE_SHA2 | __ARM_FEATURE_CRYPTO | sha2 | crypto | HWCAP_SHA256 | PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE |
 | FEAT_SHA512 | | SHA-512 instructions | none / SHA256 / SHA256+SHA512 | __ARM_FEATURE_SHA512 | | sha3 | | HWCAP_SHA512 | PF_ARM_SHA512_INSTRUCTIONS_AVAILABLE |
 | FEAT_SHA3 | | SHA-3 instructions | none / SHA3 | __ARM_FEATURE_SHA3 | | sha3 | | HWCAP_SHA3 | PF_ARM_SHA3_INSTRUCTIONS_AVAILABLE |
-| FEAT_DIT | | | | | | dit | | HWCAP_DIT | |
-| FEAT_SB | | | | | | sb | | HWCAP_SB | |
 
 ## Footnotes
 

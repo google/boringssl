@@ -290,12 +290,12 @@ TEST(Crypto, CPUIDEnvVariable) {
 
       // Enable bits.
       {{0x12345678, 0x12345678, 0x12345678, 0x12345678},
-       "|0xf0f0f0f0f0f0f0f0:|0x0f0f0f0f0f0f0f0f",
+        "|0xf0f0f0f0f0f0f0f0:|0x0f0f0f0f0f0f0f0f",
        {0xf2f4f6f8, 0xf2f4f6f8, 0x1f3f5f7f, 0x1f3f5f7f}},
 
       // Clear bits.
       {{0x12345678, 0x12345678, 0x12345678, 0x12345678},
-       "~0xf0f0f0f0f0f0f0f0:~0x0f0f0f0f0f0f0f0f",
+        "~0xf0f0f0f0f0f0f0f0:~0x0f0f0f0f0f0f0f0f",
        {0x02040608, 0x02040608, 0x10305070, 0x10305070}},
 
       // Syntax errors are silently ignored.
@@ -325,44 +325,6 @@ TEST(Crypto, CPUIDEnvVariable) {
     OPENSSL_adjust_ia32cap(cap.data(), t.env);
     EXPECT_EQ(cap, t.out);
   }
-}
-#endif
-
-#if defined(OPENSSL_ARM_DIT) && !defined(BORINGSSL_SHARED_LIBRARY)
-template <bool enabled>
-DIT_FEATURE void assert_dit() {
-  uint64_t dit;
-  __asm__ __volatile__("mrs %0, dit" : "=r"(dit));
-  if constexpr (enabled) {
-    EXPECT_NE(dit & (1ULL << 24), 0U);
-  } else {
-    EXPECT_EQ(dit & (1ULL << 24), 0U);
-  }
-}
-
-void dit_bar(bool &a) {
-  ConstTimeGuard g;
-  g.WillReadSecret(a);
-  a = true;
-  g.DidComputeResult(a);
-  assert_dit<true>();
-}
-
-void dit_foo(bool &a) {
-  ConstTimeGuard g;
-  dit_bar(a);
-  assert_dit<true>();
-}
-
-TEST(Crypto, DataIndependentTiming) {
-  if (!CRYPTO_is_ARMv8_DIT_capable()) {
-    return;
-  }
-  assert_dit<false>();
-  bool flag = false;
-  dit_foo(flag);
-  EXPECT_TRUE(flag);
-  assert_dit<false>();
 }
 #endif
 

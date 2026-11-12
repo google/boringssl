@@ -57,10 +57,7 @@ void OPENSSL_cpuid_setup() {
 
   // Use the common parsing function to check all cryptographic features.
   uint64_t id_aa64isar0_el1 = READ_SYSREG("id_aa64isar0_el1");
-  uint64_t id_aa64isar1_el1 = READ_SYSREG("id_aa64isar1_el1");
-  OPENSSL_armcap_P |= ARMV7_NEON | armcap::ParseISAR0Flags(id_aa64isar0_el1) |
-                      armcap::ParseISAR1Flags(id_aa64isar1_el1) |
-                      armcap::ParsePFR0Flags(id_aa64pfr0_el1);
+  OPENSSL_armcap_P |= ARMV7_NEON | armcap::ParseISAR0Flags(id_aa64isar0_el1);
 }
 
 BSSL_NAMESPACE_END
