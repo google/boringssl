@@ -13,7 +13,9 @@
 // limitations under the License.
 
 
-#include <openssl/evp.h>
+#include <openssl/digest.h>
+
+#include <openssl/nid.h>
 
 #include "../fipsmodule/digest/internal.h"  // IWYU pragma: keep
 #include "../fipsmodule/keccak/internal.h"
