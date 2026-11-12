@@ -4,7 +4,7 @@ build_targets: &build_targets
 
 matrix: &matrix
   linux_platforms:
-    - debian11
+    - debian13
     - ubuntu2204
   bazel: [8.x, 9.x, rolling]
 tasks:
