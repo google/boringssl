@@ -1608,6 +1608,46 @@ func addDTLSReorderTests() {
 				},
 			},
 		})
+
+		// After the handshake, DTLS 1.3 will not accept any records from
+		// epoch zero. This ensures that stray unauthenticated records cannot
+		// be used to close the connection.
+		if vers.version >= VersionTLS13 {
+			writeFlight := func(c *DTLSController, prev, received, next []DTLSMessage, records []DTLSRecordNumberInfo) {
+				c.WriteFlight(next)
+				// Skip the ClientHello flight, but target each of the others.
+				last := next[len(next)-1]
+				if last.Epoch != 0 {
+					// Send various stray plaintext records. These should be ignored
+					// because epoch 0 is closed.
+					c.WriteAppData(0, []byte("nope"))
+					c.WriteACK(0, nil)
+					c.WriteFragments([]DTLSFragment{{Epoch: 0, Sequence: last.Sequence + 1, ShouldDiscard: true}})
+				}
+			}
+			testCases = append(testCases, testCase{
+				testType: clientTest,
+				protocol: dtls,
+				name:     "DTLS-PlaintextAfterHandshake-Client-" + vers.name,
+				config: Config{
+					MaxVersion: vers.version,
+					Bugs: ProtocolBugs{
+						WriteFlightDTLS: writeFlight,
+					},
+				},
+			})
+			testCases = append(testCases, testCase{
+				testType: serverTest,
+				protocol: dtls,
+				name:     "DTLS-PlaintextAfterHandshake-Server-" + vers.name,
+				config: Config{
+					MaxVersion: vers.version,
+					Bugs: ProtocolBugs{
+						WriteFlightDTLS: writeFlight,
+					},
+				},
+			})
+		}
 	}
 }
 

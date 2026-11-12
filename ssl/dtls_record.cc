@@ -371,22 +371,27 @@ enum ssl_open_record_t dtls_open_record(SSLImpl *ssl, uint8_t *out_type,
   // Finished flight.
   if (record.read_epoch == ssl->d1->next_read_epoch.get()) {
     assert(ssl_protocol_version(ssl) >= TLS1_3_VERSION);
-    auto prev = MakeUnique<DTLSPrevReadEpoch>();
-    if (prev == nullptr) {
-      *out_alert = SSL_AD_INTERNAL_ERROR;
-      return ssl_open_record_error;
-    }
+    // Don't save epoch zero. It would be ignored by `parse_dtls12_record` and
+    // we don't want to retain it after the handshake. The cases described above
+    // don't apply to epoch 0.
+    if (ssl->d1->read_epoch.epoch != 0) {
+      auto prev = MakeUnique<DTLSPrevReadEpoch>();
+      if (prev == nullptr) {
+        *out_alert = SSL_AD_INTERNAL_ERROR;
+        return ssl_open_record_error;
+      }
 
-    // Release the epoch after a timeout.
-    prev->expire = ssl_ctx_get_current_time(ssl->ctx.get()).tv_sec;
-    if (prev->expire >= UINT64_MAX - DTLS_PREV_READ_EPOCH_EXPIRE_SECONDS) {
-      prev->expire = UINT64_MAX;  // Saturate on overflow.
-    } else {
-      prev->expire += DTLS_PREV_READ_EPOCH_EXPIRE_SECONDS;
-    }
+      // Release the epoch after a timeout.
+      prev->expire = ssl_ctx_get_current_time(ssl->ctx.get()).tv_sec;
+      if (prev->expire >= UINT64_MAX - DTLS_PREV_READ_EPOCH_EXPIRE_SECONDS) {
+        prev->expire = UINT64_MAX;  // Saturate on overflow.
+      } else {
+        prev->expire += DTLS_PREV_READ_EPOCH_EXPIRE_SECONDS;
+      }
 
-    prev->epoch = std::move(ssl->d1->read_epoch);
-    ssl->d1->prev_read_epoch = std::move(prev);
+      prev->epoch = std::move(ssl->d1->read_epoch);
+      ssl->d1->prev_read_epoch = std::move(prev);
+    }
     ssl->d1->read_epoch = std::move(*ssl->d1->next_read_epoch);
     ssl->d1->next_read_epoch = nullptr;
   }
