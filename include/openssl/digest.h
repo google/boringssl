@@ -58,18 +58,21 @@ OPENSSL_EXPORT const EVP_MD *EVP_sha3_256(void);
 OPENSSL_EXPORT const EVP_MD *EVP_sha3_384(void);
 OPENSSL_EXPORT const EVP_MD *EVP_sha3_512(void);
 
-// SHAKE256 functions.
+// SHAKE functions.
 //
 // These EVP_MD objects are extendable-output functions (XOFs), meaning they can
 // return arbitrarily many bytes of output. See `EVP_DigestSqueeze`.
 
-// EVP_turboshake256 is TurboSHAKE extendable output function.
+// EVP_turboshake* implement TurboSHAKE (RFC 9861). TurboSHAKE is similar to
+// SHAKE, but is faster due to it using a more practical round count.
+OPENSSL_EXPORT const EVP_MD *EVP_turboshake128(void);
 OPENSSL_EXPORT const EVP_MD *EVP_turboshake256(void);
 
-// EVP_shake256 is SHAKE256 extendable-output function.
+// EVP_shake* implement SHAKE128 and SHAKE256 extendable-output function.
 //
-// WARNING: SHAKE is slow. Prefer SHA-2, or TurboSHAKE (`EVP_turboshake256`) if
+// WARNING: SHAKE is slow. Prefer SHA-2, or TurboSHAKE (`EVP_turboshake*`) if
 // an XOF is needed.
+OPENSSL_EXPORT const EVP_MD *EVP_shake128(void);
 OPENSSL_EXPORT const EVP_MD *EVP_shake256(void);
 
 
@@ -154,7 +157,7 @@ OPENSSL_EXPORT int EVP_DigestUpdate(EVP_MD_CTX *ctx, const void *data,
 
 // EVP_MAX_MD_BLOCK_SIZE is the largest digest block size supported, in
 // bytes.
-#define EVP_MAX_MD_BLOCK_SIZE 136  // SHA3-256 is the longest so far.
+#define EVP_MAX_MD_BLOCK_SIZE 168  // SHAKE128 is the longest so far.
 
 // EVP_DigestFinal_ex finishes the digest in `ctx` and writes the output to
 // `md_out`. `EVP_MD_CTX_size` bytes are written, which is at most

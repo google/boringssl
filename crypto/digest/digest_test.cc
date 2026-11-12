@@ -18,12 +18,14 @@
 
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include <openssl/asn1.h>
+#include <openssl/base.h>
 #include <openssl/bytestring.h>
 #include <openssl/crypto.h>
 #include <openssl/digest.h>
@@ -49,6 +51,8 @@ struct MD {
   // one_shot_func is the convenience one-shot version of the
   // digest.
   uint8_t *(*one_shot_func)(const uint8_t *, size_t, uint8_t *);
+  // is_xof is whether the hash function is a XOF.
+  bool is_xof = false;
 };
 
 const MD md4 = {"MD4", &EVP_md4, nullptr};
@@ -64,8 +68,12 @@ const MD blake2b256 = {"BLAKE2b-256", &EVP_blake2b256, nullptr};
 const MD sha3_256 = {"SHA3-256", &EVP_sha3_256, nullptr};
 const MD sha3_384 = {"SHA3-384", &EVP_sha3_384, nullptr};
 const MD sha3_512 = {"SHA3-512", &EVP_sha3_512, nullptr};
-const MD shake256 = {"SHAKE256", &EVP_shake256, nullptr};
-const MD turboshake256 = {"TurboSHAKE256", &EVP_turboshake256, nullptr};
+const MD shake128 = {"SHAKE128", &EVP_shake128, nullptr, /*is_xof=*/true};
+const MD shake256 = {"SHAKE256", &EVP_shake256, nullptr, /*is_xof=*/true};
+const MD turboshake128 = {"TurboSHAKE128", &EVP_turboshake128, nullptr,
+                          /*is_xof=*/true};
+const MD turboshake256 = {"TurboSHAKE256", &EVP_turboshake256, nullptr,
+                          /*is_xof=*/true};
 
 struct DigestTestVector {
   // md is the digest to test.
@@ -190,121 +198,317 @@ const DigestTestVector kTestVectors[] = {
      "e76dfad22084a8b1467fcf2ffa58361bec7628edf5f3fdc0e4805dc48caeeca8"
      "1b7c13c30adf52a3659584739a2df46be589c51ca1a4a8416df6545a1ce8ba00"},
 
+    // SHAKE128 tests, from
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE128_Msg0.pdf
+    // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE128_Msg1600.pdf
+    {shake128, "", 1,
+     "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef263cb1eea98"
+     "8004b93103cfb0aeefd2a686e01fa4a58e8a3639ca8a1e3f9ae57e235b8cc873c23dc62b8"
+     "d260169afa2f75ab916a58d974918835d25e6a435085b2badfd6dfaac359a5efbb7bcc4b5"
+     "9d538df9a04302e10c8bc1cbf1a0b3a5120ea17cda7cfad765f5623474d368ccca8af0007"
+     "cd9f5e4c849f167a580b14aabdefaee7eef47cb0fca9767be1fda69419dfb927e9df07348"
+     "b196691abaeb580b32def58538b8d23f87732ea63b02b4fa0f4873360e2841928cd60dd4c"
+     "ee8cc0d4c922a96188d032675c8ac850933c7aff1533b94c834adbb69c6115bad4692d861"
+     "9f90b0cdf8a7b9c264029ac185b70b83f2801f2f4b3f70c593ea3aeeb613a7f1b1de33fd7"
+     "5081f592305f2e4526edc09631b10958f464d889f31ba010250fda7f1368ec2967fc84ef2"
+     "ae9aff268e0b1700affc6820b523a3d917135f2dff2ee06bfe72b3124721d4a26c04e53a7"
+     "5e30e73a7a9c4a95d91c55d495e9f51dd0b5e9d83c6d5e8ce803aa62b8d654db53d09b8dc"
+     "ff273cdfeb573fad8bcd45578bec2e770d01efde86e721a3f7c6cce275dabe6e2143f1af1"
+     "8da7efddc4c7b70b5e345db93cc936bea323491ccb38a388f546a9ff00dd4e1300b9b2153"
+     "d2041d205b443e41b45a653f2a5c4492c1add544512dda2529833462b71a41a45be97290b"
+     "6f"},
+    {shake128, "\xa3", 200,
+     "131ab8d2b594946b9c81333f9bb6e0ce75c3b93104fa3469d3917457385da037cf232ef71"
+     "64a6d1eb448c8908186ad852d3f85a5cf28da1ab6fe3438171978467f1c05d58c7ef38c28"
+     "4c41f6c2221a76f12ab1c04082660250802294fb87180213fdef5b0ecb7df50ca1f8555be"
+     "14d32e10f6edcde892c09424b29f597afc270c904556bfcb47a7d40778d390923642b3cbd"
+     "0579e60908d5a000c1d08b98ef933f806445bf87f8b009ba9e94f7266122ed7ac24e5e266"
+     "c42a82fa1bbefb7b8db0066e16a85e0493f07df4809aec084a593748ac3dde5a6d7aae1e8"
+     "b6e5352b2d71efbb47d4caeed5e6d633805d2d323e6fd81b4684b93a2677d45e7421c2c6a"
+     "ea259b855a698fd7d13477a1fe53e5a4a6197dbec5ce95f505b520bcd9570c4a8265a7e01"
+     "f89c0c002c59bfec6cd4a5c109258953ee5ee70cd577ee217af21fa70178f0946c9bf6ca8"
+     "751793479f6b537737e40b6ed28511d8a2d7e73eb75f8daac912ff906e0ab955b083bac45"
+     "a8e5e9b744c8506f37e9b4e749a184b30f43eb188d855f1b70d71ff3e50c537ac1b0f8974"
+     "f0fe1a6ad295ba42f6aec74d123a7abedde6e2c0711cab36be5acb1a5a11a4b1db08ba698"
+     "2efccd716929a7741cfc63aa4435e0b69a9063e880795c3dc5ef3272e11c497a91acf699f"
+     "efee206227a44c9fb359fd56ac0a9a75a743cff6862f17d7259ab075216c0699511643b64"
+     "39"},
+
     // SHAKE256 tests, from
     // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg0.pdf
     // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg1600.pdf
     {shake256, "", 1,
-     "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"},
+     "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762fd75dc4ddd"
+     "8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be141e96616fb1395769"
+     "2cc7edd0b45ae3dc07223c8e92937bef84bc0eab862853349ec75546f58fb7c2775c38462"
+     "c5010d846c185c15111e595522a6bcd16cf86f3d122109e3b1fdd943b6aec468a2d621a7c"
+     "06c6a957c62b54dafc3be87567d677231395f6147293b68ceab7a9e0c58d864e8efde4e1b"
+     "9a46cbe854713672f5caaae314ed9083dab4b099f8e300f01b8650f1f4b1d8fcf3f3cb53f"
+     "b8e9eb2ea203bdc970f50ae55428a91f7f53ac266b28419c3778a15fd248d339ede785fb7"
+     "f5a1aaa96d313eacc890936c173cdcd0fab882c45755feb3aed96d477ff96390bf9a66d13"
+     "68b208e21f7c10d04a3dbd4e360633e5db4b602601c14cea737db3dcf722632cc77851cbd"
+     "de2aaf0a33a07b373445df490cc8fc1e4160ff118378f11f0477de055a81a9eda57a4a2cf"
+     "b0c83929d310912f729ec6cfa36c6ac6a75837143045d791cc85eff5b21932f23861bcf23"
+     "a52b5da67eaf7baae0f5fb1369db78f3ac45f8c4ac5671d85735cdddb09d2b1e34a1fc066"
+     "ff4a162cb263d6541274ae2fcc865f618abe27c124cd8b074ccd516301b91875824d09958"
+     "f341ef274bdab0bae316339894304e35877b0c28a9b1fd166c796b9cc258a064a8f57e27f"
+     "2a"},
     {shake256, "\xa3", 200,
-     "cd8a920ed141aa0407a22d59288652e9d9f1a7ee0c1e7c1ca699424da84a904d"},
+     "cd8a920ed141aa0407a22d59288652e9d9f1a7ee0c1e7c1ca699424da84a904d2d700caae"
+     "7396ece96604440577da4f3aa22aeb8857f961c4cd8e06f0ae6610b1048a7f64e1074cd62"
+     "9e85ad7566048efc4fb500b486a3309a8f26724c0ed628001a1099422468de726f1061d99"
+     "eb9e93604d5aa7467d4b1bd6484582a384317d7f47d750b8f5499512bb85a226c4243556e"
+     "696f6bd072c5aa2d9b69730244b56853d16970ad817e213e470618178001c9fb56c54fefa"
+     "5fee67d2da524bb3b0b61ef0e9114a92cdbb6cccb98615cfe76e3510dd88d1cc28ff99287"
+     "512f24bfafa1a76877b6f37198e3a641c68a7c42d45fa7acc10dae5f3cefb7b735f12d4e5"
+     "89f7a456e78c0f5e4c4471fffa5e4fa0514ae974d8c2648513b5db494cea847156d277ad0"
+     "e141c24c7839064cd08851bc2e7ca109fd4e251c35bb0a04fb05b364ff8c4d8b59bc303e2"
+     "5328c09a882e952518e1a8ae0ff265d61c465896973d7490499dc639fb8502b39456791b1"
+     "b6ec5bcc5d9ac36a6df622a070d43fed781f5f149f7b62675e7d1a4d6dec48c1c7164586e"
+     "ae06a51208c0b791244d307726505c3ad4b26b6822377257aa152037560a739714a3ca79b"
+     "d605547c9b78dd1f596f2d4f1791bc689a0e9b799a37339c04275733740143ef5d2b58b96"
+     "a363d4e08076a1a9d7846436e4dca5728b6f760eef0ca92bf0be5615e96959d767197a0be"
+     "eb"},
 
-    // TurboSHAKE256 tests, from
-    // https://www.rfc-editor.org/rfc/rfc9861.html#section-5
+    // TurboSHAKE tests, from
+    // https://www.rfc-editor.org/rfc/rfc9861.html#section-5, but extended with
+    // more bytes.
+    {turboshake128, "", 1,
+     "1e415f1c5983aff2169217277d17bb538cd945a397ddec541f1ce41af2c1b74c3e8ccae2a"
+     "4dae56c84a04c2385c03c15e8193bdf58737363321691c05462c8dfdbdf137ce385dc5164"
+     "0ac13897b9078b56b752345f19ee63011fb016abd57cf2a5ca9bf410aee71044042719e1c"
+     "3ebea94c398909bd8ec9b443e62b0cc0fd7c6b79519f0c470ebd12a0a423e74e845baf888"
+     "e5d635b534049fe87b2528159ac3b5b69ad78425efe13728a261f2a4be2d4ea83a3b8c3be"
+     "12fed74555f2410f0d0aa56d0d63967f8e92c662a351386d6d42cd771f88e7b63b350ee50"
+     "139980f278cba458e85e82948963c3979ea0a809e12b1b266d8f98b8eb3acf190e1f94bd5"
+     "69832cce1e2516f477e26e3d51de3f93ae018693db399ff5792f407353add0c72abb1af7e"
+     "160400522a9d2452477f384c46a6c199147266544fe66cb1669e52f6e31aa72fd9a86a671"
+     "2a188e7c60da8ef0b8e5b2b1346731a2f28503c99ce5cfb374b451ff92a862458101ff970"
+     "c8875ac5b036eb1374c685db404a234bc63148b34ba9bc614872b3835ac11723af11f8158"
+     "b330b2ad5ea7d2936f0856e8beb5c76484063894e6bcff3c08bd22de965eea5e62c42c93a"
+     "0cdeb749a3c7e7fba389d80ac91da65c7dd15860c43bcaf4b49f70d4adfa170e20a1a68c3"
+     "72ef70e50b26525849b6d16358fd3f9e5dcafa4e06f6f402ad21afac154a1b5006e348930"
+     "20"},
     {turboshake256, "", 1,
-     "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"},
+     "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db11edc0e12"
+     "e91ea60eb6b32df06dd7f002fbafabb6e13ec1cc20d995547600db06c0618043e89afee80"
+     "f552390fdd09f45c51953be5f0904ac669c6ab50b885c9f5717c743a7a78bf0b72ed4b9a7"
+     "f51c7a0a06876f0d0526b68b8368ce563c770641b1a67b28d4f5942483a0ae3a996a45075"
+     "741bd9d4ef0f254f13cc0c9818bd8205758c04ccd6ccefcd12d07bf2cddf38e8b575096e5"
+     "d5f74117f29db7c70d842b49d9d812a1b7b29a26e303c5219c7fa16242111c924ec9d9948"
+     "f8cc71152679e6b4b0ec59e7b203b4a771ce491a3c4bf567442fd2f1a1232110351675e56"
+     "e3797fed8738abbef7f9a7ed3d161efa4b68b8362be0be43f58819e94712d1b2e26a7dbd7"
+     "7a01443cd5c603b36045f5b969a56218251d6cafe7cd9987e70ccc664184837ff0b4bd284"
+     "bee073bba98da65c83727fbea28dd57c5dd46ca5ccd431dcda802094e8b7e7c991eec1ea6"
+     "e7ccf869405f41a960381fb2febe1ae6d39ee4692d99f9658cc2652e34bf39df5a2e6eb6b"
+     "cbf5ea71369e8bf1feeed7b86c0ef171bbe0a9e2b4faf9a46b0c2ebd3c9a141983d4a5ecf"
+     "58dac6a51c7dc2a8c852223604a99930f1be1b9d1fbc135342993fff098231531efc3f446"
+     "e4d5ca960f3c8512203af1961f64de0a3d4b277d2d8e6f96719412625d3c13daee7cee499"
+     "8f"},
 };
 
-void CompareDigest(const DigestTestVector *test, const uint8_t *digest,
-                   size_t digest_len) {
-  EXPECT_EQ(test->expected_hex, EncodeHex(Span(digest, digest_len)));
-}
+void TestDigest(const DigestTestVector *test, std::string_view expected_hex,
+                bool test_xof) {
+  size_t md_size = expected_hex.size() / 2;
+  auto final = [&](EVP_MD_CTX *ctx, uint8_t *out, unsigned *out_len) -> int {
+    if (!test_xof) {
+      return EVP_DigestFinal_ex(ctx, out, out_len);
+    }
+    if (!EVP_DigestFinalXOF(ctx, out, md_size)) {
+      return 0;
+    }
+    *out_len = static_cast<unsigned>(md_size);
+    return 1;
+  };
 
-void TestDigest(const DigestTestVector *test) {
   ScopedEVP_MD_CTX ctx;
 
   // Test the input provided.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
-  for (size_t i = 0; i < test->repeat; i++) {
-    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), test->input, strlen(test->input)));
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(ctx.get(), test->input, strlen(test->input)));
+    }
+    unsigned digest_len;
+    ASSERT_TRUE(final(ctx.get(), digest.get(), &digest_len));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  auto digest = std::make_unique<uint8_t[]>(EVP_MD_size(test->md.func()));
-  unsigned digest_len;
-  ASSERT_TRUE(EVP_DigestFinal_ex(ctx.get(), digest.get(), &digest_len));
-  CompareDigest(test, digest.get(), digest_len);
 
   // Test the input one character at a time.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
-  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), nullptr, 0));
-  for (size_t i = 0; i < test->repeat; i++) {
-    for (const char *p = test->input; *p; p++) {
-      ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), p, 1));
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), nullptr, 0));
+    for (size_t i = 0; i < test->repeat; i++) {
+      for (const char *p = test->input; *p; p++) {
+        ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), p, 1));
+      }
     }
+    unsigned digest_len;
+    ASSERT_TRUE(final(ctx.get(), digest.get(), &digest_len));
+    EXPECT_EQ(md_size, digest_len);
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  ASSERT_TRUE(EVP_DigestFinal_ex(ctx.get(), digest.get(), &digest_len));
-  EXPECT_EQ(EVP_MD_size(test->md.func()), digest_len);
-  CompareDigest(test, digest.get(), digest_len);
+
+  if (test_xof) {
+    // Squeeze the output one character at a time.
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), nullptr, 0));
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(ctx.get(), test->input, strlen(test->input)));
+    }
+    for (size_t i = 0; i < md_size; i++) {
+      ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), &digest[i], 1));
+    }
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), md_size)));
+  }
 
   // Test with unaligned input.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
-  std::vector<char> unaligned(strlen(test->input) + 1);
-  char *ptr = unaligned.data();
-  if ((reinterpret_cast<uintptr_t>(ptr) & 1) == 0) {
-    ptr++;
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    std::vector<char> unaligned(strlen(test->input) + 1);
+    char *ptr = unaligned.data();
+    if ((reinterpret_cast<uintptr_t>(ptr) & 1) == 0) {
+      ptr++;
+    }
+    OPENSSL_memcpy(ptr, test->input, strlen(test->input));
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), ptr, strlen(test->input)));
+    }
+    unsigned digest_len;
+    ASSERT_TRUE(final(ctx.get(), digest.get(), &digest_len));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  OPENSSL_memcpy(ptr, test->input, strlen(test->input));
-  for (size_t i = 0; i < test->repeat; i++) {
-    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), ptr, strlen(test->input)));
-  }
-  ASSERT_TRUE(EVP_DigestFinal_ex(ctx.get(), digest.get(), &digest_len));
-  CompareDigest(test, digest.get(), digest_len);
 
   // Make a copy of the digest in the initial state.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
-  ScopedEVP_MD_CTX copy;
-  ASSERT_TRUE(EVP_MD_CTX_copy_ex(copy.get(), ctx.get()));
-  for (size_t i = 0; i < test->repeat; i++) {
-    ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ScopedEVP_MD_CTX copy;
+    ASSERT_TRUE(EVP_MD_CTX_copy_ex(copy.get(), ctx.get()));
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+    }
+    unsigned digest_len;
+    ASSERT_TRUE(final(copy.get(), digest.get(), &digest_len));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  ASSERT_TRUE(EVP_DigestFinal_ex(copy.get(), digest.get(), &digest_len));
-  CompareDigest(test, digest.get(), digest_len);
 
   // Make a copy of the digest with half the input provided.
-  size_t half = strlen(test->input) / 2;
-  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), test->input, half));
-  ASSERT_TRUE(EVP_MD_CTX_copy_ex(copy.get(), ctx.get()));
-  ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input + half,
-                               strlen(test->input) - half));
-  for (size_t i = 1; i < test->repeat; i++) {
-    ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    size_t half = strlen(test->input) / 2;
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), test->input, half));
+    ScopedEVP_MD_CTX copy;
+    ASSERT_TRUE(EVP_MD_CTX_copy_ex(copy.get(), ctx.get()));
+    ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input + half,
+                                 strlen(test->input) - half));
+    for (size_t i = 1; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+    }
+    unsigned digest_len;
+    ASSERT_TRUE(final(copy.get(), digest.get(), &digest_len));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  ASSERT_TRUE(EVP_DigestFinal_ex(copy.get(), digest.get(), &digest_len));
-  CompareDigest(test, digest.get(), digest_len);
+
+  // Make a copy of the digest with half the output squeezed.
+  if (test_xof) {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), nullptr, 0));
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(ctx.get(), test->input, strlen(test->input)));
+    }
+    size_t half_out = md_size / 2;
+    ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), digest.get(), half_out));
+    ScopedEVP_MD_CTX copy;
+    ASSERT_TRUE(EVP_MD_CTX_copy_ex(copy.get(), ctx.get()));
+    ASSERT_TRUE(EVP_DigestSqueeze(copy.get(), digest.get() + half_out,
+                                  md_size - half_out));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), md_size)));
+  }
 
   // Move the digest from the initial state.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
-  copy = std::move(ctx);
-  for (size_t i = 0; i < test->repeat; i++) {
-    ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ScopedEVP_MD_CTX copy = std::move(ctx);
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+    }
+    unsigned digest_len;
+    ASSERT_TRUE(final(copy.get(), digest.get(), &digest_len));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  ASSERT_TRUE(EVP_DigestFinal_ex(copy.get(), digest.get(), &digest_len));
-  CompareDigest(test, digest.get(), digest_len);
 
   // Move the digest with half the input provided.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
-  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), test->input, half));
-  copy = std::move(ctx);
-  ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input + half,
-                               strlen(test->input) - half));
-  for (size_t i = 1; i < test->repeat; i++) {
-    ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+  {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    size_t half = strlen(test->input) / 2;
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), test->input, half));
+    ScopedEVP_MD_CTX copy = std::move(ctx);
+    ASSERT_TRUE(EVP_DigestUpdate(copy.get(), test->input + half,
+                                 strlen(test->input) - half));
+    for (size_t i = 1; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(copy.get(), test->input, strlen(test->input)));
+    }
+    unsigned digest_len;
+    ASSERT_TRUE(final(copy.get(), digest.get(), &digest_len));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), digest_len)));
   }
-  ASSERT_TRUE(EVP_DigestFinal_ex(copy.get(), digest.get(), &digest_len));
-  CompareDigest(test, digest.get(), digest_len);
+
+  // Move the digest with half the output squeezed.
+  if (test_xof) {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
+    ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), test->md.func(), nullptr));
+    ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), nullptr, 0));
+    for (size_t i = 0; i < test->repeat; i++) {
+      ASSERT_TRUE(
+          EVP_DigestUpdate(ctx.get(), test->input, strlen(test->input)));
+    }
+    size_t half_out = md_size / 2;
+    ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), digest.get(), half_out));
+    ScopedEVP_MD_CTX copy = std::move(ctx);
+    ASSERT_TRUE(EVP_DigestSqueeze(copy.get(), digest.get() + half_out,
+                                  md_size - half_out));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), md_size)));
+  }
 
   // Test the one-shot function.
-  if (test->md.one_shot_func && test->repeat == 1) {
+  if (test->md.one_shot_func && test->repeat == 1 && !test_xof) {
+    auto digest = std::make_unique<uint8_t[]>(md_size);
     uint8_t *out = test->md.one_shot_func((const uint8_t *)test->input,
                                           strlen(test->input), digest.get());
     // One-shot functions return their supplied buffers.
     EXPECT_EQ(digest.get(), out);
-    CompareDigest(test, digest.get(), EVP_MD_size(test->md.func()));
+    EXPECT_EQ(expected_hex, EncodeHex(Span(digest.get(), md_size)));
   }
 }
 
 TEST(DigestTest, TestVectors) {
   for (size_t i = 0; i < std::size(kTestVectors); i++) {
     SCOPED_TRACE(i);
-    TestDigest(&kTestVectors[i]);
+    const auto &t = kTestVectors[i];
+    if (t.md.is_xof) {
+      TestDigest(&t,
+                 std::string_view(t.expected_hex)
+                     .substr(0, 2 * EVP_MD_size(t.md.func())),
+                 /*test_xof=*/false);
+      TestDigest(&t, t.expected_hex, /*test_xof=*/true);
+    } else {
+      TestDigest(&t, t.expected_hex, /*test_xof=*/false);
+    }
   }
 }
 
@@ -408,41 +612,12 @@ TEST(DigestTest, Uninitialized) {
   }
 }
 
-TEST(DigestTest, XOF) {
-  ScopedEVP_MD_CTX ctx;
-
+TEST(DigestTest, NonXOF) {
   // Non-XOF digests should fail `EVP_DigestSqueeze`.
+  ScopedEVP_MD_CTX ctx;
   ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr));
   uint8_t out[64];
   EXPECT_FALSE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
-  ERR_clear_error();
-
-  // SHAKE256 512-bit test vectors from NIST:
-  // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg0.pdf
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_shake256(), nullptr));
-  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
-  EXPECT_EQ(
-      "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"
-      "d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be",
-      EncodeHex(out));
-
-  // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHAKE256_Msg1600.pdf
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_shake256(), nullptr));
-  std::vector<uint8_t> input(200, 0xa3);
-  ASSERT_TRUE(EVP_DigestUpdate(ctx.get(), input.data(), input.size()));
-  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
-  EXPECT_EQ(
-      "cd8a920ed141aa0407a22d59288652e9d9f1a7ee0c1e7c1ca699424da84a904d"
-      "2d700caae7396ece96604440577da4f3aa22aeb8857f961c4cd8e06f0ae6610b",
-      EncodeHex(out));
-
-  // TurboSHAKE256 512-bit test vector from RFC 9861, section 5.
-  ASSERT_TRUE(EVP_DigestInit_ex(ctx.get(), EVP_turboshake256(), nullptr));
-  ASSERT_TRUE(EVP_DigestSqueeze(ctx.get(), out, sizeof(out)));
-  EXPECT_EQ(
-      "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"
-      "11edc0e12e91ea60eb6b32df06dd7f002fbafabb6e13ec1cc20d995547600db0",
-      EncodeHex(out));
 }
 
 struct XOFTestVector {
