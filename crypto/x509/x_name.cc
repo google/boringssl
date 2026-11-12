@@ -268,6 +268,9 @@ const X509NameCache *bssl::x509_name_get_cache(const X509_NAME *name) {
   }
 
   UniquePtr<X509NameCache> new_cache = MakeUnique<X509NameCache>();
+  if (new_cache == nullptr) {
+    return nullptr;
+  }
   // Cache the DER encoding, including the outer TLV.
   ScopedCBB cbb;
   CBB seq;
