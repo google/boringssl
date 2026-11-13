@@ -30,13 +30,18 @@ extern "C" {
 
 // Legacy ASN.1 library.
 //
-// This header is part of OpenSSL's ASN.1 implementation. It is retained for
-// compatibility but should not be used by new code. The functions are difficult
-// to use correctly, and have buggy or non-standard behaviors. They are thus
-// particularly prone to behavior changes and API removals, as BoringSSL
-// iterates on these issues.
+// This header is part of an ASN.1 implementation derived from OpenSSL. Compared
+// to other OpenSSL-derived parts of BoringSSL, it is particularly impacted by
+// that legacy. Many functions are difficult to use correctly and have a number
+// of known bugs or non-standard behaviors.
 //
-// Use the new `CBS` and `CBB` library in <openssl/bytestring.h> instead.
+// As BoringSSL iterates on these issues, this header will be particularly prone
+// to behavior changes and API removals. In particular, avoid depending on any
+// lax parsing. BoringSSL generally aims to implement strict DER parsing.
+//
+// For new code that does not otherwise need to interact with these types,
+// prefer to use the new `CBS` and `CBB` library in <openssl/bytestring.h>
+// instead.
 
 
 // Tag constants.
