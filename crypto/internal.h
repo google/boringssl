@@ -1647,7 +1647,7 @@ OPENSSL_EXPORT int OPENSSL_vasprintf_internal(char **str, const char *format,
 // CRYPTO_fuzzer_mode_enabled returns whether fuzzer mode is enabled. See
 // `CRYPTO_set_fuzzer_mode`. In non-fuzzer builds, this function statically
 // returns zero so the codepaths will be deleted by the optimizer.
-int CRYPTO_fuzzer_mode_enabled();
+OPENSSL_EXPORT int CRYPTO_fuzzer_mode_enabled();
 #else
 inline int CRYPTO_fuzzer_mode_enabled() { return 0; }
 #endif
