@@ -865,7 +865,8 @@ typedef BIO_info_cb bio_info_cb;
 // it, and decodes data read from it. `BIO_gets` is not supported. Call
 // `BIO_flush` when done writing, to signal that no more data are to be
 // encoded. The flag `BIO_FLAGS_BASE64_NO_NL` may be set to encode all the data
-// on one line.
+// on one line. When decoding, `BIO_FLAGS_BASE64_NO_NL` disables skipping
+// leading lines that are not base64.
 //
 // Use `EVP_EncodeBlock` and `EVP_DecodeBase64` instead.
 OPENSSL_EXPORT const BIO_METHOD *BIO_f_base64(void);

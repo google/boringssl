@@ -126,8 +126,7 @@ OPENSSL_EXPORT int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, uint8_t *out,
 // `dst`. It returns the number of bytes written or -1 on error.
 //
 // WARNING: EVP_DecodeBlock's return value does not take padding into
-// account. It also strips leading whitespace and trailing
-// whitespace and minuses.
+// account. It also strips leading spaces and tabs, and trailing whitespace.
 OPENSSL_EXPORT int EVP_DecodeBlock(uint8_t *dst, const uint8_t *src,
                                    size_t src_len);
 

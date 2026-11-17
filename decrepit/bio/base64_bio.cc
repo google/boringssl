@@ -100,7 +100,7 @@ static int b64_read(BIO *b, char *out, int outl) {
     EVP_DecodeInit(&ctx->base64);
   }
 
-  // First check if there are bytes decoded/encoded
+  // First check for bytes already decoded, and return those.
   if (ctx->buf_len > 0) {
     assert(ctx->buf_len >= ctx->buf_off);
     i = ctx->buf_len - ctx->buf_off;
@@ -128,6 +128,8 @@ static int b64_read(BIO *b, char *out, int outl) {
       break;
     }
 
+    // Read more data into `ctx->tmp` after anything remaining there from
+    // previous iterations.
     i = BIO_read(BIO_next(b), &(ctx->tmp[ctx->tmp_len]),
                  B64_BLOCK_SIZE - ctx->tmp_len);
 
@@ -152,12 +154,15 @@ static int b64_read(BIO *b, char *out, int outl) {
     i += ctx->tmp_len;
     ctx->tmp_len = i;
 
-    // We need to scan, a line at a time until we have a valid line if we are
-    // starting.
+    // If `ctx->start` is 1, we must handle starting by finding the position of
+    // the data to decode.
     if (ctx->start && (BIO_test_flags(b, BIO_FLAGS_BASE64_NO_NL))) {
-      // ctx->start = 1;
+      // In `BIO_FLAGS_BASE64_NO_NL` mode, there is no line structure.
+      // Decode all the contents of `ctx->tmp` without skipping any leading
+      // lines. In this mode, `ctx->start` is never cleared.
       ctx->tmp_len = 0;
     } else if (ctx->start) {
+      // Otherwise scan, one line at a time, until we find a valid line of data.
       q = p = (uint8_t *)ctx->tmp;
       num = 0;
       for (j = 0; j < i; j++) {
@@ -220,34 +225,9 @@ static int b64_read(BIO *b, char *out, int outl) {
       continue;
     }
 
-    if (BIO_test_flags(b, BIO_FLAGS_BASE64_NO_NL)) {
-      int z, jj;
-
-      jj = i & ~3;  // process per 4
-      z = EVP_DecodeBlock((uint8_t *)ctx->buf, (uint8_t *)ctx->tmp, jj);
-      if (jj > 2) {
-        if (ctx->tmp[jj - 1] == '=') {
-          z--;
-          if (ctx->tmp[jj - 2] == '=') {
-            z--;
-          }
-        }
-      }
-      // z is now number of output bytes and jj is the number consumed.
-      if (jj != i) {
-        OPENSSL_memmove(ctx->tmp, &ctx->tmp[jj], i - jj);
-        ctx->tmp_len = i - jj;
-      }
-      ctx->buf_len = 0;
-      if (z > 0) {
-        ctx->buf_len = z;
-      }
-      i = z;
-    } else {
-      i = EVP_DecodeUpdate(&(ctx->base64), (uint8_t *)ctx->buf, &ctx->buf_len,
-                           (uint8_t *)ctx->tmp, i);
-      ctx->tmp_len = 0;
-    }
+    i = EVP_DecodeUpdate(&(ctx->base64), (uint8_t *)ctx->buf, &ctx->buf_len,
+                         (uint8_t *)ctx->tmp, i);
+    ctx->tmp_len = 0;
     ctx->buf_off = 0;
     if (i < 0) {
       ret_code = 0;

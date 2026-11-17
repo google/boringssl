@@ -1236,6 +1236,7 @@ boringssl_decrepit_internal_headers := \
 
 boringssl_decrepit_test_sources := \
   crypto/test/gtest_main.cc \
+  decrepit/bio/base64_bio_test.cc \
   decrepit/blowfish/blowfish_test.cc \
   decrepit/cast/cast_test.cc \
   decrepit/cfb/cfb_test.cc \
