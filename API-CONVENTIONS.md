@@ -78,6 +78,9 @@ post-conditions.
 - The bytes delimited from the beginning of the allocation pointed at by the
   pointer until `size` bytes after the pointer, exclusive, are valid for write.
 - `size` must have been no more than `PTRDIFF_MAX` bytes.
+- Any non-`NULL` pointer returned is disjoint from every other live object, and
+  a zero-size allocation returns either `NULL` or a unique pointer that can be
+  passed to `OPENSSL_free`.
 
 
 ## Pointers and slices

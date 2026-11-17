@@ -438,6 +438,7 @@ func (x extractor) visit(n *node) (err error) {
 		"FriendDecl",
 		"NonTypeTemplateParmDecl",
 		"ParmVarDecl",
+		"RestrictAttr",
 		"StaticAssertDecl",
 		"TemplateArgument",
 		"TemplateTemplateParmDecl",

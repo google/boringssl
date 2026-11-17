@@ -87,6 +87,17 @@ static void (*const sdallocx)(void *ptr, size_t size, int flags) = nullptr;
 // `OPENSSL_memory_free` to zero out the memory before returning it to the
 // system. `OPENSSL_memory_free` will not be passed NULL pointers.
 //
+// Because `OPENSSL_malloc` and related functions carry `OPENSSL_ATTR_MALLOC`,
+// any non-NULL pointer returned by `OPENSSL_memory_alloc` or by a custom
+// `OPENSSL_malloc` override must be disjoint from every other live allocation.
+// Its contents are treated as uninitialized. Zero-size allocations must return
+// a unique pointer distinct from all other live allocations so that it can be
+// passed to `OPENSSL_memory_free` or `OPENSSL_free`, but never a shared
+// non-NULL sentinel value.
+//
+// See https://gcc.gnu.org/onlinedocs/gcc/Common-Attributes.html#index-malloc
+// for more details on the `malloc` protocol.
+//
 // WARNING: These functions are called on every allocation and free in
 // BoringSSL across the entire process. They may be called by any code in the
 // process which calls BoringSSL, including in process initializers and thread

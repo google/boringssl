@@ -180,6 +180,14 @@ extern "C" {
 #define OPENSSL_UNUSED
 #endif
 
+// OPENSSL_ATTR_MALLOC marks allocation functions whose returned non-NULL
+// pointers never alias existing objects.
+#if defined(__GNUC__) || defined(__clang__)
+#define OPENSSL_ATTR_MALLOC __attribute__((__malloc__))
+#else
+#define OPENSSL_ATTR_MALLOC
+#endif
+
 #if defined(BORINGSSL_ALWAYS_USE_STATIC_INLINE)
 // Add OPENSSL_UNUSED so that, should an inline function be emitted via macro
 // (e.g. a `STACK_OF(T)` implementation) in a source file without tripping

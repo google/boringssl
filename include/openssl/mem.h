@@ -38,16 +38,17 @@ extern "C" {
 // private data. The resulting pointer must be freed with `OPENSSL_free`. In
 // the case of a malloc failure, prior to returning NULL `OPENSSL_malloc` will
 // push `ERR_R_MALLOC_FAILURE` onto the openssl error stack.
-OPENSSL_EXPORT void *OPENSSL_malloc(size_t size);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT void *OPENSSL_malloc(size_t size);
 
 // OPENSSL_zalloc behaves like `OPENSSL_malloc` except it also initializes the
 // resulting memory to zero.
-OPENSSL_EXPORT void *OPENSSL_zalloc(size_t size);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT void *OPENSSL_zalloc(size_t size);
 
 // OPENSSL_calloc is similar to a regular `calloc`, but allocates data with
 // `OPENSSL_malloc`. On overflow, it will push `ERR_R_OVERFLOW` onto the error
 // queue.
-OPENSSL_EXPORT void *OPENSSL_calloc(size_t num, size_t size);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT void *OPENSSL_calloc(size_t num,
+                                                        size_t size);
 
 // OPENSSL_realloc returns a pointer to a buffer of `new_size` bytes that
 // contains the contents of `ptr`. Unlike `realloc`, a new buffer is always
@@ -79,7 +80,7 @@ OPENSSL_EXPORT uint32_t OPENSSL_hash32(const void *ptr, size_t len);
 OPENSSL_EXPORT uint32_t OPENSSL_strhash(const char *s);
 
 // OPENSSL_strdup has the same behaviour as strdup(3).
-OPENSSL_EXPORT char *OPENSSL_strdup(const char *s);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT char *OPENSSL_strdup(const char *s);
 
 // OPENSSL_strnlen has the same behaviour as strnlen(3).
 OPENSSL_EXPORT size_t OPENSSL_strnlen(const char *s, size_t len);
@@ -148,7 +149,8 @@ OPENSSL_EXPORT int OPENSSL_asprintf(char **str, const char *format, ...)
 // OPENSSL_strndup returns an allocated, duplicate of `str`, which is, at most,
 // `size` bytes. The result is always NUL terminated. The memory allocated
 // must be freed with `OPENSSL_free`.
-OPENSSL_EXPORT char *OPENSSL_strndup(const char *str, size_t size);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT char *OPENSSL_strndup(const char *str,
+                                                         size_t size);
 
 // OPENSSL_memdup returns an allocated, duplicate of `size` bytes from `data` or
 // NULL on allocation failure. The memory allocated must be freed with
@@ -167,7 +169,9 @@ OPENSSL_EXPORT size_t OPENSSL_strlcat(char *dst, const char *src,
 // Deprecated functions.
 
 // CRYPTO_malloc calls `OPENSSL_malloc`. `file` and `line` are ignored.
-OPENSSL_EXPORT void *CRYPTO_malloc(size_t size, const char *file, int line);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT void *CRYPTO_malloc(size_t size,
+                                                       const char *file,
+                                                       int line);
 
 // CRYPTO_realloc calls `OPENSSL_realloc`. `file` and `line` are ignored.
 OPENSSL_EXPORT void *CRYPTO_realloc(void *ptr, size_t new_size,
@@ -190,7 +194,7 @@ OPENSSL_EXPORT int CRYPTO_secure_malloc_initialized(void);
 OPENSSL_EXPORT size_t CRYPTO_secure_used(void);
 
 // OPENSSL_secure_malloc calls `OPENSSL_malloc`.
-OPENSSL_EXPORT void *OPENSSL_secure_malloc(size_t size);
+OPENSSL_ATTR_MALLOC OPENSSL_EXPORT void *OPENSSL_secure_malloc(size_t size);
 
 // OPENSSL_secure_clear_free calls `OPENSSL_clear_free`.
 OPENSSL_EXPORT void OPENSSL_secure_clear_free(void *ptr, size_t len);
