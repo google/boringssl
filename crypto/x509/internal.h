@@ -468,6 +468,10 @@ int x509_verify_signature_bytes(const X509_ALGOR *sigalg,
 int x509_sign_to_bit_string(EVP_MD_CTX *ctx, ASN1_BIT_STRING *out,
                             Span<const uint8_t> in);
 
+// x509_sig_nid_allowed returns whether a signature algorithm with NID `sig_nid`
+// may be used for a certificate verification with `ctx`.
+bool x509_sig_nid_allowed(const X509_STORE_CTX *ctx, int sig_nid);
+
 
 // Path-building functions.
 
@@ -662,11 +666,12 @@ bool x509_evaluate_mtc_subtree_inclusion_proof(
     uint64_t subtree_end);
 
 // x509_verify_mtc verifies `x509` as a Merkle Tree Certificate issued by
-// `issuer`, which must be an MTC CA represented in X.509 format. `pkey` is the
-// `issuer`'s public key. It returns one if the MTC is valid, or zero on error.
-// This function only checks the MTC proof itself and does not perform a full
-// certificate validation.
-int x509_verify_mtc(const X509 *x509, const EVP_PKEY *pkey, const X509 *issuer);
+// `issuer`, which must be an MTC CA represented in X.509 format, as part of a
+// verification operation for `ctx`. `pkey` is the `issuer`'s public key. It
+// returns one if the MTC is valid, or zero on error. This function only checks
+// the MTC proof itself and does not perform a full certificate validation.
+int x509_verify_mtc(const X509_STORE_CTX *ctx, const X509 *x509,
+                    const EVP_PKEY *pkey, const X509 *issuer);
 
 
 // Standard extensions.

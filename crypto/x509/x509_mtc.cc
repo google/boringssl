@@ -180,7 +180,7 @@ class MTCCACosigner {
   // its MTCCertificationAuthority extension. `pkey` is the public key
   // previously parsed from `x509`. Returns true if successfully initialized an
   // MTCCACosigner representing a valid MTC CA, or false on error.
-  bool Init(const X509 *x509, const EVP_PKEY *pkey) {
+  bool Init(const X509_STORE_CTX *ctx, const X509 *x509, const EVP_PKEY *pkey) {
     // Get and parse the MTCCertificationAuthority extension (see section 5.5).
     int ext_index =
         X509_get_ext_by_NID(x509, NID_pe_mtcCertificationAuthority_SHA256, -1);
@@ -200,6 +200,10 @@ class MTCCACosigner {
         !CBS_get_asn1_uint64(&seq, &max_serial_) ||            //
         CBS_len(&seq) != 0) {
       OPENSSL_PUT_ERROR(ASN1, ASN1_R_DECODE_ERROR);
+      return false;
+    }
+    if (!x509_sig_nid_allowed(ctx, OBJ_obj2nid(cosign_sigalg_->algorithm))) {
+      OPENSSL_PUT_ERROR(X509, X509_R_INVALID_MTC_CA);
       return false;
     }
     if (!is_mtc_serial_valid(min_serial_) ||
@@ -418,10 +422,10 @@ bool x509_evaluate_mtc_subtree_inclusion_proof(
   return true;
 }
 
-int x509_verify_mtc(const X509 *x509, const EVP_PKEY *pkey,
-                    const X509 *issuer) {
+int x509_verify_mtc(const X509_STORE_CTX *ctx, const X509 *x509,
+                    const EVP_PKEY *pkey, const X509 *issuer) {
   MTCCACosigner issuer_mtc_ca;
-  if (!issuer_mtc_ca.Init(issuer, pkey)) {
+  if (!issuer_mtc_ca.Init(ctx, issuer, pkey)) {
     return 0;
   }
 

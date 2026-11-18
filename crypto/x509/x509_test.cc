@@ -12993,7 +12993,9 @@ class X509VerifyMTCTest : public X509VerifyTest {
     };
   }
 
-  int VerifyMTC(X509 *mtc, X509 *mtc_ca = nullptr) {
+  int VerifyMTC(
+      X509 *mtc, X509 *mtc_ca = nullptr,
+      std::function<void(X509_STORE_CTX *)> configure_callback = nullptr) {
     if (!mtc_ca) {
       mtc_ca = mtc_ca_cert_.get();
     }
@@ -13002,10 +13004,13 @@ class X509VerifyMTCTest : public X509VerifyTest {
         /*crls=*/{},
         /*flags=*/0,
         /*configure_callback=*/
-        [mtc_ca](X509_STORE_CTX *ctx) {
+        [mtc_ca, configure_callback](X509_STORE_CTX *ctx) {
           ASSERT_TRUE(X509_STORE_CTX_set_trust(ctx, X509_TRUST_SSL_SERVER));
           ASSERT_TRUE(
               X509_add1_trust_object(mtc_ca, OBJ_nid2obj(NID_server_auth)));
+          if (configure_callback) {
+            configure_callback(ctx);
+          }
         },
         /*time_posix=*/kVerifyMtcReferenceTime);
   }
@@ -13316,6 +13321,32 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCATrustAnchorIDTooLong) {
 
   EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
             VerifyMTC(mtc.get(), /*mtc_ca=*/bad_ca.get()));
+  EXPECT_TRUE(
+      ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
+}
+
+// The CA cosigner's signature algorithm may not use SHA-1, unless
+// X509_V_FLAG_ALLOW_SHA1 is set.
+TEST_P(X509VerifyMTCTest, SHA1CACosigner) {
+  UniquePtr<X509> ca = CertFromPEM(
+      GetTestData("crypto/x509/test/mtc/ca_sha1_cosigner/ca_cert.pem"));
+  ASSERT_TRUE(ca);
+
+  UniquePtr<X509> mtc = CertFromPEM(
+      GetTestData("crypto/x509/test/mtc/ca_sha1_cosigner/cert_1_0.pem"));
+  ASSERT_TRUE(mtc);
+
+  // X509_V_FLAG_ALLOW_SHA1 is currently set by default.
+  // TODO(crbug.com/461736992): Flip this when the default changes.
+  EXPECT_EQ(X509_V_OK, VerifyMTC(mtc.get(), /*mtc_ca=*/ca.get()));
+
+  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+            VerifyMTC(mtc.get(), /*mtc_ca=*/ca.get(),
+                      /*configure_callback=*/[](X509_STORE_CTX *ctx) {
+                        X509_VERIFY_PARAM_clear_flags(
+                            X509_STORE_CTX_get0_param(ctx),
+                            X509_V_FLAG_ALLOW_SHA1);
+                      }));
   EXPECT_TRUE(
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
 }
