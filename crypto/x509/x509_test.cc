@@ -13269,6 +13269,23 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCAExtensionNotCritical) {
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
 }
 
+// If the CA has more than one MTCCertificationAuthority extension, it is not a
+// valid MTC CA.
+TEST_P(X509VerifyMTCTest, InvalidMTCCADuplicateExtension) {
+  UniquePtr<X509> bad_ca(X509_dup(mtc_ca_cert_.get()));
+  ASSERT_TRUE(bad_ca);
+  int ext_index = X509_get_ext_by_NID(
+      bad_ca.get(), NID_pe_mtcCertificationAuthority_SHA256, -1);
+  ASSERT_GE(ext_index, 0);
+  ASSERT_TRUE(
+      X509_add_ext(bad_ca.get(), X509_get_ext(bad_ca.get(), ext_index), -1));
+
+  EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
+            VerifyMTC(mtc_10_subtree_8_11_.get(), /*mtc_ca=*/bad_ca.get()));
+  EXPECT_TRUE(
+      ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
+}
+
 // If the CA has the MTCCertificationAuthority extension but an invalid
 // subject name (e.g. missing trust anchor ID), MTC CA initialization fails.
 TEST_P(X509VerifyMTCTest, InvalidMTCCABadSubject) {

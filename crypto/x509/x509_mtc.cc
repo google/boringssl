@@ -185,7 +185,12 @@ class MTCCACosigner {
     int ext_index =
         X509_get_ext_by_NID(x509, NID_pe_mtcCertificationAuthority_SHA256, -1);
     const X509_EXTENSION *ext = X509_get_ext(x509, ext_index);
-    if (ext == nullptr || !X509_EXTENSION_get_critical(ext)) {
+    if (ext == nullptr || !X509_EXTENSION_get_critical(ext) ||
+        // Check for duplicate MTC CA extensions.
+        // TODO(crbug.com/42290240): If the parser is tightened to check for
+        // duplicate extensions earlier, this check can be removed.
+        X509_get_ext_by_NID(x509, NID_pe_mtcCertificationAuthority_SHA256,
+                            ext_index) >= 0) {
       OPENSSL_PUT_ERROR(X509, X509_R_INVALID_MTC_CA);
       return false;
     }
