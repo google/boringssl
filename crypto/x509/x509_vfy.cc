@@ -908,14 +908,10 @@ int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
     return X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY;
   }
 
-  int ret;
-  if ((ctx->param->flags & X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07) &&
-      x509_is_merkle_tree_ca(issuer)) {
-    ret = x509_verify_mtc(x509, pkey, issuer);
-  } else {
-    ret = sig_nid_allowed(ctx, X509_get_signature_nid(x509)) &&
-          X509_verify(x509, pkey);
-  }
+  int ret = x509_is_merkle_tree_ca(issuer)
+                ? x509_verify_mtc(x509, pkey, issuer)
+                : sig_nid_allowed(ctx, X509_get_signature_nid(x509)) &&
+                      X509_verify(x509, pkey);
   return ret ? X509_V_OK : X509_V_ERR_CERT_SIGNATURE_FAILURE;
 }
 

@@ -12993,16 +12993,14 @@ class X509VerifyMTCTest : public X509VerifyTest {
     };
   }
 
-  int VerifyMTC(X509 *mtc,
-                unsigned long flags = X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                X509 *mtc_ca = nullptr) {
+  int VerifyMTC(X509 *mtc, X509 *mtc_ca = nullptr) {
     if (!mtc_ca) {
       mtc_ca = mtc_ca_cert_.get();
     }
     return Verify(
         mtc, /*roots=*/{mtc_ca}, /*intermediates=*/{},
         /*crls=*/{},
-        /*flags=*/flags,
+        /*flags=*/0,
         /*configure_callback=*/
         [mtc_ca](X509_STORE_CTX *ctx) {
           ASSERT_TRUE(X509_STORE_CTX_set_trust(ctx, X509_TRUST_SSL_SERVER));
@@ -13027,14 +13025,7 @@ INSTANTIATE_TEST_SUITE_P(/* no prefix */, X509VerifyMTCTest, testing::Bool());
 
 TEST_P(X509VerifyMTCTest, VerifyMTC) {
   for (X509 *mtc : GetValidTestMTCs()) {
-    EXPECT_EQ(X509_V_OK,
-              VerifyMTC(mtc, /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07));
-
-    // The flag is required to enable MTC verification.
-    EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE, VerifyMTC(mtc, /*flags=*/0));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_ASN1,
-                            ASN1_R_UNKNOWN_SIGNATURE_ALGORITHM));
-    ERR_clear_error();
+    EXPECT_EQ(X509_V_OK, VerifyMTC(mtc));
 
     // X509_verify does not work directly on MTCs.
     EXPECT_EQ(X509_verify(mtc, X509_get0_pubkey(mtc_ca_cert_.get())), 0);
@@ -13218,9 +13209,7 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCANoExtension) {
   ASSERT_TRUE(ext);
 
   EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
-            VerifyMTC(mtc_10_subtree_8_11_.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                      /*mtc_ca=*/bad_ca.get()));
+            VerifyMTC(mtc_10_subtree_8_11_.get(), /*mtc_ca=*/bad_ca.get()));
   EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_ASN1,
                           ASN1_R_UNKNOWN_SIGNATURE_ALGORITHM));
 }
@@ -13237,9 +13226,7 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCADeprecatedDraftVersion) {
   ASSERT_TRUE(mtc);
 
   EXPECT_EQ(X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION,
-            VerifyMTC(mtc.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                      /*mtc_ca=*/bad_ca.get()));
+            VerifyMTC(mtc.get(), /*mtc_ca=*/bad_ca.get()));
 }
 
 // If the CA cert has the older draft version's OID, it is not recognized as an
@@ -13254,9 +13241,7 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCAWrongExtensionOID) {
   ASSERT_TRUE(mtc);
 
   EXPECT_EQ(X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION,
-            VerifyMTC(mtc.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                      /*mtc_ca=*/bad_ca.get()));
+            VerifyMTC(mtc.get(), /*mtc_ca=*/bad_ca.get()));
 }
 
 // If the CA's MTCCertificationAuthority extension is not marked critical,
@@ -13274,7 +13259,6 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCAExtensionNotCritical) {
 
   EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
             VerifyMTC(mtc_10_subtree_8_11_.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
                       /*mtc_ca=*/bad_ca_non_critical.get()));
   EXPECT_TRUE(
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
@@ -13302,9 +13286,7 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCABadSubject) {
   ASSERT_TRUE(X509_set_issuer_name(mtc.get(), subject));
 
   EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
-            VerifyMTC(mtc.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                      /*mtc_ca=*/bad_ca_no_trust_anchor.get()));
+            VerifyMTC(mtc.get(), /*mtc_ca=*/bad_ca_no_trust_anchor.get()));
   EXPECT_TRUE(
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
 }
@@ -13319,9 +13301,7 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCAExtensionTrailingData) {
   ASSERT_TRUE(mtc);
 
   EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
-            VerifyMTC(mtc.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                      /*mtc_ca=*/bad_ca.get()));
+            VerifyMTC(mtc.get(), /*mtc_ca=*/bad_ca.get()));
   EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_ASN1, ASN1_R_DECODE_ERROR));
 }
 
@@ -13335,9 +13315,7 @@ TEST_P(X509VerifyMTCTest, InvalidMTCCATrustAnchorIDTooLong) {
   ASSERT_TRUE(mtc);
 
   EXPECT_EQ(X509_V_ERR_CERT_SIGNATURE_FAILURE,
-            VerifyMTC(mtc.get(),
-                      /*flags=*/X509_V_FLAG_USE_MTC_DRAFT_PLANTS_07,
-                      /*mtc_ca=*/bad_ca.get()));
+            VerifyMTC(mtc.get(), /*mtc_ca=*/bad_ca.get()));
   EXPECT_TRUE(
       ErrorEquals(ERR_get_error(), ERR_LIB_X509, X509_R_INVALID_MTC_CA));
 }
