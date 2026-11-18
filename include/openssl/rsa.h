@@ -199,7 +199,7 @@ OPENSSL_EXPORT int RSA_generate_key_ex(RSA *rsa, int bits, const BIGNUM *e,
 
 // RSA_generate_key_fips behaves like `RSA_generate_key_ex` but performs
 // additional checks for FIPS compliance. The public exponent is always 65537
-// and `bits` must be either 2048 or 3072.
+// and `bits` must be one of 2048, 3072 and 4096.
 OPENSSL_EXPORT int RSA_generate_key_fips(RSA *rsa, int bits, BN_GENCB *cb);
 
 

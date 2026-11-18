@@ -16,7 +16,7 @@
 #ifndef OPENSSL_HEADER_ECDH_H
 #define OPENSSL_HEADER_ECDH_H
 
-#include <openssl/base.h>   // IWYU pragma: export
+#include <openssl/base.h>  // IWYU pragma: export
 
 #include <openssl/ec_key.h>
 
@@ -40,7 +40,7 @@ OPENSSL_EXPORT int ECDH_compute_key(
 
 // ECDH_compute_key_fips calculates the shared key between `pub_key` and
 // `priv_key` and hashes it with the appropriate SHA function for `out_len`. The
-// only value values for `out_len` are thus 24 (SHA-224), 32 (SHA-256), 48
+// only valid values for `out_len` are thus 28 (SHA-224), 32 (SHA-256), 48
 // (SHA-384), and 64 (SHA-512). It returns one on success and zero on error.
 //
 // Note that the return value is different to `ECDH_compute_key`: it returns an
