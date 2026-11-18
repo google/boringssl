@@ -5,14 +5,14 @@ description: How to add a new source file to the BoringSSL build.
 
 # Adding a Source File to the Build
 
-To add a new source file (C/C++, header, or assembly) to BoringSSL, you must update the build configuration and regenerate the build files.
-
 ## Steps
 
-1.  **Update `build.json`**:
-    *   Add the new file to the correct section (e.g., `srcs`, `hdrs`, `internal_hdrs`) under the appropriate target in [build.json](../../../build.json).
-    *   For the schema of `build.json`, refer to the Go structs in [util/pregenerate/build.go](../../../util/pregenerate/build.go).
+1.  **Check Filename Uniqueness** (for `.c`/`.cc` files):
+    *   Verify unique basenames with `go run ./util/check_filenames.go` (see [util/check_filenames.go](../../../util/check_filenames.go)).
 
-2.  **Update Pregenerated Files**:
-    *   After modifying `build.json`, you must regenerate the build files.
-    *   Refer to [gen/README.md](../../../gen/README.md) or use the [update_pregenerated_files](../update_pregenerated_files/SKILL.md) skill to update the pre-generated files.
+2.  **Update `build.json` (if not already matched by a glob)**:
+    *   Add the file to the appropriate target and section (`srcs`, `hdrs`, `internal_hdrs`, `data`, etc.) in [build.json](../../../build.json) (schema in [util/pregenerate/build.go](../../../util/pregenerate/build.go)).
+    *   Files matching an existing wildcard glob in `build.json` (e.g., `fuzz/*.cc`, `rust/bssl-*/src/*.rs`, and globbed test `data` paths) do not require editing `build.json`, but still require step 3.
+
+3.  **Update Pregenerated Files**:
+    *   Regenerate `gen/` using [update_pregenerated_files](../update_pregenerated_files/SKILL.md) (required even when adding a file matched by an existing glob).
