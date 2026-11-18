@@ -74,9 +74,9 @@ The `client` and `server` corpora are seeded from the test suite. The test suite
 
 There are separate fuzzers, `client_no_fuzzer_mode` and `server_no_fuzzer_mode`, with fuzzer mode disabled. This configuration is run in the same way but without `-fuzzer` and `-shim-config` flags.
 
-If both sets of tests pass, refresh the fuzzer corpora with `refresh_ssl_corpora.sh`:
+If both sets of tests pass, refresh the fuzzer corpora with `refresh_ssl_corpora.sh`, passing the `-DFUZZ=1` build directory:
 
 ```
 cd fuzz
-./refresh_ssl_corpora.sh /path/to/fuzzer/mode/build /path/to/non/fuzzer/mode/build
+./refresh_ssl_corpora.sh /path/to/fuzz/build
 ```
