@@ -115,6 +115,12 @@ TEST(EncodeCertificateTest, EncodeMtcCaCertificateInvalid) {
   EXPECT_TRUE(encode(kCaId, spki));
   EXPECT_FALSE(encode(kInvalidCaId, spki));
   EXPECT_FALSE(encode({}, spki));
+  // Trust anchor IDs are at most 32 bytes.
+  const std::vector<uint8_t> max_ca_id(32, 0x01);
+  const std::vector<uint8_t> too_long_ca_id(33, 0x01);
+  EXPECT_TRUE(EncodeAndParseMtcCaCertificate(
+      max_ca_id, SignatureAlgorithm::kMldsa44, spki, kMinSerial, kMaxSerial));
+  EXPECT_FALSE(encode(too_long_ca_id, spki));
   EXPECT_FALSE(encode(kCaId, kInvalidSpki));
   EXPECT_FALSE(encode(kCaId, {}));
   EXPECT_FALSE(encode(kCaId, spki_trailing_data));

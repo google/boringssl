@@ -14,6 +14,8 @@
 
 #include "parsed_certificate.h"
 
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include <openssl/nid.h>
@@ -637,13 +639,11 @@ TEST(ParsedCertificateTest, MtcCaExtension) {
   EXPECT_EQ(mtc_ca.max_serial, (uint64_t{1} << 48) + 4096);
 }
 
-// Unlike crypto/x509, libpki does not limit the length of the CA ID.
 TEST(ParsedCertificateTest, MtcCaExtensionLongCAId) {
-  std::shared_ptr<const ParsedCertificate> cert =
-      ReadCryptoX509MTCTestCert("ca_id_too_long/ca_cert.pem");
-  ASSERT_TRUE(cert);
-  ASSERT_TRUE(cert->mtc_ca_info());
-  EXPECT_EQ(cert->mtc_ca_info()->ca_id.size(), 36u);
+  CertErrors errors;
+  EXPECT_FALSE(
+      ReadCryptoX509MTCTestCert("ca_id_too_long/ca_cert.pem", &errors));
+  EXPECT_EQ(errors.ToDebugString(), "ERROR: Failed parsing MTC CA info\n");
 }
 
 TEST(ParsedCertificateTest, MtcCaExtensionTrailingData) {
@@ -690,6 +690,31 @@ class ParseMtcCaExtensionTest : public testing::Test {
       OBJ_ENC_rdna_trustAnchorID,  //         id-rdna-trustAnchorID
       0x0d, 1,                     //       RELATIVE-OID
       0x01,                        //         1
+  };
+  // Name with a 32-byte RELATIVE-OID (the maximum allowed length).
+  static constexpr uint8_t kSubjectMaxCaId[] = {
+      0x30, 48,                             // SEQUENCE (48 bytes)
+      0x31, 46,                             //   SET (46 bytes)
+      0x30, 44,                             //     SEQUENCE (44 bytes)
+      0x06, 8, OBJ_ENC_rdna_trustAnchorID,  //       OBJECT IDENTIFIER (8 bytes)
+      0x0d, 32,                             //       RELATIVE-OID (32 bytes)
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+  };
+  // Name with a 33-byte RELATIVE-OID (exceeding the 32-byte limit).
+  static constexpr uint8_t kSubjectCaIdTooLong[] = {
+      0x30, 49,                             // SEQUENCE (49 bytes)
+      0x31, 47,                             //   SET (47 bytes)
+      0x30, 45,                             //     SEQUENCE (45 bytes)
+      0x06, 8, OBJ_ENC_rdna_trustAnchorID,  //       OBJECT IDENTIFIER (8 bytes)
+      0x0d, 33,                             //       RELATIVE-OID (33 bytes)
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01,
   };
   // Same as above, but with an invalid RELATIVE-OID.
   static constexpr uint8_t kSubjectInvalidRelativeOid[] = {
@@ -783,6 +808,15 @@ TEST_F(ParseMtcCaExtensionTest, Valid) {
   EXPECT_EQ(out.max_serial, (uint64_t{1} << 48) + 1);
 }
 
+TEST_F(ParseMtcCaExtensionTest, MaxLengthCaId) {
+  ParsedMtcCaInfo out;
+  ASSERT_TRUE(ParseMtcCaInfo(
+      MakeExtension(der::Input(kExtensionValue), /*critical=*/true),
+      der::Input(kSubjectMaxCaId), &out));
+  const std::vector<uint8_t> expected_ca_id(32, 0x01);
+  EXPECT_EQ(out.ca_id, der::Input(expected_ca_id));
+}
+
 TEST_F(ParseMtcCaExtensionTest, NotCritical) {
   ParsedMtcCaInfo out;
   EXPECT_FALSE(ParseMtcCaInfo(
@@ -794,6 +828,7 @@ TEST_F(ParseMtcCaExtensionTest, BadSubject) {
   const ParsedExtension extension =
       MakeExtension(der::Input(kExtensionValue), /*critical=*/true);
   for (der::Input subject : {
+           der::Input(kSubjectCaIdTooLong),
            der::Input(kSubjectInvalidRelativeOid),
            der::Input(kSubjectUTF8String),
            der::Input(kSubjectTwoRDNs),

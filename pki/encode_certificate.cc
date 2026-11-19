@@ -14,6 +14,8 @@
 
 #include "encode_certificate.h"
 
+#include <stddef.h>
+
 #include <openssl/bytestring.h>
 #include <openssl/nid.h>
 #include <openssl/pool.h>
@@ -27,6 +29,9 @@ namespace {
 
 // draft-ietf-plants-merkle-tree-certs-07, Section 5.5: mtcMinSerial.
 constexpr uint64_t kMtcMinSerial = uint64_t{1} << 48;
+
+// draft-ietf-tls-trust-anchor-ids-06 limits trust anchor IDs to 32 bytes.
+constexpr size_t kMaxTrustAnchorIdBytes = 32;
 
 // `EncodeMtcCaCertificate` produces a certificate that is not issued by anyone,
 // so its serial number is arbitrary, but RFC 5280, Section 4.1.2.2, requires it
@@ -93,7 +98,8 @@ UniquePtr<CRYPTO_BUFFER> EncodeMtcCaCertificate(
       CBS_len(&key_cbs) != 0) {
     return nullptr;
   }
-  if (!CBS_is_valid_asn1_relative_oid(&ca_id_cbs)) {
+  if (!CBS_is_valid_asn1_relative_oid(&ca_id_cbs) ||
+      CBS_len(&ca_id_cbs) > kMaxTrustAnchorIdBytes) {
     return nullptr;
   }
 

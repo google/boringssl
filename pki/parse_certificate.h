@@ -661,7 +661,7 @@ struct OPENSSL_EXPORT ParsedAuthorityKeyIdentifier {
 //         maxSerial    INTEGER (mtcMinSerial..mtcMaxSerial) }
 struct OPENSSL_EXPORT ParsedMtcCaInfo {
   // The CA ID, i.e. the contents of the RELATIVE-OID in the subject's single
-  // id-rdna-trustAnchorID attribute.
+  // id-rdna-trustAnchorID attribute (at most 32 bytes).
   der::Input ca_id;
 
   // The DER-encoded AlgorithmIdentifier for the CA cosigner.

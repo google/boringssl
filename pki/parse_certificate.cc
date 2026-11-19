@@ -14,6 +14,8 @@
 
 #include "parse_certificate.h"
 
+#include <stddef.h>
+
 #include <optional>
 #include <utility>
 
@@ -1023,6 +1025,9 @@ namespace {
 //     mtcMaxSerial INTEGER ::= 18446744073709551615 -- 2^64-1
 constexpr uint64_t kMtcMinSerial = uint64_t{1} << 48;
 
+// draft-ietf-tls-trust-anchor-ids-06 limits trust anchor IDs to 32 bytes.
+constexpr size_t kMaxTrustAnchorIdBytes = 32;
+
 // From draft-ietf-plants-merkle-tree-certs-07, Section 5.1:
 //
 //     id-rdna-trustAnchorID OBJECT IDENTIFIER ::= {
@@ -1052,9 +1057,10 @@ inline constexpr uint8_t kRdnaTrustAnchorIdOid[] = {OBJ_ENC_rdna_trustAnchorID};
 }
 
 // Parses `subject_tlv`, checking that it consists of a single
-// RelativeDistinguishedName with a single valid RELATIVE-OID attribute of type
-// id-rdna-trustAnchorID, per draft-ietf-plants-merkle-tree-certs-07, section
-// 5.1. On success, sets `*value` to that attribute's value.
+// RelativeDistinguishedName with a single valid RELATIVE-OID attribute (at most
+// 32 bytes) of type id-rdna-trustAnchorID, per
+// draft-ietf-plants-merkle-tree-certs-07, section 5.1. On success, sets
+// `*value` to that attribute's value.
 [[nodiscard]] bool ParseMtcCaSubject(der::Input subject_tlv,
                                      der::Input *value) {
   RDNSequence rdns;
@@ -1066,7 +1072,8 @@ inline constexpr uint8_t kRdnaTrustAnchorIdOid[] = {OBJ_ENC_rdna_trustAnchorID};
   }
   CBS ca_id;
   CBS_init(&ca_id, rdns[0][0].value.data(), rdns[0][0].value.size());
-  if (!CBS_is_valid_asn1_relative_oid(&ca_id)) {
+  if (!CBS_is_valid_asn1_relative_oid(&ca_id) ||
+      CBS_len(&ca_id) > kMaxTrustAnchorIdBytes) {
     return false;
   }
   *value = rdns[0][0].value;

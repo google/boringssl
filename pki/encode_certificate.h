@@ -28,11 +28,11 @@ BSSL_NAMESPACE_BEGIN
 // Returns an MTC CA certificate encoded according to
 // draft-ietf-plants-merkle-tree-certs-07, Section 5.5, or nullptr on error.
 // The certificate is allocated from `pool` (which may be null). `ca_id`
-// contains the DER encoding of the relative OID of the CA's ID, and
-// `ca_cosign_sigalg` and `ca_cosign_key` (a DER-encoded SubjectPublicKeyInfo)
-// describe the CA cosigner algorithm and key. Its allowed serial number range
-// is set to `min_serial`..`max_serial`, inclusive, which is empty if
-// `min_serial` > `max_serial`. The certificate is unsigned (RFC 9925).
+// contains the DER encoding of the relative OID of the CA's ID (at most 32
+// bytes), and `ca_cosign_sigalg` and `ca_cosign_key` (a DER-encoded
+// SubjectPublicKeyInfo) describe the CA cosigner algorithm and key. Its allowed
+// serial number range is set to `min_serial`..`max_serial`, inclusive, which is
+// empty if `min_serial` > `max_serial`. The certificate is unsigned (RFC 9925).
 OPENSSL_EXPORT UniquePtr<CRYPTO_BUFFER> EncodeMtcCaCertificate(
     Span<const uint8_t> ca_id, SignatureAlgorithm ca_cosign_sigalg,
     Span<const uint8_t> ca_cosign_key, uint64_t min_serial, uint64_t max_serial,
