@@ -121,6 +121,10 @@ pub struct TlsContextBuilder<Mode = TlsMode> {
     _p: PhantomData<fn() -> Mode>,
 }
 
+// Safety: `TlsContextBuilder` has exclusive ownership of its `SSL_CTX`, and all callbacks
+// stored in its `RustContextMethods` `ex_data` are `Send + Sync`.
+unsafe impl<M> Send for TlsContextBuilder<M> {}
+
 impl<M> TlsContextBuilder<M> {
     fn ptr(&self) -> *mut bssl_sys::SSL_CTX {
         self.ptr.as_ptr()

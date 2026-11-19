@@ -581,3 +581,21 @@ fn legacy_tls_versions() -> Result<(), Error> {
     }
     Ok(())
 }
+
+#[test]
+fn context_builder_send_across_async_fn() {
+    fn assert_send<F: std::future::Future + Send>(fut: F) -> F {
+        fut
+    }
+
+    let fut = assert_send(async {
+        let mut builder = TlsContextBuilder::new_tls();
+        builder.set_alpn_protocols([crate::alpn::H2])?;
+        let ctx = builder.build();
+        futures::future::ready(()).await;
+        drop(ctx);
+        Ok::<_, Error>(())
+    });
+
+    futures::executor::block_on(fut).expect("ALPN configuration succeeds");
+}
