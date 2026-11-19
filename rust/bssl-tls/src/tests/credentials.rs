@@ -202,3 +202,33 @@ fn test_private_key_methods() -> Result<(), Box<dyn std::error::Error + Send + S
 
     Ok(())
 }
+
+#[test]
+fn test_get_peer_certificates() -> Result<(), crate::errors::Error> {
+    let (mut server_conn, mut client_conn) = super::dumb_server_client()?;
+
+    assert_eq!(client_conn.get_peer_certificates().len(), 0);
+    assert_eq!(server_conn.get_peer_certificates().len(), 0);
+
+    let (client_socket, server_socket, mut executor) = super::create_mock_pipe();
+    client_conn.set_io(client_socket)?;
+    server_conn.set_io(server_socket)?;
+
+    executor.run(async {
+        futures::future::join(
+            super::drive_handshake(&mut client_conn),
+            super::drive_handshake(&mut server_conn),
+        )
+        .await;
+    });
+
+    assert_eq!(server_conn.get_peer_certificates().len(), 0);
+    let mut peer_certs = client_conn.get_peer_certificates();
+    assert_eq!(peer_certs.len(), 2);
+    assert_eq!(
+        peer_certs.next().expect("chain has 2 certs").as_der_bytes(),
+        super::RSA_SERVER_CERT_DER
+    );
+
+    Ok(())
+}

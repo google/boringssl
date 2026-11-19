@@ -42,6 +42,7 @@ use crate::{
     check_lib_error,
     config::ConfigurationError,
     credentials::{
+        CertificateChainIterator,
         CertificateType,
         CertificateVerificationMode,
         DistinguishedName,
@@ -556,6 +557,28 @@ impl<R, M> TlsConnection<R, M> {
             return None;
         }
         get_peer_raw_public_key(self.ptr())
+    }
+
+    /// Get the peer's certificate chain, starting with the leaf certificate.
+    ///
+    /// Returns an empty iterator if the handshake has not completed or if the peer did not
+    /// present an X.509 certificate chain. The chain may also appear empty if the server
+    /// opts into dropping peer certificate chains.
+    pub fn get_peer_certificates(&self) -> CertificateChainIterator<'_> {
+        let cert_chain = if self.is_in_handshake() {
+            null()
+        } else {
+            unsafe {
+                // Safety: `self.ptr()` is a valid `SSL` handle and `cert_chain` borrows from
+                // `self`.
+                bssl_sys::SSL_get0_peer_certificates(self.ptr())
+            }
+        };
+        unsafe {
+            // Safety: `cert_chain` is either null or a valid `STACK_OF(CRYPTO_BUFFER)` borrowed
+            // from `self`.
+            CertificateChainIterator::new(cert_chain)
+        }
     }
 }
 
