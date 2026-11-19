@@ -168,8 +168,6 @@ TEST_F(TrustStoreCollectionTest, TwoStores) {
 // Collection contains two stores. The certificate is marked as trusted in one,
 // but distrusted in the other.
 TEST_F(TrustStoreCollectionTest, DistrustTakesPriority) {
-  ParsedCertificateList issuers;
-
   TrustStoreCollection collection;
   TrustStoreInMemory in_memory1;
   TrustStoreInMemory in_memory2;

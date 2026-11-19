@@ -1084,10 +1084,6 @@ TEST_P(PerAEADTest, AliasedBuffers) {
       "123456testing123456testing123456testing123456testing123456testing123456t"
       "esting123456testing123456testing123456testing123456testing123456testing1"
       "23456testing123456testing123456testing12345";
-  const std::vector<size_t> offsets = {
-      0,  1,  2,  8,  15, 16,  17,  31,  32,  33,  63,
-      64, 65, 95, 96, 97, 127, 128, 129, 255, 256, 257,
-  };
 
   std::vector<uint8_t> nonce(nonce_len, 'b');
   std::vector<uint8_t> valid_encryption(sizeof(kPlaintext) + max_overhead);

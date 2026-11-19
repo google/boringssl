@@ -22,11 +22,19 @@
 // Randomize order where unspecified (e.g. equal-comparing items in std::sort).
 #define _LIBCPP_DEBUG_RANDOMIZE_UNSPECIFIED_STABILITY
 
-// libc++ headers disable std::string ASan annotations if this is not defined.
-// This is to avoid false positives when libc++'s runtime components are
-// uninstrumented. When building our custom libc++, libc++ will be as
-// instrumented as the caller, so we can safely enable this.
+// libc++ headers disable std::string ASan annotations if this is not defined,
+// to avoid false positives when libc++'s runtime components are uninstrumented,
+// and error if _LIBCPP_INSTRUMENTED_WITH_ASAN is set when compiling without
+// ASan. When building our custom libc++, libc++ will be as instrumented as the
+// caller, so match the caller's ASan setting.
+#if __has_feature(address_sanitizer)
 #define _LIBCPP_INSTRUMENTED_WITH_ASAN 1
+#else
+#define _LIBCPP_INSTRUMENTED_WITH_ASAN 0
+#endif
+
+#define _LIBCPP_ABI_NAMESPACE __bssl
+#define _LIBCPP_ABI_NAMESPACE_LEN 6
 
 #define _LIBCPP_HAS_FILESYSTEM 1
 #define _LIBCPP_HAS_LOCALIZATION 1
@@ -41,10 +49,12 @@
 #define _LIBCPP_HAS_THREAD_API_PTHREAD 0
 #define _LIBCPP_HAS_THREAD_API_EXTERNAL 0
 #define _LIBCPP_HAS_THREAD_API_WIN32 1
+#define _LIBCPP_HAS_THREAD_API_C11 0
 #else
 #define _LIBCPP_HAS_THREAD_API_PTHREAD 1
 #define _LIBCPP_HAS_THREAD_API_EXTERNAL 0
 #define _LIBCPP_HAS_THREAD_API_WIN32 0
+#define _LIBCPP_HAS_THREAD_API_C11 0
 #endif
 
 #endif  // BORINGSSL_LIBCXX_CONFIG_SITE_

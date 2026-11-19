@@ -353,8 +353,8 @@ if(USE_CUSTOM_LIBCXX)
   target_include_directories(libcxx PRIVATE util/bot/llvm-libc)
   set_target_properties(
     libcxx libcxxabi PROPERTIES
-    # libc++ and libc++abi must be built in C++23 mode.
-    CXX_STANDARD 23
+    # libc++ and libc++abi must be built in C++26 mode.
+    CXX_STANDARD 26
     CXX_STANDARD_REQUIRED TRUE
   )
   # libc++abi depends on libc++ internal headers.

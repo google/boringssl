@@ -346,13 +346,22 @@ impl<T: StackElement> Stack<T> {
     }
 }
 
-#[derive(Clone, Copy)]
 pub(crate) struct StackIterator<'a, T: StackElement> {
     sk: *const T::Stack,
     len: usize,
     curr: usize,
     _p: PhantomData<&'a fn() -> T>,
 }
+
+// Implement manually instead of deriving so `T` does not need `Clone` or `Copy`
+// (bindgen does not derive them for opaque C structs).
+impl<T: StackElement> Clone for StackIterator<'_, T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: StackElement> Copy for StackIterator<'_, T> {}
 
 impl<'a, T: StackElement> StackIterator<'a, T> {
     /// Safety: caller must ensure that `sk` outlives `'a`.
