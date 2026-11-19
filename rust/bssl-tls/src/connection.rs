@@ -162,6 +162,12 @@ pub struct TlsConnection<Role, Mode = TlsMode> {
 /// or reference-counted but immutable, including `SSL_SESSION`s and `SSL_CTX`s.
 unsafe impl<R, M> Send for TlsConnection<R, M> {}
 
+impl<R, M> core::fmt::Debug for TlsConnection<R, M> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TlsConnection").finish_non_exhaustive()
+    }
+}
+
 impl<R, M> Drop for TlsConnection<R, M> {
     fn drop(&mut self) {
         unsafe {

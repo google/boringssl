@@ -125,6 +125,12 @@ pub struct TlsStream<Role, S> {
     _marker: PhantomData<S>,
 }
 
+impl<Role, S> std::fmt::Debug for TlsStream<Role, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TlsStream").finish_non_exhaustive()
+    }
+}
+
 impl<Role, S> TlsStream<Role, S> {
     /// Get a reference to the underlying `TlsConnection`.
     pub fn get_ref(&self) -> &TlsConnection<Role> {

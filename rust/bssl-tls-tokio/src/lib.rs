@@ -389,6 +389,12 @@ pub struct TokioTlsConnection<Role> {
     pub(crate) inner: TlsConnection<Role, TlsMode>,
 }
 
+impl<Role> std::fmt::Debug for TokioTlsConnection<Role> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokioTlsConnection").finish_non_exhaustive()
+    }
+}
+
 impl<Role> TokioTlsConnection<Role> {
     /// Construct a new wrapper.
     pub fn new(inner: TlsConnection<Role, TlsMode>) -> Self {
@@ -554,6 +560,12 @@ impl TlsAcceptor {
 pub struct TlsStream<Role, Stream> {
     pub(crate) conn: TokioTlsConnection<Role>,
     pub(crate) _marker: PhantomData<Stream>,
+}
+
+impl<Role, Stream> std::fmt::Debug for TlsStream<Role, Stream> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TlsStream").finish_non_exhaustive()
+    }
 }
 
 impl<Role, S> TlsStream<Role, S> {
