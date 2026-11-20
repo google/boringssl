@@ -68,8 +68,8 @@ OPENSSL_EXPORT int SHA224_Final(uint8_t out[SHA224_DIGEST_LENGTH],
 // `out`.
 //
 // `static inline` to not generate such short-named linker symbols or macros.
-static inline OPENSSL_UNUSED uint8_t* SHA224(
-    const uint8_t* data, size_t len, uint8_t out[SHA224_DIGEST_LENGTH]) {
+static inline uint8_t *SHA224(const uint8_t *data, size_t len,
+                              uint8_t out[SHA224_DIGEST_LENGTH]) {
   SHA256_CTX ctx;
   SHA224_Init(&ctx);
   SHA224_Update(&ctx, data, len);
@@ -99,8 +99,8 @@ OPENSSL_EXPORT int SHA256_Final(uint8_t out[SHA256_DIGEST_LENGTH],
 // `out`.
 //
 // `static inline` to not generate such short-named linker symbols or macros.
-static inline OPENSSL_UNUSED uint8_t* SHA256(
-    const uint8_t* data, size_t len, uint8_t out[SHA256_DIGEST_LENGTH]) {
+static inline uint8_t *SHA256(const uint8_t *data, size_t len,
+                              uint8_t out[SHA256_DIGEST_LENGTH]) {
   SHA256_CTX ctx;
   SHA256_Init(&ctx);
   SHA256_Update(&ctx, data, len);
@@ -112,7 +112,7 @@ static inline OPENSSL_UNUSED uint8_t* SHA256(
 // SHA256_Transform is a low-level function that performs a single, SHA-256
 // block transformation using the state from `sha` and `SHA256_CBLOCK` bytes
 // from `block`.
-OPENSSL_EXPORT void SHA256_Transform(SHA256_CTX* sha,
+OPENSSL_EXPORT void SHA256_Transform(SHA256_CTX *sha,
                                      const uint8_t block[SHA256_CBLOCK]);
 
 // SHA256_TransformBlocks is a low-level function that takes `num_blocks` *
@@ -172,8 +172,8 @@ OPENSSL_EXPORT int SHA384_Final(uint8_t out[SHA384_DIGEST_LENGTH],
 // `out`.
 //
 // `static inline` to not generate such short-named linker symbols or macros.
-static inline OPENSSL_UNUSED uint8_t* SHA384(
-    const uint8_t* data, size_t len, uint8_t out[SHA384_DIGEST_LENGTH]) {
+static inline uint8_t *SHA384(const uint8_t *data, size_t len,
+                              uint8_t out[SHA384_DIGEST_LENGTH]) {
   SHA512_CTX ctx;
   SHA384_Init(&ctx);
   SHA384_Update(&ctx, data, len);
@@ -203,8 +203,8 @@ OPENSSL_EXPORT int SHA512_Final(uint8_t out[SHA512_DIGEST_LENGTH],
 // `out`.
 //
 // `static inline` to not generate such short-named linker symbols or macros.
-static inline OPENSSL_UNUSED uint8_t* SHA512(
-    const uint8_t* data, size_t len, uint8_t out[SHA512_DIGEST_LENGTH]) {
+static inline uint8_t *SHA512(const uint8_t *data, size_t len,
+                              uint8_t out[SHA512_DIGEST_LENGTH]) {
   SHA512_CTX ctx;
   SHA512_Init(&ctx);
   SHA512_Update(&ctx, data, len);
@@ -241,8 +241,8 @@ OPENSSL_EXPORT int SHA512_256_Final(uint8_t out[SHA512_256_DIGEST_LENGTH],
 // `out`.
 //
 // `static inline` to not generate such short-named linker symbols or macros.
-static inline OPENSSL_UNUSED uint8_t* SHA512_256(
-    const uint8_t* data, size_t len, uint8_t out[SHA512_256_DIGEST_LENGTH]) {
+static inline uint8_t *SHA512_256(const uint8_t *data, size_t len,
+                                  uint8_t out[SHA512_256_DIGEST_LENGTH]) {
   SHA512_CTX ctx;
   SHA512_256_Init(&ctx);
   SHA512_256_Update(&ctx, data, len);

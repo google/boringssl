@@ -63,23 +63,23 @@ struct sha_state_st {
 } /* SHA_CTX */;
 
 // SHA1_Init initialises `sha` and returns one.
-OPENSSL_EXPORT int SHA1_Init(SHA_CTX* sha);
+OPENSSL_EXPORT int SHA1_Init(SHA_CTX *sha);
 
 // SHA1_Update adds `len` bytes from `data` to `sha` and returns one.
-OPENSSL_EXPORT int SHA1_Update(SHA_CTX* sha, const void* data, size_t len);
+OPENSSL_EXPORT int SHA1_Update(SHA_CTX *sha, const void *data, size_t len);
 
 // SHA1_Final adds the final padding to `sha` and writes the resulting digest to
 // `out`, which must have at least `SHA_DIGEST_LENGTH` bytes of space. It
 // returns one.
-OPENSSL_EXPORT int SHA1_Final(uint8_t out[SHA_DIGEST_LENGTH], SHA_CTX* sha);
+OPENSSL_EXPORT int SHA1_Final(uint8_t out[SHA_DIGEST_LENGTH], SHA_CTX *sha);
 
 // SHA1 writes the digest of `len` bytes from `data` to `out` and returns
 // `out`. There must be at least `SHA_DIGEST_LENGTH` bytes of space in
 // `out`.
 //
 // `static inline` to not generate such short-named linker symbols or macros.
-static inline OPENSSL_UNUSED uint8_t* SHA1(const uint8_t* data, size_t len,
-                                           uint8_t out[SHA_DIGEST_LENGTH]) {
+static inline uint8_t *SHA1(const uint8_t *data, size_t len,
+                            uint8_t out[SHA_DIGEST_LENGTH]) {
   SHA_CTX ctx;
   SHA1_Init(&ctx);
   SHA1_Update(&ctx, data, len);
@@ -91,7 +91,7 @@ static inline OPENSSL_UNUSED uint8_t* SHA1(const uint8_t* data, size_t len,
 // SHA1_Transform is a low-level function that performs a single, SHA-1 block
 // transformation using the state from `sha` and `SHA_CBLOCK` bytes from
 // `block`.
-OPENSSL_EXPORT void SHA1_Transform(SHA_CTX* sha,
+OPENSSL_EXPORT void SHA1_Transform(SHA_CTX *sha,
                                    const uint8_t block[SHA_CBLOCK]);
 
 // CRYPTO_fips_186_2_prf derives `out_len` bytes from `xkey` using the PRF
@@ -108,7 +108,7 @@ OPENSSL_EXPORT void SHA1_Transform(SHA_CTX* sha,
 // in new protocols. It is provided for compatibility with some legacy EAP
 // methods.
 OPENSSL_EXPORT void CRYPTO_fips_186_2_prf(
-    uint8_t* out, size_t out_len, const uint8_t xkey[SHA_DIGEST_LENGTH]);
+    uint8_t *out, size_t out_len, const uint8_t xkey[SHA_DIGEST_LENGTH]);
 
 
 #if defined(__cplusplus)
