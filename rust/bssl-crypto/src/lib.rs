@@ -38,6 +38,7 @@ mod macros;
 
 pub mod aead;
 pub mod aes;
+pub mod chacha20;
 
 /// Ciphers.
 pub mod cipher;

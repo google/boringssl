@@ -2975,6 +2975,7 @@ pki_test_data = [
 rust_bssl_crypto_sources = [
   "rust/bssl-crypto/src/aead.rs",
   "rust/bssl-crypto/src/aes.rs",
+  "rust/bssl-crypto/src/chacha20.rs",
   "rust/bssl-crypto/src/cipher/aes_cbc.rs",
   "rust/bssl-crypto/src/cipher/aes_ctr.rs",
   "rust/bssl-crypto/src/cipher/mod.rs",
