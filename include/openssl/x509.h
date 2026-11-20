@@ -162,14 +162,24 @@ OPENSSL_EXPORT const ASN1_TIME *X509_get0_notBefore(const X509 *x509);
 OPENSSL_EXPORT const ASN1_TIME *X509_get0_notAfter(const X509 *x509);
 
 // X509_get_issuer_name returns `x509`'s issuer.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Use `X509_set_issuer_name` to
+// modify the issuer name.
 OPENSSL_EXPORT X509_NAME *X509_get_issuer_name(const X509 *x509);
 
 // X509_get_subject_name returns `x509`'s subject.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Use `X509_set_subject_name` to
+// modify the subject name.
 OPENSSL_EXPORT X509_NAME *X509_get_subject_name(const X509 *x509);
 
-// X509_get_X509_PUBKEY returns the public key of `x509`. Note this function is
-// not const-correct for legacy reasons. Callers should not modify the returned
-// object.
+// X509_get_X509_PUBKEY returns the public key of `x509`.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Use `X509_set_issuer_name` to
+// modify the issuer name.
 OPENSSL_EXPORT X509_PUBKEY *X509_get_X509_PUBKEY(const X509 *x509);
 
 // X509_get0_pubkey returns `x509`'s public key as an `EVP_PKEY`, or NULL if the
@@ -186,9 +196,9 @@ OPENSSL_EXPORT EVP_PKEY *X509_get_pubkey(const X509 *x509);
 // X509_get0_pubkey_bitstr returns the BIT STRING portion of `x509`'s public
 // key. Note this does not contain the AlgorithmIdentifier portion.
 //
-// WARNING: This function returns a non-const pointer for OpenSSL compatibility,
-// but the caller must not modify the resulting object. Doing so will break
-// internal invariants in `x509`.
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in `x509`.
 OPENSSL_EXPORT ASN1_BIT_STRING *X509_get0_pubkey_bitstr(const X509 *x509);
 
 // X509_check_private_key returns one if `x509`'s public key matches `pkey` and
@@ -372,8 +382,11 @@ OPENSSL_EXPORT int X509_get_ext_by_critical(const X509 *x, int crit,
                                             int lastpos);
 
 // X509_get_ext returns the extension in `x` at index `loc`, or NULL if `loc` is
-// out of bounds. This function returns a non-const pointer for OpenSSL
-// compatibility, but callers should not mutate the result.
+// out of bounds.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in `x`.
 OPENSSL_EXPORT X509_EXTENSION *X509_get_ext(const X509 *x, int loc);
 
 // X509_get_ext_d2i behaves like `X509V3_get_d2i` but looks for the extension in
@@ -819,8 +832,11 @@ OPENSSL_EXPORT int X509_CRL_get_ext_by_critical(const X509_CRL *x, int crit,
                                                 int lastpos);
 
 // X509_CRL_get_ext returns the extension in `x` at index `loc`, or NULL if
-// `loc` is out of bounds. This function returns a non-const pointer for OpenSSL
-// compatibility, but callers should not mutate the result.
+// `loc` is out of bounds.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in `x`.
 OPENSSL_EXPORT X509_EXTENSION *X509_CRL_get_ext(const X509_CRL *x, int loc);
 
 // X509_CRL_get_ext_d2i behaves like `X509V3_get_d2i` but looks for the
@@ -1048,8 +1064,11 @@ OPENSSL_EXPORT int X509_REVOKED_get_ext_by_critical(const X509_REVOKED *x,
                                                     int crit, int lastpos);
 
 // X509_REVOKED_get_ext returns the extension in `x` at index `loc`, or NULL if
-// `loc` is out of bounds. This function returns a non-const pointer for OpenSSL
-// compatibility, but callers should not mutate the result.
+// `loc` is out of bounds.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in `x`.
 OPENSSL_EXPORT X509_EXTENSION *X509_REVOKED_get_ext(const X509_REVOKED *x,
                                                     int loc);
 
@@ -1776,8 +1795,10 @@ OPENSSL_EXPORT int X509v3_get_ext_by_critical(const STACK_OF(X509_EXTENSION) *x,
                                               int crit, int lastpos);
 
 // X509v3_get_ext returns the extension in `x` at index `loc`, or NULL if `loc`
-// is out of bounds. This function returns a non-const pointer for OpenSSL
-// compatibility, but callers should not mutate the result.
+// is out of bounds.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object.
 OPENSSL_EXPORT X509_EXTENSION *X509v3_get_ext(const STACK_OF(X509_EXTENSION) *x,
                                               int loc);
 
