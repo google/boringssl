@@ -183,7 +183,7 @@ int X509_PUBKEY_set0_param(X509_PUBKEY *pub, ASN1_OBJECT *obj, int param_type,
 
 int X509_PUBKEY_get0_param(ASN1_OBJECT **out_obj, const uint8_t **out_key,
                            int *out_key_len, X509_ALGOR **out_alg,
-                           X509_PUBKEY *pub) {
+                           const X509_PUBKEY *pub) {
   auto *pub_impl = FromOpaque(pub);
   if (out_obj != nullptr) {
     *out_obj = pub_impl->algor->algorithm;
@@ -193,7 +193,7 @@ int X509_PUBKEY_get0_param(ASN1_OBJECT **out_obj, const uint8_t **out_key,
     *out_key_len = pub_impl->public_key->length;
   }
   if (out_alg != nullptr) {
-    *out_alg = pub_impl->algor.get();
+    *out_alg = const_cast<X509_ALGOR*>(pub_impl->algor.get());
   }
   return 1;
 }

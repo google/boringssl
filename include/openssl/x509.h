@@ -1647,8 +1647,8 @@ OPENSSL_EXPORT int X509_PUBKEY_set0_param(X509_PUBKEY *pub, ASN1_OBJECT *obj,
 // If `out_alg` is not NULL, it sets `*out_alg` to the AlgorithmIdentifier.
 //
 // All pointers outputted by this function are internal to `pub` and must not be
-// freed by the caller. Additionally, although some outputs are non-const,
-// callers must not mutate the resulting objects.
+// freed by the caller. Additionally, although some outputs are non-const for
+// historical reasons, callers must not mutate the resulting objects.
 //
 // Note: X.509 SubjectPublicKeyInfo structures store the encoded public key as a
 // BIT STRING. `*out_key` and `*out_key_len` will silently pad the key with zero
@@ -1658,7 +1658,7 @@ OPENSSL_EXPORT int X509_PUBKEY_get0_param(ASN1_OBJECT **out_obj,
                                           const uint8_t **out_key,
                                           int *out_key_len,
                                           X509_ALGOR **out_alg,
-                                          X509_PUBKEY *pub);
+                                          const X509_PUBKEY *pub);
 
 // X509_PUBKEY_get0_public_key returns `pub`'s encoded public key.
 OPENSSL_EXPORT const ASN1_BIT_STRING *X509_PUBKEY_get0_public_key(
