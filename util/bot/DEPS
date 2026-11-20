@@ -38,6 +38,8 @@ vars = {
   # infra/3pp/tools/cmake/linux-amd64
   'cmake_version': 'version:3@3.31.11.chromium.8',
   # infra/3pp/tools/go/linux-amd64
+  # Keep this in sync with the go directive in go.mod, and run `go mod tidy`
+  # after updating.
   'go_version': 'version:3@1.27.0',
   # infra/3pp/tools/perl/windows-amd64
   'perl_version': 'version:3@5.42.0.1',
@@ -63,6 +65,10 @@ vars = {
   # https://chromium.googlesource.com/chromium/src/+/main/DEPS
   'android_sdk_platform-tools_version': 'qTD9QdBlBf3dyHsN1lJ0RH6AhHxR42Hmg2Ih-Vj4zIEC',
   'libfuzzer_revision': 'bea408a6e01f0f7e6c82a43121fe3af4506c932e',
+  # Updating libc++ may require updating util/bot/libcxx-config/__config_site
+  # and the USE_CUSTOM_LIBCXX block in CMakeLists.txt. Test locally with
+  # checkout_libcxx=True, -DUSE_CUSTOM_LIBCXX=1 (e.g. with -DMSAN=1 or
+  # -DASAN=1), and the clang binary in util/bot/llvm-build/bin.
   'libcxx_revision': '7ab65651aed6802d2599dcb7a73b1f82d5179d05',
   'libcxxabi_revision': '8f11bb1d4438d0239d0dfc1bd9456a9f31629dda',
   'llvm_libc_revision': '2a826f2fda3cf8d75b47cbc3bb1d9b244f13a6ab',
@@ -75,6 +81,13 @@ vars = {
   # Update to the latest revision of
   # https://chromium.googlesource.com/chromium/src/tools/rust
   # and also ensure that `tools_clang_revision` above is up-to-date.
+  # Updating Rust or bindgen may require adjustments in rust/. Test locally with
+  # checkout_rust=True, configuring CMake with -DRUST_BINDINGS=<triple> (see
+  # rust/bssl-sys/README.md) and
+  # -DBINDGEN_EXECUTABLE=$PWD/util/bot/rust-toolchain/bin/bindgen, then in rust/
+  # running ../util/bot/rust-toolchain/bin/cargo test --all-targets
+  # --all-features (with RUSTC, RUSTDOC, and BORINGSSL_BUILD_DIR set
+  # accordingly).
   'tools_rust_revision': '285104ac97c055afdc632b9c02af223ef738ad87',
 }
 
