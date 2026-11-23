@@ -801,9 +801,9 @@ OPENSSL_EXPORT int X509_CRL_get0_by_cert(X509_CRL *crl, X509_REVOKED **out,
 // X509_CRL_get_REVOKED returns the list of revoked certificates in `crl`, or
 // NULL if `crl` omits it.
 //
-// TODO(davidben): This function was originally a macro, without clear const
-// semantics. It should take a const input and give const output, but the latter
-// would break existing callers. For now, we match upstream.
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in the library.
 OPENSSL_EXPORT STACK_OF(X509_REVOKED) *X509_CRL_get_REVOKED(X509_CRL *crl);
 
 // X509_CRL_get0_extensions returns `crl`'s extension list, or NULL if `crl`
@@ -1150,8 +1150,10 @@ OPENSSL_EXPORT int i2d_X509_REQ(const X509_REQ *req, uint8_t **outp);
 // function may return other values.
 OPENSSL_EXPORT long X509_REQ_get_version(const X509_REQ *req);
 
-// X509_REQ_get_subject_name returns `req`'s subject name. Note this function is
-// not const-correct for legacy reasons.
+// X509_REQ_get_subject_name returns `req`'s subject name.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object.
 OPENSSL_EXPORT X509_NAME *X509_REQ_get_subject_name(const X509_REQ *req);
 
 // X509_REQ_get0_pubkey returns `req`'s public key as an `EVP_PKEY`, or NULL if
@@ -1517,9 +1519,11 @@ OPENSSL_EXPORT void X509_NAME_ENTRY_free(X509_NAME_ENTRY *entry);
 OPENSSL_EXPORT X509_NAME_ENTRY *X509_NAME_ENTRY_dup(
     const X509_NAME_ENTRY *entry);
 
-// X509_NAME_ENTRY_get_object returns `entry`'s attribute type. This function
-// returns a non-const pointer for OpenSSL compatibility, but callers should not
-// mutate the result. Doing so will break internal invariants in the library.
+// X509_NAME_ENTRY_get_object returns `entry`'s attribute type.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in the library.
 OPENSSL_EXPORT ASN1_OBJECT *X509_NAME_ENTRY_get_object(
     const X509_NAME_ENTRY *entry);
 
@@ -1530,9 +1534,7 @@ OPENSSL_EXPORT int X509_NAME_ENTRY_set_object(X509_NAME_ENTRY *entry,
 
 // X509_NAME_ENTRY_get_data returns `entry`'s attribute value, represented as an
 // `ASN1_STRING`. This value may have any ASN.1 type, so callers must check the
-// type before interpreting the contents. This function returns a non-const
-// pointer for OpenSSL compatibility, but callers should not mutate the result.
-// Doing so will break internal invariants in the library.
+// type before interpreting the contents.
 //
 // See `ASN1_STRING` for how values are represented in this library. Where a
 // specific `ASN1_STRING` representation exists, that representation is used.
@@ -1540,6 +1542,10 @@ OPENSSL_EXPORT int X509_NAME_ENTRY_set_object(X509_NAME_ENTRY *entry,
 // IDENTIFIER, and BOOLEAN attribute values are represented as `V_ASN1_OTHER`,
 // because their usual representation in this library is not
 // `ASN1_STRING`-compatible.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in the library.
 OPENSSL_EXPORT ASN1_STRING *X509_NAME_ENTRY_get_data(
     const X509_NAME_ENTRY *entry);
 
@@ -1716,14 +1722,18 @@ OPENSSL_EXPORT X509_EXTENSION *X509_EXTENSION_create_by_OBJ(
     X509_EXTENSION **ex, const ASN1_OBJECT *obj, int crit,
     const ASN1_OCTET_STRING *data);
 
-// X509_EXTENSION_get_object returns `ex`'s extension type. This function
-// returns a non-const pointer for OpenSSL compatibility, but callers should not
-// mutate the result.
+// X509_EXTENSION_get_object returns `ex`'s extension type.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in the library.
 OPENSSL_EXPORT ASN1_OBJECT *X509_EXTENSION_get_object(const X509_EXTENSION *ex);
 
-// X509_EXTENSION_get_data returns `ne`'s extension value. This function returns
-// a non-const pointer for OpenSSL compatibility, but callers should not mutate
-// the result.
+// X509_EXTENSION_get_data returns `ne`'s extension value.
+//
+// TODO(crbug.com/442860745): This function should return a const pointer.
+// Callers should not modify the returned object. Doing so will break internal
+// invariants in the library.
 OPENSSL_EXPORT ASN1_OCTET_STRING *X509_EXTENSION_get_data(
     const X509_EXTENSION *ne);
 
@@ -2800,6 +2810,9 @@ OPENSSL_EXPORT int X509_ATTRIBUTE_set1_data(X509_ATTRIBUTE *attr, int attrtype,
 // type does not match. `attrtype` is one of the type values in `ASN1_TYPE`. On
 // match, the return value uses the same representation as `ASN1_TYPE_set0`. See
 // `ASN1_TYPE` for details.
+//
+// TODO(crbug.com/442860745): This function should take and return a const
+// pointer. Callers should not modify the returned object.
 OPENSSL_EXPORT void *X509_ATTRIBUTE_get0_data(X509_ATTRIBUTE *attr, int idx,
                                               int attrtype, void *unused);
 
@@ -2807,10 +2820,16 @@ OPENSSL_EXPORT void *X509_ATTRIBUTE_get0_data(X509_ATTRIBUTE *attr, int idx,
 OPENSSL_EXPORT int X509_ATTRIBUTE_count(const X509_ATTRIBUTE *attr);
 
 // X509_ATTRIBUTE_get0_object returns the type of `attr`.
+//
+// TODO(crbug.com/442860745): This function should take and return a const
+// pointer. Callers should not modify the returned object.
 OPENSSL_EXPORT ASN1_OBJECT *X509_ATTRIBUTE_get0_object(X509_ATTRIBUTE *attr);
 
 // X509_ATTRIBUTE_get0_type returns the `idx`th value in `attr`, or NULL if out
 // of bounds. Note this function returns one of `attr`'s values, not the type.
+//
+// TODO(crbug.com/442860745): This function should take and return a const
+// pointer. Callers should not modify the returned object.
 OPENSSL_EXPORT ASN1_TYPE *X509_ATTRIBUTE_get0_type(X509_ATTRIBUTE *attr,
                                                    int idx);
 
