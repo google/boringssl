@@ -55,7 +55,11 @@ OPENSSL_INLINE int ERR_GET_LIB(uint32_t packed_error) {
 
 // ERR_GET_REASON returns the reason code for the error. This is one of
 // library-specific `LIB_R_*` values where `LIB` is the library (see
-// `ERR_GET_LIB`). Note that reason codes are specific to the library.
+// `ERR_GET_LIB`).
+//
+// WARNING: reason codes are specific to the library code and cannot be checked
+// on their own. Check the pair of `ERR_GET_LIB` and `ERR_GET_REASON`, or use
+// the `ERR_equals` helper.
 OPENSSL_INLINE int ERR_GET_REASON(uint32_t packed_error) {
   return (int)(packed_error & 0xfff);
 }
