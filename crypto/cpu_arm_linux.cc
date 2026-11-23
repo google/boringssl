@@ -49,7 +49,8 @@ static ssize_t read_eintr(int fd, void *out, size_t len) {
 // read_file opens `path` and reads until end-of-file. On success, it returns
 // one and sets `*out_ptr` and `*out_len` to a newly-allocated buffer with the
 // contents. Otherwise, it returns zero.
-static int read_file(char **out_ptr, size_t *out_len, const char *path) {
+[[maybe_unused]] static int read_file(char **out_ptr, size_t *out_len,
+                                      const char *path) {
   int fd = open_eintr(path, O_RDONLY);
   if (fd < 0) {
     return 0;
@@ -110,14 +111,11 @@ void bssl::OPENSSL_cpuid_setup() {
 #endif
     OPENSSL_armcap_P |= ARMV7_NEON;
 
+    unsigned long hwcap2 = getauxval(AT_HWCAP2);
+#if defined(OPENSSL_ANDROID) && __ANDROID_MIN_SDK_VERSION__ < 24
     // Some ARMv8 Android devices don't expose AT_HWCAP2. Fall back to
     // /proc/cpuinfo. See https://crbug.com/40644934. The fix was added to
-    // Android CTS in N, so, after Net.NeedsHWCAP2Workaround confirms this, we
-    // should be able to disable this when __ANDROID_MIN_SDK_VERSION__ is high
-    // enough. (It may not be worth carrying the workaround at all at that
-    // point. Then again, AES and PMULL extensions are crucial for performance
-    // when available.)
-    unsigned long hwcap2 = getauxval(AT_HWCAP2);
+    // Android CTS in N, so this code isn't needed whne targetting N or higher.
     if (hwcap2 == 0) {
       char *cpuinfo_data = nullptr;
       size_t cpuinfo_len = 0;
@@ -128,6 +126,7 @@ void bssl::OPENSSL_cpuid_setup() {
         OPENSSL_free(cpuinfo_data);
       }
     }
+#endif  // ANDROID && ANDROID_MIN_SDK_VERSION < 24
 
     // HWCAP2_* values, without the "CRYPTO_" prefix, are exposed through
     // <sys/auxv.h> in some versions of glibc(>= 2.41). Assert that we don't
