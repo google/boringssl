@@ -33,6 +33,7 @@
 
 #include "../test/file_test.h"
 #include "../test/test_util.h"
+#include "../test/wycheproof_util.h"
 
 
 BSSL_NAMESPACE_BEGIN
@@ -371,6 +372,212 @@ TEST(HPKETest, VerifyTestVectorsPQ) {
     EXPECT_TRUE(test_vec.ReadFromFileTest(t));
     test_vec.Verify();
   });
+}
+
+namespace {
+
+// GetWycheproofHPKEParams reads the HPKE algorithm IDs from the Wycheproof test
+// group. If BoringSSL does not implement one of the algorithms, it skips the
+// test and returns false.
+bool GetWycheproofHPKEParams(FileTest *t, const EVP_HPKE_KEM **out_kem,
+                             const EVP_HPKE_KDF **out_kdf,
+                             const EVP_HPKE_AEAD **out_aead) {
+  t->IgnoreInstruction("kem");
+  t->IgnoreInstruction("kdf");
+  t->IgnoreInstruction("aead");
+  std::string kem_id, kdf_id, aead_id;
+  EXPECT_TRUE(t->GetInstruction(&kem_id, "kemId"));
+  EXPECT_TRUE(t->GetInstruction(&kdf_id, "kdfId"));
+  EXPECT_TRUE(t->GetInstruction(&aead_id, "aeadId"));
+  *out_kem = nullptr;
+  *out_kdf = nullptr;
+  *out_aead = nullptr;
+  for (const auto kem : kAllKEMs) {
+    if (std::to_string(EVP_HPKE_KEM_id(kem())) == kem_id) {
+      *out_kem = kem();
+    }
+  }
+  for (const auto kdf : kAllKDFs) {
+    if (std::to_string(EVP_HPKE_KDF_id(kdf())) == kdf_id) {
+      *out_kdf = kdf();
+    }
+  }
+  for (const auto aead : kAllAEADs) {
+    if (std::to_string(EVP_HPKE_AEAD_id(aead())) == aead_id) {
+      *out_aead = aead();
+    }
+  }
+  if (*out_kem == nullptr || *out_kdf == nullptr || *out_aead == nullptr) {
+    t->SkipCurrent();
+    return false;
+  }
+  return true;
+}
+
+// WycheproofHPKESealDeterministic runs SetupBaseS and Seal with the sender's
+// encapsulation randomness from the test. It returns false if SetupBaseS
+// fails.
+bool WycheproofHPKESealDeterministic(FileTest *t, const EVP_HPKE_KEM *kem,
+                                     const EVP_HPKE_KDF *kdf,
+                                     const EVP_HPKE_AEAD *aead,
+                                     std::vector<uint8_t> *out_enc,
+                                     std::vector<uint8_t> *out_ct) {
+  std::vector<uint8_t> pk, info, aad, pt, seed;
+  EXPECT_TRUE(t->GetBytes(&pk, "pkRm"));
+  EXPECT_TRUE(t->GetBytes(&info, "info"));
+  EXPECT_TRUE(t->GetBytes(&aad, "aad"));
+  EXPECT_TRUE(t->GetBytes(&pt, "pt"));
+  // For DHKEM, `EVP_HPKE_CTX_setup_sender_with_seed_for_testing` takes the
+  // ephemeral private key, skEm. For ML-KEM, it takes the ML-KEM.Encaps
+  // randomness, which Wycheproof provides as ikmE.
+  if (t->HasAttribute("skEm")) {
+    t->IgnoreAttribute("ikmE");
+    EXPECT_TRUE(t->GetBytes(&seed, "skEm"));
+  } else {
+    EXPECT_TRUE(t->GetBytes(&seed, "ikmE"));
+  }
+
+  ScopedEVP_HPKE_CTX ctx;
+  uint8_t enc[EVP_HPKE_MAX_ENC_LENGTH];
+  size_t enc_len;
+  if (!EVP_HPKE_CTX_setup_sender_with_seed_for_testing(
+          ctx.get(), enc, &enc_len, sizeof(enc), kem, kdf, aead, pk.data(),
+          pk.size(), info.data(), info.size(), seed.data(), seed.size())) {
+    return false;
+  }
+  out_enc->assign(enc, enc + enc_len);
+
+  out_ct->resize(pt.size() + EVP_HPKE_CTX_max_overhead(ctx.get()));
+  size_t ct_len;
+  EXPECT_TRUE(EVP_HPKE_CTX_seal(ctx.get(), out_ct->data(), &ct_len,
+                                out_ct->size(), pt.data(), pt.size(),
+                                aad.data(), aad.size()));
+  out_ct->resize(ct_len);
+  return true;
+}
+
+void WycheproofHPKEDecryptTest(FileTest *t) {
+  const EVP_HPKE_KEM *kem;
+  const EVP_HPKE_KDF *kdf;
+  const EVP_HPKE_AEAD *aead;
+  if (!GetWycheproofHPKEParams(t, &kem, &kdf, &aead)) {
+    return;
+  }
+
+  std::vector<uint8_t> sk, pk, info, aad, enc, ct, pt;
+  ASSERT_TRUE(t->GetBytes(&sk, "skRm"));
+  ASSERT_TRUE(t->GetBytes(&pk, "pkRm"));
+  ASSERT_TRUE(t->GetBytes(&info, "info"));
+  ASSERT_TRUE(t->GetBytes(&aad, "aad"));
+  ASSERT_TRUE(t->GetBytes(&enc, "enc"));
+  ASSERT_TRUE(t->GetBytes(&ct, "ct"));
+  ASSERT_TRUE(t->GetBytes(&pt, "pt"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid =
+      result.IsValid({"LongInfo", "NonCanonicalEncLargeOrder", "Twist"});
+
+  // Valid cases that come from an encapsulation include its randomness. Check
+  // that the sender reproduces them.
+  if (t->HasAttribute("ikmE")) {
+    std::vector<uint8_t> sender_enc, sender_ct;
+    ASSERT_TRUE(WycheproofHPKESealDeterministic(t, kem, kdf, aead, &sender_enc,
+                                                &sender_ct));
+    EXPECT_EQ(Bytes(sender_enc), Bytes(enc));
+    EXPECT_EQ(Bytes(sender_ct), Bytes(ct));
+  }
+
+  ScopedEVP_HPKE_KEY key;
+  ASSERT_TRUE(EVP_HPKE_KEY_init(key.get(), kem, sk.data(), sk.size()));
+  uint8_t public_key[EVP_HPKE_MAX_PUBLIC_KEY_LENGTH];
+  size_t public_key_len;
+  ASSERT_TRUE(EVP_HPKE_KEY_public_key(key.get(), public_key, &public_key_len,
+                                      sizeof(public_key)));
+  EXPECT_EQ(Bytes(public_key, public_key_len), Bytes(pk));
+
+  ScopedEVP_HPKE_CTX ctx;
+  if (!EVP_HPKE_CTX_setup_recipient(ctx.get(), key.get(), kdf, aead, enc.data(),
+                                    enc.size(), info.data(), info.size())) {
+    EXPECT_FALSE(expect_valid);
+    ERR_clear_error();
+    return;
+  }
+
+  std::vector<uint8_t> out(ct.size());
+  size_t out_len;
+  if (!EVP_HPKE_CTX_open(ctx.get(), out.data(), &out_len, out.size(), ct.data(),
+                         ct.size(), aad.data(), aad.size())) {
+    EXPECT_FALSE(expect_valid);
+    ERR_clear_error();
+    return;
+  }
+  EXPECT_TRUE(expect_valid);
+  EXPECT_EQ(Bytes(out.data(), out_len), Bytes(pt));
+}
+
+void WycheproofHPKEEncapTest(FileTest *t) {
+  const EVP_HPKE_KEM *kem;
+  const EVP_HPKE_KDF *kdf;
+  const EVP_HPKE_AEAD *aead;
+  if (!GetWycheproofHPKEParams(t, &kem, &kdf, &aead)) {
+    return;
+  }
+
+  // skRm is only provided for some keys, and is not needed for this test.
+  t->IgnoreAttribute("skRm");
+  std::vector<uint8_t> expected_enc, expected_ct;
+  ASSERT_TRUE(t->GetBytes(&expected_enc, "enc"));
+  ASSERT_TRUE(t->GetBytes(&expected_ct, "ct"));
+  WycheproofResult result;
+  ASSERT_TRUE(GetWycheproofResult(t, &result));
+  bool expect_valid = result.IsValid({"NonCanonicalPkRmLargeOrder"});
+
+  std::vector<uint8_t> enc, ct;
+  if (!WycheproofHPKESealDeterministic(t, kem, kdf, aead, &enc, &ct)) {
+    EXPECT_FALSE(expect_valid);
+    ERR_clear_error();
+    return;
+  }
+  EXPECT_TRUE(expect_valid);
+  EXPECT_EQ(Bytes(enc), Bytes(expected_enc));
+  EXPECT_EQ(Bytes(ct), Bytes(expected_ct));
+}
+
+}  // namespace
+
+TEST(HPKETest, WycheproofDecryptX25519) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/hpke_x25519_decrypt_test.txt",
+      WycheproofHPKEDecryptTest);
+}
+
+TEST(HPKETest, WycheproofDecryptMLKEM768) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/hpke_mlkem768_decrypt_test.txt",
+      WycheproofHPKEDecryptTest);
+}
+
+TEST(HPKETest, WycheproofDecryptMLKEM1024) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/hpke_mlkem1024_decrypt_test.txt",
+      WycheproofHPKEDecryptTest);
+}
+
+TEST(HPKETest, WycheproofEncapX25519) {
+  FileTestGTest("third_party/wycheproof_testvectors/hpke_x25519_encap_test.txt",
+                WycheproofHPKEEncapTest);
+}
+
+TEST(HPKETest, WycheproofEncapMLKEM768) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/hpke_mlkem768_encap_test.txt",
+      WycheproofHPKEEncapTest);
+}
+
+TEST(HPKETest, WycheproofEncapMLKEM1024) {
+  FileTestGTest(
+      "third_party/wycheproof_testvectors/hpke_mlkem1024_encap_test.txt",
+      WycheproofHPKEEncapTest);
 }
 
 // The test vectors used fixed sender ephemeral keys, while HPKE itself

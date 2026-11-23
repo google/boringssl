@@ -68,6 +68,9 @@ func printAttribute(w io.Writer, key string, valueAny any, isInstruction bool) e
 			panic(key + " contained a newline.")
 		}
 		if isInstruction {
+			// FileTest splits instruction lines on commas, and has no escape
+			// syntax.
+			value = strings.ReplaceAll(value, ",", "%2C")
 			if _, err := fmt.Fprintf(w, "[%s = %s]\n", key, value); err != nil {
 				return err
 			}
@@ -241,6 +244,12 @@ var defaultInputs = []string{
 	"hmac_sha256_test.json",
 	"hmac_sha384_test.json",
 	"hmac_sha512_test.json",
+	"hpke_mlkem1024_decrypt_test.json",
+	"hpke_mlkem1024_encap_test.json",
+	"hpke_mlkem768_decrypt_test.json",
+	"hpke_mlkem768_encap_test.json",
+	"hpke_x25519_decrypt_test.json",
+	"hpke_x25519_encap_test.json",
 	"aes_wrap_test.json",
 	"aes_kwp_test.json",
 	"primality_test.json",

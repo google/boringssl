@@ -1585,10 +1585,17 @@ void RunWycheproofVerifyTest(const char *path, const EVP_PKEY_ALG *alg) {
     }
     WycheproofResult result;
     ASSERT_TRUE(GetWycheproofResult(t, &result));
-    // BoringSSL does not enforce policies on weak keys and leaves it to the
-    // caller.
-    bool expect_valid =
-        result.IsValid({"SmallModulus", "SmallPublicKey", "WeakHash"});
+    bool expect_valid = result.IsValid({
+        // BoringSSL does not enforce policies on weak keys and leaves it to the
+        // caller.
+        "SmallModulus",
+        "SmallPublicKey",
+        "WeakHash",
+        // BoringSSL does not reject Ed25519 public keys outside the prime-order
+        // subgroup; RFC 8032 does not require it.
+        "SmallOrderPublicKey",
+        "MixedOrderPublicKey",
+    });
 
     std::vector<uint8_t> der;
     ASSERT_TRUE(t->GetInstructionBytes(&der, "publicKeyDer"));
