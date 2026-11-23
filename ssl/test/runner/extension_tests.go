@@ -2454,7 +2454,42 @@ func addExtensionTrailingDataTests() {
 			// Skip the server test. BoringSSL does not currently parse most of the
 			// ClientHello status_request extension.
 
+			if ver.version >= VersionTLS12 {
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: serverTest,
+					name:     "ExtensionTrailingData-SignatureAlgorithms-Server-" + suffix,
+					config: Config{
+						MaxVersion: ver.version,
+						Bugs: ProtocolBugs{
+							ExtensionsWithTrailingData: []uint16{extensionSignatureAlgorithms},
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":ERROR_PARSING_EXTENSION:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+			}
+
 			if ver.version >= VersionTLS13 {
+				// In TLS 1.2, the signature algorithms in CertificateRequest are not an
+				// extension.
+				testCases = append(testCases, testCase{
+					protocol: protocol,
+					testType: clientTest,
+					name:     "ExtensionTrailingData-SignatureAlgorithms-Client-" + suffix,
+					config: Config{
+						MaxVersion: ver.version,
+						ClientAuth: RequireAnyClientCert,
+						Bugs: ProtocolBugs{
+							ExtensionsWithTrailingData: []uint16{extensionSignatureAlgorithms},
+						},
+					},
+					shouldFail:         true,
+					expectedError:      ":DECODE_ERROR:",
+					expectedLocalError: "remote error: error decoding message",
+				})
+
 				testCases = append(testCases, testCase{
 					protocol: protocol,
 					testType: clientTest,
