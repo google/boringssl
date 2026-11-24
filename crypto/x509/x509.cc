@@ -27,6 +27,9 @@ int X509_signature_dump(BIO *bp, const ASN1_STRING *sig, int indent) {
   const uint8_t *s;
   int i, n;
 
+  if (indent < 0) {
+    indent = 0;
+  }
   n = sig->length;
   s = sig->data;
   for (i = 0; i < n; i++) {

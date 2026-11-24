@@ -75,7 +75,7 @@ int unknown_ext_print(BIO *out, const X509_EXTENSION *ext, unsigned long flag,
     case X509V3_EXT_DUMP_UNKNOWN: {
       const ASN1_STRING *data = X509_EXTENSION_get_data(ext);
       return BIO_hexdump(out, ASN1_STRING_get0_data(data),
-                         ASN1_STRING_length(data), indent);
+                         ASN1_STRING_length(data), indent < 0 ? 0 : indent);
     }
 
     default:

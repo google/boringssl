@@ -1093,6 +1093,8 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
   if (  // In OpenSSL, this specifies a non-standard Microsoft key usage
         // extension which we do not currently support.
       key_type != 0 ||
+      // Negative iteration counts are invalid.
+      iterations < 0 ||
       // In OpenSSL, -1 here means to omit the MAC, which we do not
       // currently support. Omitting it is also invalid for a password-based
       // PKCS#12 file.
