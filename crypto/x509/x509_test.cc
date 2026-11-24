@@ -11959,6 +11959,32 @@ TEST(X509Test, GetOCSP) {
   EXPECT_EQ(actual, expected);
 }
 
+// Test that the AuthorityInfoAccess `i2v` method can correctly append to a
+// non-empty list.
+TEST(X509Test, AuthorityInfoAccessI2V) {
+  UniquePtr<AUTHORITY_INFO_ACCESS> aia(sk_ACCESS_DESCRIPTION_new_null());
+  ASSERT_TRUE(aia);
+  UniquePtr<ACCESS_DESCRIPTION> ad(ACCESS_DESCRIPTION_new());
+  ASSERT_TRUE(ad);
+  ad->method = OBJ_nid2obj(NID_ad_OCSP);
+  GENERAL_NAME_free(ad->location);
+  ad->location = MakeGeneralName(GEN_URI, "http://ocsp.example").release();
+  ASSERT_TRUE(ad->location);
+  ASSERT_TRUE(PushToStack(aia.get(), std::move(ad)));
+
+  const X509V3_EXT_METHOD *method = X509V3_EXT_get_nid(NID_info_access);
+  ASSERT_TRUE(method);
+  UniquePtr<STACK_OF(CONF_VALUE)> values(
+      method->i2v(method, aia.get(), nullptr));
+  ASSERT_TRUE(values);
+  ASSERT_EQ(values.get(), method->i2v(method, aia.get(), values.get()));
+  ASSERT_EQ(2u, sk_CONF_VALUE_num(values.get()));
+  for (const CONF_VALUE *value : values.get()) {
+    EXPECT_STREQ("OCSP - URI", value->name);
+    EXPECT_STREQ("http://ocsp.example", value->value);
+  }
+}
+
 TEST_P(X509VerifyTest, PathLenConstraint) {
   struct CertChainItem {
     bool self_issued;

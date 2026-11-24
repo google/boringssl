@@ -62,7 +62,8 @@ STACK_OF(CONF_VALUE) *i2v_AUTHORITY_INFO_ACCESS(const X509V3_EXT_METHOD *method,
       goto err;
     }
     tret = tmp;
-    vtmp = sk_CONF_VALUE_value(tret, i);
+    // `i2v_GENERAL_NAME` appends exactly one value to `tret`.
+    vtmp = sk_CONF_VALUE_value(tret, sk_CONF_VALUE_num(tret) - 1);
     i2t_ASN1_OBJECT(objtmp, sizeof objtmp, desc->method);
 
     if (OPENSSL_asprintf(&name, "%s - %s", objtmp, vtmp->name) == -1) {
