@@ -425,7 +425,7 @@ int do_check_string(const ASN1_STRING *a, int cmp_type, equal_fn equal,
     if (rv > 0 && peername) {
       *peername = OPENSSL_strndup((char *)astr, astrlen);
       if (*peername == nullptr) {
-        return -1;
+        rv = -1;
       }
     }
     OPENSSL_free(astr);
