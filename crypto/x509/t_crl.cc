@@ -99,6 +99,7 @@ int X509_CRL_print(BIO *out, const X509_CRL *x) {
         BIO_printf(out, "\n") <= 0 ||
         !X509V3_extensions_print(out, "CRL entry extensions",
                                  X509_REVOKED_get0_extensions(r), 0, 8)) {
+      return 0;
     }
   }
 
