@@ -95,12 +95,11 @@ static int scalar_to_cbb(CBB *out, const EC_GROUP *group,
 static int scalar_from_cbs(CBS *cbs, const EC_GROUP *group, EC_SCALAR *out) {
   size_t scalar_len = BN_num_bytes(EC_GROUP_get0_order(group));
   CBS tmp;
-  if (!CBS_get_bytes(cbs, &tmp, scalar_len)) {
+  if (!CBS_get_bytes(cbs, &tmp, scalar_len) ||
+      !ec_scalar_from_bytes(group, out, CBS_data(&tmp), CBS_len(&tmp))) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
     return 0;
   }
-
-  ec_scalar_from_bytes(group, out, CBS_data(&tmp), CBS_len(&tmp));
   return 1;
 }
 

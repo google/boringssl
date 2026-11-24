@@ -28,6 +28,7 @@
 
 #include <openssl/bytestring.h>
 #include <openssl/curve25519.h>
+#include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/mem.h>
 #include <openssl/rand.h>
@@ -811,6 +812,59 @@ TEST_P(TrustTokenProtocolTest, ExtraDataIssuanceResponse) {
       TRUST_TOKEN_CLIENT_finish_issuance(client.get(), &key_index,
                                          response2.data(), response2.size()));
   ASSERT_FALSE(tokens);
+}
+
+TEST_P(TrustTokenProtocolTest, UnreducedProofScalar) {
+  ASSERT_NO_FATAL_FAILURE(SetupContexts());
+
+  uint8_t *request = nullptr, *response = nullptr;
+  size_t request_len, response_len;
+  if (use_message()) {
+    ASSERT_TRUE(TRUST_TOKEN_CLIENT_begin_issuance_over_message(
+        client.get(), &request, &request_len, 1, kMessage, sizeof(kMessage)));
+  } else {
+    ASSERT_TRUE(TRUST_TOKEN_CLIENT_begin_issuance(client.get(), &request,
+                                                  &request_len, 1));
+  }
+  bssl::UniquePtr<uint8_t> free_request(request);
+  size_t tokens_issued;
+  ASSERT_TRUE(TRUST_TOKEN_ISSUER_issue(issuer.get(), &response, &response_len,
+                                       &tokens_issued, request, request_len,
+                                       /*public_metadata=*/KeyID(0),
+                                       /*private_metadata=*/0,
+                                       /*max_issuance=*/1));
+  bssl::UniquePtr<uint8_t> free_response(response);
+  ASSERT_EQ(tokens_issued, 1u);
+
+  // The response is a u16 count, a u32 key ID, one signed token, and a
+  // u16-length-prefixed proof. Every proof begins with a scalar. Replace it
+  // with one that is not reduced modulo the group order.
+  const size_t kP384PointLen = 1 + 2 * (384 / 8);
+  const size_t kP384ScalarLen = 384 / 8;
+  size_t token_len = TRUST_TOKEN_NONCE_SIZE + 2 * kP384PointLen;
+  if (method() == TRUST_TOKEN_experiment_v1()) {
+    token_len += 4;
+  }
+  if (method() == TRUST_TOKEN_experiment_v2_voprf() ||
+      method() == TRUST_TOKEN_pst_v1_voprf()) {
+    token_len = kP384PointLen;
+  }
+  size_t proof_offset = 2 + 4 + token_len + 2;
+  ASSERT_LE(proof_offset + kP384ScalarLen, response_len);
+  std::vector<uint8_t> bad(response, response + response_len);
+  std::fill(bad.begin() + proof_offset,
+            bad.begin() + proof_offset + kP384ScalarLen, 0xff);
+
+  ERR_clear_error();
+  size_t key_index;
+  bssl::UniquePtr<STACK_OF(TRUST_TOKEN)> tokens(
+      TRUST_TOKEN_CLIENT_finish_issuance(client.get(), &key_index, bad.data(),
+                                         bad.size()));
+  EXPECT_FALSE(tokens);
+  // The scalar should be rejected when decoding the proof.
+  uint32_t err = ERR_peek_last_error();
+  EXPECT_EQ(ERR_LIB_TRUST_TOKEN, ERR_GET_LIB(err));
+  EXPECT_EQ(TRUST_TOKEN_R_DECODE_FAILURE, ERR_GET_REASON(err));
 }
 
 TEST_P(TrustTokenProtocolTest, TruncatedRedemptionRequest) {
