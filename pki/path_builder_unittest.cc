@@ -3099,6 +3099,52 @@ TEST_F(PathBuilderMTCTest, UnsupportedCaSignatureAlgorithm) {
       << path.errors.ToDebugString(path.certs);
 }
 
+TEST_F(PathBuilderMTCTest, EntryExtensions) {
+  std::shared_ptr<const ParsedCertificate> ca_cert =
+      ReadCryptoX509MTCTestCert("ca_cert.pem");
+  ASSERT_TRUE(ca_cert);
+  std::optional<MTCAnchor> anchor =
+      MTCAnchor::Create(ca_cert, CertificateTrust::ForTrustAnchor());
+  ASSERT_TRUE(anchor);
+  TrustStoreInMemory in_memory;
+  ASSERT_TRUE(in_memory.AddMTCTrustAnchor(
+      std::make_shared<MTCAnchor>(*std::move(anchor))));
+
+  // Well-formed extensions of unrecognized types are ignored.
+  {
+    std::shared_ptr<const ParsedCertificate> leaf =
+        ReadCryptoX509MTCTestCert("cert_34_0.pem");
+    ASSERT_TRUE(leaf);
+    MtcCosignersPathBuilderDelegate delegate;
+    EXPECT_CALL(delegate, IsMTCCosignatureVerificationResultAcceptable(
+                              Ref(*ca_cert), ElementsAre()))
+        .WillOnce(Return(true));
+    CertPathBuilder::Result result =
+        RunPathBuilder(leaf, &in_memory, nullptr, &delegate);
+    EXPECT_TRUE(result.HasValidPath());
+  }
+
+  for (const char *file_name : {"cert_35_0.pem" /* truncated extensions */,
+                                "cert_36_0.pem" /* duplicate extensions */,
+                                "cert_37_0.pem" /* misordered extensions */}) {
+    SCOPED_TRACE(file_name);
+    std::shared_ptr<const ParsedCertificate> leaf =
+        ReadCryptoX509MTCTestCert(file_name);
+    ASSERT_TRUE(leaf);
+    StrictMock<MtcCosignersPathBuilderDelegate> delegate;
+    CertPathBuilder::Result result =
+        RunPathBuilder(leaf, &in_memory, nullptr, &delegate);
+    EXPECT_FALSE(result.HasValidPath());
+    const auto &path = *result.GetBestPathPossiblyInvalid();
+    ASSERT_EQ(2u, path.certs.size());
+    EXPECT_EQ(leaf, path.certs[0]);
+    EXPECT_EQ(ca_cert, path.certs[1]);
+    EXPECT_TRUE(path.errors.GetErrorsForCert(0)->ContainsError(
+        cert_errors::kVerifySignedDataFailed))
+        << path.errors.ToDebugString(path.certs);
+  }
+}
+
 TEST(PathBuilderPrioritizationTest, DatePrioritization) {
   std::string test_dir =
       "testdata/path_builder_unittest/validity_date_prioritization/";

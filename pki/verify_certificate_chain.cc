@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <optional>
 #include <string>
 
 #include <inttypes.h>
@@ -1223,6 +1224,26 @@ static bool VerifyMTCProofSignature(
                           der::BitString(signature, 0), key_bytes, cache);
 }
 
+// CheckMTCLogEntryExtensions returns whether `extensions` is a well-formed list
+// of MTCLogEntryExtension structures, sorted in strictly ascending order by
+// extension type (see draft-ietf-plants-merkle-tree-certs section 5.2.1).
+static bool CheckMTCLogEntryExtensions(CBS extensions) {
+  std::optional<uint16_t> prev_type;
+  while (CBS_len(&extensions) > 0) {
+    uint16_t type;
+    CBS data;
+    if (!CBS_get_u16(&extensions, &type) ||
+        !CBS_get_u16_length_prefixed(&extensions, &data)) {
+      return false;
+    }
+    if (prev_type.has_value() && *prev_type >= type) {
+      return false;
+    }
+    prev_type = type;
+  }
+  return true;
+}
+
 enum class VerifyMTCResult {
   // Failed for any reason not covered by the more specific cases.
   kFailed,
@@ -1265,6 +1286,9 @@ static VerifyMTCResult VerifyMTC(const ParsedCertificate &cert,
       !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof) ||
       !CBS_get_u24_length_prefixed(&mtc_proof, &signatures) ||
       CBS_len(&mtc_proof) != 0) {
+    return VerifyMTCResult::kFailed;
+  }
+  if (!CheckMTCLogEntryExtensions(extensions)) {
     return VerifyMTCResult::kFailed;
   }
 
