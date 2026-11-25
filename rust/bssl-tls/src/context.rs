@@ -465,6 +465,20 @@ where
         }
         self
     }
+
+    /// Switch off session ticket support.
+    ///
+    /// Session resumption through tickets support per [RFC 5077] is enable by default. Server with
+    /// memory restricts could disable this feature.
+    ///
+    /// [RFC 5077]: <https://datatracker.ietf.org/doc/html/rfc5077>
+    pub fn without_ticket_support(&mut self) -> &mut Self {
+        unsafe {
+            // Safety: the validity of the handle `self.ptr` is witnessed by `self`.
+            bssl_sys::SSL_CTX_set_options(self.ptr(), bssl_sys::SSL_OP_NO_TICKET as u32);
+        }
+        self
+    }
 }
 
 #[cfg(feature = "std")]
