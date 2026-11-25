@@ -93,6 +93,9 @@ pub enum X509Mode {}
 /// Raw Public Key credential
 pub enum RawPublicKeyMode {}
 
+/// Pre-shared Key credential
+pub enum PreSharedKeyMode {}
+
 pub(crate) trait HasPrivateKey {}
 
 impl HasPrivateKey for X509Mode {}
@@ -332,6 +335,20 @@ where
 }
 
 impl<M> TlsCredentialBuilder<M> {
+    /// Set session ID context to insulate sessions on different privilege levels from each other.
+    pub fn with_session_id_context(&mut self, session_context: &[u8]) -> Result<&mut Self, Error> {
+        let (sid, sid_len) = slice_into_ffi_raw_parts(session_context);
+        if sid_len > bssl_sys::SSL_MAX_SID_CTX_LENGTH as usize {
+            return Err(Error::Configuration(
+                ConfigurationError::SessionIdContextTooLarge,
+            ));
+        }
+        let rc =
+            unsafe { bssl_sys::SSL_CREDENTIAL_set1_session_id_context(self.ptr(), sid, sid_len) };
+        assert_eq!(rc, 1);
+        Ok(self)
+    }
+
     /// Finalise the credential.
     pub fn build(mut self) -> Option<TlsCredential> {
         if unsafe {
@@ -398,12 +415,36 @@ impl TlsCredential {
     /// Create a new pre-shared key credential for TLS 1.3.
     ///
     /// See [RFC 9258](https://datatracker.ietf.org/doc/html/rfc9258) for details.
+    pub fn build_pre_shared_key(
+        key: &[u8],
+        identity: &[u8],
+        hash: PskHash,
+        context: &[u8],
+    ) -> Result<TlsCredentialBuilder<PreSharedKeyMode>, Error> {
+        let cred = Self::build_psk_inner(key, identity, hash, context)?;
+        Ok(TlsCredentialBuilder(cred, PhantomData))
+    }
+
+    /// Create a new pre-shared key credential for TLS 1.3.
+    ///
+    /// See [RFC 9258](https://datatracker.ietf.org/doc/html/rfc9258) for details.
     pub fn new_pre_shared_key(
         key: &[u8],
         identity: &[u8],
         hash: PskHash,
         context: &[u8],
     ) -> Result<Self, Error> {
+        Ok(TlsCredential(Self::build_psk_inner(
+            key, identity, hash, context,
+        )?))
+    }
+
+    fn build_psk_inner(
+        key: &[u8],
+        identity: &[u8],
+        hash: PskHash,
+        context: &[u8],
+    ) -> Result<NonNull<bssl_sys::SSL_CREDENTIAL>, Error> {
         let (key_ptr, key_len) = slice_into_ffi_raw_parts(key);
         let (id_ptr, id_len) = slice_into_ffi_raw_parts(identity);
         let (ctx_ptr, ctx_len) = slice_into_ffi_raw_parts(context);
@@ -425,7 +466,7 @@ impl TlsCredential {
             )
         };
         let cred = NonNull::new(cred).ok_or_else(|| Error::extract_lib_err_or_unknown())?;
-        Ok(TlsCredential(cred))
+        Ok(cred)
     }
 
     /// Return the external identity of this pre-shared key credential.

@@ -930,3 +930,45 @@ fn test_certificate_selector_alert() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn credential_session_id_context() -> Result<(), Error> {
+    let mut builder =
+        TlsCredential::build_pre_shared_key(b"psk-key", b"psk-id", PskHash::Sha256, b"ctx")?;
+    assert!(matches!(
+        builder.with_session_id_context(&[0; bssl_sys::SSL_MAX_SID_CTX_LENGTH as usize + 1]),
+        Err(Error::Configuration(
+            ConfigurationError::SessionIdContextTooLarge
+        ))
+    ));
+    builder.with_session_id_context(b"cred-sid")?;
+    let cred = builder.build().unwrap();
+
+    let mut server_ctx = TlsContextBuilder::new_tls();
+    server_ctx
+        .with_session_id_ctx(b"ctx-default")?
+        .with_credential(cred.clone())?;
+    let mut server_conn = server_ctx.build().new_server_connection().build();
+
+    let mut client_ctx = TlsContextBuilder::new_tls();
+    client_ctx.with_credential(cred)?;
+    let mut client_conn = client_ctx.build().new_client_connection().build();
+
+    let (client_socket, server_socket, mut executor) = create_mock_pipe();
+    client_conn.set_io(client_socket)?;
+    server_conn.set_io(server_socket)?;
+    executor.run(try_join(
+        client_conn.async_nonstop_handshake(),
+        server_conn.async_nonstop_handshake(),
+    ))?;
+
+    // Safety: `server_conn` owns a valid `SSL` pointer after handshake completion.
+    let session = unsafe { bssl_sys::SSL_get_session(server_conn.ptr()) };
+    let mut sid_len = 0;
+    // Safety: `session` is borrowed from `server_conn` and `sid_len` is valid.
+    let sid_ptr = unsafe { bssl_sys::SSL_SESSION_get0_id_context(session, &mut sid_len) };
+    // Safety: `sid_ptr` is valid for `sid_len` bytes while `server_conn` is alive.
+    let sid_ctx = unsafe { u8::from_ffi_ptr(sid_ptr, sid_len as usize) };
+    assert_eq!(sid_ctx, b"cred-sid");
+    Ok(())
+}
