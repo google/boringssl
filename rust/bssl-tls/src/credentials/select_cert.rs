@@ -98,6 +98,18 @@ pub(crate) unsafe extern "C" fn select_cert_cb<M: CertCallback<Mode>, Mode>(
         // Safety: `ssl` is still valid by BoringSSL invariant.
         bssl_sys::SSL_is_server(ssl) == 1
     };
+    // NOTE: we must bump the TlsContext refcount once here because this callback has the capability
+    // to swap out context object. Without this refcount bump, we would violate many outlive
+    // contracts with regards to RustContextMethods<_>.
+    let Some(_ssl_ctx) = (unsafe {
+        // Safety:
+        // - We only bump the refcount on the context object.
+        // - `TlsContext` is a transparent wrapper of the pointer.
+        NonNull::new(bssl_sys::SSL_CTX_dup_ref(bssl_sys::SSL_get_SSL_CTX(ssl)))
+            .map(|ctx| core::mem::transmute::<_, TlsContext<Mode>>(ctx))
+    }) else {
+        return 0;
+    };
     let Some(ssl) = NonNull::new(ssl) else {
         return 0;
     };
