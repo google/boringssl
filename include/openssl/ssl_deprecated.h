@@ -392,6 +392,16 @@ DEFINE_STACK_OF(SSL_COMP)
 #define SSL_OP_TLS_ROLLBACK_BUG 0
 #define SSL_VERIFY_CLIENT_ONCE 0
 
+// The following flags toggle individual protocol versions. This is deprecated.
+// Use `SSL_CTX_set_min_proto_version` and `SSL_CTX_set_max_proto_version`
+// instead.
+#define SSL_OP_NO_TLSv1 0x04000000L
+#define SSL_OP_NO_TLSv1_2 0x08000000L
+#define SSL_OP_NO_TLSv1_1 0x10000000L
+#define SSL_OP_NO_TLSv1_3 0x20000000L
+#define SSL_OP_NO_DTLSv1 SSL_OP_NO_TLSv1
+#define SSL_OP_NO_DTLSv1_2 SSL_OP_NO_TLSv1_2
+
 // SSL_cache_hit calls `SSL_session_reused`.
 OPENSSL_EXPORT int SSL_cache_hit(SSL *ssl);
 

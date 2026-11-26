@@ -645,16 +645,6 @@ OPENSSL_EXPORT int SSL_version(const SSL *ssl);
 // TODO(crbug.com/41393419): Disable SSL_OP_LEGACY_SERVER_CONNECT by default.
 #define SSL_OP_ALL SSL_OP_LEGACY_SERVER_CONNECT
 
-// The following flags toggle individual protocol versions. This is deprecated.
-// Use `SSL_CTX_set_min_proto_version` and `SSL_CTX_set_max_proto_version`
-// instead.
-#define SSL_OP_NO_TLSv1 0x04000000L
-#define SSL_OP_NO_TLSv1_2 0x08000000L
-#define SSL_OP_NO_TLSv1_1 0x10000000L
-#define SSL_OP_NO_TLSv1_3 0x20000000L
-#define SSL_OP_NO_DTLSv1 SSL_OP_NO_TLSv1
-#define SSL_OP_NO_DTLSv1_2 SSL_OP_NO_TLSv1_2
-
 // SSL_CTX_set_options enables all options set in `options` (which should be one
 // or more of the `SSL_OP_*` values, ORed together) in `ctx`. It returns a
 // bitmask representing the resulting enabled options.
